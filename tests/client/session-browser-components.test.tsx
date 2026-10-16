@@ -3,6 +3,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import type { SessionDetail } from "../../src/shared/domain";
 import {
   MessageItem,
   planPreview,
@@ -21,6 +22,34 @@ import {
 } from "./session-browser.fixtures";
 
 describe("session browser components", () => {
+  it("uses the project in the catalog and displays both directories in the reader", () => {
+    const session: SessionDetail = {
+      ...firstPage.session,
+      projectDirectory: "/project/main",
+      workingDirectory: "/worktrees/task",
+    };
+    const catalog = render(<SessionTree entries={[session]} />);
+    expect(screen.getByText("/project/main")).toBeInTheDocument();
+    expect(screen.queryByText("/worktrees/task")).toBeNull();
+    catalog.unmount();
+
+    const header = (value: typeof session) => <SessionHeader
+      session={value}
+      visibility={DEFAULT_TIMELINE_VISIBILITY}
+      onVisibilityChange={vi.fn()}
+      autoRefreshEnabled={false}
+      onAutoRefreshChange={vi.fn()}
+    />;
+    const view = render(header(session));
+    expect(screen.getByText(/Project Directory/)).toHaveTextContent("Project Directory · /project/main");
+    expect(screen.getByText(/Working Directory/)).toHaveTextContent("Working Directory · /worktrees/task");
+    view.rerender(header({ ...session, workingDirectory: session.projectDirectory }));
+    expect(screen.getAllByText("/project/main")).toHaveLength(2);
+    view.rerender(header({ ...session, workingDirectory: null, projectDirectory: null }));
+    expect(screen.getByText(/Project Directory/)).toHaveTextContent("Project Directory · Unavailable");
+    expect(screen.getByText(/Working Directory/)).toHaveTextContent("Working Directory · Unavailable");
+  });
+
   it("renders valid event timestamps with semantic time markup and omits invalid values", () => {
     const valid = "2026-07-28T10:00:00.000Z";
     const view = render(<EventTime timestamp={valid} />);

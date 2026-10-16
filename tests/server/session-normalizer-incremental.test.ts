@@ -34,13 +34,15 @@ describe("incremental Codex derivation", () => {
 
     expect(resolver.metadata(before)).toMatchObject({
       threadId: "fallback",
-      cwd: "/fallback",
+      workingDirectory: "/fallback",
+      projectDirectory: "/fallback",
       createdAt: "2026-08-08T00:00:01.000Z",
       updatedAt: "2026-08-08T00:00:01.000Z",
     });
     expect(resolver.metadata(after)).toMatchObject({
       threadId: "matching-thread",
-      cwd: "/matching",
+      workingDirectory: "/matching",
+      projectDirectory: "/matching",
       createdAt: "2026-08-07T23:59:00.000Z",
       updatedAt: "2026-08-08T00:00:02.000Z",
     });

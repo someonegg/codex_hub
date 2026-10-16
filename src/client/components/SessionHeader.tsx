@@ -36,7 +36,13 @@ export function SessionHeader({
         </div>
         <h2 id="session-title">{sessionDisplayTitle(session)}</h2>
         <p className="session-meta">
-          {session.cwd ?? "Project unavailable"} · {updatedAt} · {session.itemCount} events
+          {updatedAt} · {session.itemCount} events
+        </p>
+        <p className="session-meta">
+          Project Directory · <code>{session.projectDirectory ?? "Unavailable"}</code>
+        </p>
+        <p className="session-meta">
+          Working Directory · <code>{session.workingDirectory ?? "Unavailable"}</code>
         </p>
         <p className="session-origin">
           {sessionOriginLabel(session.origin)}

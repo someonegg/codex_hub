@@ -29,7 +29,8 @@ export interface SessionSummary {
   origin: SessionOrigin;
   title: string;
   nickname: string | null;
-  cwd: string | null;
+  workingDirectory: string | null;
+  projectDirectory: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   archived: boolean;

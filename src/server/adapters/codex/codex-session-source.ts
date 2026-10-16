@@ -31,6 +31,7 @@ import {
   type SessionNormalizerState,
 } from "./session-normalizer.js";
 import { SessionIndexReader } from "./session-index-reader.js";
+import { ProjectDirectoryResolver } from "./project-directory-resolver.js";
 
 const EXPECTED_ROLLOUT_IO_ERRORS = new Set([
   "ENOENT",
@@ -86,8 +87,6 @@ export class CodexSessionSource implements SessionSource {
   readonly descriptor: SessionSourceDescriptor;
   #cache = new Map<string, CodexCacheEntry>();
   #snapshot: SessionSourceSnapshot | null = null;
-  #discoverySignature: string | null = null;
-  #hasUnavailableRollouts = false;
   #lastRefreshTelemetry: CodexRefreshTelemetry = EMPTY_TELEMETRY;
 
   constructor(
@@ -97,6 +96,7 @@ export class CodexSessionSource implements SessionSource {
     private readonly identity = new IdentityResolver(),
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
+    private readonly projectDirectories = new ProjectDirectoryResolver(),
   ) {
     this.descriptor = {
       sourceType: "codex-jsonl",
@@ -114,15 +114,6 @@ export class CodexSessionSource implements SessionSource {
       diagnostics: discovery.diagnostics,
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
     });
-    if (
-      this.#snapshot !== null &&
-      this.#discoverySignature === discoverySignature &&
-      !this.#hasUnavailableRollouts
-    ) {
-      this.#lastRefreshTelemetry = EMPTY_TELEMETRY;
-      return this.#snapshot;
-    }
-
     const nextCache = new Map<string, CodexCacheEntry>();
     const telemetry = mutableTelemetry();
     const unavailableRollouts: string[] = [];
@@ -142,6 +133,21 @@ export class CodexSessionSource implements SessionSource {
         }
       }
     }
+    const directories = await this.projectDirectories.resolveAll(
+      [...nextCache.values()].map((entry) => entry.normalized.session.workingDirectory),
+    );
+    for (const [key, entry] of nextCache) {
+      const session = entry.normalized.session;
+      const projectDirectory = directories.get(session.workingDirectory) ?? null;
+      if (session.projectDirectory === projectDirectory) continue;
+      nextCache.set(key, {
+        ...entry,
+        normalized: {
+          ...entry.normalized,
+          session: { ...session, projectDirectory },
+        },
+      });
+    }
     const entries = sourceEntries(nextCache);
     const diagnostics = [
       ...discovery.diagnostics.map((item) => ({ ...item })),
@@ -152,12 +158,12 @@ export class CodexSessionSource implements SessionSource {
     const signature = JSON.stringify({
       discoverySignature,
       unavailableRollouts,
+      directories: [...directories],
     });
     const snapshot = { signature, sessions, diagnostics };
     this.#cache = nextCache;
-    this.#discoverySignature = discoverySignature;
-    this.#hasUnavailableRollouts = unavailableRollouts.length > 0;
     this.#lastRefreshTelemetry = telemetry;
+    if (this.#snapshot?.signature === signature) return this.#snapshot;
     this.#snapshot = snapshot;
     return snapshot;
   }

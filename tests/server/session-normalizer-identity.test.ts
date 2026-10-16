@@ -109,7 +109,7 @@ describe("session identity and recovery", () => {
 
   it("chooses filename-matching metadata when duplicate metadata records exist", async () => {
     const normalized = await normalizeFixture("rollout-2026-07-28T11-00-00-child-session.jsonl");
-    expect(normalized.session.cwd).toBe("/synthetic/child");
+    expect(normalized.session.workingDirectory).toBe("/synthetic/child");
     expect(normalized.session.parentId).toBe("basic-session");
     expect(normalized.session.agent).toEqual({
       taskName: "widget_review",

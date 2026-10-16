@@ -197,7 +197,7 @@ function SessionLink({ session, child = false }: SessionLinkProps) {
                 ? agentLabels.map((label) => (
                     <span className="agent-label" key={label}>{label}</span>
                   ))
-                : session.cwd ?? "Project unavailable"}
+                : session.projectDirectory ?? "Project unavailable"}
             </small>
           )}
     </a>

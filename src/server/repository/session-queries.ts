@@ -109,8 +109,10 @@ export class SessionQueries {
         continue;
       }
       const session = normalized.session;
-      if (session.cwd !== null) projects.set(session.cwd, (projects.get(session.cwd) ?? 0) + 1);
-      if (query.project !== undefined && session.cwd !== query.project) continue;
+      if (session.projectDirectory !== null) {
+        projects.set(session.projectDirectory, (projects.get(session.projectDirectory) ?? 0) + 1);
+      }
+      if (query.project !== undefined && session.projectDirectory !== query.project) continue;
       matchedSessions.push(session);
     }
     if (query.project !== undefined && !projects.has(query.project)) {

@@ -60,7 +60,8 @@ export interface DomainSession {
   readonly sourceId: string | null;
   readonly origin: DomainSessionOrigin;
   readonly title: string;
-  readonly cwd: string | null;
+  readonly workingDirectory: string | null;
+  readonly projectDirectory: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly archived: boolean;

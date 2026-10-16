@@ -9,7 +9,8 @@ export interface SessionMetadata {
   threadId: string | null;
   agentVersion: string | null;
   title: string | null;
-  cwd: string | null;
+  workingDirectory: string | null;
+  projectDirectory: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   parentThreadId: string | null;
@@ -94,7 +95,8 @@ export class IdentityResolver {
       threadId: raw?.id ?? null,
       agentVersion: raw?.agentVersion ?? null,
       title: raw?.title ?? null,
-      cwd: raw?.cwd ?? null,
+      workingDirectory: raw?.cwd ?? null,
+      projectDirectory: raw?.cwd ?? null,
       createdAt: raw?.timestamp ?? state.firstRecordTimestamp,
       updatedAt: state.lastTimestamp,
       parentThreadId: raw?.parentThreadId ?? null,

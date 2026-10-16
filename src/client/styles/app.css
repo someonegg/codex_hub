@@ -203,6 +203,8 @@
 .reader { width: 100%; max-width: 72rem; padding: 3.5rem clamp(1.5rem, 5vw, 5rem); }
 .reader-welcome { display: grid; place-items: center; }
 .reader-header { display: flex; justify-content: space-between; gap: 2rem; padding-bottom: 2rem; border-bottom: 1px solid var(--mist); }
+.reader-header > div { min-width: 0; }
+.reader-header .session-meta { overflow-wrap: anywhere; }
 .reader-header h2 {
   display: -webkit-box; max-width: 50rem; margin-bottom: .65rem; overflow: hidden;
   overflow-wrap: anywhere; font-size: clamp(1.8rem, 3vw, 2.6rem);

@@ -245,7 +245,7 @@ describe("SessionReadService", () => {
     } as const;
 
     const selectedProject = await sessions.list(range);
-    expect(selectedProject.sessions.map(({ cwd }) => cwd)).toEqual(["/project/a"]);
+    expect(selectedProject.sessions.map(({ projectDirectory }) => projectDirectory)).toEqual(["/project/a"]);
     expect(selectedProject.total).toBe(1);
     expect(selectedProject.projects).toEqual([
       { project: "/project/a", count: 1 },
@@ -268,7 +268,7 @@ describe("SessionReadService", () => {
 
   it("publishes linked summaries and pages timeline details", async () => {
     const { catalogSessions, repository, session: parent } = await basicFixtureSession();
-    const child = catalogSessions.find((session) => session.cwd === "/synthetic/child")!;
+    const child = catalogSessions.find((session) => session.workingDirectory === "/synthetic/child")!;
     expect(child.parentId).toBe(parent.id);
     expect(parent.childIds).toContain(child.id);
 
@@ -830,7 +830,8 @@ function normalizedSession(
       sourceId: id,
       origin: TEST_ORIGIN,
       title,
-      cwd,
+      workingDirectory: cwd,
+      projectDirectory: cwd,
       createdAt: timestamp,
       updatedAt: timestamp,
       archived: false,
