@@ -1,21 +1,19 @@
-// @vitest-environment jsdom
-
+import { type ComponentProps, useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { InteractionPanel } from "../../src/client/components/InteractionPanel";
-import { INTERACTION_PANEL_STORAGE_KEY } from "../../src/client/state/use-interaction-panel-preference";
+import { describe, expect, it, vi } from "vitest";
+
 import type { InteractionResponse } from "../../src/shared/api-contract";
 
-const activation = "! printf 'CODEX_VIEWER_TMUX_BIND_V1\\n%s\\n%s\\n' \"$TMUX\" \"$TMUX_PANE\"";
+import { InteractionPanel as Panel } from "../../src/client/components/InteractionPanel";
 
-function interaction(
-  state: "unbound" | "disconnected" | "connected",
-): InteractionResponse {
+// @vitest-environment jsdom
+
+function interaction(state: "unbound" | "disconnected" | "connected"): InteractionResponse {
   return {
     supported: true,
+    attachCommand: null,
     state,
-    activation,
   };
 }
 
@@ -27,116 +25,105 @@ function props(value: InteractionResponse | null) {
     interactionBusy: false,
     error: null,
     onDismissError: vi.fn(),
+    onRebind: vi.fn().mockResolvedValue(undefined),
+    onExpandPreview: vi.fn(),
     onSendMessage: vi.fn().mockResolvedValue(undefined),
     onSendKeys: vi.fn().mockResolvedValue(undefined),
     preview: null,
     previewBusy: false,
     previewError: null,
     onDismissPreviewError: vi.fn(),
-    onPreviewTerminal: vi.fn().mockResolvedValue(undefined),
-    onCancelPreviewTerminal: vi.fn(),
+    onTogglePreview: vi.fn(),
   };
 }
 
+function InteractionPanel(properties: Omit<ComponentProps<typeof Panel>, "previewExpanded">) {
+  const [expanded, setExpanded] = useState(properties.preview !== null);
+  return (
+    <Panel
+      {...properties}
+      previewExpanded={expanded}
+      onExpandPreview={() => {
+        properties.onExpandPreview();
+        setExpanded(true);
+      }}
+      onTogglePreview={() => {
+        properties.onTogglePreview();
+        setExpanded((value) => !value);
+      }}
+    />
+  );
+}
+
 describe("interaction panel", () => {
-  beforeEach(() => {
-    sessionStorage.setItem(INTERACTION_PANEL_STORAGE_KEY, "true");
+  it("shows the composer immediately when connected", () => {
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeVisible();
   });
 
-  it("defaults to a collapsed summary and persists the disclosure choice", async () => {
-    sessionStorage.removeItem(INTERACTION_PANEL_STORAGE_KEY);
-    const user = userEvent.setup();
+  it("retains the draft when sending fails", async () => {
     const handlers = props(interaction("connected"));
-    const { unmount } = render(<InteractionPanel {...handlers} />);
-
-    const toggle = screen.getByRole("button", { name: /Live interaction.*Connected/i });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(screen.getByText(/12 events · Updated/)).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: "Message to agent" })).toBeNull();
-    expect(handlers.onPreviewTerminal).not.toHaveBeenCalled();
-
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeInTheDocument();
-    expect(sessionStorage.getItem(INTERACTION_PANEL_STORAGE_KEY)).toBe("true");
-
-    unmount();
+    handlers.onSendMessage.mockRejectedValueOnce(new Error("offline"));
     render(<InteractionPanel {...handlers} />);
-    expect(screen.getByRole("button", { name: /Live interaction.*Connected/i }))
-      .toHaveAttribute("aria-expanded", "true");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "unsent draft" } });
+    fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("textbox")).toHaveValue("unsent draft");
+    expect(handlers.onSendMessage).toHaveBeenCalledOnce();
   });
 
-  it("keeps attention states collapsed and exposes them in the heading", () => {
-    sessionStorage.setItem(INTERACTION_PANEL_STORAGE_KEY, "false");
-    const { rerender } = render(
-      <InteractionPanel {...props(interaction("unbound"))} />,
-    );
-    expect(screen.getByRole("button", { name: /Needs activation/i }))
-      .toHaveAttribute("aria-expanded", "false");
-
-    rerender(<InteractionPanel {...props(interaction("disconnected"))} />);
-    expect(screen.getByRole("button", { name: /Disconnected/i }))
-      .toHaveAttribute("aria-expanded", "false");
-
-    rerender(<InteractionPanel {...props(interaction("connected"))} error="send failed" />);
-    expect(screen.getByRole("button", { name: /Error/i }))
-      .toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("preserves drafts and pauses terminal polling while the outer panel is collapsed", async () => {
-    const user = userEvent.setup();
-    const handlers = {
-      ...props(interaction("connected")),
-      preview: { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00.000Z" },
-    };
-    render(<InteractionPanel {...handlers} />);
-    await user.type(screen.getByRole("textbox", { name: "Message to agent" }), "draft");
-    handlers.onCancelPreviewTerminal.mockClear();
-
-    await user.click(screen.getByRole("button", { name: /Live interaction.*Connected/i }));
-    expect(screen.queryByRole("textbox", { name: "Message to agent" })).toBeNull();
-    expect(handlers.onCancelPreviewTerminal).toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: /Live interaction.*Connected/i }));
+  it("retains the panel and draft through every unavailable state", () => {
+    const handlers = props(interaction("connected"));
+    const view = render(<InteractionPanel {...handlers} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "Message to agent" }), {
+      target: { value: "draft" },
+    });
+    const states: Array<InteractionResponse | null> = [
+      interaction("disconnected"),
+      { supported: true, state: "unknown", attachCommand: null },
+      interaction("unbound"),
+      null,
+      { supported: false, attachCommand: null },
+    ];
+    for (const state of states) {
+      view.rerender(<InteractionPanel {...handlers} interaction={state} />);
+      expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
+      expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
+      expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeDisabled();
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    }
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    view.rerender(<InteractionPanel {...handlers} />);
+    expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeEnabled();
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
-    expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
   });
 
-  it("keeps unsupported sessions as a pure viewer", () => {
+  it("hides unbound and disconnected targets", () => {
+    const view = render(<InteractionPanel {...props(interaction("unbound"))} />);
+    expect(view.container).toBeEmptyDOMElement();
+    view.rerender(<InteractionPanel {...props(interaction("disconnected"))} />);
+    expect(view.container).toBeEmptyDOMElement();
+  });
+
+  it("keeps unsupported sessions read-only", () => {
     const { container, rerender } = render(<InteractionPanel {...props(null)} />);
     expect(container).toBeEmptyDOMElement();
-    rerender(<InteractionPanel {...props({ supported: false })} />);
+    rerender(<InteractionPanel {...props({ supported: false, attachCommand: null })} />);
     expect(container).toBeEmptyDOMElement();
-  });
-
-  it("shows activation and reconnection guidance", () => {
-    const updatedAt = "2026-08-08T12:00:00.000Z";
-    const localTime = new Date(updatedAt).toLocaleTimeString(undefined, { timeStyle: "medium" });
-    const { rerender } = render(
-      <InteractionPanel
-        {...props(interaction("unbound"))}
-        itemCount={12}
-        updatedAt={updatedAt}
-      />,
-    );
-    expect(screen.getByText(activation)).toBeInTheDocument();
-    expect(screen.getByText(`12 events · Updated ${localTime}`)).toBeInTheDocument();
-    rerender(
-      <InteractionPanel
-        {...props(interaction("disconnected"))}
-        itemCount={12}
-        updatedAt={updatedAt}
-      />,
-    );
-    expect(screen.getByText(/previous tmux target is unavailable/i)).toBeInTheDocument();
-    expect(screen.getByText(`12 events · Updated ${localTime}`)).toBeInTheDocument();
   });
 
   it("shows the event count and local update time while connected", () => {
     const updatedAt = "2026-08-08T12:00:00.000Z";
     const localTime = new Date(updatedAt).toLocaleTimeString(undefined, { timeStyle: "medium" });
-    render(<InteractionPanel {...props(interaction("connected"))} itemCount={12} updatedAt={updatedAt} />);
+    render(
+      <InteractionPanel
+        {...props(interaction("connected"))}
+        itemCount={12}
+        updatedAt={updatedAt}
+      />,
+    );
 
     const summary = screen.getByText(`12 events · Updated ${localTime}`);
     const preview = screen.getByRole("region", { name: "Terminal preview" });
@@ -144,9 +131,12 @@ describe("interaction panel", () => {
     const lastAction = screen.getByRole("button", { name: "Interrupt" });
     expect(summary).toBeInTheDocument();
     expect(preview.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(lastAction.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy();
-    expect(preview.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      lastAction.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      preview.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it("uses a singular event label and falls back when the update time is unavailable", () => {
@@ -156,20 +146,13 @@ describe("interaction panel", () => {
     expect(screen.getByText("1 event · Update time unavailable")).toBeInTheDocument();
 
     rerender(
-      <InteractionPanel {...props(interaction("connected"))} itemCount={0} updatedAt="not-a-time" />,
+      <InteractionPanel
+        {...props(interaction("connected"))}
+        itemCount={0}
+        updatedAt="not-a-time"
+      />,
     );
     expect(screen.getByText("0 events · Update time unavailable")).toBeInTheDocument();
-  });
-
-  it("copies the activation command", async () => {
-    const user = userEvent.setup();
-    const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
-    render(<InteractionPanel {...props(interaction("unbound"))} />);
-
-    await user.click(screen.getByRole("button", { name: "Copy" }));
-
-    expect(writeText).toHaveBeenCalledWith(activation);
-    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
   it("inserts a newline on Enter, sends on Shift+Enter, and clears after success", async () => {
@@ -208,18 +191,14 @@ describe("interaction panel", () => {
     expect(screen.getByText(/12 events · Updated/)).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Interrupt" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Rebind" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Rebind" }).parentElement)
-      .toHaveClass("interaction-actions");
-    expect(screen.getByRole("button", { name: "Send" }).parentElement)
-      .toHaveClass("interaction-primary-actions");
+    expect(screen.getByRole("button", { name: "Send" }).parentElement).toHaveClass(
+      "interaction-primary-actions",
+    );
     expect(screen.queryByRole("button", { name: "Esc" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terminal preview" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Interrupt" }));
     expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["interrupt"]);
     expect(handlers.onSendKeys).toHaveBeenCalledTimes(1);
-    await user.click(screen.getByRole("button", { name: "Rebind" }));
-    expect(handlers.onSendMessage).toHaveBeenCalledWith(activation);
 
     await user.type(screen.getByRole("textbox"), "draft");
     const interrupt = screen.getByRole("button", { name: "Interrupt" });
@@ -233,15 +212,10 @@ describe("interaction panel", () => {
     expect(interrupt).toHaveFocus();
     expect(interrupt).toBeEnabled();
     expect(interrupt).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("button", { name: "Rebind" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
     expect(screen.getByRole("button", { name: "Terminal preview" })).not.toHaveAttribute(
       "aria-disabled",
     );
     await user.click(interrupt);
-    await user.click(screen.getByRole("button", { name: "Rebind" }));
     expect(handlers.onSendKeys).not.toHaveBeenCalled();
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
 
@@ -259,7 +233,8 @@ describe("interaction panel", () => {
       truncated: false,
       capturedAt: "2026-08-08T12:00:00.000Z",
     };
-    const scrollHeight = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get")
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
       .mockReturnValue(480);
     const user = userEvent.setup();
     const { rerender } = render(<InteractionPanel {...handlers} />);
@@ -267,11 +242,13 @@ describe("interaction panel", () => {
     const header = screen.getByRole("button", { name: "Terminal preview" });
     expect(header).toHaveAttribute("aria-expanded", "false");
     await user.click(header);
-    expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
+    expect(handlers.onTogglePreview).toHaveBeenCalledTimes(1);
 
     rerender(<InteractionPanel {...handlers} preview={captured} />);
-    expect(screen.getByRole("button", { name: "Terminal preview" }))
-      .toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
     const content = screen.getByLabelText("Terminal preview content");
     expect(content).toHaveAttribute("tabindex", "0");
     expect(content.scrollTop).toBe(480);
@@ -307,7 +284,8 @@ describe("interaction panel", () => {
         capturedAt: "2026-08-08T12:00:00.000Z",
       },
     };
-    const scrollHeight = vi.spyOn(HTMLElement.prototype, "scrollHeight", "get")
+    const scrollHeight = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
       .mockReturnValue(640);
     const user = userEvent.setup();
     render(<InteractionPanel {...handlers} />);
@@ -325,8 +303,7 @@ describe("interaction panel", () => {
     const handlers = {
       ...props(interaction("connected")),
       preview: {
-        content: Array.from({ length: 80 }, (_, index) =>
-          `${staleLine} ${index + 1}`).join("\n"),
+        content: Array.from({ length: 80 }, (_, index) => `${staleLine} ${index + 1}`).join("\n"),
         truncated: false,
         capturedAt: "2026-08-08T12:00:00.000Z",
       },
@@ -354,131 +331,9 @@ describe("interaction panel", () => {
     expect(refreshed).toHaveFocus();
   });
 
-  it("replaces timestamp and manual refresh with a default-on auto-refresh switch", async () => {
-    const captured = {
-      content: "output",
-      truncated: false,
-      capturedAt: "2026-08-08T12:00:00.000Z",
-    };
-    const handlers = props(interaction("connected"));
-    const user = userEvent.setup();
-    render(<InteractionPanel {...handlers} preview={captured} />);
-    const autoRefresh = screen.getByRole("switch", { name: "Auto refresh" });
-    expect(autoRefresh).toHaveAttribute("aria-checked", "true");
-    expect(screen.queryByRole("button", { name: "Refresh terminal preview" })).toBeNull();
-    expect(screen.queryByText(new Date(captured.capturedAt).toLocaleTimeString())).toBeNull();
-
-    await user.click(autoRefresh);
-    expect(autoRefresh).toHaveAttribute("aria-checked", "false");
-  });
-
-  it("polls without overlap and retries after failures", async () => {
-    vi.useFakeTimers();
-    let resolveFirst!: () => void;
-    const first = new Promise<void>((resolve) => { resolveFirst = resolve; });
-    const handlers = {
-      ...props(interaction("connected")),
-      preview: { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00.000Z" },
-    };
-    handlers.onPreviewTerminal
-      .mockReturnValueOnce(first)
-      .mockRejectedValueOnce(new Error("temporary capture failure"))
-      .mockResolvedValue(undefined);
-
-    try {
-      const { unmount } = render(<InteractionPanel {...handlers} />);
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-
-      await act(async () => { await vi.advanceTimersByTimeAsync(5_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-
-      await act(async () => { resolveFirst(); await first; });
-      await act(async () => { await vi.advanceTimersByTimeAsync(999); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-      await act(async () => { await vi.advanceTimersByTimeAsync(1); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(2);
-      await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(3);
-      unmount();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
-
-  it("cancels a paused manual preview capture when unmounted", async () => {
-    const handlers = {
-      ...props(interaction("connected")),
-      preview: { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00.000Z" },
-    };
-    const { unmount } = render(<InteractionPanel {...handlers} />);
-    const autoRefresh = screen.getByRole("switch", { name: "Auto refresh" });
-    const toggle = screen.getByRole("button", { name: "Terminal preview" });
-
-    fireEvent.click(autoRefresh);
-    fireEvent.click(toggle);
-    handlers.onPreviewTerminal.mockClear();
-    handlers.onCancelPreviewTerminal.mockClear();
-
-    fireEvent.click(toggle);
-    expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-    expect(handlers.onCancelPreviewTerminal).not.toHaveBeenCalled();
-
-    unmount();
-    expect(handlers.onCancelPreviewTerminal).toHaveBeenCalledTimes(1);
-  });
-
-  it("pauses polling when disabled, collapsed, hidden, or disconnected", async () => {
-    vi.useFakeTimers();
-    let visibility: DocumentVisibilityState = "visible";
-    const visibilityState = vi.spyOn(document, "visibilityState", "get")
-      .mockImplementation(() => visibility);
-    const handlers = {
-      ...props(interaction("connected")),
-      preview: { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00.000Z" },
-    };
-
-    try {
-      const { rerender, unmount } = render(<InteractionPanel {...handlers} />);
-      await act(async () => { await Promise.resolve(); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-
-      const autoRefresh = screen.getByRole("switch", { name: "Auto refresh" });
-      fireEvent.click(autoRefresh);
-      expect(autoRefresh).toHaveAttribute("aria-checked", "false");
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(1);
-
-      fireEvent.click(autoRefresh);
-      await act(async () => { await Promise.resolve(); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(2);
-
-      const toggle = screen.getByRole("button", { name: "Terminal preview" });
-      fireEvent.click(toggle);
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(2);
-
-      fireEvent.click(toggle);
-      await act(async () => { await Promise.resolve(); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(3);
-
-      visibility = "hidden";
-      fireEvent(document, new Event("visibilitychange"));
-      expect(handlers.onCancelPreviewTerminal).toHaveBeenCalled();
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(3);
-
-      visibility = "visible";
-      fireEvent(document, new Event("visibilitychange"));
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(4);
-
-      rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000); });
-      expect(handlers.onPreviewTerminal).toHaveBeenCalledTimes(4);
-      unmount();
-    } finally {
-      visibilityState.mockRestore();
-      vi.useRealTimers();
-    }
+  it("has no automatic refresh switch", () => {
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    expect(screen.queryByRole("switch", { name: "Auto refresh" })).toBeNull();
   });
 
   it("sends the six terminal keys from the rectangular terminal keypad", async () => {
@@ -491,7 +346,12 @@ describe("interaction panel", () => {
     const keypad = screen.getByRole("group", { name: "Terminal controls" });
     expect(keypad).toBeInTheDocument();
     expect([...keypad.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
-      "Enter", "↑", "Plan", "←", "↓", "→",
+      "Enter",
+      "↑",
+      "Plan",
+      "←",
+      "↓",
+      "→",
     ]);
 
     for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
@@ -516,4 +376,154 @@ describe("interaction panel", () => {
     }
     expect(handlers.onSendKeys).not.toHaveBeenCalled();
   });
+});
+
+it("shows tmux access only when supplied and supports copy failure and focus return", async () => {
+  const command = "tmux -S '/tmp/socket path' attach-session -t 'test'";
+  const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const view = render(<InteractionPanel {...props(interaction("connected"))} />);
+  expect(screen.queryByRole("button", { name: "tmux access" })).not.toBeInTheDocument();
+  view.rerender(
+    <InteractionPanel {...props({ ...interaction("connected"), attachCommand: command })} />,
+  );
+  const trigger = screen.getByRole("button", { name: "tmux access" });
+  trigger.focus();
+  fireEvent.click(trigger);
+  expect(screen.getByRole("dialog", { name: "tmux access" })).toBeVisible();
+  expect(screen.getByText(command).tagName).toBe("PRE");
+  fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
+  await act(async () => {});
+  expect(screen.getByRole("status")).toHaveTextContent("Copy failed");
+  fireEvent.click(screen.getByRole("button", { name: "Close tmux access" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+it("copies commands and closes on Escape, command withdrawal, and session replacement", async () => {
+  const command = "tmux attach-session -t test";
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  const connected = props({ ...interaction("connected"), attachCommand: command });
+  const view = render(<InteractionPanel key="first" {...connected} />);
+  const open = () => {
+    const trigger = screen.getByRole("button", { name: "tmux access" });
+    trigger.focus();
+    fireEvent.click(trigger);
+  };
+  open();
+  fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
+  await act(async () => {});
+  expect(writeText).toHaveBeenCalledWith(command);
+  expect(screen.getByRole("status")).toHaveTextContent("Copied");
+  fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "tmux access" })).toHaveFocus();
+  open();
+  view.rerender(<InteractionPanel key="first" {...props(interaction("disconnected"))} />);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  view.rerender(<InteractionPanel key="first" {...connected} />);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  open();
+  view.rerender(<InteractionPanel key="second" {...connected} />);
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+});
+
+it.each([
+  ["/plan", true],
+  [" /STATUS ", true],
+  ["/plan now", false],
+  ["/foo-bar", false],
+  ["/abc1", false],
+  ["/中文", false],
+  ["hello", false],
+])("expands the preview after successfully sending %s: %s", async (message, expands) => {
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: message } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    "aria-expanded",
+    String(expands),
+  );
+});
+
+it("waits for successful command delivery and keeps an expanded preview open", async () => {
+  let resolve!: () => void;
+  const handlers = props(interaction("connected"));
+  handlers.onSendMessage.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+  );
+  render(<InteractionPanel {...handlers} />);
+  const toggle = screen.getByRole("button", { name: "Terminal preview" });
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", shiftKey: true });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await act(async () => resolve());
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/status" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+it("does not expand on failed command delivery", async () => {
+  const handlers = props(interaction("connected"));
+  handlers.onSendMessage.mockRejectedValueOnce(new Error("offline"));
+  render(<InteractionPanel {...handlers} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  expect(screen.getByRole("textbox")).toHaveValue("/plan");
+});
+
+it("rebinds without changing the draft or preview and disables rebind while busy or disconnected", async () => {
+  const handlers = props(interaction("connected"));
+  const view = render(<InteractionPanel {...handlers} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Rebind" }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(handlers.onRebind).toHaveBeenCalledOnce();
+  expect(screen.getByRole("textbox")).toHaveValue("draft");
+  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  view.rerender(<InteractionPanel {...handlers} interactionBusy />);
+  expect(screen.getByRole("button", { name: "Rebind" })).toBeDisabled();
+  view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
+  expect(screen.getByRole("button", { name: "Rebind" })).toBeDisabled();
+});
+
+it("ignores command completion after the panel unmounts", async () => {
+  let resolve!: () => void;
+  const handlers = props(interaction("connected"));
+  handlers.onSendMessage.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+  );
+  const view = render(<InteractionPanel {...handlers} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  view.unmount();
+  await act(async () => resolve());
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
 });

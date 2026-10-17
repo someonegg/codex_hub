@@ -1,4 +1,4 @@
-import type { InteractionKey } from "../../shared/api-contract.js";
+import type { InteractionKey } from "../../shared/interaction.js";
 
 export type DomainSessionId = string;
 export type DomainItemId = string;
@@ -30,6 +30,7 @@ export type InteractionBindingAttempt =
   | {
       readonly ordinal: number;
       readonly valid: true;
+      readonly operationId?: string;
       readonly socketPath: string;
       readonly paneId: string;
     }
@@ -38,22 +39,16 @@ export type InteractionBindingAttempt =
       readonly valid: false;
     };
 
-export type TmuxKey =
-  | "Enter"
-  | "Up"
-  | "Down"
-  | "Left"
-  | "Right"
-  | "C-c"
-  | "BTab";
+export type TmuxKey = "Enter" | "Up" | "Down" | "Left" | "Right" | "C-d" | "C-c" | "BTab";
 
 export type InteractionKeyBindings = Readonly<Record<InteractionKey, TmuxKey>>;
 
-export interface DomainAgentInteraction {
-  readonly activation: string;
+export type DomainAgentInteraction = {
+  readonly transport: "tmux";
+  readonly rebindCommand: string;
   readonly bindingAttempt: InteractionBindingAttempt | null;
   readonly keyBindings: InteractionKeyBindings;
-}
+};
 
 export interface DomainSession {
   readonly id: DomainSessionId;
@@ -65,6 +60,7 @@ export interface DomainSession {
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly archived: boolean;
+  readonly isChild?: boolean;
   readonly parentId: DomainSessionId | null;
   readonly childIds: readonly DomainSessionId[];
   readonly agent: DomainAgentIdentity | null;
@@ -104,9 +100,7 @@ export interface DomainLazyDirectiveRecord extends DomainDirectiveRecordBase {
   readonly charCount: number;
 }
 
-export type DomainDirectiveRecord =
-  | DomainInlineDirectiveRecord
-  | DomainLazyDirectiveRecord;
+export type DomainDirectiveRecord = DomainInlineDirectiveRecord | DomainLazyDirectiveRecord;
 
 interface DomainToolRecordBase extends DomainTimelineRecordBase {
   readonly kind: "tool";

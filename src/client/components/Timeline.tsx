@@ -1,18 +1,17 @@
 import { memo, useMemo } from "react";
+
 import type { TimelineCursor } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
 import type { UserInputItem as UserInputTimelineItem } from "../../shared/domain";
+
 import { DirectiveItem } from "./DirectiveItem";
+import { EventMark } from "./EventMark";
+import { InfiniteScrollSentinel } from "./InfiniteScrollSentinel";
 import { InternalEventItem } from "./InternalEventItem";
 import { MessageItem } from "./MessageItem";
 import { TokenItem } from "./TokenItem";
 import { ToolItem } from "./ToolItem";
-import {
-  UserInputItem,
-  type UserInputCardEntry,
-} from "./UserInputItem";
-import { EventMark } from "./EventMark";
-import { InfiniteScrollSentinel } from "./InfiniteScrollSentinel";
+import { type UserInputCardEntry, UserInputItem } from "./UserInputItem";
 
 interface TimelineProps {
   items: TimelineItem[];
@@ -44,10 +43,7 @@ export const Timeline = memo(function Timeline({
     <>
       <ol className="timeline" aria-label="Session timeline">
         {entries.map((item) => (
-          <li
-            className={`trace-event ${classFor(item)}`}
-            key={`${sessionId}:${item.id}`}
-          >
+          <li className={`trace-event ${classFor(item)}`} key={`${sessionId}:${item.id}`}>
             <EventMark item={item} />
             <TimelineContent
               item={item}
@@ -58,15 +54,15 @@ export const Timeline = memo(function Timeline({
           </li>
         ))}
       </ol>
-      {hasMore && paginationEnabled && !paginationFrozen
-        ? <InfiniteScrollSentinel
-            enabled={!readerBusy}
-            triggerKey={cursor}
-            loading={loading}
-            loadingLabel="Loading more events…"
-            onLoadMore={onLoadMore}
-          />
-        : null}
+      {hasMore && paginationEnabled && !paginationFrozen ? (
+        <InfiniteScrollSentinel
+          enabled={!readerBusy}
+          triggerKey={cursor}
+          loading={loading}
+          loadingLabel="Loading more events…"
+          onLoadMore={onLoadMore}
+        />
+      ) : null}
     </>
   );
 });

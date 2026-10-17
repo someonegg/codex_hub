@@ -13,6 +13,5 @@ export async function createTempDirectory(prefix: string): Promise<string> {
 export async function cleanupTempDirectories(): Promise<void> {
   const pending = [...directories];
   directories.clear();
-  await Promise.all(pending.map((directory) =>
-    rm(directory, { force: true, recursive: true })));
+  await Promise.all(pending.map((directory) => rm(directory, { force: true, recursive: true })));
 }

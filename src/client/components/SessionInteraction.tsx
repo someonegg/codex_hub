@@ -1,5 +1,7 @@
 import type { InteractionResponse } from "../../shared/api-contract";
+
 import { useSessionInteraction } from "../state/use-session-interaction";
+import { useTerminalPreview } from "../state/use-terminal-preview";
 import { InteractionPanel } from "./InteractionPanel";
 
 interface SessionInteractionProps {
@@ -7,6 +9,7 @@ interface SessionInteractionProps {
   sessionId: string;
   itemCount: number;
   updatedAt: string | null;
+  previewAutoExpandKey?: string | null;
 }
 
 export function SessionInteraction({
@@ -14,10 +17,12 @@ export function SessionInteraction({
   sessionId,
   itemCount,
   updatedAt,
+  previewAutoExpandKey = null,
 }: SessionInteractionProps) {
-  const previewAvailable = interaction?.supported === true &&
-    interaction.state === "connected";
-  const controller = useSessionInteraction(sessionId, previewAvailable);
+  const previewAvailable = interaction?.supported === true && interaction.state === "connected";
+  const controller = useSessionInteraction(sessionId);
+
+  const preview = useTerminalPreview(sessionId, previewAvailable, previewAutoExpandKey);
 
   return (
     <InteractionPanel
@@ -29,12 +34,8 @@ export function SessionInteraction({
       onDismissError={controller.clearError}
       onSendMessage={controller.sendMessage}
       onSendKeys={controller.sendKeys}
-      preview={controller.preview}
-      previewBusy={controller.previewBusy}
-      previewError={controller.previewError}
-      onDismissPreviewError={controller.clearPreviewError}
-      onPreviewTerminal={controller.previewTerminal}
-      onCancelPreviewTerminal={controller.cancelPreviewTerminal}
+      onRebind={controller.rebind}
+      {...preview}
     />
   );
 }

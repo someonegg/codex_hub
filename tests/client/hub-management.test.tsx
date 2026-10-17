@@ -1,0 +1,538 @@
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+import type { HubOperation } from "../../src/shared/api-contract";
+
+import { api, ApiClientError } from "../../src/client/api/client";
+import { CreateSession, ManageSession } from "../../src/client/components/HubManagement";
+import { useHubOperation } from "../../src/client/state/use-hub-operation";
+import { baseSession, SESSION_ID } from "./session.fixtures";
+
+// @vitest-environment jsdom
+
+const pending: HubOperation = {
+  phase: null,
+  attachCommand: null,
+  operationId: "test-operation",
+  type: "create",
+  status: "pending",
+  sessionId: null,
+  error: null,
+  createdAt: "2026-10-16T00:00:00Z",
+  updatedAt: "2026-10-16T00:00:00Z",
+};
+const flush = async () => {
+  await act(async () => {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+  });
+};
+describe("hub management", () => {
+  it("renders management and creates requests without randomUUID in an HTTP context", async () => {
+    vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
+    const create = vi.spyOn(api, "createSession").mockResolvedValue(pending);
+    const archive = vi
+      .spyOn(api, "archiveSession")
+      .mockResolvedValue({ ...pending, type: "archive", phase: "waiting_exit" });
+    const session = { ...baseSession, sourceId: "native", itemCount: 0 };
+    render(<ManageSession session={session} onChanged={vi.fn()} />);
+    render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    expect(document.querySelector(".session-action-menu")?.textContent).toBe("Archive session");
+    fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+    await flush();
+    expect(archive).toHaveBeenCalledWith(session.id);
+    expect(screen.getByText("Waiting for exit")).toBeInTheDocument();
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: expect.stringMatching(/^[a-f0-9]{32}$/) }),
+    );
+  });
+  it("uses a new request after definite failure but preserves it for uncertain retries", async () => {
+    const create = vi
+      .spyOn(api, "createSession")
+      .mockResolvedValueOnce({ ...pending, status: "failed" })
+      .mockRejectedValueOnce(new Error("network failure"))
+      .mockResolvedValueOnce({ ...pending, status: "unknown" })
+      .mockResolvedValueOnce(pending);
+    render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+    for (let i = 0; i < 4; i++) {
+      fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+      await flush();
+    }
+    const ids = create.mock.calls.map(([input]) => input.requestId);
+    expect(ids[1]).not.toBe(ids[0]);
+    expect(ids[2]).toBe(ids[1]);
+    expect(ids[3]).not.toBe(ids[1]);
+  });
+  it("shows a separate creation placeholder, disables duplicate submits, and navigates only after observation", async () => {
+    vi.useFakeTimers();
+    const create = vi.spyOn(api, "createSession").mockResolvedValue(pending);
+    vi.spyOn(api, "operation").mockResolvedValue({
+      ...pending,
+      status: "succeeded",
+      sessionId: SESSION_ID,
+    });
+    const onCreated = vi.fn();
+    render(<CreateSession project="/project with spaces" projects={[]} onCreated={onCreated} />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Create Codex worktree" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+    await flush();
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ directory: "/project with spaces", worktree: true }),
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("pending");
+    expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();
+    expect(onCreated).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ sessionId: SESSION_ID }));
+  });
+  it("restores pending tracking and clears the recovery marker for unknown results", async () => {
+    sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+    const get = vi
+      .spyOn(api, "operation")
+      .mockResolvedValue({ ...pending, status: "unknown", error: "Timed out" });
+    const view = render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+    await flush();
+    expect(screen.getByRole("status")).toHaveTextContent("unknown");
+    expect(screen.queryByRole("button", { name: "Check result" })).not.toBeInTheDocument();
+    expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+    view.unmount();
+    render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+    await flush();
+    expect(get).toHaveBeenCalledOnce();
+  });
+  it("offers archive without a binding and refreshes after observed completion", async () => {
+    vi.useFakeTimers();
+    const session = { ...baseSession, sourceId: "native", itemCount: 0 };
+    const onChanged = vi.fn();
+    const archive = vi
+      .spyOn(api, "archiveSession")
+      .mockResolvedValue({ ...pending, type: "archive", sessionId: SESSION_ID });
+    vi.spyOn(api, "operation").mockResolvedValue({
+      ...pending,
+      type: "archive",
+      sessionId: SESSION_ID,
+      status: "succeeded",
+    });
+    const view = render(<ManageSession session={session} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    expect(screen.getByRole("button", { name: "Archive session" })).toBeEnabled();
+    view.rerender(<ManageSession session={session} onChanged={onChanged} />);
+    fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+    await flush();
+    expect(archive).toHaveBeenCalledOnce();
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Archive session" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Session management" })).toHaveFocus();
+    view.rerender(<ManageSession session={{ ...session, archived: true }} onChanged={onChanged} />);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+    expect(onChanged).toHaveBeenCalledOnce();
+  });
+  it("refreshes an already archived session when recovering a successful archive operation", async () => {
+    sessionStorage.setItem(`codex-hub.operation.${SESSION_ID}`, pending.operationId);
+    vi.spyOn(api, "operation").mockResolvedValue({
+      ...pending,
+      type: "archive",
+      sessionId: SESSION_ID,
+      status: "succeeded",
+    });
+    const onChanged = vi.fn();
+    const session = { ...baseSession, sourceId: "native", itemCount: 0, archived: true };
+    render(<ManageSession session={session} onChanged={onChanged} />);
+    await flush();
+    expect(onChanged).toHaveBeenCalledOnce();
+    expect(sessionStorage.getItem(`codex-hub.operation.${SESSION_ID}`)).toBeNull();
+  });
+  it("requires confirmation before deleting an archived session", async () => {
+    const session = { ...baseSession, sourceId: "native", itemCount: 0, archived: true };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const deletion = vi
+      .spyOn(api, "deleteSession")
+      .mockResolvedValue({ ...pending, type: "delete", sessionId: SESSION_ID });
+    render(<ManageSession session={session} onChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    expect(deletion).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    await flush();
+    expect(deletion).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
+  });
+  it.each(["succeeded", "failed", "unknown"] as const)(
+    "dismisses only successful status after five seconds (%s)",
+    async (status) => {
+      vi.useFakeTimers();
+      vi.spyOn(api, "archiveSession").mockResolvedValue({
+        ...pending,
+        type: "archive",
+        phase: "confirming_archive",
+        status,
+      });
+      const session = { ...baseSession, sourceId: "native", itemCount: 0 };
+      render(<ManageSession session={session} onChanged={vi.fn()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+      fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+      await flush();
+      expect(screen.getByRole("status")).toHaveTextContent(status);
+      expect(screen.queryByText("Confirming archive")).not.toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4999);
+      });
+      expect(screen.getByRole("status")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      if (status === "succeeded") expect(screen.queryByRole("status")).not.toBeInTheDocument();
+      else expect(screen.getByRole("status")).toBeInTheDocument();
+    },
+  );
+});
+
+it("shows copyable creation recovery commands", async () => {
+  const command = "tmux -S '/tmp/socket path' attach-session -t 'codex-hub-test'";
+  const writeText = vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+  vi.spyOn(api, "createSession").mockResolvedValue({
+    ...pending,
+    status: "unknown",
+    attachCommand: command,
+  });
+  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await flush();
+  expect(screen.getByText(command)).toBeInTheDocument();
+  expect(screen.getByText("tmux access")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("unknown");
+  fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
+  await flush();
+  expect(writeText).toHaveBeenCalledWith(command);
+  expect(screen.getByText("Copied")).toBeInTheDocument();
+});
+
+it("hides attach until the server supplies it and stops polling after a terminal response", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(api, "createSession").mockResolvedValue(pending);
+  const get = vi
+    .spyOn(api, "operation")
+    .mockResolvedValueOnce({ ...pending, attachCommand: "tmux attach-session -t test" })
+    .mockResolvedValueOnce({
+      ...pending,
+      status: "unknown",
+      attachCommand: "tmux attach-session -t test",
+    });
+  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await flush();
+  expect(screen.getByText("Starting Codex")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Copy command" })).not.toBeInTheDocument();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(
+    screen.getByText("No Codex session detected yet. Attach to tmux to check startup progress."),
+  ).toBeInTheDocument();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
+});
+
+it("clears expired recovery markers on 404 while keeping retry for transient query failures", async () => {
+  sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+  const get = vi
+    .spyOn(api, "operation")
+    .mockRejectedValueOnce(new Error("network failure"))
+    .mockRejectedValueOnce(new ApiClientError(404, "management_error", "Operation not found"));
+  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+  await flush();
+  expect(sessionStorage.getItem("codex-hub.operation.create")).toBe(pending.operationId);
+  fireEvent.click(screen.getByRole("button", { name: "Retry status check" }));
+  await flush();
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+});
+
+it("serializes manual queries and ignores a response after scope changes", async () => {
+  sessionStorage.setItem("codex-hub.operation.stale", pending.operationId);
+  let resolve!: (op: HubOperation) => void;
+  const get = vi.spyOn(api, "operation").mockImplementationOnce(
+    () =>
+      new Promise((done) => {
+        resolve = done;
+      }),
+  );
+  const success = vi.fn();
+  const { result, rerender } = renderHook(({ scope }) => useHubOperation(scope, success), {
+    initialProps: { scope: "stale" },
+  });
+  act(() => {
+    result.current.check();
+    result.current.check();
+  });
+  expect(get).toHaveBeenCalledOnce();
+  const signal = get.mock.calls[0]![1]!;
+  rerender({ scope: "fresh" });
+  expect(signal.aborted).toBe(true);
+  await act(async () => {
+    resolve({ ...pending, status: "succeeded" });
+  });
+  expect(result.current.operation).toBeNull();
+  expect(result.current.busy).toBe(false);
+  expect(success).not.toHaveBeenCalled();
+});
+
+it("blocks submission during recovery and transient failures until a terminal result", async () => {
+  sessionStorage.setItem("codex-hub.operation.recovery", pending.operationId);
+  let resolve!: (op: HubOperation) => void;
+  const get = vi
+    .spyOn(api, "operation")
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          resolve = done;
+        }),
+    )
+    .mockRejectedValueOnce(new Error("network failure"))
+    .mockResolvedValueOnce({ ...pending, status: "succeeded" });
+  const submit = vi.fn().mockResolvedValue(pending);
+  const { result } = renderHook(() => useHubOperation("recovery", vi.fn()));
+  expect(result.current.busy).toBe(true);
+  await act(async () => {
+    await result.current.start(submit);
+  });
+  expect(submit).not.toHaveBeenCalled();
+  await act(async () => {
+    resolve(pending);
+  });
+  act(() => result.current.check());
+  await flush();
+  expect(result.current.busy).toBe(true);
+  await act(async () => {
+    await result.current.start(submit);
+  });
+  expect(submit).not.toHaveBeenCalled();
+  act(() => result.current.check());
+  await flush();
+  expect(get).toHaveBeenCalledTimes(3);
+  expect(result.current.busy).toBe(false);
+});
+
+it("keeps failed initial recovery locked until a 404 confirms removal", async () => {
+  sessionStorage.setItem("codex-hub.operation.recovery", pending.operationId);
+  vi.spyOn(api, "operation")
+    .mockRejectedValueOnce(new Error("network failure"))
+    .mockRejectedValueOnce(new ApiClientError(404, "management_error", "gone"));
+  const submit = vi.fn().mockResolvedValue(pending);
+  const { result } = renderHook(() => useHubOperation("recovery", vi.fn()));
+  await flush();
+  expect(result.current.busy).toBe(true);
+  await act(async () => {
+    await result.current.start(submit);
+  });
+  expect(submit).not.toHaveBeenCalled();
+  expect(sessionStorage.getItem("codex-hub.operation.recovery")).toBe(pending.operationId);
+  act(() => result.current.check());
+  await flush();
+  expect(result.current.busy).toBe(false);
+  await act(async () => {
+    await result.current.start(submit);
+  });
+  expect(submit).toHaveBeenCalledOnce();
+});
+
+it("automatically retries initial recovery, shows the error once, and stops at a terminal result", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+  const get = vi
+    .spyOn(api, "operation")
+    .mockRejectedValueOnce(new Error("offline during recovery"))
+    .mockRejectedValueOnce(new Error("still offline"))
+    .mockResolvedValueOnce({ ...pending, status: "succeeded" });
+  const recovered = vi.fn();
+  const created = vi.fn();
+  render(
+    <CreateSession
+      project="/project"
+      projects={[]}
+      open={false}
+      onRecovered={recovered}
+      onCreated={created}
+    />,
+  );
+  await flush();
+  expect(screen.getByRole("alert", { hidden: true })).toHaveTextContent("offline during recovery");
+  expect(recovered).toHaveBeenCalledOnce();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(recovered).toHaveBeenCalledOnce();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(created).toHaveBeenCalledOnce();
+  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000);
+  });
+  expect(get).toHaveBeenCalledTimes(3);
+});
+
+it("keeps nonretryable query failures locked with a manual query and does not retry submissions", async () => {
+  vi.useFakeTimers();
+  sessionStorage.setItem("codex-hub.operation.locked", pending.operationId);
+  const get = vi
+    .spyOn(api, "operation")
+    .mockRejectedValueOnce(new ApiClientError(403, "forbidden", "Forbidden"))
+    .mockResolvedValueOnce({ ...pending, status: "failed" });
+  const { result } = renderHook(() => useHubOperation("locked", vi.fn()));
+  await flush();
+  expect(result.current.lifecycle).toBe("stopped");
+  expect(result.current.busy).toBe(true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000);
+  });
+  expect(get).toHaveBeenCalledOnce();
+  act(() => result.current.check());
+  await flush();
+  expect(result.current.busy).toBe(false);
+  const submit = vi.fn().mockRejectedValue(new Error("uncertain submission"));
+  await act(async () => {
+    await result.current.start(submit);
+  });
+  expect(result.current.errorPhase).toBe("submit");
+  expect(result.current.canCheck).toBe(false);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000);
+  });
+  expect(submit).toHaveBeenCalledOnce();
+});
+
+it("shows resubmission guidance without an ineffective status query button", async () => {
+  vi.spyOn(api, "createSession").mockRejectedValue(new Error("submission failed"));
+  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+  await flush();
+  expect(screen.getByRole("alert")).toHaveTextContent("submit again");
+  expect(screen.queryByRole("button", { name: "Retry status check" })).toBeNull();
+});
+
+it("cancels hidden recovery reads and ignores late responses while a resumed manual read runs", async () => {
+  vi.useFakeTimers();
+  let visible: DocumentVisibilityState = "visible";
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
+  sessionStorage.setItem("codex-hub.operation.visibility", pending.operationId);
+  let old!: (value: HubOperation) => void;
+  let fresh!: (value: HubOperation) => void;
+  const get = vi
+    .spyOn(api, "operation")
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          old = done;
+        }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          fresh = done;
+        }),
+    );
+  const success = vi.fn();
+  const { result, unmount } = renderHook(() => useHubOperation("visibility", success));
+  visible = "hidden";
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(get.mock.calls[0]![1]?.aborted).toBe(true);
+  act(() => result.current.check());
+  await act(async () => vi.advanceTimersByTimeAsync(60000));
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(result.current.busy).toBe(true);
+  expect(result.current.error).toBeNull();
+  visible = "visible";
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(get).toHaveBeenCalledTimes(2);
+  await act(async () => old({ ...pending, status: "succeeded" }));
+  act(() => {
+    result.current.check();
+    result.current.check();
+  });
+  expect(get).toHaveBeenCalledTimes(2);
+  expect(success).not.toHaveBeenCalled();
+  await act(async () => fresh({ ...pending, status: "succeeded" }));
+  expect(success).toHaveBeenCalledOnce();
+  expect(result.current.busy).toBe(false);
+  unmount();
+});
+
+it("preserves a submission received while hidden and immediately queries when visible", async () => {
+  vi.useFakeTimers();
+  let visible: DocumentVisibilityState = "visible";
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
+  let resolve!: (value: HubOperation) => void;
+  const submit = vi.fn(
+    () =>
+      new Promise<HubOperation>((done) => {
+        resolve = done;
+      }),
+  );
+  const get = vi.spyOn(api, "operation").mockResolvedValue(pending);
+  const { result, unmount } = renderHook(() => useHubOperation("hidden-submit", vi.fn()));
+  let submitting!: Promise<void>;
+  act(() => {
+    submitting = result.current.start(submit);
+  });
+  visible = "hidden";
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  await act(async () => {
+    resolve(pending);
+    await submitting;
+  });
+  expect(sessionStorage.getItem("codex-hub.operation.hidden-submit")).toBe(pending.operationId);
+  await act(async () => vi.advanceTimersByTimeAsync(10000));
+  expect(get).not.toHaveBeenCalled();
+  expect(result.current.busy).toBe(true);
+  visible = "visible";
+  await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+  expect(get).toHaveBeenCalledOnce();
+  unmount();
+});
+
+it.each([403, 503])(
+  "preserves query errors while hidden and resumes only retryable status %s",
+  async (status) => {
+    vi.useFakeTimers();
+    let visible: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
+    sessionStorage.setItem("codex-hub.operation.hidden-error", pending.operationId);
+    const get = vi
+      .spyOn(api, "operation")
+      .mockRejectedValueOnce(new ApiClientError(status, "error", "query failed"))
+      .mockResolvedValue(pending);
+    const { result, unmount } = renderHook(() => useHubOperation("hidden-error", vi.fn()));
+    await flush();
+    visible = "hidden";
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    await act(async () => vi.advanceTimersByTimeAsync(60000));
+    expect(get).toHaveBeenCalledOnce();
+    expect(result.current.error).toBe("query failed");
+    expect(result.current.busy).toBe(true);
+    visible = "visible";
+    await act(async () => document.dispatchEvent(new Event("visibilitychange")));
+    expect(get).toHaveBeenCalledTimes(status === 503 ? 2 : 1);
+    unmount();
+  },
+);

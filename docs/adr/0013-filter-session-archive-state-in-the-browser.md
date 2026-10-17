@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0020
 date: 2026-08-20
 ---
 
@@ -55,3 +55,5 @@ Chosen option: "Return mixed pages and incrementally filter accumulated sessions
 
 - Good: Produces complete state-specific results after loading finishes.
 - Bad: Increases startup requests and memory in proportion to the entire catalog.
+
+Superseded by the hub redesign; see [ADR-0020](0020-use-a-unified-project-hub.md).

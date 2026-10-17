@@ -1,30 +1,33 @@
 import { randomUUID } from "node:crypto";
+
 import type { SessionReader } from "../application/session-reader.js";
+import type { SessionCatalogService } from "../catalog/session-catalog-service.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
 import type { SessionLiveService } from "../live/session-live-service.js";
-import { sendJson, type ApiRouter } from "./router.js";
+import type { OperationService } from "../management/operation-service.js";
+import { HttpQueryError } from "./query-params.js";
+import { RequestBodyError } from "./request-body.js";
+import { type ApiRouter, sendJson } from "./router.js";
 import { createSessionInteractionRoutes } from "./session-interaction-routes.js";
 import { createSessionLiveRoutes } from "./session-live-routes.js";
+import { createSessionManagementRoutes } from "./session-management-routes.js";
 import { createSessionReadRoutes } from "./session-read-routes.js";
 
-const SESSION_ROOT = "/api/v1/sessions";
-
 export interface ApiErrorLogger {
-  error(
-    message: string,
-    context: { readonly requestId: string; readonly error: unknown },
-  ): void;
+  error(message: string, context: { readonly requestId: string; readonly error: unknown }): void;
 }
 
 type InteractionApi = Pick<
   SessionInteractionService,
-  "describe" | "sendMessage" | "sendKeys" | "preview"
+  "describe" | "sendMessage" | "rebind" | "sendKeys" | "preview"
 >;
 
 export interface ApiRouterDependencies {
   readonly sessions: SessionReader;
+  readonly catalog: SessionCatalogService;
   readonly live: SessionLiveService;
   readonly interaction?: InteractionApi;
+  readonly operations?: OperationService;
 }
 
 export interface ApiRouterOptions {
@@ -45,6 +48,7 @@ export function createApiRouter(
   const logger = options.logger ?? CONSOLE_ERROR_LOGGER;
   const requestIdFactory = options.requestId ?? randomUUID;
   const handlers = [
+    createSessionManagementRoutes(dependencies.operations),
     createSessionLiveRoutes(dependencies.live),
     createSessionInteractionRoutes(dependencies.interaction),
     createSessionReadRoutes(dependencies),
@@ -53,31 +57,43 @@ export function createApiRouter(
     const url = new URL(request.url ?? "/", "http://localhost");
     if (!url.pathname.startsWith("/api/")) return false;
     const headOnly = request.method === "HEAD";
-    const readMethod = request.method === "GET" || headOnly;
-    const mutationPath = new RegExp(
-      `^${SESSION_ROOT}/[A-Za-z0-9_-]{20,100}/(?:messages|keys)$`,
-    ).test(url.pathname);
-    if (!readMethod && (request.method !== "POST" || !mutationPath)) {
-      return false;
-    }
-
-    const handler = handlers.find((candidate) => candidate.matches(url))!;
     const requestId = requestIdFactory();
-    try {
-      return await handler.handle(request, response, url);
-    } catch (error) {
-      if (handler.mapError(error, request, response)) return true;
-      logger.error("Session API request failed", { requestId, error });
-      sendJson(response, 500, {
-        error: {
-          code: "internal_error",
-          message: "The local session reader could not complete the request",
-          requestId,
-        },
-      }, headOnly);
-      return true;
+    for (const handler of handlers.filter((candidate) => candidate.matches(url))) {
+      try {
+        if (await handler.handle(request, response, url)) return true;
+      } catch (error) {
+        if (error instanceof RequestBodyError || error instanceof HttpQueryError) {
+          sendJson(
+            response,
+            error instanceof RequestBodyError ? error.status : 400,
+            {
+              error: {
+                code: error instanceof RequestBodyError ? error.code : "invalid_query",
+                message: error.message,
+              },
+            },
+            headOnly,
+          );
+          return true;
+        }
+        if (handler.mapError(error, request, response)) return true;
+        logger.error("Session API request failed", { requestId, error });
+        sendJson(
+          response,
+          500,
+          {
+            error: {
+              code: "internal_error",
+              message: "The local session reader could not complete the request",
+              requestId,
+            },
+          },
+          headOnly,
+        );
+        return true;
+      }
     }
+    return false;
   };
-  router.close = () => dependencies.live.close();
   return router;
 }

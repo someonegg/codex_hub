@@ -1,0 +1,3 @@
+export const CATALOG_PROBE_INTERVAL_MS = 1_500;
+export const CATALOG_WAIT_TIMEOUT_MS = 25_000;
+export const MAX_CATALOG_WAITERS = 100;

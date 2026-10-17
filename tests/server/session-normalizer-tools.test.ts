@@ -1,24 +1,24 @@
 import { describe, expect, it } from "vitest";
+
 import {
   MAX_DIRECTIVE_CHARS,
   MAX_TOOL_DETAIL_CHARS,
 } from "../../src/server/adapters/codex/limits.js";
 import { MAX_PREVIEW_CHARS } from "../../src/server/domain/session-text.js";
-import {
-  normalizeFixture,
-  normalizeRecords,
-} from "./session-normalizer.fixtures.js";
+import { normalizeFixture, normalizeRecords } from "./session-normalizer.fixtures.js";
 
 describe("tool normalization", () => {
   it("emits append-stable call and output items with public call IDs", async () => {
     const normalized = await normalizeFixture("rollout-2026-07-28T10-00-00-basic-session.jsonl");
     const tools = normalized.timeline.filter((item) => item.kind === "tool");
-    expect(tools.map((item) => [
-      item.stage,
-      item.callId,
-      item.toolName,
-      item.stage === "output" ? item.status : null,
-    ])).toEqual([
+    expect(
+      tools.map((item) => [
+        item.stage,
+        item.callId,
+        item.toolName,
+        item.stage === "output" ? item.status : null,
+      ]),
+    ).toEqual([
       ["call", "call-complete", "inspect_widget", null],
       ["output", "call-complete", "inspect_widget", "completed"],
       ["call", "call-pending", "pending_widget", null],
@@ -40,42 +40,42 @@ describe("tool normalization", () => {
   it("truncates oversized synthetic tool input and output before retaining detail", async () => {
     const oversized = "x".repeat(MAX_TOOL_DETAIL_CHARS + 32);
     const normalized = normalizeRecords("oversized-tool-session", [
-        {
-          ordinal: 1,
-          value: {
-            type: "response_item",
-            payload: { type: "function_call", name: "bounded", call_id: "big", arguments: oversized },
+      {
+        ordinal: 1,
+        value: {
+          type: "response_item",
+          payload: { type: "function_call", name: "bounded", call_id: "big", arguments: oversized },
+        },
+      },
+      {
+        ordinal: 2,
+        value: {
+          type: "response_item",
+          payload: { type: "function_call_output", call_id: "big", output: oversized },
+        },
+      },
+      {
+        ordinal: 3,
+        value: {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "user",
+            content: [{ type: "input_text", text: oversized }],
           },
         },
-        {
-          ordinal: 2,
-          value: {
-            type: "response_item",
-            payload: { type: "function_call_output", call_id: "big", output: oversized },
+      },
+      {
+        ordinal: 4,
+        value: {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [{ type: "output_text", text: oversized }],
           },
         },
-        {
-          ordinal: 3,
-          value: {
-            type: "response_item",
-            payload: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: oversized }],
-            },
-          },
-        },
-        {
-          ordinal: 4,
-          value: {
-            type: "response_item",
-            payload: {
-              type: "message",
-              role: "assistant",
-              content: [{ type: "output_text", text: oversized }],
-            },
-          },
-        },
+      },
     ]);
     const callDetail = normalized.toolDetails.get("tool-1");
     const outputDetail = normalized.toolDetails.get("tool-2");
@@ -91,10 +91,9 @@ describe("tool normalization", () => {
     expect(callDetail?.truncated).toBe(true);
     expect(outputDetail?.truncated).toBe(true);
     const directive = normalized.directiveDetails.get("directive-3");
-    expect(directiveItem?.kind === "directive" && directiveItem.hasDetail
-      ? directiveItem.summary
-      : null)
-      .toHaveLength(MAX_PREVIEW_CHARS);
+    expect(
+      directiveItem?.kind === "directive" && directiveItem.hasDetail ? directiveItem.summary : null,
+    ).toHaveLength(MAX_PREVIEW_CHARS);
     expect(directive?.text).toHaveLength(MAX_DIRECTIVE_CHARS);
     expect(directive?.truncated).toBe(true);
   });
@@ -102,14 +101,10 @@ describe("tool normalization", () => {
   it("does not rewrite an existing call when its output arrives", () => {
     const call = toolCall(1, "append", "inspect", "input");
     const before = normalizeRecords("before-output", [call]);
-    const after = normalizeRecords("after-output", [
-      call,
-      toolOutput(2, "append", "result"),
-    ]);
+    const after = normalizeRecords("after-output", [call, toolOutput(2, "append", "result")]);
 
     expect(after.timeline[0]).toEqual(before.timeline[0]);
-    expect(after.toolDetails.get("tool-1"))
-      .toEqual(before.toolDetails.get("tool-1"));
+    expect(after.toolDetails.get("tool-1")).toEqual(before.toolDetails.get("tool-1"));
     expect(after.timeline[1]).toMatchObject({
       kind: "tool",
       stage: "output",
@@ -203,12 +198,7 @@ function toolCall(ordinal: number, callId: string, name: string, input: string) 
   };
 }
 
-function toolOutput(
-  ordinal: number,
-  callId: string,
-  output: string | null,
-  failed = false,
-) {
+function toolOutput(ordinal: number, callId: string, output: string | null, failed = false) {
   return {
     ordinal,
     value: {

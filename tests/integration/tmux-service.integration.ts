@@ -1,11 +1,12 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
+
 import {
   MAX_TERMINAL_PREVIEW_BYTES,
-  type TmuxBinding,
   TmuxInteractionService,
 } from "../../src/server/interaction/tmux-service.js";
+import { type TmuxBinding } from "../../src/server/interaction/transport.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 beforeAll(() => {
@@ -28,19 +29,15 @@ describe("tmux interaction integration", () => {
       "-y",
       "20",
       "-s",
-      "viewer-test",
+      "codex-hub-test",
       "i=0; while [ \"$i\" -lt 80 ]; do printf 'HISTORY-%03d\\n' \"$i\"; i=$((i + 1)); done; printf '\\033[31mTAIL-世界\\033[0m\\n'; sleep 30",
     ]);
     try {
-      const paneId = execFileSync("tmux", [
-        "-S",
-        socketPath,
-        "display-message",
-        "-p",
-        "-t",
-        "viewer-test",
-        "#{pane_id}",
-      ], { encoding: "utf8" }).trim();
+      const paneId = execFileSync(
+        "tmux",
+        ["-S", socketPath, "display-message", "-p", "-t", "codex-hub-test", "#{pane_id}"],
+        { encoding: "utf8" },
+      ).trim();
       const service = new TmuxInteractionService();
       const binding = await service.connect({
         ordinal: 1,
@@ -49,17 +46,25 @@ describe("tmux interaction integration", () => {
         paneId,
       });
       expect(binding.paneId).toBe(paneId);
-      await service.sendKeys(binding, [
-        "Up", "Down", "Left", "Right", "BTab",
-      ]);
+      await service.sendKeys(binding, ["Up", "Down", "Left", "Right", "BTab"]);
       const preview = await waitForPreview(service, binding, "TAIL-世界");
       expect(preview.truncated).toBe(false);
-      expect(Buffer.byteLength(preview.content, "utf8"))
-        .toBeLessThanOrEqual(MAX_TERMINAL_PREVIEW_BYTES);
+      expect(Buffer.byteLength(preview.content, "utf8")).toBeLessThanOrEqual(
+        MAX_TERMINAL_PREVIEW_BYTES,
+      );
       expect(preview.content).toContain("TAIL-世界");
       expect(preview.content).not.toContain("HISTORY-000");
       expect(preview.content).not.toContain("\u001b[");
       expect(preview.content).not.toContain("�");
+      // Keep the server alive while the original target disappears.
+      execFileSync("tmux", ["-S", socketPath, "new-session", "-d", "-s", "other", "sleep 30"]);
+      execFileSync("tmux", ["-S", socketPath, "kill-pane", "-t", paneId]);
+      await expect(service.captureTerminal(binding)).rejects.toMatchObject({
+        code: "disconnected",
+      });
+      await expect(service.sendKeys(binding, ["Enter"])).rejects.toMatchObject({
+        code: "disconnected",
+      });
     } finally {
       spawnSync("tmux", ["-S", socketPath, "kill-server"]);
     }

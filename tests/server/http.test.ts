@@ -3,11 +3,14 @@ import { request } from "node:http";
 import { request as secureRequest } from "node:https";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { SessionReader } from "../../src/server/application/session-reader.js";
+import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer, listenServer } from "../../src/server/http/create-server.js";
-import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionLiveService } from "../../src/server/live/session-live-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import {
@@ -23,15 +26,16 @@ import {
 const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+  );
 });
 
 async function start() {
   const clientDirectory = await createTempDirectory("codex-reader-client-");
-  await Promise.all([
-    writeFile(join(clientDirectory, "index.html"), "<h1>trace notebook</h1>"),
-    writeFile(join(clientDirectory, "session.html"), "<h1>session notebook</h1>"),
-  ]);
+  await Promise.all([writeFile(join(clientDirectory, "index.html"), "<h1>trace notebook</h1>")]);
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
@@ -47,9 +51,12 @@ async function start() {
   return `http://${LOOPBACK_HOST}:${port}`;
 }
 
-async function startWithRepository(repository: SessionReader, logger: {
-  error(message: string, context: { readonly requestId: string; readonly error: unknown }): void;
-}) {
+async function startWithRepository(
+  repository: SessionReader,
+  logger: {
+    error(message: string, context: { readonly requestId: string; readonly error: unknown }): void;
+  },
+) {
   const clientDirectory = await createTempDirectory("codex-reader-api-client-");
   await writeFile(join(clientDirectory, "index.html"), "<h1>trace notebook</h1>");
   const config: ServerConfig = {
@@ -61,12 +68,20 @@ async function startWithRepository(repository: SessionReader, logger: {
     interactionEnabled: false,
   };
   const live = new SessionLiveService(repository);
+  const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, live }, {
-      logger,
-      requestId: () => "request-fixture",
-    }),
+    createApiRouter(
+      { sessions: repository, catalog, live },
+      {
+        logger,
+        requestId: () => "request-fixture",
+      },
+    ),
+    () => {
+      catalog.close();
+      live.close();
+    },
   );
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
@@ -171,11 +186,11 @@ describe("secure HTTP foundation", () => {
     });
   });
 
-  it("serves both MPA pages with restrictive headers and no CORS", async () => {
+  it("serves the unified hub with restrictive headers and no CORS", async () => {
     const base = await start();
     const response = await fetch(`${base}/sessions/abcdefghijklmnopqrstuvwx`);
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain("session notebook");
+    expect(await response.text()).toContain("trace notebook");
     const contentSecurityPolicy = response.headers.get("content-security-policy");
     expect(contentSecurityPolicy).toContain("default-src 'self'");
     expect(contentSecurityPolicy).toContain("font-src 'self' data:");
@@ -190,12 +205,9 @@ describe("secure HTTP foundation", () => {
   it("does not serve a static-file symlink whose target is outside the client root", async () => {
     const clientDirectory = await createTempDirectory("codex-reader-client-root-");
     const outsideDirectory = await createTempDirectory("codex-reader-client-outside-");
-    await writeFile(join(clientDirectory, "index.html"), "viewer");
+    await writeFile(join(clientDirectory, "index.html"), "hub");
     await writeFile(join(outsideDirectory, "secret.txt"), "STATIC_ESCAPE_CANARY");
-    await symlink(
-      join(outsideDirectory, "secret.txt"),
-      join(clientDirectory, "leak.txt"),
-    );
+    await symlink(join(outsideDirectory, "secret.txt"), join(clientDirectory, "leak.txt"));
     const server = createServer({
       host: LOOPBACK_HOST,
       port: 0,
@@ -231,15 +243,17 @@ describe("secure HTTP foundation", () => {
       clientDirectory,
     };
 
-    expect(() => createServer({
-      ...baseConfig,
-      tls: {
-        enabled: true,
-        certificatePath: join(directory, "missing-cert.pem"),
-        privateKeyPath: join(directory, "missing-key.pem"),
-      },
-      interactionEnabled: false,
-    })).toThrow();
+    expect(() =>
+      createServer({
+        ...baseConfig,
+        tls: {
+          enabled: true,
+          certificatePath: join(directory, "missing-cert.pem"),
+          privateKeyPath: join(directory, "missing-key.pem"),
+        },
+        interactionEnabled: false,
+      }),
+    ).toThrow();
 
     const certificatePath = join(directory, "invalid-cert.pem");
     const privateKeyPath = join(directory, "invalid-key.pem");
@@ -247,33 +261,41 @@ describe("secure HTTP foundation", () => {
       writeFile(certificatePath, "not a certificate"),
       writeFile(privateKeyPath, "not a private key"),
     ]);
-    expect(() => createServer({
-      ...baseConfig,
-      tls: { enabled: true, certificatePath, privateKeyPath },
-      interactionEnabled: false,
-    })).toThrow();
+    expect(() =>
+      createServer({
+        ...baseConfig,
+        tls: { enabled: true, certificatePath, privateKeyPath },
+        interactionEnabled: false,
+      }),
+    ).toThrow();
   });
 
   it("requires a client certificate signed by the configured CA", async () => {
     const base = await startSecure(true);
     await expect(secureStatus(base)).rejects.toThrow();
-    await expect(secureStatus(base, {
-      certificate: TEST_UNTRUSTED_CLIENT_CERTIFICATE,
-      key: TEST_UNTRUSTED_CLIENT_KEY,
-    })).rejects.toThrow();
-    expect(await secureStatus(base, {
-      certificate: TEST_CLIENT_CERTIFICATE,
-      key: TEST_CLIENT_KEY,
-    })).toBe(200);
+    await expect(
+      secureStatus(base, {
+        certificate: TEST_UNTRUSTED_CLIENT_CERTIFICATE,
+        key: TEST_UNTRUSTED_CLIENT_KEY,
+      }),
+    ).rejects.toThrow();
+    expect(
+      await secureStatus(base, {
+        certificate: TEST_CLIENT_CERTIFICATE,
+        key: TEST_CLIENT_KEY,
+      }),
+    ).toBe(200);
   });
 
   it("accepts forwarded Host and Origin headers but rejects mutation methods", async () => {
     const base = await start();
     expect(await rawStatus(base, { Host: "reader.example" })).toBe(200);
-    expect(await rawStatus(base, {
-      Host: "reader.example",
-      Origin: "https://dashboard.example",
-    })).toBe(200);
+    expect(
+      await rawStatus(base, {
+        Host: "reader.example",
+        Origin: "https://dashboard.example",
+      }),
+    ).toBe(200);
     const post = await fetch(base, { method: "POST" });
     expect(post.status).toBe(405);
     expect(post.headers.get("allow")).toBe("GET, HEAD");
@@ -285,55 +307,6 @@ describe("secure HTTP foundation", () => {
     expect(response.status).toBe(404);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect((await response.json()).error.code).toBe("not_found");
-  });
-
-  it("returns catalog diagnostics in list responses without local paths", async () => {
-    const unavailable = async () => null;
-    const diagnostics = [
-      {
-        code: "session_root_unreadable",
-        severity: "warning" as const,
-        message: "A configured session root could not be read.",
-        ordinal: null,
-      },
-      {
-        code: "rollout_unavailable",
-        severity: "warning" as const,
-        message: "A session rollout is temporarily unavailable.",
-        ordinal: null,
-      },
-      {
-        code: "duplicate_source_session_id",
-        severity: "error" as const,
-        message: "A source returned duplicate stable session identities.",
-        ordinal: null,
-      },
-    ];
-    const sessions: SessionReader = {
-      list: vi.fn().mockResolvedValue({
-        sessions: [],
-        projects: [],
-        total: 0,
-        nextCursor: null,
-        diagnostics,
-      }),
-      getSession: unavailable,
-      getItems: unavailable,
-      getLiveSession: unavailable,
-      getToolDetail: unavailable,
-      getDirectiveDetail: unavailable,
-      getInternalDetail: unavailable,
-      getInteractionSession: unavailable,
-      refresh: vi.fn(),
-    };
-    const base = await startWithRepository(sessions, { error: vi.fn() });
-
-    const response = await fetch(`${base}/api/v1/sessions?project=%2Fprivate%2Fproject`);
-    const body = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(body.diagnostics).toEqual(diagnostics);
-    expect(JSON.stringify(body)).not.toContain("/private/project");
   });
 
   it("logs internal API failures and returns only an opaque request ID", async () => {
@@ -367,9 +340,9 @@ describe("secure HTTP foundation", () => {
       },
     });
     expect(JSON.stringify(body)).not.toContain(failure.message);
-    expect(logger.error).toHaveBeenCalledWith(
-      "Session API request failed",
-      { requestId: "request-fixture", error: failure },
-    );
+    expect(logger.error).toHaveBeenCalledWith("Session API request failed", {
+      requestId: "request-fixture",
+      error: failure,
+    });
   });
 });

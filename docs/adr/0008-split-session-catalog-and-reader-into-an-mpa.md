@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0020
 date: 2026-08-01
 ---
 
@@ -59,3 +59,5 @@ The Live update preference lifecycle was later refined by [ADR-0014](0014-rememb
 
 - Good: Aligns URL documents, React roots, and state ownership.
 - Bad: Accepts full navigation cost and requires two build inputs.
+
+Superseded by the hub redesign; see [ADR-0020](0020-use-a-unified-project-hub.md).

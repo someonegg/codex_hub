@@ -1,19 +1,21 @@
 import type {
   ApiError,
+  CreateSessionRequest,
   DirectiveDetailQuery,
   DirectiveDetailResponse,
+  HubOperation,
   InteractionKey,
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
   ItemPageResponse,
-  SessionLiveQuery,
-  SessionLiveResponse,
   SessionListQuery,
   SessionListResponse,
+  SessionLiveQuery,
+  SessionLiveResponse,
+  TerminalPreviewResponse,
   ToolDetailQuery,
   ToolDetailResponse,
-  TerminalPreviewResponse,
 } from "../../shared/api-contract";
 
 export class ApiClientError extends Error {
@@ -27,11 +29,7 @@ export class ApiClientError extends Error {
   }
 }
 
-async function request<T>(
-  path: string,
-  signal?: AbortSignal,
-  init: RequestInit = {},
-): Promise<T> {
+async function request<T>(path: string, signal?: AbortSignal, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: { Accept: "application/json", ...init.headers },
@@ -51,9 +49,7 @@ async function request<T>(
       apiError?.message ?? `Request failed (${response.status})`,
     );
   }
-  return response.status === 204
-    ? undefined as T
-    : response.json() as Promise<T>;
+  return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>);
 }
 
 function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
@@ -83,18 +79,22 @@ function queryString(values: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
+  createSession: (input: CreateSessionRequest) => postJson<HubOperation>("/api/v1/sessions", input),
+  archiveSession: (id: string) =>
+    postJson<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}/archive`, {}),
+  deleteSession: (id: string) =>
+    request<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}`, undefined, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }),
+  operation: (id: string, signal?: AbortSignal) =>
+    request<HubOperation>(`/api/v1/operations/${encodeURIComponent(id)}`, signal),
   sessions: (query: SessionListQuery, signal?: AbortSignal) =>
-    request<SessionListResponse>(
-      `/api/v1/sessions${queryString({
-        project: query.project,
-        from: query.from,
-        to: query.to,
-        limit: query.limit,
-        cursor: query.cursor,
-        fresh: query.fresh,
-      })}`,
+    request<SessionListResponse | null>(
+      `/api/v1/sessions${queryString({ after: query.after })}`,
       signal,
-    ),
+    ).then((value) => value ?? null),
   items: (id: string, query: ItemPageQuery, signal?: AbortSignal) =>
     request<ItemPageResponse>(
       `/api/v1/sessions/${encodeURIComponent(id)}/items${queryString({
@@ -111,12 +111,7 @@ export const api = {
       })}`,
       signal,
     ).then((value) => value ?? null),
-  tool: (
-    sessionId: string,
-    itemId: string,
-    query: ToolDetailQuery,
-    signal?: AbortSignal,
-  ) =>
+  tool: (sessionId: string, itemId: string, query: ToolDetailQuery, signal?: AbortSignal) =>
     request<ToolDetailResponse>(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/tool${queryString({ cursor: query.cursor })}`,
       signal,
@@ -131,12 +126,7 @@ export const api = {
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/directive${queryString({ cursor: query.cursor })}`,
       signal,
     ),
-  internal: (
-    sessionId: string,
-    itemId: string,
-    query: InternalDetailQuery,
-    signal?: AbortSignal,
-  ) =>
+  internal: (sessionId: string, itemId: string, query: InternalDetailQuery, signal?: AbortSignal) =>
     request<InternalDetailResponse>(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/internal${queryString({ cursor: query.cursor })}`,
       signal,
@@ -147,16 +137,10 @@ export const api = {
       { message },
       signal,
     ),
-  sendKeys: (
-    sessionId: string,
-    keys: readonly InteractionKey[],
-    signal?: AbortSignal,
-  ) =>
-    postJson<void>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/keys`,
-      { keys },
-      signal,
-    ),
+  rebind: (sessionId: string, signal?: AbortSignal) =>
+    postJson<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/rebind`, {}, signal),
+  sendKeys: (sessionId: string, keys: readonly InteractionKey[], signal?: AbortSignal) =>
+    postJson<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/keys`, { keys }, signal),
   terminalPreview: (sessionId: string, signal?: AbortSignal) =>
     request<TerminalPreviewResponse>(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/terminal-preview`,

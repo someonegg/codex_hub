@@ -1,32 +1,39 @@
 import { cp, readFile, rename, writeFile } from "node:fs/promises";
+import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { SessionReadService } from "../../src/server/application/session-read-service.js";
+import {
+  CatalogCapacityError,
+  SessionCatalogService,
+} from "../../src/server/catalog/session-catalog-service.js";
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
-import { createCodexSessionReadService } from "../../src/server/create-session-read-service.js";
+import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
 import { SessionLiveService } from "../../src/server/live/session-live-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { normalizeFixture } from "./session-normalizer.fixtures.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) =>
-    new Promise<void>((done) => server.close(() => done()))));
+  await Promise.all(
+    servers.splice(0).map((server) => new Promise<void>((done) => server.close(() => done()))),
+  );
 });
 
-async function startApi(existingHome?: string) {
-  const home = existingHome ?? await createTempDirectory("codex-opaque-api-");
+async function startApi(existingHome?: string, override?: SessionReadService) {
+  const home = existingHome ?? (await createTempDirectory("codex-opaque-api-"));
   if (existingHome === undefined) {
     await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
   }
   const clientDirectory = await createTempDirectory("codex-opaque-client-");
-  await Promise.all([
-    writeFile(join(clientDirectory, "index.html"), "<h1>sessions</h1>"),
-    writeFile(join(clientDirectory, "session.html"), "<h1>session reader</h1>"),
-  ]);
-  const repository = await createCodexSessionReadService(home);
+  await Promise.all([writeFile(join(clientDirectory, "index.html"), "<h1>sessions</h1>")]);
+  const repository = override ?? (await createCodexSessionReadService(home));
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
@@ -36,12 +43,17 @@ async function startApi(existingHome?: string) {
     interactionEnabled: false,
   };
   const live = new SessionLiveService(repository, {
-      probeIntervalMs: 5,
-      waitTimeoutMs: 15,
+    probeIntervalMs: 5,
+    waitTimeoutMs: 15,
   });
+  const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, live }),
+    createApiRouter({ sessions: repository, catalog, live }),
+    () => {
+      catalog.close();
+      live.close();
+    },
   );
   servers.push(server);
   await new Promise<void>((done) => server.listen(0, LOOPBACK_HOST, done));
@@ -50,14 +62,35 @@ async function startApi(existingHome?: string) {
 }
 
 describe("opaque cursor API", () => {
+  it("preserves read query errors and accepts a normal item request", async () => {
+    const { base } = await startApi();
+    const list = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
+    const id = list.sessions[0].id;
+    const cases = [
+      ["?unknown=x", "unknown is not supported"],
+      ["?after=x&after=y", "after must appear once"],
+      [`/${id}/items?limit=1&limit=2`, "limit must appear once"],
+      [`/${id}/items/item/tool`, "cursor is required for tool detail"],
+      [`/${id}/items/item/internal`, "cursor is required for internal detail"],
+      [`/${id}/items/item/directive`, "cursor is required for directive detail"],
+    ];
+    for (const [suffix, message] of cases) {
+      const response = await fetch(`${base}/api/v1/sessions${suffix}`);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ error: { code: "invalid_query", message } });
+    }
+    expect((await fetch(`${base}/api/v1/sessions/${id}/items?limit=1`)).status).toBe(200);
+  });
+
   it("serves internal JSON only from its cursor-bound detail endpoint", async () => {
     const { base } = await startApi();
     const list = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
     const sessionId = list.sessions.find(
       (session: { title: string }) => session.title === "Synthetic trace",
     ).id;
-    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300`)
-      .then((response) => response.json());
+    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300`).then(
+      (response) => response.json(),
+    );
     expect(JSON.stringify(page)).not.toContain("REASONING_CANARY_NEVER_RENDER");
 
     const detail = await fetch(
@@ -86,25 +119,18 @@ describe("opaque cursor API", () => {
 
   it("classifies structurally valid cursors from another service instance as recoverable", async () => {
     const firstServer = await startApi();
-    const list = await fetch(`${firstServer.base}/api/v1/sessions?limit=1`)
-      .then((response) => response.json());
+    const list = await fetch(`${firstServer.base}/api/v1/sessions`).then((response) =>
+      response.json(),
+    );
     const sessionId = list.sessions[0].id;
-    const page = await fetch(
-      `${firstServer.base}/api/v1/sessions/${sessionId}/items?limit=1`,
-    ).then((response) => response.json());
+    const page = await fetch(`${firstServer.base}/api/v1/sessions/${sessionId}/items?limit=1`).then(
+      (response) => response.json(),
+    );
     const confirmed = await fetch(
       `${firstServer.base}/api/v1/sessions/${sessionId}/items?limit=300`,
     ).then((response) => response.json());
 
     const restarted = await startApi(firstServer.home);
-    const staleList = await fetch(
-      `${restarted.base}/api/v1/sessions?limit=1&cursor=${encodeURIComponent(list.nextCursor)}`,
-    );
-    expect(staleList.status).toBe(409);
-    expect(await staleList.json()).toMatchObject({
-      error: { code: "stale_list_cursor" },
-    });
-
     const staleTimeline = await fetch(
       `${restarted.base}/api/v1/sessions/${sessionId}/items?cursor=${encodeURIComponent(page.cursor)}`,
     );
@@ -120,63 +146,86 @@ describe("opaque cursor API", () => {
       error: { code: "timeline_changed" },
     });
 
-    expect((await fetch(
-      `${restarted.base}/api/v1/sessions?cursor=not-a-cursor`,
-    )).status).toBe(400);
-    expect((await fetch(
-      `${restarted.base}/api/v1/sessions/${sessionId}/items?cursor=not-a-cursor`,
-    )).status).toBe(400);
+    expect((await fetch(`${restarted.base}/api/v1/sessions?cursor=not-a-cursor`)).status).toBe(400);
+    expect(
+      (await fetch(`${restarted.base}/api/v1/sessions/${sessionId}/items?cursor=not-a-cursor`))
+        .status,
+    ).toBe(400);
   });
 
-  it("pages lists with a filter-bound cursor and rejects a stale list", async () => {
-    const { base, home } = await startApi();
-    const head = await fetch(
-      `${base}/api/v1/sessions?limit=1`,
-      { method: "HEAD" },
-    );
+  it("returns the full compact catalog and rejects old pagination and filters", async () => {
+    const { base } = await startApi();
+    const head = await fetch(`${base}/api/v1/sessions`, { method: "HEAD" });
     expect(head.status).toBe(200);
-    expect(head.headers.get("content-length")).toEqual(expect.any(String));
     expect(await head.text()).toBe("");
-    const first = await fetch(`${base}/api/v1/sessions?limit=1`)
-      .then((response) => response.json());
-    expect(first).toEqual(expect.objectContaining({
-      total: 4,
-      nextCursor: expect.any(String),
-    }));
-    expect(Object.keys(first).sort()).toEqual([
-      "diagnostics",
-      "nextCursor",
-      "projects",
-      "sessions",
-      "total",
+    const first = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
+    expect(first.sessions).toHaveLength(4);
+    expect(Object.keys(first).sort()).toEqual(["projects", "revision", "sessions"]);
+    expect(Object.keys(first.sessions[0]).sort()).toEqual([
+      "archived",
+      "id",
+      "isChild",
+      "parentId",
+      "projectId",
+      "title",
+      "updatedAt",
     ]);
-    expect(first.sessions[0]).toEqual(expect.objectContaining({ id: expect.any(String) }));
-    expect(first.sessions[0]).not.toHaveProperty("session");
-    const second = await fetch(
-      `${base}/api/v1/sessions?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
-    ).then((response) => response.json());
-    expect(second.sessions[0].id).not.toBe(first.sessions[0].id);
+    for (const query of [
+      "limit=1",
+      "cursor=x",
+      "fresh=true",
+      "project=x",
+      "from=x",
+      "to=x",
+      "mainOnly=true",
+      "after=x",
+      `after=${first.revision}&after=${first.revision}`,
+    ]) {
+      expect((await fetch(`${base}/api/v1/sessions?${query}`)).status).toBe(400);
+    }
+    const changed = await fetch(`${base}/api/v1/sessions?after=${"z".repeat(43)}`);
+    expect(changed.status).toBe(200);
+    expect(await changed.json()).toEqual(first);
+  });
 
-    const wrongFilters = await fetch(
-      `${base}/api/v1/sessions?project=${encodeURIComponent("/wrong")}&limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
+  it("reports directory capacity with a retry hint and connects disconnect cleanup", async () => {
+    const { base } = await startApi();
+    const wait = vi
+      .spyOn(SessionCatalogService.prototype, "wait")
+      .mockRejectedValueOnce(new CatalogCapacityError("Retry shortly"));
+    const full = await fetch(`${base}/api/v1/sessions`);
+    expect(full.status).toBe(429);
+    expect(full.headers.get("retry-after")).toBe("2");
+    expect(await full.json()).toMatchObject({ error: { code: "catalog_capacity_exceeded" } });
+    let connected!: () => void;
+    const connection = new Promise<void>((resolve) => {
+      connected = resolve;
+    });
+    let disconnected!: () => void;
+    const disconnection = new Promise<void>((resolve) => {
+      disconnected = resolve;
+    });
+    wait.mockImplementationOnce(
+      async (_after, signal) =>
+        new Promise((_resolve, reject) => {
+          signal!.addEventListener(
+            "abort",
+            () => {
+              disconnected();
+              reject(new DOMException("Aborted", "AbortError"));
+            },
+            { once: true },
+          );
+          connected();
+        }),
     );
-    expect(wrongFilters.status).toBe(400);
-
-    const rollout = join(
-      home,
-      "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
-    );
-    await writeFile(
-      rollout,
-      `${await readFile(rollout, "utf8")}{"timestamp":"2026-08-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"new tail"}]}}\n`,
-    );
-    await fetch(`${base}/api/v1/sessions?limit=1&fresh=true`);
-    const stale = await fetch(
-      `${base}/api/v1/sessions?limit=1&cursor=${encodeURIComponent(first.nextCursor)}`,
-    );
-    expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ error: { code: "stale_list_cursor" } });
-    expect((await fetch(`${base}/api/v1/sessions?fresh=true&cursor=x`)).status).toBe(400);
+    const controller = new AbortController();
+    const pending = fetch(`${base}/api/v1/sessions`, { signal: controller.signal });
+    const aborted = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await connection;
+    controller.abort();
+    await aborted;
+    await disconnection;
   });
 
   it("opens through items, keeps an empty incremental cursor stable, and bounds lazy detail", async () => {
@@ -185,33 +234,37 @@ describe("opaque cursor API", () => {
       join(home, "session_index.jsonl"),
       `${JSON.stringify({ id: "basic-session", thread_name: "Current nickname" })}\n`,
     );
-    const list = await fetch(`${base}/api/v1/sessions?fresh=true`)
-      .then((response) => response.json());
+    const list = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
     const sessionId = list.sessions.find(
-      (session: { title: string }) => session.title === "Synthetic trace",
+      (session: { title: string }) => session.title === "Current nickname",
     ).id;
-    expect(list.sessions.find((session: { id: string }) => session.id === sessionId))
-      .toMatchObject({ title: "Synthetic trace", nickname: "Current nickname" });
+    expect(list.sessions.find((session: { id: string }) => session.id === sessionId)).toMatchObject(
+      { title: "Current nickname" },
+    );
 
-    const metadata = await fetch(`${base}/api/v1/sessions/${sessionId}`)
-      .then((response) => response.json());
+    const metadata = await fetch(`${base}/api/v1/sessions/${sessionId}`).then((response) =>
+      response.json(),
+    );
     expect(metadata.session.title).toBe("Synthetic trace");
     expect(metadata.session.nickname).toBe("Current nickname");
     expect(metadata).not.toHaveProperty("revisionSession");
 
-    const first = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=1`)
-      .then((response) => response.json());
-    expect(first).toEqual(expect.objectContaining({
-      session: expect.objectContaining({
-        title: "Synthetic trace",
-        nickname: "Current nickname",
+    const first = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=1`).then(
+      (response) => response.json(),
+    );
+    expect(first).toEqual(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          title: "Synthetic trace",
+          nickname: "Current nickname",
+        }),
+        interaction: { supported: false, attachCommand: null },
+        items: expect.any(Array),
+        cursor: expect.any(String),
+        hasMore: true,
+        liveRevision: expect.any(String),
       }),
-      interaction: { supported: false },
-      items: expect.any(Array),
-      cursor: expect.any(String),
-      hasMore: true,
-      liveRevision: expect.any(String),
-    }));
+    );
     expect(first).not.toHaveProperty("revisionSession");
     const unconfirmed = await fetch(
       `${base}/api/v1/sessions/${sessionId}/items/directive-4/directive?cursor=${encodeURIComponent(first.cursor)}`,
@@ -222,8 +275,9 @@ describe("opaque cursor API", () => {
       `${base}/api/v1/sessions/${sessionId}/items?limit=300&cursor=${encodeURIComponent(first.cursor)}`,
     ).then((response) => response.json());
     const tail = rest.hasMore
-      ? await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300&cursor=${encodeURIComponent(rest.cursor)}`)
-          .then((response) => response.json())
+      ? await fetch(
+          `${base}/api/v1/sessions/${sessionId}/items?limit=300&cursor=${encodeURIComponent(rest.cursor)}`,
+        ).then((response) => response.json())
       : rest;
     const empty = await fetch(
       `${base}/api/v1/sessions/${sessionId}/items?cursor=${encodeURIComponent(tail.cursor)}`,
@@ -246,8 +300,9 @@ describe("opaque cursor API", () => {
     const sessionId = list.sessions.find(
       (session: { title: string }) => session.title === "Synthetic trace",
     ).id;
-    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300`)
-      .then((response) => response.json());
+    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300`).then(
+      (response) => response.json(),
+    );
     const query = `cursor=${encodeURIComponent(page.cursor)}&after=${encodeURIComponent(page.liveRevision)}`;
 
     const unchanged = await fetch(`${base}/api/v1/sessions/${sessionId}/live?${query}`);
@@ -265,29 +320,36 @@ describe("opaque cursor API", () => {
     await repository.refresh();
     const changed = await fetch(`${base}/api/v1/sessions/${sessionId}/live?${query}`);
     expect(changed.status).toBe(200);
-    expect(await changed.json()).toEqual(expect.objectContaining({
-      cursor: page.cursor,
-      hasMore: true,
-      liveRevision: expect.not.stringMatching(page.liveRevision),
-    }));
+    expect(await changed.json()).toEqual(
+      expect.objectContaining({
+        cursor: page.cursor,
+        hasMore: true,
+        liveRevision: expect.not.stringMatching(page.liveRevision),
+      }),
+    );
 
-    expect((await fetch(
-      `${base}/api/v1/sessions/${sessionId}/live?cursor=bad&after=${"a".repeat(43)}`,
-    )).status).toBe(400);
-    expect((await fetch(
-      `${base}/api/v1/sessions/${sessionId}/live?cursor=${encodeURIComponent(page.cursor)}&after=bad`,
-    )).status).toBe(400);
+    expect(
+      (await fetch(`${base}/api/v1/sessions/${sessionId}/live?cursor=bad&after=${"a".repeat(43)}`))
+        .status,
+    ).toBe(400);
+    expect(
+      (
+        await fetch(
+          `${base}/api/v1/sessions/${sessionId}/live?cursor=${encodeURIComponent(page.cursor)}&after=bad`,
+        )
+      ).status,
+    ).toBe(400);
   });
 
   it("accepts append-only continuation and reports timeline_changed after replacement", async () => {
     const { base, home, repository } = await startApi();
-    const list = await fetch(`${base}/api/v1/sessions`)
-      .then((response) => response.json());
+    const list = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
     const sessionId = list.sessions.find(
       (session: { title: string }) => session.title === "Synthetic trace",
     ).id;
-    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=2`)
-      .then((response) => response.json());
+    const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=2`).then(
+      (response) => response.json(),
+    );
     const rollout = join(
       home,
       "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
@@ -297,9 +359,13 @@ describe("opaque cursor API", () => {
       `${await readFile(rollout, "utf8")}{"timestamp":"2026-08-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"append"}]}}\n`,
     );
     await repository.refresh();
-    expect((await fetch(
-      `${base}/api/v1/sessions/${sessionId}/items?limit=2&cursor=${encodeURIComponent(page.cursor)}`,
-    )).status).toBe(200);
+    expect(
+      (
+        await fetch(
+          `${base}/api/v1/sessions/${sessionId}/items?limit=2&cursor=${encodeURIComponent(page.cursor)}`,
+        )
+      ).status,
+    ).toBe(200);
 
     const replacement = `${rollout}.replacement`;
     await writeFile(
@@ -320,4 +386,113 @@ describe("opaque cursor API", () => {
     expect(liveChanged.status).toBe(409);
     expect(await liveChanged.json()).toMatchObject({ error: { code: "timeline_changed" } });
   });
+});
+
+it("accepts opaque Unicode, UUID and percent-containing item IDs with one decoding pass", async () => {
+  const original = await normalizeFixture("rollout-2026-07-28T10-00-00-basic-session.jsonl");
+  const ids = new Map(
+    original.timeline.map((item, index) => [
+      item.id,
+      item.kind === "tool"
+        ? `550e8400-e29b-41d4-a716-446655440000:${index}`
+        : item.kind === "directive"
+          ? `条目:α-${index}`
+          : `literal%2Fid-${index}`,
+    ]),
+  );
+  const normalized = {
+    ...original,
+    timeline: original.timeline.map((item) => ({ ...item, id: ids.get(item.id)! })),
+    toolDetails: new Map([...original.toolDetails].map(([id, detail]) => [ids.get(id)!, detail])),
+    directiveDetails: new Map(
+      [...original.directiveDetails].map(([id, detail]) => [ids.get(id)!, detail]),
+    ),
+    internalDetails: new Map(
+      [...original.internalDetails].map(([id, detail]) => [ids.get(id)!, detail]),
+    ),
+  };
+  const source = {
+    descriptor: {
+      sourceType: "test",
+      instanceKey: "ids",
+      sourceInstanceId: "ids",
+      displayName: "Test",
+    },
+    async refresh() {
+      return {
+        signature: "1",
+        diagnostics: [],
+        sessions: [
+          {
+            localId: "one",
+            nativeSessionId: "native",
+            parentNativeSessionId: null,
+            origin: original.session.origin,
+            normalized,
+          },
+        ],
+      };
+    },
+  };
+  const reader = new SessionReadService([source], undefined, undefined, {
+    diagnosticLogger: { log() {} },
+  });
+  const { base } = await startApi(undefined, reader);
+  const sessionId = (await reader.list()).sessions[0]!.id;
+  const page = (await reader.getItems(sessionId, { limit: 300 }))!;
+  const root = `/api/v1/sessions/${sessionId}/items/`;
+  const suffix = `?cursor=${encodeURIComponent(page.cursor)}`;
+  for (const kind of ["tool", "directive", "internal"] as const) {
+    const item = normalized.timeline.find(
+      (item) =>
+        item.kind === kind &&
+        (kind === "tool"
+          ? normalized.toolDetails
+          : kind === "directive"
+            ? normalized.directiveDetails
+            : normalized.internalDetails
+        ).has(item.id),
+    )!;
+    const result = await fetch(`${base}${root}${encodeURIComponent(item.id)}/${kind}${suffix}`);
+    expect(result.status).toBe(200);
+    const wrongKind = kind === "tool" ? "directive" : "tool";
+    expect(
+      (await fetch(`${base}${root}${encodeURIComponent(item.id)}/${wrongKind}${suffix}`)).status,
+    ).toBe(404);
+  }
+  for (const itemId of ["550e8400-e29b-41d4-a716-446655440000", "plainABC-12", "α".repeat(512)]) {
+    expect((await fetch(`${base}${root}${encodeURIComponent(itemId)}/tool${suffix}`)).status).toBe(
+      404,
+    );
+  }
+  // Send the raw request path so URL implementations cannot normalize dot segments first.
+  const rawStatus = (itemId: string) =>
+    new Promise<number>((resolveStatus, reject) => {
+      const address = new URL(base);
+      const outgoing = request(
+        { hostname: address.hostname, port: address.port, path: `${root}${itemId}/tool${suffix}` },
+        (response) => {
+          response.resume();
+          resolveStatus(response.statusCode!);
+        },
+      );
+      outgoing.on("error", reject);
+      outgoing.end();
+    });
+  for (const itemId of [
+    "",
+    "%",
+    "%FF",
+    "%2F",
+    "%5C",
+    "%00",
+    "%C2%85",
+    ".",
+    "..",
+    "%2e",
+    "%2E%2e",
+    encodeURIComponent("α".repeat(513)),
+  ]) {
+    expect(await rawStatus(itemId), itemId).toBe(400);
+  }
 });

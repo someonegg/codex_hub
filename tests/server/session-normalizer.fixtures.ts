@@ -1,20 +1,22 @@
 import { resolve } from "node:path";
-import { IdentityResolver, type SessionMetadata } from "../../src/server/adapters/codex/identity-resolver.js";
+
+import {
+  IdentityResolver,
+  type SessionMetadata,
+} from "../../src/server/adapters/codex/identity-resolver.js";
+import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
 import {
   CheckpointedRolloutDecoder,
   type DecodedRecord,
   type DecodedRollout,
 } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
-import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
 
-export const fixtureHome = resolve("tests/fixtures/codex-home");
+const fixtureHome = resolve("tests/fixtures/codex-home");
 
 export async function normalizeFixture(fileName: string) {
   const policy = await PathPolicy.create(fixtureHome);
-  const descriptor = await policy.register(
-    resolve(fixtureHome, "sessions/2026/07/28", fileName),
-  );
+  const descriptor = await policy.register(resolve(fixtureHome, "sessions/2026/07/28", fileName));
   if (descriptor === null) throw new Error(`Fixture is outside the path policy: ${fileName}`);
   const decoded = await new CheckpointedRolloutDecoder().decode(descriptor);
   const metadata = new IdentityResolver().resolve(decoded);
@@ -47,9 +49,7 @@ export function decodedRollout(id: string, records: DecodedRecord[]): DecodedRol
   };
 }
 
-export function sessionMetadata(
-  overrides: Partial<SessionMetadata> = {},
-): SessionMetadata {
+export function sessionMetadata(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   return {
     threadId: null,
     agentVersion: null,

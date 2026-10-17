@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
+
 import type {
   DomainDiagnostic,
   DomainSession,
@@ -7,39 +8,29 @@ import type {
   NormalizedSession,
 } from "../../domain/session-domain.js";
 import { opaqueIdForParts } from "../../security/opaque-id.js";
-import { PathPolicy, type RolloutDescriptor } from "./path-policy.js";
 import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
   SourceSessionEntry,
 } from "../../source/session-source.js";
-import {
-  IdentityResolver,
-  type IdentityAccumulatorState,
-} from "./identity-resolver.js";
+import { type IdentityAccumulatorState, IdentityResolver } from "./identity-resolver.js";
+import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
 import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
+import { PathPolicy, type RolloutDescriptor } from "./path-policy.js";
+import { ProjectDirectoryResolver } from "./project-directory-resolver.js";
 import {
   CheckpointedRolloutDecoder,
   type RolloutCheckpoint,
   type RolloutDecoder,
 } from "./rollout-decoder.js";
+import { SessionIndexReader } from "./session-index-reader.js";
 import {
   DefaultSessionNormalizer,
   type SessionNormalizer,
   type SessionNormalizerState,
 } from "./session-normalizer.js";
-import { SessionIndexReader } from "./session-index-reader.js";
-import { ProjectDirectoryResolver } from "./project-directory-resolver.js";
-
-const EXPECTED_ROLLOUT_IO_ERRORS = new Set([
-  "ENOENT",
-  "EACCES",
-  "EPERM",
-  "ESTALE",
-  "EISDIR",
-]);
 
 interface FileFingerprint {
   readonly sourceRelativePath: string;
@@ -86,6 +77,7 @@ interface SourceEntries {
 export class CodexSessionSource implements SessionSource {
   readonly descriptor: SessionSourceDescriptor;
   #cache = new Map<string, CodexCacheEntry>();
+  readonly #observedRoots = new Set<string>();
   #snapshot: SessionSourceSnapshot | null = null;
   #lastRefreshTelemetry: CodexRefreshTelemetry = EMPTY_TELEMETRY;
 
@@ -110,6 +102,17 @@ export class CodexSessionSource implements SessionSource {
     await this.sessionIndex.refresh();
     const policy = await PathPolicy.create(this.codexHome);
     const discovery = await new JsonlCatalogSource(policy).discover();
+    const presentRoots = new Set(policy.roots().map((root) => root.canonicalPath));
+    for (const root of this.#observedRoots) {
+      if (!presentRoots.has(root))
+        discovery.diagnostics.push({
+          code: "session_root_unreadable",
+          severity: "warning",
+          message: "A previously observed session directory is unavailable.",
+          ordinal: null,
+        });
+    }
+    for (const root of presentRoots) this.#observedRoots.add(root);
     const discoverySignature = JSON.stringify({
       diagnostics: discovery.diagnostics,
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
@@ -176,7 +179,8 @@ export class CodexSessionSource implements SessionSource {
     if (
       session.origin.sourceInstanceId !== this.descriptor.sourceInstanceId ||
       session.sourceId === null
-    ) return null;
+    )
+      return null;
     return this.sessionIndex.threadName(session.sourceId);
   }
 
@@ -187,9 +191,10 @@ export class CodexSessionSource implements SessionSource {
     telemetry: MutableCodexRefreshTelemetry,
   ): Promise<CodexCacheEntry | null> {
     try {
-      const appendCheckpoint = cached?.fingerprint.normalizerVersion === NORMALIZER_VERSION
-        ? cached.checkpoint
-        : undefined;
+      const appendCheckpoint =
+        cached?.fingerprint.normalizerVersion === NORMALIZER_VERSION
+          ? cached.checkpoint
+          : undefined;
       const decodeStartedAt = performance.now();
       const decoded = await this.decoder.decode(descriptor, appendCheckpoint);
       telemetry.decodeMs += performance.now() - decodeStartedAt;
@@ -198,12 +203,14 @@ export class CodexSessionSource implements SessionSource {
       telemetry[decoded.mode === "append" ? "appendFiles" : "fullFiles"] += 1;
 
       const normalizeStartedAt = performance.now();
-      const identityBase = decoded.mode === "append" && cached !== undefined
-        ? cached.identityState
-        : this.identity.create(descriptor);
-      const normalizerBase = decoded.mode === "append" && cached !== undefined
-        ? cached.normalizerState
-        : this.normalizer.create(descriptor);
+      const identityBase =
+        decoded.mode === "append" && cached !== undefined
+          ? cached.identityState
+          : this.identity.create(descriptor);
+      const normalizerBase =
+        decoded.mode === "append" && cached !== undefined
+          ? cached.normalizerState
+          : this.normalizer.create(descriptor);
       const identityState = this.identity.append(identityBase, decoded.records);
       const normalizerState = this.normalizer.append(
         normalizerBase,
@@ -212,12 +219,14 @@ export class CodexSessionSource implements SessionSource {
       );
       const metadata = this.identity.metadata(identityState);
       const origin = this.#origin(metadata.agentVersion);
-      const normalized = decoded.mode === "append" && cached !== undefined &&
-          identityState === cached.identityState &&
-          normalizerState === cached.normalizerState &&
-          sameOrigin(origin, cached.origin)
-        ? cached.normalized
-        : this.normalizer.materialize(normalizerState, metadata, origin);
+      const normalized =
+        decoded.mode === "append" &&
+        cached !== undefined &&
+        identityState === cached.identityState &&
+        normalizerState === cached.normalizerState &&
+        sameOrigin(origin, cached.origin)
+          ? cached.normalized
+          : this.normalizer.materialize(normalizerState, metadata, origin);
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
       return {
         fingerprint,
@@ -230,7 +239,7 @@ export class CodexSessionSource implements SessionSource {
         normalizerState,
       };
     } catch (error) {
-      if (!isExpectedRolloutIoError(error)) throw error;
+      if (!isExpectedIoError(error)) throw error;
       return null;
     }
   }
@@ -246,19 +255,12 @@ export class CodexSessionSource implements SessionSource {
   }
 }
 
-export async function createCodexSessionSource(
-  codexHome: string,
-): Promise<CodexSessionSource> {
+export async function createCodexSessionSource(codexHome: string): Promise<CodexSessionSource> {
   const configured = resolve(codexHome);
-  return new CodexSessionSource(
-    configured,
-    `codex-jsonl\0${configured}`,
-  );
+  return new CodexSessionSource(configured, `codex-jsonl\0${configured}`);
 }
 
-function sourceEntries(
-  cache: ReadonlyMap<string, CodexCacheEntry>,
-): SourceEntries {
+function sourceEntries(cache: ReadonlyMap<string, CodexCacheEntry>): SourceEntries {
   const threadCounts = new Map<string, number>();
   for (const entry of cache.values()) {
     if (entry.threadId !== null) {
@@ -282,11 +284,7 @@ function sourceEntries(
       });
     }
     sessions.push({
-      localId: sourceLocalId(
-        threadId,
-        entry.fingerprint.sourceRelativePath,
-        duplicate,
-      ),
+      localId: sourceLocalId(threadId, entry.fingerprint.sourceRelativePath, duplicate),
       nativeSessionId: threadId,
       parentNativeSessionId: entry.parentThreadId,
       origin: entry.origin,
@@ -326,11 +324,13 @@ function fingerprintOf(descriptor: RolloutDescriptor): FileFingerprint {
 }
 
 function sameFingerprint(left: FileFingerprint, right: FileFingerprint): boolean {
-  return left.sourceRelativePath === right.sourceRelativePath &&
+  return (
+    left.sourceRelativePath === right.sourceRelativePath &&
     left.size === right.size &&
     left.mtimeMs === right.mtimeMs &&
     left.decoderVersion === right.decoderVersion &&
-    left.normalizerVersion === right.normalizerVersion;
+    left.normalizerVersion === right.normalizerVersion
+  );
 }
 
 interface MutableCodexRefreshTelemetry {
@@ -347,16 +347,11 @@ function mutableTelemetry(): MutableCodexRefreshTelemetry {
 }
 
 function sameOrigin(left: DomainSessionOrigin, right: DomainSessionOrigin): boolean {
-  return left.sourceType === right.sourceType &&
+  return (
+    left.sourceType === right.sourceType &&
     left.sourceInstanceId === right.sourceInstanceId &&
     left.agentName === right.agentName &&
     left.agentVersion === right.agentVersion &&
-    left.formatVersion === right.formatVersion;
-}
-
-function isExpectedRolloutIoError(error: unknown): boolean {
-  if (!(error instanceof Error) || !("code" in error)) return false;
-  return EXPECTED_ROLLOUT_IO_ERRORS.has(
-    String((error as NodeJS.ErrnoException).code),
+    left.formatVersion === right.formatVersion
   );
 }

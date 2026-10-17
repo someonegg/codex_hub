@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded by ADR-0019
 date: 2026-08-20
 ---
+
+Superseded by [ADR-0019](0019-enable-live-for-unarchived-sessions.md).
 
 # Remember Live updates per browser tab
 

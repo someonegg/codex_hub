@@ -1,6 +1,4 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { canonicalListFilters, type CanonicalListFilters } from "./list-revision.js";
-import type { SessionListCriteria } from "./session-query-criteria.js";
 
 const SIGNATURE_BYTES = 24;
 const SIGNATURE_CHARS = 32;
@@ -11,13 +9,6 @@ export type CursorDecodeResult<T> =
   | { readonly kind: "malformed" }
   | { readonly kind: "untrusted" };
 
-interface ListCursorPayload {
-  readonly v: 1;
-  readonly filters: CanonicalListFilters;
-  readonly o: number;
-  readonly r: string;
-}
-
 interface TimelineCursorPayload {
   readonly v: 1;
   readonly s: string;
@@ -27,23 +18,6 @@ interface TimelineCursorPayload {
 
 export class OpaqueCursorCodec {
   constructor(private readonly key: Uint8Array = randomBytes(32)) {}
-
-  encodeList(query: SessionListCriteria, offset: number, revision: string): string {
-    return this.#encode({
-      v: 1,
-      filters: canonicalListFilters(query),
-      o: offset,
-      r: revision,
-    });
-  }
-
-  decodeList(cursor: string): CursorDecodeResult<ListCursorPayload> {
-    return this.#decode(cursor, isListCursorPayload);
-  }
-
-  listQueryMatches(cursor: ListCursorPayload, query: SessionListCriteria): boolean {
-    return JSON.stringify(cursor.filters) === JSON.stringify(canonicalListFilters(query));
-  }
 
   encodeTimeline(sessionId: string, ordinal: number, prefix: string): string {
     return this.#encode({ v: 1, s: sessionId, o: ordinal, p: prefix });
@@ -63,10 +37,7 @@ export class OpaqueCursorCodec {
     return `${payload}.${signature}`;
   }
 
-  #decode<T>(
-    cursor: string,
-    validate: (value: unknown) => value is T,
-  ): CursorDecodeResult<T> {
+  #decode<T>(cursor: string, validate: (value: unknown) => value is T): CursorDecodeResult<T> {
     if (cursor.length === 0 || cursor.length > MAX_CURSOR_CHARS) {
       return { kind: "malformed" };
     }
@@ -103,16 +74,15 @@ export class OpaqueCursorCodec {
 
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
-function isListCursorPayload(value: unknown): value is ListCursorPayload {
-  return isRecord(value) && hasOnlyKeys(value, ["v", "filters", "o", "r"]) &&
-    value.v === 1 && isCanonicalFilters(value.filters) && isOrdinal(value.o) &&
-    typeof value.r === "string";
-}
-
 function isTimelineCursorPayload(value: unknown): value is TimelineCursorPayload {
-  return isRecord(value) && hasOnlyKeys(value, ["v", "s", "o", "p"]) &&
-    value.v === 1 && typeof value.s === "string" && isOrdinal(value.o) &&
-    typeof value.p === "string";
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ["v", "s", "o", "p"]) &&
+    value.v === 1 &&
+    typeof value.s === "string" &&
+    isOrdinal(value.o) &&
+    typeof value.p === "string"
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,18 +93,7 @@ function isOrdinal(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function isCanonicalFilters(value: unknown): value is CanonicalListFilters {
-  if (!isRecord(value)) return false;
-  return hasOnlyKeys(value, ["project", "from", "to"]) &&
-    nullableString(value.project) &&
-    nullableString(value.from) && nullableString(value.to);
-}
-
 function hasOnlyKeys(value: Record<string, unknown>, keys: readonly string[]): boolean {
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => key in value);
-}
-
-function nullableString(value: unknown): value is string | null {
-  return value === null || typeof value === "string";
 }

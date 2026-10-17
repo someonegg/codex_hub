@@ -1,9 +1,11 @@
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
+
 import { MAX_JSONL_LINE_BYTES } from "../../src/server/adapters/codex/limits.js";
 import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
+import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("CheckpointedRolloutDecoder", () => {
@@ -35,10 +37,10 @@ describe("CheckpointedRolloutDecoder", () => {
     ["non-object JSON", Buffer.from("[]")],
     ["partial UTF-8", Buffer.from([0xe2, 0x82])],
   ])("silently ignores an unterminated %s tail", async (_label, tail) => {
-    const { path, descriptor } = await rollout("silent-tail", Buffer.concat([
-      Buffer.from('{"type":"committed"}\n'),
-      tail,
-    ]));
+    const { path, descriptor } = await rollout(
+      "silent-tail",
+      Buffer.concat([Buffer.from('{"type":"committed"}\n'), tail]),
+    );
     const decoder = new CheckpointedRolloutDecoder();
     const before = await decoder.decode(descriptor);
     expect(before.records.map((record) => record.value.type)).toEqual(["committed"]);
@@ -95,10 +97,7 @@ describe("CheckpointedRolloutDecoder", () => {
   });
 
   it("accepts an appended CRLF record from a checkpoint boundary", async () => {
-    const { path, descriptor } = await rollout(
-      "crlf-append",
-      '{"type":"first"}\n',
-    );
+    const { path, descriptor } = await rollout("crlf-append", '{"type":"first"}\n');
     const decoder = new CheckpointedRolloutDecoder();
     const before = await decoder.decode(descriptor);
     await appendFile(path, '{"type":"second"}\r\n');
@@ -117,14 +116,8 @@ describe("CheckpointedRolloutDecoder", () => {
     const directory = join(home, "sessions", "2026", "07", "28");
     await mkdir(directory, { recursive: true });
     const path = join(directory, "rollout-decoder-limit.jsonl");
-    const malformedLines = Array.from(
-      { length: 60 },
-      (_, index) => `malformed-${index + 1}`,
-    );
-    await writeFile(
-      path,
-      `${malformedLines.join("\n")}\n{"type":"valid"}\n`,
-    );
+    const malformedLines = Array.from({ length: 60 }, (_, index) => `malformed-${index + 1}`);
+    await writeFile(path, `${malformedLines.join("\n")}\n{"type":"valid"}\n`);
     const policy = await PathPolicy.create(home);
     const descriptor = await policy.register(path);
     expect(descriptor).not.toBeNull();
@@ -141,9 +134,7 @@ describe("CheckpointedRolloutDecoder", () => {
   });
 
   it("returns only newly committed records on a validated append", async () => {
-    const initial = Buffer.from(
-      '{"type":"one"}\nmalformed\n{"type":"pending"}',
-    );
+    const initial = Buffer.from('{"type":"one"}\nmalformed\n{"type":"pending"}');
     const { path, descriptor } = await rollout("checkpoint-append", initial);
     const decoder = new CheckpointedRolloutDecoder();
     const before = await decoder.decode(descriptor);
@@ -183,10 +174,7 @@ describe("CheckpointedRolloutDecoder", () => {
   });
 
   it("re-reads an unterminated tail without duplicating ordinals or diagnostics", async () => {
-    const { path, descriptor } = await rollout(
-      "checkpoint-tail",
-      '{"type":"one"}\nmalformed',
-    );
+    const { path, descriptor } = await rollout("checkpoint-tail", '{"type":"one"}\nmalformed');
     const decoder = new CheckpointedRolloutDecoder();
     const first = await decoder.decode(descriptor);
     expect(first.records).toEqual([
@@ -223,18 +211,13 @@ describe("CheckpointedRolloutDecoder", () => {
       const changed = Buffer.from(prefix);
       const position = probe === "head" ? 0 : changed.length - 1;
       changed[position] = changed[position] === 0x20 ? 0x21 : 0x20;
-      await writeFile(path, Buffer.concat([
-        changed,
-        Buffer.from('\n{"type":"appended"}\n'),
-      ]));
+      await writeFile(path, Buffer.concat([changed, Buffer.from('\n{"type":"appended"}\n')]));
 
       const next = await decoder.decode(descriptor, first.checkpoint);
 
       expect(next.mode).toBe("full");
       expect(next.telemetry.decodeBytes).toBe(next.checkpoint.observedEof);
-      expect(next.records.at(-1)).toEqual(
-        expect.objectContaining({ value: { type: "appended" } }),
-      );
+      expect(next.records.at(-1)).toEqual(expect.objectContaining({ value: { type: "appended" } }));
       expect(next.diagnostics).toContainEqual(
         expect.objectContaining({ code: "malformed_json", ordinal: 2 }),
       );
@@ -242,10 +225,7 @@ describe("CheckpointedRolloutDecoder", () => {
   );
 
   it("falls back on non-growth and an incompatible decoder version", async () => {
-    const { path, descriptor } = await rollout(
-      "checkpoint-compatibility",
-      '{"type":"one"}\n',
-    );
+    const { path, descriptor } = await rollout("checkpoint-compatibility", '{"type":"one"}\n');
     const decoder = new CheckpointedRolloutDecoder();
     const first = await decoder.decode(descriptor);
 
@@ -263,10 +243,7 @@ describe("CheckpointedRolloutDecoder", () => {
 
   it("keeps cumulative decoder diagnostics capped across append checkpoints", async () => {
     const firstLines = Array.from({ length: 49 }, (_, index) => `bad-${index}`).join("\n");
-    const { path, descriptor } = await rollout(
-      "checkpoint-diagnostics",
-      `${firstLines}\n`,
-    );
+    const { path, descriptor } = await rollout("checkpoint-diagnostics", `${firstLines}\n`);
     const decoder = new CheckpointedRolloutDecoder();
     const first = await decoder.decode(descriptor);
     expect(first.diagnostics).toHaveLength(49);

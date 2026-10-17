@@ -1,16 +1,15 @@
+import type { ReactNode } from "react";
+
 import type { SessionDetail } from "../../shared/domain";
+
 import { sessionDisplayTitle } from "../session-title";
-import type {
-  TimelineVisibility,
-  TimelineVisibilityKey,
-} from "../state/timeline-visibility";
+import type { TimelineVisibility, TimelineVisibilityKey } from "../state/timeline-visibility";
 
 interface SessionHeaderProps {
+  management?: ReactNode;
   session: SessionDetail;
   visibility: TimelineVisibility;
   onVisibilityChange: (key: TimelineVisibilityKey, visible: boolean) => void;
-  autoRefreshEnabled: boolean;
-  onAutoRefreshChange: (enabled: boolean) => void;
 }
 
 const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
@@ -19,57 +18,46 @@ const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 
 export function SessionHeader({
+  management,
   session,
   visibility,
   onVisibilityChange,
-  autoRefreshEnabled,
-  onAutoRefreshChange,
 }: SessionHeaderProps) {
   const updatedAt = formatTimestamp(session.updatedAt);
 
   return (
     <header className="reader-header">
       <div>
-        <div className="session-heading-flags">
-          <p className="eyebrow">Session trace</p>
-          {session.archived ? <span className="archive-label">Archived</span> : null}
+        <div className="session-title-row">
+          <h2 id="session-title" tabIndex={-1}>
+            {sessionDisplayTitle(session)}
+          </h2>
+          {management}
         </div>
-        <h2 id="session-title">{sessionDisplayTitle(session)}</h2>
-        <p className="session-meta">
-          {updatedAt} · {session.itemCount} events
-        </p>
-        <p className="session-meta">
-          Project Directory · <code>{session.projectDirectory ?? "Unavailable"}</code>
-        </p>
-        <p className="session-meta">
-          Working Directory · <code>{session.workingDirectory ?? "Unavailable"}</code>
-        </p>
-        <p className="session-origin">
-          {sessionOriginLabel(session.origin)}
-        </p>
-        <p className="session-source-id">
-          Original session ID · <code>{session.sourceId ?? "Unavailable"}</code>
-        </p>
+        <div className="session-metadata">
+          {session.archived ? <span className="archive-label">Archived</span> : null}
+          <span>{session.origin.agentName}</span>
+          <span>·</span>
+          <span>{updatedAt}</span>
+          <span>·</span>
+          <span>{session.itemCount} events</span>
+        </div>
         <div className="reader-controls">
-          {!session.archived
-            ? (
-                <div className="auto-refresh-control">
-                  <span className="auto-refresh-label" id="live-updates-label">
-                    Live updates
-                  </span>
-                  <button
-                    type="button"
-                    className="auto-refresh-switch"
-                    role="switch"
-                    aria-checked={autoRefreshEnabled}
-                    aria-labelledby="live-updates-label"
-                    onClick={() => onAutoRefreshChange(!autoRefreshEnabled)}
-                  >
-                    <span className="auto-refresh-thumb" aria-hidden="true" />
-                  </button>
-                </div>
-              )
-            : null}
+          <details className="session-information" key={session.id}>
+            <summary>Session information</summary>
+            <div className="session-information-content">
+              <p className="session-meta">
+                Project Directory · <code>{session.projectDirectory ?? "Unavailable"}</code>
+              </p>
+              <p className="session-meta">
+                Working Directory · <code>{session.workingDirectory ?? "Unavailable"}</code>
+              </p>
+              <p className="session-origin">{sessionOriginLabel(session.origin)}</p>
+              <p className="session-source-id">
+                Original session ID · <code>{session.sourceId ?? "Unavailable"}</code>
+              </p>
+            </div>
+          </details>
           <div className="event-toggles" role="group" aria-label="Timeline event visibility">
             {VISIBILITY_TOGGLES.map(({ key, label }) => (
               <label className="check-row event-toggle" key={key}>
@@ -91,9 +79,7 @@ export function SessionHeader({
 function formatTimestamp(value: string | null): string {
   if (value === null) return "Time unavailable";
   const date = new Date(value);
-  return Number.isNaN(date.valueOf())
-    ? "Time unavailable"
-    : DATE_FORMAT.format(date);
+  return Number.isNaN(date.valueOf()) ? "Time unavailable" : DATE_FORMAT.format(date);
 }
 
 const VISIBILITY_TOGGLES: Array<{

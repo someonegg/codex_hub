@@ -1,8 +1,9 @@
-// @vitest-environment jsdom
-
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
 import { PageJumpControls } from "../../src/client/components/PageJumpControls";
+
+// @vitest-environment jsdom
 
 describe("page jump controls", () => {
   afterEach(() => {
@@ -62,15 +63,18 @@ describe("page jump controls", () => {
   it("updates when the document height changes and disconnects its observer", async () => {
     let notifyResize!: ResizeObserverCallback;
     const disconnect = vi.fn();
-    vi.stubGlobal("ResizeObserver", class {
-      constructor(callback: ResizeObserverCallback) {
-        notifyResize = callback;
-      }
-      observe() {}
-      disconnect() {
-        disconnect();
-      }
-    });
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          notifyResize = callback;
+        }
+        observe() {}
+        disconnect() {
+          disconnect();
+        }
+      },
+    );
     setPageMetrics({ scrollY: 0, innerHeight: 800, scrollHeight: 800 });
     const view = render(<PageJumpControls />);
     expect(screen.queryByRole("button", { name: "Jump to bottom" })).toBeNull();
@@ -109,11 +113,7 @@ describe("page jump controls", () => {
   });
 });
 
-function setPageMetrics(metrics: {
-  scrollY: number;
-  innerHeight: number;
-  scrollHeight: number;
-}) {
+function setPageMetrics(metrics: { scrollY: number; innerHeight: number; scrollHeight: number }) {
   Object.defineProperty(window, "scrollY", { configurable: true, value: metrics.scrollY });
   Object.defineProperty(window, "innerHeight", { configurable: true, value: metrics.innerHeight });
   Object.defineProperty(document.documentElement, "scrollHeight", {

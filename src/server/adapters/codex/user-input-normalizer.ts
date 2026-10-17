@@ -3,10 +3,7 @@ import type {
   DomainUserInputQuestion,
   DomainUserInputRecord,
 } from "../../domain/session-domain.js";
-import {
-  MAX_PREVIEW_CHARS,
-  truncateText,
-} from "../../domain/session-text.js";
+import { MAX_PREVIEW_CHARS, truncateText } from "../../domain/session-text.js";
 import { isObject } from "./rollout-decoder.js";
 import type { ToolOutput } from "./tool-normalizer.js";
 
@@ -23,9 +20,7 @@ export interface NormalizedUserInput {
   readonly malformed: boolean;
 }
 
-export function normalizeUserInputRequest(
-  request: UserInputRequest,
-): NormalizedUserInput {
+export function normalizeUserInputRequest(request: UserInputRequest): NormalizedUserInput {
   return {
     item: {
       kind: "user_input",
@@ -40,9 +35,7 @@ export function normalizeUserInputRequest(
   };
 }
 
-export function normalizeUserInputResponse(
-  output: ToolOutput,
-): NormalizedUserInput {
+export function normalizeUserInputResponse(output: ToolOutput): NormalizedUserInput {
   const parsed = parseResponse(output.output);
   const base = {
     kind: "user_input" as const,
@@ -84,9 +77,7 @@ export function parseUserInputQuestions(value: unknown): readonly DomainUserInpu
   const questions = object.questions.map(parseQuestion);
   if (!questions.every((question) => question !== null)) return null;
   const parsed = questions as DomainUserInputQuestion[];
-  return new Set(parsed.map((question) => question.id)).size === parsed.length
-    ? parsed
-    : null;
+  return new Set(parsed.map((question) => question.id)).size === parsed.length ? parsed : null;
 }
 
 function parseQuestion(value: unknown): DomainUserInputQuestion | null {
@@ -102,9 +93,12 @@ function parseQuestion(value: unknown): DomainUserInputQuestion | null {
     return label === null || description === null ? null : { label, description };
   });
   if (
-    id === null || header === null || question === null ||
+    id === null ||
+    header === null ||
+    question === null ||
     !options.every((option) => option !== null)
-  ) return null;
+  )
+    return null;
   const parsedOptions = options as DomainUserInputQuestion["options"];
   if (new Set(parsedOptions.map((option) => option.label)).size !== parsedOptions.length) {
     return null;
@@ -112,7 +106,9 @@ function parseQuestion(value: unknown): DomainUserInputQuestion | null {
   return { id, header, question, options: parsedOptions };
 }
 
-function parseResponse(value: string | null):
+function parseResponse(
+  value: string | null,
+):
   | { kind: "answered"; answers: readonly DomainUserInputAnswer[] }
   | { kind: "aborted" }
   | { kind: "unavailable" } {
@@ -127,7 +123,9 @@ function parseResponse(value: string | null):
     if (!isObject(rawAnswer) || !Array.isArray(rawAnswer.answers)) {
       return { kind: "unavailable" };
     }
-    const values = rawAnswer.answers.filter((answer): answer is string => typeof answer === "string");
+    const values = rawAnswer.answers.filter(
+      (answer): answer is string => typeof answer === "string",
+    );
     if (values.length !== rawAnswer.answers.length) return { kind: "unavailable" };
     answers.push({ questionId, answers: values });
   }

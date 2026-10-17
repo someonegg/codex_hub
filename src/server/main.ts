@@ -1,9 +1,7 @@
 import { commandLineHelp, loadConfig } from "./config.js";
-import { createCodexSessionReadService } from "./create-session-read-service.js";
+import { createCodexHub } from "./create-hub.js";
 import { createApiRouter } from "./http/api-router.js";
-import { createServer, listenServer } from "./http/create-server.js";
-import { SessionInteractionService } from "./interaction/interaction-service.js";
-import { SessionLiveService } from "./live/session-live-service.js";
+import { startServer } from "./http/create-server.js";
 
 async function main(): Promise<void> {
   const command = loadConfig();
@@ -13,31 +11,22 @@ async function main(): Promise<void> {
   }
 
   const { config } = command;
-  const sessions = await createCodexSessionReadService(config.codexHome);
-  const interaction = new SessionInteractionService(
-    sessions,
-    config.interactionEnabled,
-  );
-  const live = new SessionLiveService(sessions, { interaction });
-  const server = createServer(
-    config,
-    createApiRouter({ sessions, live, interaction }),
-  );
-
-  await listenServer(server, config.port, config.host);
+  const hub = await createCodexHub(config.codexHome, config.tmuxSocket, config.interactionEnabled);
+  const server = await startServer(config, createApiRouter(hub), hub.close);
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : config.port;
   const host = config.host.includes(":") ? `[${config.host}]` : config.host;
   const protocol = config.tls.enabled ? "https" : "http";
-  const mutualTls = config.tls.enabled && config.tls.certificateAuthorityPath
-    ? " (client certificates required)"
-    : "";
-  console.log(`Codex Sessions Reader listening on ${protocol}://${host}:${port}${mutualTls}`);
+  const mutualTls =
+    config.tls.enabled && config.tls.certificateAuthorityPath
+      ? " (client certificates required)"
+      : "";
+  console.log(`Codex Hub listening on ${protocol}://${host}:${port}${mutualTls}`);
 
   function close(): void {
     server.close((error) => {
       if (error) {
-        console.error("Failed to stop Codex Sessions Reader");
+        console.error("Failed to stop Codex Hub");
         process.exitCode = 1;
       }
     });
@@ -48,6 +37,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Failed to start Codex Sessions Reader");
+  console.error(error instanceof Error ? error.message : "Failed to start Codex Hub");
   process.exitCode = 1;
 });

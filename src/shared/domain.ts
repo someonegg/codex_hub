@@ -1,15 +1,6 @@
 export type SessionId = string;
 export type ItemId = string;
 
-export type DiagnosticSeverity = "info" | "warning" | "error";
-
-export interface Diagnostic {
-  code: string;
-  severity: DiagnosticSeverity;
-  message: string;
-  ordinal: number | null;
-}
-
 export interface AgentIdentity {
   taskName: string | null;
   nickname: string | null;
@@ -26,6 +17,16 @@ export interface SessionOrigin {
 
 export interface SessionSummary {
   id: SessionId;
+  title: string;
+  projectId: string | null;
+  archived: boolean;
+  parentId: SessionId | null;
+  isChild: boolean;
+  updatedAt: string | null;
+}
+
+export interface SessionDetail {
+  id: SessionId;
   origin: SessionOrigin;
   title: string;
   nickname: string | null;
@@ -39,12 +40,7 @@ export interface SessionSummary {
   agent: AgentIdentity | null;
   messageCount: number;
   toolCount: number;
-  warningCount: number;
-}
-
-export interface SessionDetail extends SessionSummary {
   sourceId: string | null;
-  diagnostics: Diagnostic[];
   itemCount: number;
 }
 

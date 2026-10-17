@@ -1,16 +1,15 @@
 import { useEffect, useRef } from "react";
-import type {
-  LiveRevision,
-  SessionLiveResponse,
-  TimelineCursor,
-} from "../../shared/api-contract";
+
+import type { LiveRevision, SessionLiveResponse, TimelineCursor } from "../../shared/api-contract";
+
 import { api } from "../api/client";
+import { createRequestChannel } from "./request-channel";
 import { isAbort, isTimelineConflict } from "./request-errors";
 import {
   INITIAL_RETRY_MS,
   isRetryableRequestError,
   nextRetryMs,
-  retryDelayMs,
+  waitForRetry,
 } from "./retry-policy";
 
 export interface LiveSnapshot {
@@ -22,7 +21,10 @@ interface SessionLiveOptions {
   readonly sessionId: string;
   readonly enabled: boolean;
   readonly snapshot: LiveSnapshot | null;
-  readonly onUpdate: (response: SessionLiveResponse, expected: LiveSnapshot) => Promise<void> | void;
+  readonly onUpdate: (
+    response: SessionLiveResponse,
+    expected: LiveSnapshot,
+  ) => Promise<void> | void;
   readonly onTimelineConflict: () => void;
   readonly onError: (reason: unknown, terminal: boolean) => void;
   readonly onSuccess?: () => void;
@@ -40,13 +42,15 @@ export function useSessionLive({
   const callbacks = useRef({ onUpdate, onTimelineConflict, onError, onSuccess });
   callbacks.current = { onUpdate, onTimelineConflict, onError, onSuccess };
 
+  const cursor = snapshot?.cursor;
+  const liveRevision = snapshot?.liveRevision;
   useEffect(() => {
-    if (!enabled || snapshot === null) return;
+    if (!enabled || cursor === undefined || liveRevision === undefined) return;
     let disposed = false;
+    const channel = createRequestChannel();
     let controller: AbortController | null = null;
     let retryMs = INITIAL_RETRY_MS;
     let wakeVisible: (() => void) | null = null;
-    let cancelDelay: (() => void) | null = null;
 
     const onVisibility = () => {
       if (document.hidden) controller?.abort();
@@ -57,18 +61,25 @@ export function useSessionLive({
     const run = async () => {
       while (!disposed) {
         if (document.hidden) {
-          await new Promise<void>((resolve) => { wakeVisible = resolve; });
+          await new Promise<void>((resolve) => {
+            wakeVisible = resolve;
+          });
           wakeVisible = null;
           if (disposed) return;
         }
-        const expected = snapshot;
-        controller = new AbortController();
+        const expected = { cursor, liveRevision };
+        const request = channel.begin();
+        controller = request.controller;
         try {
-          const response = await api.live(sessionId, {
-            cursor: expected.cursor,
-            after: expected.liveRevision,
-          }, controller.signal);
-          if (disposed || controller.signal.aborted) continue;
+          const response = await api.live(
+            sessionId,
+            {
+              cursor: expected.cursor,
+              after: expected.liveRevision,
+            },
+            controller.signal,
+          );
+          if (disposed || !request.isCurrent()) continue;
           retryMs = INITIAL_RETRY_MS;
           callbacks.current.onSuccess?.();
           if (response !== null) {
@@ -77,7 +88,7 @@ export function useSessionLive({
           }
         } catch (reason) {
           if (disposed) return;
-          if (isAbort(reason)) continue;
+          if (!request.isCurrent() || isAbort(reason)) continue;
           if (isTimelineConflict(reason)) {
             callbacks.current.onTimelineConflict();
             return;
@@ -85,14 +96,12 @@ export function useSessionLive({
           const retryable = isRetryableRequestError(reason);
           callbacks.current.onError(reason, !retryable);
           if (!retryable) return;
-          await new Promise<void>((resolve) => {
-            const timer = window.setTimeout(resolve, retryDelayMs(retryMs));
-            cancelDelay = () => {
-              window.clearTimeout(timer);
-              resolve();
-            };
-          });
-          cancelDelay = null;
+          try {
+            await waitForRetry(retryMs, controller.signal);
+          } catch {
+            if (disposed) return;
+            continue;
+          }
           retryMs = nextRetryMs(retryMs);
         } finally {
           controller = null;
@@ -103,10 +112,9 @@ export function useSessionLive({
     void run();
     return () => {
       disposed = true;
-      controller?.abort();
-      cancelDelay?.();
+      channel.cancel();
       wakeVisible?.();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled, sessionId, snapshot?.cursor, snapshot?.liveRevision]);
+  }, [enabled, sessionId, cursor, liveRevision]);
 }

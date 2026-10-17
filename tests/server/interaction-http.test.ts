@@ -1,11 +1,14 @@
 import { writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { SessionReader } from "../../src/server/application/session-reader.js";
+import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
-import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionLiveService } from "../../src/server/live/session-live-service.js";
 import type { SessionDetail } from "../../src/shared/domain.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -32,21 +35,22 @@ const SESSION: SessionDetail = {
   agent: null,
   messageCount: 0,
   toolCount: 0,
-  warningCount: 0,
   sourceId: "session",
-  diagnostics: [],
   itemCount: 0,
 };
 const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) =>
-    new Promise<void>((resolve) => server.close(() => resolve()))));
+  await Promise.all(
+    servers
+      .splice(0)
+      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+  );
 });
 
 async function start() {
   const clientDirectory = await createTempDirectory("codex-interaction-http-");
-  await writeFile(join(clientDirectory, "index.html"), "viewer");
+  await writeFile(join(clientDirectory, "index.html"), "hub");
   const unavailable = async () => null;
   const repository: SessionReader = {
     list: vi.fn(),
@@ -62,9 +66,10 @@ async function start() {
   const interaction = {
     describe: vi.fn().mockResolvedValue({
       supported: true,
+      attachCommand: null,
       state: "connected",
-      activation: "activate",
     }),
+    rebind: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendKeys: vi.fn().mockResolvedValue(undefined),
     preview: vi.fn().mockResolvedValue({
@@ -82,9 +87,14 @@ async function start() {
     interactionEnabled: true,
   };
   const live = new SessionLiveService(repository);
+  const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, live, interaction }),
+    createApiRouter({ sessions: repository, catalog, live, interaction }),
+    () => {
+      catalog.close();
+      live.close();
+    },
   );
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
@@ -93,13 +103,34 @@ async function start() {
 }
 
 describe("interaction HTTP API", () => {
+  it("accepts rebind with an empty object and rejects supplied commands", async () => {
+    const { base, interaction } = await start();
+    const post = (body: unknown) =>
+      fetch(`${base}/api/v1/sessions/${SESSION_ID}/rebind`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    expect((await post({})).status).toBe(204);
+    expect(interaction.rebind).toHaveBeenCalledWith(SESSION_ID);
+    expect((await post({ command: "arbitrary" })).status).toBe(400);
+    expect((await post([])).status).toBe(400);
+    expect(interaction.rebind).toHaveBeenCalledTimes(1);
+  });
+
   it("includes connection state in session reads and accepts messages", async () => {
     const { base, interaction } = await start();
     const detail = await fetch(`${base}/api/v1/sessions/${SESSION_ID}`);
     expect(detail.status).toBe(200);
-    expect(await detail.json()).toEqual(expect.objectContaining({
-      interaction: expect.objectContaining({ supported: true, state: "connected" }),
-    }));
+    expect(await detail.json()).toEqual(
+      expect.objectContaining({
+        interaction: expect.objectContaining({
+          supported: true,
+          attachCommand: null,
+          state: "connected",
+        }),
+      }),
+    );
     const message = "first\r\nsecond 🌊";
     const sent = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/messages`, {
       method: "POST",
@@ -112,27 +143,23 @@ describe("interaction HTTP API", () => {
 
   it("validates message and key bodies including their boundaries", async () => {
     const { base, interaction } = await start();
-    const postMessage = (message: string) => fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/messages`,
-      {
+    const postMessage = (message: string) =>
+      fetch(`${base}/api/v1/sessions/${SESSION_ID}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message }),
-      },
-    );
+      });
     expect((await postMessage(" \n ")).status).toBe(400);
     expect((await postMessage("a".repeat(65_536))).status).toBe(204);
     expect((await postMessage("a".repeat(65_537))).status).toBe(400);
     expect(interaction.sendMessage).toHaveBeenCalledTimes(1);
 
-    const postKeys = (keys: unknown, extra?: Record<string, unknown>) => fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/keys`,
-      {
+    const postKeys = (keys: unknown, extra?: Record<string, unknown>) =>
+      fetch(`${base}/api/v1/sessions/${SESSION_ID}/keys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys, ...extra }),
-      },
-    );
+      });
     expect((await postKeys([])).status).toBe(400);
     expect((await postKeys(["unknown"])).status).toBe(400);
     expect((await postKeys(["escape"])).status).toBe(400);
@@ -140,12 +167,16 @@ describe("interaction HTTP API", () => {
     expect((await postKeys(Array.from({ length: 65 }, () => "left"))).status).toBe(400);
 
     const representativeKeys = [
-      "enter", "up", "down", "left", "right", "interrupt", "plan", "left",
+      "enter",
+      "up",
+      "down",
+      "left",
+      "right",
+      "interrupt",
+      "plan",
+      "left",
     ];
-    const boundaryKeys = [
-      ...representativeKeys,
-      ...Array.from({ length: 56 }, () => "left"),
-    ];
+    const boundaryKeys = [...representativeKeys, ...Array.from({ length: 56 }, () => "left")];
     expect(boundaryKeys).toHaveLength(64);
     const sentKeys = await postKeys(boundaryKeys);
     expect(sentKeys.status).toBe(204);
@@ -164,17 +195,20 @@ describe("interaction HTTP API", () => {
     });
     expect(interaction.preview).toHaveBeenCalledWith(SESSION_ID);
 
-    expect((await fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?lines=all`,
-    )).status).toBe(400);
+    expect(
+      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?lines=all`)).status,
+    ).toBe(400);
   });
 
   it("allows POST only on the declared interaction routes", async () => {
     const { base } = await start();
     expect((await fetch(`${base}/api/v1/sessions`, { method: "POST" })).status).toBe(405);
-    expect((await fetch(`${base}/api/v1/sessions/${SESSION_ID}`, { method: "POST" })).status).toBe(405);
-    expect((await fetch(`${base}/api/v1/sessions/${SESSION_ID}/interrupt`, { method: "POST" })).status)
-      .toBe(405);
+    expect((await fetch(`${base}/api/v1/sessions/${SESSION_ID}`, { method: "POST" })).status).toBe(
+      405,
+    );
+    expect(
+      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/interrupt`, { method: "POST" })).status,
+    ).toBe(405);
     expect((await fetch(`${base}/api/v1/unknown`, { method: "POST" })).status).toBe(405);
   });
 });

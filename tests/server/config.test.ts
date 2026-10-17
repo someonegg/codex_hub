@@ -1,6 +1,8 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
+
 import { commandLineHelp, loadConfig } from "../../src/server/config.js";
 
 function runnable(args: readonly string[]) {
@@ -16,25 +18,33 @@ describe("server command line", () => {
       port: 4173,
       codexHome: resolve(homedir(), ".codex"),
       tls: { enabled: false },
-      interactionEnabled: false,
+      interactionEnabled: true,
     });
   });
 
-  it("enables interaction only with the explicit flag", () => {
-    expect(runnable(["--enable-interaction"]).interactionEnabled).toBe(true);
-    expect(commandLineHelp()).toContain("--enable-interaction");
+  it("resolves an explicit tmux socket", () => {
+    expect(runnable(["--tmux-socket", "./tmux.sock"]).tmuxSocket).toBe(resolve("tmux.sock"));
+    expect(commandLineHelp()).toContain("--tmux-socket");
   });
 
   it("parses all server and mutual TLS options", () => {
-    expect(runnable([
-      "--codex-home", "fixtures/codex",
-      "--host", "0.0.0.0",
-      "--port", "0",
-      "--ssl",
-      "--ssl-cert", "certs/server.pem",
-      "--ssl-key", "certs/server-key.pem",
-      "--ssl-ca", "certs/ca.pem",
-    ])).toMatchObject({
+    expect(
+      runnable([
+        "--codex-home",
+        "fixtures/codex",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "0",
+        "--ssl",
+        "--ssl-cert",
+        "certs/server.pem",
+        "--ssl-key",
+        "certs/server-key.pem",
+        "--ssl-ca",
+        "certs/ca.pem",
+      ]),
+    ).toMatchObject({
       host: "0.0.0.0",
       port: 0,
       codexHome: resolve("fixtures/codex"),
@@ -57,6 +67,7 @@ describe("server command line", () => {
     expect(() => loadConfig(["--port", "65536"])).toThrow("--port must be an integer");
     expect(() => loadConfig(["--codex-home", " "])).toThrow("--codex-home must not be empty");
     expect(() => loadConfig(["--unknown"])).toThrow();
+    expect(() => loadConfig(["--tmux-socket", " "])).toThrow("--tmux-socket must not be empty");
     expect(() => loadConfig(["positional"])).toThrow();
   });
 

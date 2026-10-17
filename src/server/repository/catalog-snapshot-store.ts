@@ -3,21 +3,23 @@ import type {
   DomainSessionId,
   NormalizedSession,
 } from "../domain/session-domain.js";
-import {
-  encodeStringTuple,
-  opaqueIdForParts,
-} from "../security/opaque-id.js";
+import { encodeStringTuple, opaqueIdForParts } from "../security/opaque-id.js";
 import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
   SourceSessionEntry,
 } from "../source/session-source.js";
+import {
+  type AggregateDiagnostic,
+  type DiagnosticLogger,
+  RefreshDiagnosticLogger,
+} from "./diagnostic-logger.js";
 import { RefreshCoordinator } from "./refresh-coordinator.js";
 import {
-  TimelinePrefixRegistry,
-  type TimelinePrefixIndexBuilder,
   type IndexedSession,
+  type TimelinePrefixIndexBuilder,
+  TimelinePrefixRegistry,
 } from "./timeline-prefix-registry.js";
 
 export const DEFAULT_CATALOG_FRESHNESS_MS = 1_500;
@@ -27,19 +29,21 @@ export interface CatalogSnapshot {
   readonly signature: string;
   readonly diagnostics: readonly DomainDiagnostic[];
   readonly sessions: ReadonlyMap<DomainSessionId, IndexedSession>;
-  readonly orderedIds: readonly DomainSessionId[];
 }
 
 export interface CatalogSnapshotStoreDependencies {
+  readonly diagnosticLogger?: DiagnosticLogger;
   readonly timelinePrefixIndexBuilder?: TimelinePrefixIndexBuilder;
 }
 
 export class CatalogSnapshotStore {
   readonly #coordinator = new RefreshCoordinator<CatalogSnapshot>();
+  readonly #diagnosticLogger: RefreshDiagnosticLogger;
   readonly #prefixes: TimelinePrefixRegistry;
   readonly #sources: readonly SessionSource[];
   #snapshot: CatalogSnapshot | null = null;
   #aggregate: AggregateState | null = null;
+  #aggregateDiagnostics: ReadonlyMap<string, readonly AggregateDiagnostic[]> = new Map();
   #lastDiscoveryAt = Number.NEGATIVE_INFINITY;
 
   constructor(
@@ -49,10 +53,9 @@ export class CatalogSnapshotStore {
     dependencies: CatalogSnapshotStoreDependencies = {},
   ) {
     assertUniqueSources(sources);
+    this.#diagnosticLogger = new RefreshDiagnosticLogger(dependencies.diagnosticLogger);
     this.#sources = [...sources];
-    this.#prefixes = new TimelinePrefixRegistry(
-      dependencies.timelinePrefixIndexBuilder,
-    );
+    this.#prefixes = new TimelinePrefixRegistry(dependencies.timelinePrefixIndexBuilder);
   }
 
   async current(): Promise<CatalogSnapshot> {
@@ -82,7 +85,10 @@ export class CatalogSnapshotStore {
     );
     const signature = aggregateSignature(loadedSources);
     const previous = this.#snapshot;
-    if (previous?.signature === signature) return previous;
+    if (previous?.signature === signature) {
+      this.#diagnosticLogger.update(loadedSources, this.#aggregateDiagnostics);
+      return previous;
+    }
 
     const sourceDiagnostics: DomainDiagnostic[] = [];
     for (const { snapshot } of loadedSources) {
@@ -99,18 +105,11 @@ export class CatalogSnapshotStore {
     );
     const diagnostics = [...sourceDiagnostics, ...linked.diagnostics];
     const normalizedSessions = linked.sessions;
-    const orderedIds = [...normalizedSessions.values()]
-      .sort(compareSessions)
-      .map((session) => session.session.id);
-    const preparedPrefixes = this.#prefixes.prepare(
-      normalizedSessions,
-      linked.dirtyIds,
-    );
+    const preparedPrefixes = this.#prefixes.prepare(normalizedSessions, linked.dirtyIds);
     const snapshot: CatalogSnapshot = {
       signature,
       diagnostics,
       sessions: preparedPrefixes.sessions,
-      orderedIds,
     };
     preparedPrefixes.commit();
     this.#aggregate = {
@@ -121,6 +120,8 @@ export class CatalogSnapshotStore {
       sessions: normalizedSessions,
     };
     this.#snapshot = snapshot;
+    this.#aggregateDiagnostics = linked.aggregateDiagnostics;
+    this.#diagnosticLogger.update(loadedSources, linked.aggregateDiagnostics);
     return snapshot;
   }
 }
@@ -142,35 +143,34 @@ interface PendingSession {
 interface AggregateState {
   readonly inputs: ReadonlyMap<DomainSessionId, PendingSession>;
   readonly nativeBuckets: ReadonlyMap<string, readonly DomainSessionId[]>;
-  readonly parentNativeDependents: ReadonlyMap<
-    string,
-    ReadonlySet<DomainSessionId>
-  >;
+  readonly parentNativeDependents: ReadonlyMap<string, ReadonlySet<DomainSessionId>>;
   readonly resolvedParents: ReadonlyMap<DomainSessionId, DomainSessionId | null>;
   readonly sessions: ReadonlyMap<DomainSessionId, NormalizedSession>;
 }
 
 interface LinkedSessions {
+  readonly aggregateDiagnostics: ReadonlyMap<string, readonly AggregateDiagnostic[]>;
   readonly sessions: Map<DomainSessionId, NormalizedSession>;
   readonly diagnostics: readonly DomainDiagnostic[];
   readonly dirtyIds: ReadonlySet<DomainSessionId>;
   readonly inputs: ReadonlyMap<DomainSessionId, PendingSession>;
   readonly nativeBuckets: ReadonlyMap<string, readonly DomainSessionId[]>;
-  readonly parentNativeDependents: ReadonlyMap<
-    string,
-    ReadonlySet<DomainSessionId>
-  >;
+  readonly parentNativeDependents: ReadonlyMap<string, ReadonlySet<DomainSessionId>>;
   readonly resolvedParents: ReadonlyMap<DomainSessionId, DomainSessionId | null>;
 }
 
 function assertUniqueSources(sources: readonly SessionSource[]): void {
-  const keys = new Set<string>();
-  for (const source of sources) {
-    const key = source.descriptor.instanceKey;
-    if (keys.has(key)) {
-      throw new Error(`Duplicate session source instance key: ${key}`);
+  for (const field of ["instanceKey", "sourceInstanceId"] as const) {
+    const keys = new Set<string>();
+    for (const { descriptor } of sources) {
+      const key = descriptor[field];
+      if (!key.trim()) throw new Error(`Empty session source ${field}`);
+      if (keys.has(key)) {
+        const label = field === "instanceKey" ? "instance key" : field;
+        throw new Error(`Duplicate session source ${label}: ${key}`);
+      }
+      keys.add(key);
     }
-    keys.add(key);
   }
 }
 
@@ -178,9 +178,7 @@ function aggregateSignature(sources: readonly LoadedSource[]): string {
   return JSON.stringify(
     [...sources]
       .sort((left, right) =>
-        left.descriptor.instanceKey.localeCompare(
-          right.descriptor.instanceKey,
-        )
+        left.descriptor.instanceKey.localeCompare(right.descriptor.instanceKey),
       )
       .map(({ descriptor, snapshot }) => ({
         source: descriptor.instanceKey,
@@ -195,6 +193,7 @@ function linkRelationships(
   diagnosticLimit: number,
 ): LinkedSessions {
   const diagnostics: DomainDiagnostic[] = [];
+  const aggregateDiagnostics = new Map<string, AggregateDiagnostic[]>();
   const inputs = new Map<DomainSessionId, PendingSession>();
   const nativeBuckets = new Map<string, DomainSessionId[]>();
   const parentNativeDependents = new Map<string, Set<DomainSessionId>>();
@@ -202,13 +201,21 @@ function linkRelationships(
     const localIds = new Set<string>();
     for (const entry of snapshot.sessions) {
       if (localIds.has(entry.localId)) {
-        if (diagnostics.length < diagnosticLimit) {
-          diagnostics.push({
-            code: "duplicate_source_session_id",
-            severity: "error",
-            message: "A source returned duplicate stable session identities.",
-            ordinal: null,
-          });
+        const diagnostic: DomainDiagnostic = {
+          code: "duplicate_source_session_id",
+          severity: "error",
+          message: "A source returned duplicate stable session identities.",
+          ordinal: null,
+        };
+        if (diagnostics.length < diagnosticLimit) diagnostics.push(diagnostic);
+        const group = aggregateDiagnostics.get(descriptor.sourceInstanceId) ?? [];
+        const sessionId = opaqueIdForParts(descriptor.instanceKey, entry.localId);
+        if (
+          group.length < MAX_CATALOG_DIAGNOSTICS &&
+          !group.some((item) => item.sessionId === sessionId)
+        ) {
+          group.push({ sessionId, diagnostic });
+          aggregateDiagnostics.set(descriptor.sourceInstanceId, group);
         }
         continue;
       }
@@ -224,19 +231,13 @@ function linkRelationships(
       };
       inputs.set(id, input);
       if (entry.nativeSessionId !== null) {
-        const nativeKey = identityKey(
-          descriptor.instanceKey,
-          entry.nativeSessionId,
-        );
+        const nativeKey = identityKey(descriptor.instanceKey, entry.nativeSessionId);
         const bucket = nativeBuckets.get(nativeKey);
         if (bucket === undefined) nativeBuckets.set(nativeKey, [id]);
         else bucket.push(id);
       }
       if (entry.parentNativeSessionId !== null) {
-        const parentKey = identityKey(
-          descriptor.instanceKey,
-          entry.parentNativeSessionId,
-        );
+        const parentKey = identityKey(descriptor.instanceKey, entry.parentNativeSessionId);
         const dependents = parentNativeDependents.get(parentKey);
         if (dependents === undefined) {
           parentNativeDependents.set(parentKey, new Set([id]));
@@ -250,16 +251,12 @@ function linkRelationships(
   const resolvedParents = new Map<DomainSessionId, DomainSessionId | null>();
   const children = new Map<DomainSessionId, DomainSessionId[]>();
   for (const item of inputs.values()) {
-    const parentId = item.parentNativeSessionId === null
-      ? null
-      : uniqueIdentity(
-        nativeBuckets.get(
-          identityKey(
-            item.descriptor.instanceKey,
-            item.parentNativeSessionId,
-          ),
-        ),
-      );
+    const parentId =
+      item.parentNativeSessionId === null
+        ? null
+        : uniqueIdentity(
+            nativeBuckets.get(identityKey(item.descriptor.instanceKey, item.parentNativeSessionId)),
+          );
     resolvedParents.set(item.id, parentId);
     if (parentId !== null) {
       const childIds = children.get(parentId);
@@ -294,6 +291,7 @@ function linkRelationships(
           sourceInstanceId: item.descriptor.sourceInstanceId,
           agentName: item.descriptor.displayName,
         },
+        isChild: item.parentNativeSessionId !== null,
         parentId: resolvedParents.get(id) ?? null,
         childIds: [...(children.get(id) ?? [])].sort(compareCodeUnits),
       },
@@ -307,6 +305,7 @@ function linkRelationships(
   return {
     sessions,
     diagnostics,
+    aggregateDiagnostics,
     dirtyIds,
     inputs,
     nativeBuckets,
@@ -318,10 +317,7 @@ function linkRelationships(
 function findDirtyIds(
   inputs: ReadonlyMap<DomainSessionId, PendingSession>,
   nativeBuckets: ReadonlyMap<string, readonly DomainSessionId[]>,
-  parentNativeDependents: ReadonlyMap<
-    string,
-    ReadonlySet<DomainSessionId>
-  >,
+  parentNativeDependents: ReadonlyMap<string, ReadonlySet<DomainSessionId>>,
   resolvedParents: ReadonlyMap<DomainSessionId, DomainSessionId | null>,
   previous: AggregateState | null,
 ): Set<DomainSessionId> {
@@ -354,14 +350,10 @@ function findDirtyIds(
     if (oldParent !== null && inputs.has(oldParent)) dirty.add(oldParent);
   }
 
-  const identityKeys = new Set([
-    ...previous.nativeBuckets.keys(),
-    ...nativeBuckets.keys(),
-  ]);
+  const identityKeys = new Set([...previous.nativeBuckets.keys(), ...nativeBuckets.keys()]);
   for (const key of identityKeys) {
     if (
-      uniqueIdentity(previous.nativeBuckets.get(key)) ===
-        uniqueIdentity(nativeBuckets.get(key))
+      uniqueIdentity(previous.nativeBuckets.get(key)) === uniqueIdentity(nativeBuckets.get(key))
     ) {
       continue;
     }
@@ -381,45 +373,37 @@ function findDirtyIds(
   return dirty;
 }
 
-function sameSourceInput(
-  left: PendingSession,
-  right: PendingSession,
-): boolean {
-  return left.normalized === right.normalized &&
+function sameSourceInput(left: PendingSession, right: PendingSession): boolean {
+  return (
+    left.normalized === right.normalized &&
     left.nativeSessionId === right.nativeSessionId &&
     left.parentNativeSessionId === right.parentNativeSessionId &&
     sameOrigin(left.origin, right.origin) &&
     left.descriptor.sourceType === right.descriptor.sourceType &&
     left.descriptor.sourceInstanceId === right.descriptor.sourceInstanceId &&
-    left.descriptor.displayName === right.descriptor.displayName;
+    left.descriptor.displayName === right.descriptor.displayName
+  );
 }
 
 function sameOrigin(
   left: SourceSessionEntry["origin"],
   right: SourceSessionEntry["origin"],
 ): boolean {
-  return left.sourceType === right.sourceType &&
+  return (
+    left.sourceType === right.sourceType &&
     left.sourceInstanceId === right.sourceInstanceId &&
     left.agentName === right.agentName &&
     left.agentVersion === right.agentVersion &&
-    left.formatVersion === right.formatVersion;
+    left.formatVersion === right.formatVersion
+  );
 }
 
-function uniqueIdentity(
-  bucket: readonly DomainSessionId[] | undefined,
-): DomainSessionId | null {
+function uniqueIdentity(bucket: readonly DomainSessionId[] | undefined): DomainSessionId | null {
   return bucket?.length === 1 ? bucket[0]! : null;
 }
 
 function identityKey(sourceKey: string, nativeId: string): string {
   return encodeStringTuple(sourceKey, nativeId);
-}
-
-function compareSessions(left: NormalizedSession, right: NormalizedSession): number {
-  return (right.session.updatedAt ?? right.session.createdAt ?? "")
-    .localeCompare(left.session.updatedAt ?? left.session.createdAt ?? "") ||
-    left.session.title.localeCompare(right.session.title) ||
-    compareCodeUnits(left.session.id, right.session.id);
 }
 
 function compareCodeUnits(left: string, right: string): number {

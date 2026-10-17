@@ -1,5 +1,6 @@
 import { open } from "node:fs/promises";
 import { join } from "node:path";
+
 import { normalizeSessionTitle } from "../../domain/session-text.js";
 import { MAX_JSONL_LINE_BYTES } from "./limits.js";
 
@@ -24,11 +25,12 @@ export class SessionIndexReader {
       const info = await handle.stat();
       const fingerprint = { size: info.size, mtimeMs: info.mtimeMs };
       if (sameFingerprint(this.#fingerprint, fingerprint)) return;
-      const threadNames = info.size === 0
-        ? new Map<string, string>()
-        : await readCompleteRecords(
-          handle.createReadStream({ start: 0, end: info.size - 1, autoClose: false }),
-        );
+      const threadNames =
+        info.size === 0
+          ? new Map<string, string>()
+          : await readCompleteRecords(
+              handle.createReadStream({ start: 0, end: info.size - 1, autoClose: false }),
+            );
       this.#threadNames = threadNames;
       this.#fingerprint = fingerprint;
     } catch {

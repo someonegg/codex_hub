@@ -1,18 +1,17 @@
 import type {
-  InteractionResponse,
   InteractionKey,
+  InteractionResponse,
   TerminalPreviewResponse,
 } from "../../shared/api-contract.js";
+import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
 import type { InteractionBindingAttempt } from "../domain/session-domain.js";
-import type {
-  InteractionSessionSnapshot,
-  SessionReader,
-} from "../application/session-reader.js";
+import { normalizeMessage } from "./message.js";
+import { attachCommand } from "./tmux-launcher.js";
 import {
-  TmuxInteractionError,
-  TmuxInteractionService,
+  type InteractionTransport,
+  InteractionTransportError,
   type TmuxBinding,
-} from "./tmux-service.js";
+} from "./transport.js";
 
 export class SessionInteractionError extends Error {
   constructor(
@@ -21,7 +20,8 @@ export class SessionInteractionError extends Error {
       | "interaction_not_supported"
       | "interaction_not_connected"
       | "operation_result_unknown"
-      | "interaction_failed",
+      | "interaction_failed"
+      | "session_busy",
     message: string,
   ) {
     super(message);
@@ -29,25 +29,51 @@ export class SessionInteractionError extends Error {
   }
 }
 
-interface CachedBinding {
+interface CheckedBinding {
   readonly attempt: InteractionBindingAttempt & { readonly valid: true };
   readonly binding: TmuxBinding;
 }
 
-interface ResolvedBinding extends CachedBinding {
+interface ResolvedBinding extends CheckedBinding {
+  readonly rebindCommand: string;
   readonly keyBindings: NonNullable<InteractionSessionSnapshot["interaction"]>["keyBindings"];
 }
 
 type InteractionSessionReader = Pick<SessionReader, "getInteractionSession">;
 
 export class SessionInteractionService {
-  readonly #bindings = new Map<string, CachedBinding>();
+  readonly #busy = new Set<string>();
 
   constructor(
     private readonly sessions: InteractionSessionReader,
     private readonly enabled: boolean,
-    private readonly tmux = new TmuxInteractionService(),
+    private readonly tmux: InteractionTransport,
   ) {}
+
+  setBusy(sessionId: string, busy: boolean) {
+    if (busy) this.#busy.add(sessionId);
+    else this.#busy.delete(sessionId);
+  }
+  async archiveTarget(sessionId: string): Promise<TmuxBinding | null> {
+    const session = await this.sessions.getInteractionSession(sessionId);
+    if (!session) throw new Error("Session not found");
+    const attempt = session.interaction?.bindingAttempt;
+    if (!attempt?.valid) return null;
+    return this.tmux.archiveTarget(attempt);
+  }
+  exitTarget(target: TmuxBinding) {
+    return this.tmux.exitTarget(target);
+  }
+  inspectTarget(target: TmuxBinding) {
+    return this.tmux.inspect(target);
+  }
+  #assertAvailable(sessionId: string) {
+    if (this.#busy.has(sessionId))
+      throw new SessionInteractionError(
+        "session_busy",
+        "Session management is in progress; input is temporarily unavailable",
+      );
+  }
 
   async describe(sessionId: string): Promise<InteractionResponse | null> {
     const session = await this.sessions.getInteractionSession(sessionId);
@@ -56,44 +82,74 @@ export class SessionInteractionService {
   }
 
   async describeSnapshot(
-    sessionId: string,
+    _sessionId: string,
     session: InteractionSessionSnapshot,
   ): Promise<InteractionResponse> {
-    if (!this.#supported(session)) return { supported: false };
+    if (!this.#supported(session)) return { supported: false, attachCommand: null };
     const interaction = session.interaction!;
     const attempt = interaction.bindingAttempt;
-    if (attempt === null) return response(interaction.activation, "unbound");
+    if (attempt === null) return response("unbound");
     if (!attempt.valid) {
-      this.#bindings.delete(sessionId);
-      return response(interaction.activation, "disconnected");
+      return response("disconnected");
     }
     try {
-      const binding = await this.tmux.connect(attempt);
-      this.#bindings.set(sessionId, { attempt, binding });
-      return response(interaction.activation, "connected");
+      const checked = await this.#check(attempt);
+      return response(checked === null ? "disconnected" : "connected", checked?.binding);
     } catch {
-      this.#bindings.delete(sessionId);
-      return response(interaction.activation, "disconnected");
+      return response("unknown");
     }
+  }
+
+  #check(attempt: InteractionBindingAttempt & { valid: true }): Promise<CheckedBinding | null> {
+    return this.tmux.connect(attempt).then(
+      (binding) => ({ attempt, binding }),
+      (error: unknown) => {
+        if (error instanceof InteractionTransportError && error.code === "disconnected")
+          return null;
+        throw error;
+      },
+    );
+  }
+
+  async matchesTarget(sessionId: string, target: TmuxBinding): Promise<boolean> {
+    const resolved = await this.#resolve(sessionId);
+    return (
+      resolved.binding.socketPath === target.socketPath && resolved.binding.paneId === target.paneId
+    );
   }
 
   async sendMessage(sessionId: string, message: string): Promise<void> {
+    message = normalizeMessage(message);
+    this.#assertAvailable(sessionId);
     const { binding } = await this.#resolve(sessionId);
-    await this.#perform(sessionId, () => this.tmux.sendMessage(binding, message));
+    this.#assertAvailable(sessionId);
+    await this.#perform(() =>
+      this.tmux.sendMessage(binding, message, () => this.#assertAvailable(sessionId)),
+    );
+  }
+
+  async rebind(sessionId: string): Promise<void> {
+    this.#assertAvailable(sessionId);
+    const { binding, rebindCommand } = await this.#resolve(sessionId);
+    this.#assertAvailable(sessionId);
+    await this.#perform(() =>
+      this.tmux.sendMessage(binding, rebindCommand, () => this.#assertAvailable(sessionId)),
+    );
   }
 
   async sendKeys(sessionId: string, keys: readonly InteractionKey[]): Promise<void> {
+    this.#assertAvailable(sessionId);
     const { binding, keyBindings } = await this.#resolve(sessionId);
+    this.#assertAvailable(sessionId);
     const mapped = keys.map((key) => keyBindings[key]);
-    await this.#perform(sessionId, () => this.tmux.sendKeys(binding, mapped));
+    await this.#perform(() =>
+      this.tmux.sendKeys(binding, mapped, () => this.#assertAvailable(sessionId)),
+    );
   }
 
   async preview(sessionId: string): Promise<TerminalPreviewResponse> {
     const { binding } = await this.#resolve(sessionId);
-    const result = await this.#perform(
-      sessionId,
-      () => this.tmux.captureTerminal(binding),
-    );
+    const result = await this.#perform(() => this.tmux.captureTerminal(binding));
     return {
       ...result,
       capturedAt: new Date().toISOString(),
@@ -114,38 +170,31 @@ export class SessionInteractionService {
     const interaction = session.interaction!;
     const attempt = interaction.bindingAttempt;
     if (attempt === null || !attempt.valid) {
-      this.#bindings.delete(sessionId);
       throw new SessionInteractionError(
         "interaction_not_connected",
         "The session is not connected to a tmux pane",
       );
     }
-    const cached = this.#bindings.get(sessionId);
-    if (
-      cached !== undefined &&
-      cached.attempt.ordinal === attempt.ordinal &&
-      cached.attempt.socketPath === attempt.socketPath &&
-      cached.attempt.paneId === attempt.paneId
-    ) {
-      return { ...cached, keyBindings: interaction.keyBindings };
-    }
+    let checked: CheckedBinding | null;
     try {
-      const binding = await this.tmux.connect(attempt);
-      const next = { attempt, binding };
-      this.#bindings.set(sessionId, next);
-      return { ...next, keyBindings: interaction.keyBindings };
+      checked = await this.#check(attempt);
     } catch (error) {
-      return this.#translateConnectionError(sessionId, error);
+      return this.#translateConnectionError(error);
     }
+    if (checked === null) return this.#translateConnectionError(null);
+    return {
+      ...checked,
+      keyBindings: interaction.keyBindings,
+      rebindCommand: interaction.rebindCommand,
+    };
   }
 
-  async #perform<T>(sessionId: string, operation: () => Promise<T>): Promise<T> {
+  async #perform<T>(operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error) {
-      if (error instanceof TmuxInteractionError) {
+      if (error instanceof InteractionTransportError) {
         if (error.code === "disconnected") {
-          this.#bindings.delete(sessionId);
           throw new SessionInteractionError(
             "interaction_not_connected",
             "The tmux target is no longer connected",
@@ -168,17 +217,18 @@ export class SessionInteractionService {
     }
   }
 
-  #translateConnectionError(sessionId: string, error: unknown): never {
-    this.#bindings.delete(sessionId);
-    if (error instanceof TmuxInteractionError && error.code === "timeout") {
+  #translateConnectionError(error: unknown): never {
+    if (error instanceof InteractionTransportError && error.code === "timeout") {
       throw new SessionInteractionError(
         "operation_result_unknown",
         "The tmux validation timed out; its result is unknown and was not retried",
       );
     }
     throw new SessionInteractionError(
-      "interaction_not_connected",
-      "The session is not connected to a valid tmux pane",
+      error === null ? "interaction_not_connected" : "interaction_failed",
+      error === null
+        ? "The session is not connected to a valid tmux pane"
+        : "tmux target validation failed",
     );
   }
 
@@ -188,12 +238,14 @@ export class SessionInteractionService {
 }
 
 function response(
-  activation: string,
-  state: "unbound" | "disconnected" | "connected",
+  state: "unbound" | "disconnected" | "connected" | "unknown",
+  binding?: TmuxBinding,
 ): InteractionResponse {
   return {
     supported: true,
     state,
-    activation,
+    attachCommand: binding?.sessionName
+      ? attachCommand(binding.socketPath, binding.sessionName)
+      : null,
   };
 }

@@ -7,20 +7,15 @@ timeline items. Keep it synchronized with `rollout-decoder.ts`,
 
 ## Decode-time skips
 
-Rollout state is checkpointed in memory after a successful source refresh. The
-checkpoint records the observed EOF, the byte after the last committed newline,
-the consumed physical-line count, decoder diagnostics and versions, plus SHA-256
-probes covering the first 4 KiB and up to 4 KiB before the prior EOF. A strictly
-growing file is decoded incrementally only when both probes and versions still
-match. Truncation, a same-size change, a probe mismatch, or incompatible state
-causes a complete decode and normalization. Checkpoints are not persisted, so
-the first refresh after process startup is always complete.
+Successful refreshes keep an in-memory checkpoint. Growing files decode only new
+complete lines when decoder/normalizer versions and SHA-256 probes match; probes
+cover the first 4 KiB and up to 4 KiB before the previous EOF. Truncation,
+same-size changes, probe mismatches, incompatible state, and process startup
+require a full decode. See [ADR-0012](adr/0012-use-checkpointed-incremental-rollout-loading.md).
 
-Incremental decoding begins at the last committed newline rather than the old
-EOF. Consequently, an unterminated tail—including partial UTF-8 or an oversized
-line—is reread on later refreshes and remains invisible until its terminating
-newline arrives. The decoder bounds every batch at the EOF observed from the
-same open file handle used for probes and decoding.
+Incremental reads resume after the last committed newline. Unterminated tails,
+including partial UTF-8 and oversized lines, remain invisible and are reread until
+terminated. Probes and decoding use the same open handle and observed EOF bound.
 
 - Empty lines are ignored.
 - Malformed JSON and JSON values that are not objects are skipped with a
@@ -78,9 +73,9 @@ Timeline pages include every normalized item kind. The client always displays
 user and assistant messages and `user_input` items, then independently filters
 `directive`, `tool`, `token`, and `internal` items. Those four technical
 event kinds are hidden by default and can be enabled without reloading the
-timeline. Internal events show only their type until the user requests their
-formatted JSON detail. Directives up to 512 JavaScript code units are shown inline as literal
-plain-text blocks; longer directives retain their lazy detail control. An
+timeline. Internal events show only their type until the user requests JSON detail.
+Directives up to 512 JavaScript code units appear as literal plain-text blocks;
+longer directives load details on demand. An
 inline directive is also hidden when either of the two preceding or two
 following loaded timeline items is a message with exactly the same text. This
 comparison uses the unfiltered timeline, so event visibility does not change

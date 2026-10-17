@@ -1,12 +1,9 @@
 import { createHash } from "node:crypto";
-import { open, type FileHandle } from "node:fs/promises";
-import type { Diagnostic } from "../../../shared/domain.js";
+import { type FileHandle, open } from "node:fs/promises";
+
+import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
+import { DECODER_VERSION, MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import type { RolloutDescriptor } from "./path-policy.js";
-import {
-  DECODER_VERSION,
-  MAX_JSONL_LINE_BYTES,
-  MAX_SESSION_DIAGNOSTICS,
-} from "./limits.js";
 
 const PROBE_BYTES = 4 * 1024;
 
@@ -83,13 +80,7 @@ export class CheckpointedRolloutDecoder implements RolloutDecoder {
       const start = appendCheckpoint?.committedOffset ?? 0;
       const baseOrdinal = appendCheckpoint?.physicalLineCount ?? 0;
       const priorDiagnostics = appendCheckpoint?.diagnostics ?? [];
-      const decoded = await decodeRange(
-        handle,
-        start,
-        observedEof,
-        baseOrdinal,
-        priorDiagnostics,
-      );
+      const decoded = await decodeRange(handle, start, observedEof, baseOrdinal, priorDiagnostics);
       const probes = createProbes(observedEof, [
         ...validatedWindows,
         { offset: start, contents: decoded.headBytes },
@@ -144,9 +135,7 @@ async function decodeRange(
   priorDiagnostics: readonly Diagnostic[],
 ): Promise<RangeDecodeResult> {
   const records: DecodedRecord[] = [];
-  const diagnostics = priorDiagnostics
-    .slice(0, MAX_SESSION_DIAGNOSTICS)
-    .map(cloneDiagnostic);
+  const diagnostics = priorDiagnostics.slice(0, MAX_SESSION_DIAGNOSTICS).map(cloneDiagnostic);
   const batchDiagnostics: Diagnostic[] = [];
   const lineChunks: Buffer[] = [];
   let lineBytes = 0;
@@ -195,11 +184,7 @@ async function decodeRange(
         ordinal += 1;
         committedOffset = start + bytesRead - (chunk.length - newline - 1);
         if (droppingOversizedLine) {
-          retainDiagnostic(
-            diagnostics,
-            batchDiagnostics,
-            lineTooLargeDiagnostic(ordinal),
-          );
+          retainDiagnostic(diagnostics, batchDiagnostics, lineTooLargeDiagnostic(ordinal));
         } else {
           decodeLine(
             lineBuffer(lineChunks, lineBytes),
@@ -246,11 +231,7 @@ function decodeLine(
   const line = rawLine.at(-1) === 0x0d ? rawLine.subarray(0, -1) : rawLine;
   if (line.length === 0) return;
   if (line.length > MAX_JSONL_LINE_BYTES) {
-    retainDiagnostic(
-      diagnostics,
-      batchDiagnostics,
-      lineTooLargeDiagnostic(ordinal),
-    );
+    retainDiagnostic(diagnostics, batchDiagnostics, lineTooLargeDiagnostic(ordinal));
     return;
   }
   try {
@@ -299,7 +280,8 @@ function isCompatibleCheckpoint(
   checkpoint: RolloutCheckpoint | undefined,
   observedEof: number,
 ): checkpoint is RolloutCheckpoint {
-  return checkpoint !== undefined &&
+  return (
+    checkpoint !== undefined &&
     checkpoint.decoderVersion === DECODER_VERSION &&
     Number.isSafeInteger(checkpoint.observedEof) &&
     Number.isSafeInteger(checkpoint.committedOffset) &&
@@ -309,16 +291,19 @@ function isCompatibleCheckpoint(
     checkpoint.physicalLineCount >= 0 &&
     checkpoint.diagnostics.length <= MAX_SESSION_DIAGNOSTICS &&
     validProbeGeometry(checkpoint) &&
-    observedEof > checkpoint.observedEof;
+    observedEof > checkpoint.observedEof
+  );
 }
 
 function validProbeGeometry(checkpoint: RolloutCheckpoint): boolean {
   const headLength = Math.min(PROBE_BYTES, checkpoint.observedEof);
   const tailOffset = Math.max(0, checkpoint.observedEof - PROBE_BYTES);
-  return checkpoint.headProbe.offset === 0 &&
+  return (
+    checkpoint.headProbe.offset === 0 &&
     checkpoint.headProbe.length === headLength &&
     checkpoint.tailProbe.offset === tailOffset &&
-    checkpoint.tailProbe.length === checkpoint.observedEof - tailOffset;
+    checkpoint.tailProbe.length === checkpoint.observedEof - tailOffset
+  );
 }
 
 async function validateProbes(
@@ -376,14 +361,16 @@ async function readProbe(
   expected: RolloutProbe,
 ): Promise<{ matches: boolean; bytesRead: number; contents: Buffer }> {
   if (
-    !Number.isSafeInteger(expected.offset) || expected.offset < 0 ||
-    !Number.isSafeInteger(expected.length) || expected.length < 0
-  ) return { matches: false, bytesRead: 0, contents: Buffer.alloc(0) };
+    !Number.isSafeInteger(expected.offset) ||
+    expected.offset < 0 ||
+    !Number.isSafeInteger(expected.length) ||
+    expected.length < 0
+  )
+    return { matches: false, bytesRead: 0, contents: Buffer.alloc(0) };
   const actual = await probeAt(handle, expected.offset, expected.length);
   const contents = actual.contents;
   return {
-    matches: actual.probe.length === expected.length &&
-      actual.probe.sha256 === expected.sha256,
+    matches: actual.probe.length === expected.length && actual.probe.sha256 === expected.sha256,
     bytesRead: actual.bytesRead,
     contents,
   };
@@ -412,8 +399,9 @@ function probeFromWindows(
   const contents = Buffer.alloc(length);
   let cursor = offset;
   while (cursor < offset + length) {
-    const window = windows.find(({ offset: windowOffset, contents: value }) =>
-      cursor >= windowOffset && cursor < windowOffset + value.length
+    const window = windows.find(
+      ({ offset: windowOffset, contents: value }) =>
+        cursor >= windowOffset && cursor < windowOffset + value.length,
     );
     if (window === undefined) {
       throw new Error("Decoder probe bytes were not retained");

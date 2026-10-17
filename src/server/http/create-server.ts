@@ -1,11 +1,16 @@
 import { createReadStream, readFileSync, realpathSync } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
-import { createServer as createHttpServer, type RequestListener, type ServerResponse } from "node:http";
+import {
+  createServer as createHttpServer,
+  type RequestListener,
+  type ServerResponse,
+} from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
+
 import type { ServerConfig } from "../config.js";
-import { emptyApiRouter, sendJson, type ApiRouter } from "./router.js";
+import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
 import { applySecurityHeaders } from "./security.js";
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -16,7 +21,12 @@ const CONTENT_TYPES: Record<string, string> = {
   ".svg": "image/svg+xml",
 };
 
-function sendText(response: ServerResponse, status: number, message: string, headOnly: boolean): void {
+function sendText(
+  response: ServerResponse,
+  status: number,
+  message: string,
+  headOnly: boolean,
+): void {
   response.statusCode = status;
   response.setHeader("Content-Type", "text/plain; charset=utf-8");
   response.setHeader("Content-Length", Buffer.byteLength(message));
@@ -32,12 +42,17 @@ async function serveFile(
     const info = await stat(filePath);
     if (!info.isFile()) return false;
     response.statusCode = 200;
-    response.setHeader("Content-Type", CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream");
+    response.setHeader(
+      "Content-Type",
+      CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream",
+    );
     response.setHeader("Content-Length", info.size);
     if (headOnly) {
       response.end();
     } else {
-      createReadStream(filePath).on("error", () => response.destroy()).pipe(response);
+      createReadStream(filePath)
+        .on("error", () => response.destroy())
+        .pipe(response);
     }
     return true;
   } catch {
@@ -45,7 +60,11 @@ async function serveFile(
   }
 }
 
-export function createServer(config: ServerConfig, apiRouter: ApiRouter = emptyApiRouter) {
+export function createServer(
+  config: ServerConfig,
+  apiRouter: ApiRouter = emptyApiRouter,
+  closeServices: () => void = () => {},
+) {
   const clientRoot = realpathSync(config.clientDirectory);
   const clientRootPrefix = `${clientRoot}${sep}`;
   const requestListener: RequestListener = async (request, response) => {
@@ -64,11 +83,8 @@ export function createServer(config: ServerConfig, apiRouter: ApiRouter = emptyA
       const url = new URL(request.url ?? "/", "http://localhost");
       const decodedPath = decodeURIComponent(url.pathname);
       const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(decodedPath);
-      const relativePath = decodedPath === "/"
-        ? "index.html"
-        : sessionPage
-        ? "session.html"
-        : decodedPath.slice(1);
+      const relativePath =
+        decodedPath === "/" ? "index.html" : sessionPage ? "index.html" : decodedPath.slice(1);
       const requestedPath = resolve(clientRoot, relativePath);
       let canonicalPath: string;
       try {
@@ -86,13 +102,18 @@ export function createServer(config: ServerConfig, apiRouter: ApiRouter = emptyA
       }
       sendText(response, 404, "Not found", headOnly);
     } catch {
-      sendJson(response, 400, { error: { code: "bad_request", message: "Malformed request" } }, headOnly);
+      sendJson(
+        response,
+        400,
+        { error: { code: "bad_request", message: "Malformed request" } },
+        headOnly,
+      );
     }
   };
 
   if (!config.tls.enabled) {
     const server = createHttpServer(requestListener);
-    return closeRouterWith(server, apiRouter);
+    return closeServicesWith(server, closeServices);
   }
 
   const requireClientCertificate = config.tls.certificateAuthorityPath !== undefined;
@@ -109,14 +130,26 @@ export function createServer(config: ServerConfig, apiRouter: ApiRouter = emptyA
     },
     requestListener,
   );
-  return closeRouterWith(server, apiRouter);
+  return closeServicesWith(server, closeServices);
 }
 
-export function listenServer(
-  server: NetServer,
-  port: number,
-  host: string,
-): Promise<void> {
+/** Own startup cleanup as well as the server's pre-drain shutdown hook. */
+export async function startServer(
+  config: ServerConfig,
+  apiRouter: ApiRouter,
+  closeServices: () => void,
+) {
+  try {
+    const server = createServer(config, apiRouter, closeServices);
+    await listenServer(server, config.port, config.host);
+    return server;
+  } catch (error) {
+    closeServices();
+    throw error;
+  }
+}
+
+export function listenServer(server: NetServer, port: number, host: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
       server.removeListener("error", onError);
@@ -136,16 +169,16 @@ export function listenServer(
   });
 }
 
-function closeRouterWith<T extends ReturnType<typeof createHttpServer>>(
+function closeServicesWith<T extends ReturnType<typeof createHttpServer>>(
   server: T,
-  apiRouter: ApiRouter,
+  closeServices: () => void,
 ): T {
   const close = server.close.bind(server);
   const mutable = server as unknown as {
     close(callback?: (error?: Error) => void): T;
   };
   mutable.close = (callback?: (error?: Error) => void) => {
-    apiRouter.close?.();
+    closeServices();
     close(callback);
     return server;
   };

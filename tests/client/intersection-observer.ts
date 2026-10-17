@@ -12,24 +12,33 @@ const observers: ObserverRecord[] = [];
 
 export function installIntersectionObserver(): void {
   observers.length = 0;
-  vi.stubGlobal("IntersectionObserver", class {
-    readonly root = null;
-    readonly rootMargin: string;
-    readonly thresholds: readonly number[];
-    readonly record: ObserverRecord;
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      readonly root = null;
+      readonly rootMargin: string;
+      readonly thresholds: readonly number[];
+      readonly record: ObserverRecord;
 
-    constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
-      this.rootMargin = options?.rootMargin ?? "0px";
-      this.thresholds = [typeof options?.threshold === "number" ? options.threshold : 0];
-      this.record = { callback, element: null, disconnected: false, options };
-      observers.push(this.record);
-    }
+      constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+        this.rootMargin = options?.rootMargin ?? "0px";
+        this.thresholds = [typeof options?.threshold === "number" ? options.threshold : 0];
+        this.record = { callback, element: null, disconnected: false, options };
+        observers.push(this.record);
+      }
 
-    observe(element: Element) { this.record.element = element; }
-    unobserve() {}
-    disconnect() { this.record.disconnected = true; }
-    takeRecords(): IntersectionObserverEntry[] { return []; }
-  });
+      observe(element: Element) {
+        this.record.element = element;
+      }
+      unobserve() {}
+      disconnect() {
+        this.record.disconnected = true;
+      }
+      takeRecords(): IntersectionObserverEntry[] {
+        return [];
+      }
+    },
+  );
 }
 
 export function intersectLatest(): void {
@@ -37,10 +46,17 @@ export function intersectLatest(): void {
   if (record?.element === null || record === undefined) {
     throw new Error("No active infinite-scroll observer");
   }
-  act(() => record.callback([{
-    isIntersecting: true,
-    target: record.element!,
-  } as IntersectionObserverEntry], {} as IntersectionObserver));
+  act(() =>
+    record.callback(
+      [
+        {
+          isIntersecting: true,
+          target: record.element!,
+        } as IntersectionObserverEntry,
+      ],
+      {} as IntersectionObserver,
+    ),
+  );
 }
 
 export function latestObserverOptions(): IntersectionObserverInit | undefined {

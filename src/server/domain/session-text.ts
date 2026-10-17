@@ -6,27 +6,24 @@ export const MAX_PREVIEW_CHARS = 256;
 export const MAX_SESSION_TITLE_CHARS = 80;
 const MAX_TITLE_HEADING_DEPTH = 64;
 
-export function truncateText(
-  value: string,
-  limit: number,
-): { text: string; truncated: boolean } {
+export function truncateText(value: string, limit: number): { text: string; truncated: boolean } {
   if (value.length <= limit) return { text: value, truncated: false };
   let end = limit;
   const previous = value.charCodeAt(end - 1);
   const next = value.charCodeAt(end);
   const splitsSurrogatePair =
-    previous >= 0xd800 && previous <= 0xdbff &&
-    next >= 0xdc00 && next <= 0xdfff;
+    previous >= 0xd800 && previous <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
   if (splitsSurrogatePair) end -= 1;
   return { text: value.slice(0, end), truncated: true };
 }
 
 export function normalizeSessionTitle(value: string | null): string | null {
   if (value === null) return null;
-  const firstLine = value.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
-  return firstLine === undefined
-    ? null
-    : truncateText(firstLine, MAX_SESSION_TITLE_CHARS).text;
+  const firstLine = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  return firstLine === undefined ? null : truncateText(firstLine, MAX_SESSION_TITLE_CHARS).text;
 }
 
 export function sessionTitleFromMarkdown(value: string): string | null {

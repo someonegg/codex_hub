@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join, relative, resolve, sep } from "node:path";
+
 import { describe, expect, it, vi } from "vitest";
+
 import { SessionApiMapper } from "../../src/server/api/session-api-mapper.js";
 import type {
   DomainSession,
@@ -10,14 +12,8 @@ import type {
 import {
   CatalogSnapshotStore,
   MAX_CATALOG_DIAGNOSTICS,
-  type CatalogSnapshot,
 } from "../../src/server/repository/catalog-snapshot-store.js";
-import { SessionQueries } from "../../src/server/repository/session-queries.js";
-import { deriveTimelinePrefixIndex } from "../../src/server/repository/timeline-prefix-index.js";
-import type {
-  SessionSource,
-  SourceSessionEntry,
-} from "../../src/server/source/session-source.js";
+import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
 
 const session: DomainSession = {
   id: "session-one",
@@ -41,32 +37,36 @@ const session: DomainSession = {
   messageCount: 1,
   toolCount: 0,
   warningCount: 1,
-  diagnostics: [{
-    code: "partial",
-    severity: "warning",
-    message: "Partial",
-    ordinal: 2,
-  }],
+  diagnostics: [
+    {
+      code: "partial",
+      severity: "warning",
+      message: "Partial",
+      ordinal: 2,
+    },
+  ],
   itemCount: 1,
 };
 
-const timeline: readonly DomainTimelineRecord[] = [{
-  kind: "token",
-  id: "token-1",
-  ordinal: 1,
-  timestamp: null,
-  tokenUsage: {
-    total: {
-      totalTokens: 10,
-      inputTokens: 8,
-      cachedInputTokens: null,
-      cacheWriteInputTokens: null,
-      outputTokens: 2,
-      reasoningOutputTokens: null,
+const timeline: readonly DomainTimelineRecord[] = [
+  {
+    kind: "token",
+    id: "token-1",
+    ordinal: 1,
+    timestamp: null,
+    tokenUsage: {
+      total: {
+        totalTokens: 10,
+        inputTokens: 8,
+        cachedInputTokens: null,
+        cacheWriteInputTokens: null,
+        outputTokens: 2,
+        reasoningOutputTokens: null,
+      },
+      last: null,
     },
-    last: null,
   },
-}];
+];
 
 const normalized: NormalizedSession = {
   session,
@@ -81,15 +81,14 @@ describe("server architecture boundaries", () => {
     const serverDirectory = resolve("src/server");
     const files = (await typescriptFiles(serverDirectory)).filter((file) => {
       const serverRelativePath = relative(serverDirectory, file);
-      return !serverRelativePath.startsWith(`adapters${sep}`) &&
-        serverRelativePath !== "create-session-read-service.ts";
+      return (
+        !serverRelativePath.startsWith(`adapters${sep}`) && serverRelativePath !== "create-hub.ts"
+      );
     });
 
     for (const file of files) {
       const source = await readFile(file, "utf8");
-      expect(source, file).not.toMatch(
-        /(?:from\s+|import\s*\()["'][^"']*adapters\/codex/,
-      );
+      expect(source, file).not.toMatch(/(?:from\s+|import\s*\()["'][^"']*adapters\/codex/);
     }
   });
 
@@ -99,99 +98,47 @@ describe("server architecture boundaries", () => {
       const source = await readFile(file, "utf8");
       expect(source, file).not.toMatch(/shared\/api-contract|server\/api|SessionApiMapper/);
     }
-
-    const application = await readFile(
-      resolve("src/server/application/session-read-service.ts"),
-      "utf8",
-    );
-    expect(application).toContain("SessionApiMapper");
-    expect(application).toContain("CatalogSnapshotStore");
-    expect(application).toContain("SessionQueries");
   });
 
-  it("maps domain values exactly without leaking private summary fields or mutable references", () => {
-    const mapper = new SessionApiMapper();
-    const queries = new SessionQueries();
-    const read = queries.session(snapshotOf(normalized), "session-one")!;
-    const detail = mapper.detail(read);
-    const summary = mapper.summary(session);
-    const item = mapper.timelineItem(timeline[0]!);
-    const catalogDiagnostic = {
-      code: "catalog_warning",
-      severity: "warning" as const,
-      message: "Catalog warning",
-      ordinal: null,
-    };
-    const catalog = mapper.list(
-      queries.list(snapshotOf(normalized), {}),
-      [catalogDiagnostic],
-    );
+  it("keeps domain contracts independent from API and HTTP independent from tmux implementations", async () => {
+    for (const file of await typescriptFiles(resolve("src/server/domain"))) {
+      expect(await readFile(file, "utf8"), file).not.toMatch(/shared\/api-contract/);
+    }
+    for (const file of await typescriptFiles(resolve("src/server/http"))) {
+      expect(await readFile(file, "utf8"), file).not.toMatch(
+        /interaction\/tmux-(?:service|launcher)/,
+      );
+    }
+  });
 
-    expect(summary).toEqual({
-      id: "session-one",
-      origin: {
-        sourceType: "test",
-        sourceInstanceId: "test-source",
-        agentName: "Test Agent",
-        agentVersion: "1.0.0",
-        formatVersion: null,
-      },
-      title: "Session one",
-      nickname: null,
-      workingDirectory: "/project",
-      projectDirectory: "/project",
-      createdAt: "2026-07-28T00:00:00Z",
-      updatedAt: "2026-07-28T01:00:00Z",
+  it("maps compact catalog records and independent, immutable details", () => {
+    const mapper = new SessionApiMapper();
+    const catalog = mapper.list([session]);
+    expect(catalog.sessions[0]).toEqual({
+      id: session.id,
+      title: session.title,
+      projectId: expect.any(String),
       archived: false,
       parentId: null,
-      childIds: ["child"],
-      agent: { taskName: "task", nickname: null, role: "worker" },
-      messageCount: 1,
-      toolCount: 0,
-      warningCount: 1,
+      isChild: false,
+      updatedAt: session.updatedAt,
     });
-    expect(summary).not.toHaveProperty("sourceId");
-    expect(detail).toEqual({
-      session: {
-        ...summary,
-        sourceId: "private-source-id",
-        diagnostics: [{
-          code: "partial",
-          severity: "warning",
-          message: "Partial",
-          ordinal: 2,
-        }],
-        itemCount: 1,
-      },
-    });
-    expect(catalog.diagnostics).toEqual([catalogDiagnostic]);
-
-    summary.childIds.push("mutated");
-    detail.session.diagnostics[0]!.message = "mutated";
-    catalog.diagnostics[0]!.message = "mutated";
-    if (item.kind === "token" && item.tokenUsage.total) {
-      item.tokenUsage.total.totalTokens = 99;
-    }
+    const detail = mapper.detail(session);
+    detail.session.childIds.push("mutated");
+    expect(detail.session).not.toHaveProperty("diagnostics");
+    expect(detail.session).not.toHaveProperty("warningCount");
     expect(session.childIds).toEqual(["child"]);
     expect(session.diagnostics[0]!.message).toBe("Partial");
-    expect(catalogDiagnostic.message).toBe("Catalog warning");
-    expect(
-      timeline[0]?.kind === "token"
-        ? timeline[0].tokenUsage.total?.totalTokens
-        : null,
-    ).toBe(10);
+    expect(detail.session.origin).not.toBe(session.origin);
   });
 
   it("limits catalog diagnostics while preserving their order", async () => {
-    const diagnostics = Array.from(
-      { length: MAX_CATALOG_DIAGNOSTICS + 1 },
-      (_, index) => ({
-        code: `catalog_warning_${index + 1}`,
-        severity: "warning" as const,
-        message: `Catalog warning ${index + 1}`,
-        ordinal: null,
-      }),
-    );
+    const diagnostics = Array.from({ length: MAX_CATALOG_DIAGNOSTICS + 1 }, (_, index) => ({
+      code: `catalog_warning_${index + 1}`,
+      severity: "warning" as const,
+      message: `Catalog warning ${index + 1}`,
+      ordinal: null,
+    }));
     const source = {
       ...testSource("catalog-diagnostics", []),
       async refresh() {
@@ -205,9 +152,45 @@ describe("server architecture boundaries", () => {
 
     const snapshot = await new CatalogSnapshotStore([source]).current();
 
-    expect(snapshot.diagnostics).toEqual(
-      diagnostics.slice(0, MAX_CATALOG_DIAGNOSTICS),
+    expect(snapshot.diagnostics).toEqual(diagnostics.slice(0, MAX_CATALOG_DIAGNOSTICS));
+  });
+
+  it("retains readable sessions despite truncated diagnostics and duplicate local identities", async () => {
+    const first = testSource("first", []);
+    const healthy = testSource("healthy", [sourceEntry("one", null, "Healthy")]);
+    const duplicate = sourceEntry("same", null, "Duplicate");
+    const broken = testSource("broken", [duplicate, duplicate]);
+    const noisy: SessionSource = {
+      ...first,
+      async refresh() {
+        return {
+          signature: "noisy",
+          sessions: [],
+          diagnostics: Array.from({ length: MAX_CATALOG_DIAGNOSTICS + 1 }, () => ({
+            code: "unavailable",
+            severity: "error" as const,
+            message: "Unavailable",
+            ordinal: null,
+          })),
+        };
+      },
+    };
+    const log = vi.fn();
+    const snapshot = await new CatalogSnapshotStore(
+      [noisy, healthy, broken],
+      undefined,
+      undefined,
+      { diagnosticLogger: { log } },
+    ).current();
+    expect(log).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceInstanceId: broken.descriptor.sourceInstanceId,
+        scope: "aggregate",
+        code: "duplicate_source_session_id",
+      }),
     );
+    expect(snapshot.diagnostics).toHaveLength(MAX_CATALOG_DIAGNOSTICS);
+    expect(snapshot.sessions.size).toBe(2);
   });
 
   it("rejects duplicate source instances and propagates source invariant failures", async () => {
@@ -225,9 +208,7 @@ describe("server architecture boundaries", () => {
     expect(() => new CatalogSnapshotStore([source, source])).toThrow(
       "Duplicate session source instance key",
     );
-    await expect(new CatalogSnapshotStore([source]).current()).rejects.toThrow(
-      "source invariant",
-    );
+    await expect(new CatalogSnapshotStore([source]).current()).rejects.toThrow("source invariant");
   });
 
   it("namespaces source identities, links parents locally, and ignores source order", async () => {
@@ -254,32 +235,29 @@ describe("server architecture boundaries", () => {
 
     expect(first.signature).toBe(reordered.signature);
     expect(first.signature).toBe(reorderedEntries.signature);
-    expect(first.orderedIds).toEqual(reordered.orderedIds);
-    const queries = new SessionQueries();
-    expect(queries.list(first, {}).sessions)
-      .toEqual(queries.list(reordered, {}).sessions);
-    expect([...first.sessions.keys()].sort()).toEqual(
-      [...reordered.sessions.keys()].sort(),
+    const mapper = new SessionApiMapper();
+    expect(
+      mapper.list([...first.sessions.values()].map((value) => value.normalized.session)),
+    ).toEqual(
+      mapper.list([...reordered.sessions.values()].map((value) => value.normalized.session)),
     );
+    expect([...first.sessions.keys()].sort()).toEqual([...reordered.sessions.keys()].sort());
     const byTitle = new Map(
       [...first.sessions.values()].map(({ normalized: value }) => [
         value.session.title,
         value.session,
       ]),
     );
-    expect(byTitle.get("Source A parent")?.id)
-      .not.toBe(byTitle.get("Source B parent")?.id);
-    expect(byTitle.get("Source A child A")?.parentId)
-      .toBe(byTitle.get("Source A parent")?.id);
-    expect(byTitle.get("Source A child Z")?.parentId)
-      .toBe(byTitle.get("Source A parent")?.id);
+    expect(byTitle.get("Source A parent")?.id).not.toBe(byTitle.get("Source B parent")?.id);
+    expect(byTitle.get("Source A child A")?.parentId).toBe(byTitle.get("Source A parent")?.id);
+    expect(byTitle.get("Source A child Z")?.parentId).toBe(byTitle.get("Source A parent")?.id);
     expect(byTitle.get("Source B child")?.parentId).toBeNull();
     const parent = byTitle.get("Source A parent")!;
     expect(parent.childIds).toEqual([...parent.childIds].sort());
     expect(parent.childIds).toEqual(
-      [...reorderedEntries.sessions.values()]
-        .find(({ normalized: value }) => value.session.title === "Source A parent")!
-        .normalized.session.childIds,
+      [...reorderedEntries.sessions.values()].find(
+        ({ normalized: value }) => value.session.title === "Source A parent",
+      )!.normalized.session.childIds,
     );
   });
 
@@ -289,14 +267,17 @@ describe("server architecture boundaries", () => {
     const first = await new CatalogSnapshotStore([sourceA, sourceB]).current();
     const reversed = await new CatalogSnapshotStore([sourceB, sourceA]).current();
 
-    expect(first.orderedIds).toEqual(reversed.orderedIds);
-    const queries = new SessionQueries();
-    const firstResult = queries.list(first, {});
-    const reversedResult = queries.list(reversed, {});
+    const mapper = new SessionApiMapper();
+    const firstResult = mapper.list(
+      [...first.sessions.values()].map((value) => value.normalized.session),
+    );
+    const reversedResult = mapper.list(
+      [...reversed.sessions.values()].map((value) => value.normalized.session),
+    );
     expect(firstResult.sessions.map(({ id }) => id)).toEqual(
       reversedResult.sessions.map(({ id }) => id),
     );
-    expect(firstResult.total).toBe(reversedResult.total);
+    expect(firstResult.revision).toBe(reversedResult.revision);
   });
 });
 
@@ -310,22 +291,6 @@ async function typescriptFiles(directory: string): Promise<string[]> {
     }),
   );
   return files.flat();
-}
-
-function snapshotOf(value: NormalizedSession): CatalogSnapshot {
-  const timelinePrefixIndex = deriveTimelinePrefixIndex(value, Buffer.alloc(32, 7));
-  return {
-    signature: "snapshot",
-    diagnostics: [],
-    sessions: new Map([[
-      value.session.id,
-      {
-        normalized: value,
-        timelinePrefixIndex,
-      },
-    ]]),
-    orderedIds: [value.session.id],
-  };
 }
 
 function sourceEntry(
@@ -360,10 +325,7 @@ function sourceEntry(
   };
 }
 
-function testSource(
-  instanceKey: string,
-  sessions: readonly SourceSessionEntry[],
-): SessionSource {
+function testSource(instanceKey: string, sessions: readonly SourceSessionEntry[]): SessionSource {
   return {
     descriptor: {
       sourceType: "test",

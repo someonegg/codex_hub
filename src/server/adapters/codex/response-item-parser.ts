@@ -1,15 +1,9 @@
 import type { DomainTimelineRecord } from "../../domain/session-domain.js";
 import { internalItem } from "./internal-event-parser.js";
-import {
-  responseDirective,
-  type ParsedDirective,
-} from "./message-normalizer.js";
+import { type ParsedDirective, responseDirective } from "./message-normalizer.js";
 import { isObject } from "./rollout-decoder.js";
 import type { ToolCall, ToolOutput } from "./tool-normalizer.js";
-import {
-  parseUserInputQuestions,
-  type UserInputRequest,
-} from "./user-input-normalizer.js";
+import { parseUserInputQuestions, type UserInputRequest } from "./user-input-normalizer.js";
 
 export type ParsedResponseItem =
   | { readonly kind: "directive"; readonly value: ParsedDirective }
@@ -27,9 +21,7 @@ export function parseResponseItem(
   const type = string(payload.type);
   if (type === "message") {
     const directive = responseDirective(ordinal, timestamp, payload);
-    return directive === null
-      ? { kind: "ignored" }
-      : { kind: "directive", value: directive };
+    return directive === null ? { kind: "ignored" } : { kind: "directive", value: directive };
   }
   if (type === "reasoning") {
     return {

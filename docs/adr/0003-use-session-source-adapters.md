@@ -32,11 +32,33 @@ Every normalized value returned by an adapter is a published immutable snapshot.
 
 Adapters may preserve references for unchanged normalized sessions, timeline items, and tool or directive details. The repository treats such reference reuse only as an optimization hint: a reused reference must mean that value is unchanged, while a fresh reference may still contain equivalent content and remains valid at the cost of recomputing derived state. This permits copy-on-write adapters to extend timeline-prefix indexes cheaply without making reference reuse mandatory for other adapter implementations.
 
+Source registration requires nonempty, independently unique `instanceKey` and
+`sourceInstanceId`; conflicts fail construction. Adapters use server domain types.
+Item IDs are opaque, with no required naming pattern. HTTP splits path segments
+before decoding once, requires nonempty IDs of at most 1,024 UTF-8 bytes, and
+rejects control characters, slashes, backslashes, and standalone `.` or `..`.
+Queries still validate kind, session ownership, cursor signatures, and read bounds.
+
+Diagnostics belong only in server logs, not public `SessionDetail`, the UI,
+management decisions, or Live revisions. Refresh reports source, session, and
+aggregate diagnostics through an injectable port defaulting to stderr. Deduplicate
+by source, session, and content; cleared diagnostics may recur, and vanished
+objects release state. Reuse unchanged snapshots and diagnostic references;
+cache hits do not traverse or serialize diagnostics. Logging failures do not
+interrupt operations. Apply per-source limits so aggregate truncation cannot
+hide other sources.
+
+Path checks, scanning, and rollout loading treat `ENOENT`, `EACCES`, `EPERM`,
+`ESTALE`, `EISDIR`, and `ENOTDIR` as recoverable I/O errors: skip and diagnose
+unreadable portions while serving the rest. Initially absent allowed directories
+are normal. Scope and symlink restrictions remain; unexpected exceptions propagate.
+Successful snapshots carry no completeness gate.
+
 ### Positive Consequences
 
 - New agents can be added without teaching the repository their files or formats.
 - Native IDs from different agents or installations cannot collide.
-- Sessions with a stable native ID retain their viewer ID when their source resource moves.
+- Sessions with a stable native ID retain their hub ID when their source resource moves.
 - Source-specific caching and recovery policies can evolve independently.
 - Immutable snapshots keep earlier repository generations coherent, while optional reference reuse enables cheap incremental derivation.
 
@@ -47,6 +69,9 @@ Adapters may preserve references for unchanged normalized sessions, timeline ite
 - Source-local identity mistakes can still cause unstable IDs, so contract tests are required.
 - Cross-source parent relationships are intentionally unsupported.
 - The initial ID migration invalidates path-derived session URLs.
+- Diagnostics no longer appear in the UI; inspect server stderr for partial read
+  failures. Release client and server together without a legacy diagnostic-field
+  compatibility layer.
 
 ## Pros and Cons of the Options
 

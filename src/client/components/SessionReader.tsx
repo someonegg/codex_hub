@@ -1,23 +1,24 @@
-import { useMemo } from "react";
-import type {
-  InteractionResponse,
-} from "../../shared/api-contract";
+import { type ReactNode, useMemo } from "react";
+
+import type { InteractionResponse } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
+
+import type { ReaderContext } from "../state/session-reader-state";
 import {
   filterVisibleTimelineItems,
   type TimelineVisibility,
   type TimelineVisibilityKey,
 } from "../state/timeline-visibility";
-import { PageJumpControls } from "./PageJumpControls";
-import { DiagnosticNotice } from "./DiagnosticNotice";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
+import { PageJumpControls } from "./PageJumpControls";
 import { SessionHeader } from "./SessionHeader";
-import { Timeline } from "./Timeline";
 import { SessionInteraction } from "./SessionInteraction";
-import type { ReaderContext } from "../state/session-reader-state";
+import { Timeline } from "./Timeline";
 
 interface SessionReaderProps {
+  management?: ReactNode;
+  related?: ReactNode;
   context: ReaderContext;
   items: TimelineItem[];
   interaction: InteractionResponse | null;
@@ -25,8 +26,6 @@ interface SessionReaderProps {
   onVisibilityChange: (key: TimelineVisibilityKey, visible: boolean) => void;
   readerLoading: boolean;
   readerBusy: boolean;
-  autoRefreshEnabled: boolean;
-  onAutoRefreshChange: (enabled: boolean) => void;
   onLoadMore: () => void;
   onTimelineConflict: () => void;
   timelineConflict: boolean;
@@ -37,6 +36,8 @@ interface SessionReaderProps {
 }
 
 export function SessionReader({
+  management,
+  related,
   context,
   items,
   interaction,
@@ -44,8 +45,6 @@ export function SessionReader({
   onVisibilityChange,
   readerLoading,
   readerBusy,
-  autoRefreshEnabled,
-  onAutoRefreshChange,
   onLoadMore,
   onTimelineConflict,
   timelineConflict,
@@ -59,75 +58,80 @@ export function SessionReader({
     [items, visibility],
   );
   const hasMore = context.hasMore;
+  let latestMessage: TimelineItem | null = null;
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!;
+    if (item.kind === "message" || item.kind === "user_input") {
+      latestMessage = item;
+      break;
+    }
+  }
+  const previewAutoExpandKey =
+    !hasMore &&
+    latestMessage &&
+    (latestMessage.kind === "user_input" ||
+      (latestMessage.kind === "message" &&
+        latestMessage.role === "assistant" &&
+        latestMessage.phase === "final" &&
+        latestMessage.itemType === "Plan"))
+      ? latestMessage.id
+      : null;
   return (
     <section className="reader" aria-labelledby="session-title">
       <SessionHeader
+        management={management}
         session={context.session}
         visibility={visibility}
         onVisibilityChange={onVisibilityChange}
-        autoRefreshEnabled={autoRefreshEnabled}
-        onAutoRefreshChange={onAutoRefreshChange}
       />
-      <DiagnosticNotice
-        diagnostics={context.session.diagnostics}
-        label="Session diagnostics"
-      />
-      {visibleItems.length === 0 && !readerLoading
-        ? (
-            <EmptyState title="This session has no visible events">
-              {emptyStateMessage(visibility, hasMore)}
-            </EmptyState>
-          )
-        : null}
-      {visibleItems.length > 0 || hasMore
-        ? (
-            <Timeline
-              key={timelineRenderGeneration}
-              items={visibleItems}
-              sessionId={context.session.id}
-              cursor={context.cursor}
-              hasMore={hasMore}
-              loading={readerLoading}
-              readerBusy={readerBusy}
-              paginationEnabled={!autoRefreshEnabled}
-              paginationFrozen={timelineConflict}
-              onLoadMore={onLoadMore}
-              onTimelineConflict={onTimelineConflict}
-            />
-          )
-        : null}
-      {autoRefreshEnabled && !context.session.archived
-        ? (
-            <SessionInteraction
-              interaction={interaction}
-              sessionId={context.session.id}
-              itemCount={context.session.itemCount}
-              updatedAt={context.session.updatedAt}
-            />
-          )
-        : null}
-      {error && onDismissError
-        ? (
-            <ErrorState
-              title="Could not load session"
-              message={error}
-              onDismiss={onDismissError}
-            />
-          )
-        : null}
-      {timelineConflict
-        ? (
-            <aside className="continuity-notice" role="alert">
-              <div>
-                <strong>Session 内容已变化</strong>
-                <p>已保留当前阅读位置。重新载入会从第一页读取最新版本。</p>
-              </div>
-              <button type="button" disabled={readerBusy} onClick={onRefreshLatest}>
-                重新载入最新版本
-              </button>
-            </aside>
-          )
-        : null}
+      {related}
+      {visibleItems.length === 0 && !readerLoading ? (
+        <EmptyState title="This session has no visible events">
+          {emptyStateMessage(visibility, hasMore)}
+        </EmptyState>
+      ) : null}
+      {visibleItems.length > 0 || hasMore ? (
+        <Timeline
+          key={timelineRenderGeneration}
+          items={visibleItems}
+          sessionId={context.session.id}
+          cursor={context.cursor}
+          hasMore={hasMore}
+          loading={readerLoading}
+          readerBusy={readerBusy}
+          paginationEnabled={true}
+          paginationFrozen={timelineConflict}
+          onLoadMore={onLoadMore}
+          onTimelineConflict={onTimelineConflict}
+        />
+      ) : null}
+      {!context.session.archived ? (
+        <SessionInteraction
+          key={context.session.id}
+          interaction={interaction}
+          sessionId={context.session.id}
+          itemCount={context.session.itemCount}
+          updatedAt={context.session.updatedAt}
+          previewAutoExpandKey={previewAutoExpandKey}
+        />
+      ) : null}
+      {error && onDismissError ? (
+        <ErrorState title="Could not load session" message={error} onDismiss={onDismissError} />
+      ) : null}
+      {timelineConflict ? (
+        <aside className="continuity-notice" role="alert">
+          <div>
+            <strong>Session content has changed</strong>
+            <p>
+              Your reading position has been preserved. Reload to read the latest version from the
+              first page.
+            </p>
+          </div>
+          <button type="button" disabled={readerBusy} onClick={onRefreshLatest}>
+            Reload latest version
+          </button>
+        </aside>
+      ) : null}
       <PageJumpControls />
     </section>
   );

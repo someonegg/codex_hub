@@ -1,16 +1,19 @@
 import { describe, expect, it } from "vitest";
+
 import { normalizeRecords } from "./session-normalizer.fixtures.js";
 
 const QUESTIONS = {
-  questions: [{
-    header: "Choice",
-    id: "choice",
-    question: "Which option should be used?",
-    options: [
-      { label: "First", description: "Use the first approach." },
-      { label: "Second", description: "Use the second approach." },
-    ],
-  }],
+  questions: [
+    {
+      header: "Choice",
+      id: "choice",
+      question: "Which option should be used?",
+      options: [
+        { label: "First", description: "Use the first approach." },
+        { label: "Second", description: "Use the second approach." },
+      ],
+    },
+  ],
 };
 
 describe("request_user_input normalization", () => {
@@ -19,9 +22,13 @@ describe("request_user_input normalization", () => {
     const before = normalizeRecords("user-input-before", [request]);
     const after = normalizeRecords("user-input-after", [
       request,
-      userInputOutput(2, "answered", JSON.stringify({
-        answers: { choice: { answers: ["Second"] } },
-      })),
+      userInputOutput(
+        2,
+        "answered",
+        JSON.stringify({
+          answers: { choice: { answers: ["Second"] } },
+        }),
+      ),
     ]);
 
     expect(after.timeline).toEqual([
@@ -81,11 +88,10 @@ describe("request_user_input normalization", () => {
       outcome: "unavailable",
       summary: "unexpected response",
     });
-    expect(normalized.session.diagnostics.map(({ code, ordinal }) => [code, ordinal]))
-      .toEqual([
-        ["invalid_user_input", 1],
-        ["invalid_user_input", 2],
-      ]);
+    expect(normalized.session.diagnostics.map(({ code, ordinal }) => [code, ordinal])).toEqual([
+      ["invalid_user_input", 1],
+      ["invalid_user_input", 2],
+    ]);
   });
 
   it("limits unavailable response summaries to 256 code units", () => {
@@ -96,8 +102,11 @@ describe("request_user_input normalization", () => {
     ]);
     const item = normalized.timeline[1];
 
-    expect(item.kind === "user_input" && item.stage === "response" &&
-        item.outcome === "unavailable" ? item.summary : null).toHaveLength(255);
+    expect(
+      item.kind === "user_input" && item.stage === "response" && item.outcome === "unavailable"
+        ? item.summary
+        : null,
+    ).toHaveLength(255);
   });
 
   it("keeps an output without a preceding request_user_input call as a tool output", () => {
@@ -116,12 +125,20 @@ describe("request_user_input normalization", () => {
   it("consumes a request after its first response", () => {
     const normalized = normalizeRecords("duplicate-user-input-output", [
       userInputRequest(1, "duplicate", QUESTIONS),
-      userInputOutput(2, "duplicate", JSON.stringify({
-        answers: { choice: { answers: ["First"] } },
-      })),
-      userInputOutput(3, "duplicate", JSON.stringify({
-        answers: { choice: { answers: ["Second"] } },
-      })),
+      userInputOutput(
+        2,
+        "duplicate",
+        JSON.stringify({
+          answers: { choice: { answers: ["First"] } },
+        }),
+      ),
+      userInputOutput(
+        3,
+        "duplicate",
+        JSON.stringify({
+          answers: { choice: { answers: ["Second"] } },
+        }),
+      ),
     ]);
 
     expect(normalized.timeline[1]).toMatchObject({

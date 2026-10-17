@@ -1,4 +1,4 @@
-import type { AgentIdentity } from "../../../shared/domain.js";
+import type { DomainAgentIdentity as AgentIdentity } from "../../domain/session-domain.js";
 
 export function nonEmptyAgentIdentity(fields: AgentIdentity): AgentIdentity | null {
   return Object.values(fields).some((field) => field !== null) ? fields : null;

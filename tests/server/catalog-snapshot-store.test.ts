@@ -1,28 +1,23 @@
 import { describe, expect, it } from "vitest";
+
 import type {
   DomainSessionId,
   DomainTimelineRecord,
   NormalizedSession,
 } from "../../src/server/domain/session-domain.js";
 import {
-  CatalogSnapshotStore,
   type CatalogSnapshot,
+  CatalogSnapshotStore,
 } from "../../src/server/repository/catalog-snapshot-store.js";
 import { deriveTimelinePrefixIndex } from "../../src/server/repository/timeline-prefix-index.js";
-import type {
-  SessionSource,
-  SourceSessionEntry,
-} from "../../src/server/source/session-source.js";
+import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
 
 describe("CatalogSnapshotStore incremental derivation", () => {
   it("rebuilds timeline-prefix state only for changed source inputs", async () => {
     const stable = normalizedSession("stable", "Stable");
     let changed = normalizedSession("changed", "Changed");
     let signature = "initial";
-    let entries = [
-      sourceEntry("stable", stable),
-      sourceEntry("changed", changed),
-    ];
+    let entries = [sourceEntry("stable", stable), sourceEntry("changed", changed)];
     const prefixCalls: string[] = [];
     const store = new CatalogSnapshotStore(
       [mutableSource(() => ({ signature, entries }))],
@@ -54,12 +49,13 @@ describe("CatalogSnapshotStore incremental derivation", () => {
 
     expect(prefixCalls).toHaveLength(3);
     expect(prefixCalls.at(-1)).toBe("changed");
-    expect(second.sessions.get(stableId)!.normalized)
-      .toBe(firstStable.normalized);
-    expect(second.sessions.get(stableId)!.timelinePrefixIndex)
-      .toBe(firstStable.timelinePrefixIndex);
-    expect(second.sessions.get(changedId)!.timelinePrefixIndex)
-      .not.toBe(firstChanged.timelinePrefixIndex);
+    expect(second.sessions.get(stableId)!.normalized).toBe(firstStable.normalized);
+    expect(second.sessions.get(stableId)!.timelinePrefixIndex).toBe(
+      firstStable.timelinePrefixIndex,
+    );
+    expect(second.sessions.get(changedId)!.timelinePrefixIndex).not.toBe(
+      firstChanged.timelinePrefixIndex,
+    );
   });
 
   it("reuses the prefix index for a fresh normalized object with the same timeline references", async () => {
@@ -67,10 +63,12 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     let signature = "first";
     let prefixCalls = 0;
     const store = new CatalogSnapshotStore(
-      [mutableSource(() => ({
-        signature,
-        entries: [sourceEntry("session", normalized)],
-      }))],
+      [
+        mutableSource(() => ({
+          signature,
+          entries: [sourceEntry("session", normalized)],
+        })),
+      ],
       0,
       () => 0,
       {
@@ -91,10 +89,10 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const second = await store.refresh();
 
     expect(prefixCalls).toBe(1);
-    expect(second.sessions.get(id)!.normalized)
-      .not.toBe(first.sessions.get(id)!.normalized);
-    expect(second.sessions.get(id)!.timelinePrefixIndex)
-      .toBe(first.sessions.get(id)!.timelinePrefixIndex);
+    expect(second.sessions.get(id)!.normalized).not.toBe(first.sessions.get(id)!.normalized);
+    expect(second.sessions.get(id)!.timelinePrefixIndex).toBe(
+      first.sessions.get(id)!.timelinePrefixIndex,
+    );
     expect(prefixAtEnd(second, id)).toBe(prefixAtEnd(first, id));
   });
 
@@ -146,9 +144,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const child = normalizedSession("child", "Child");
     const parent = normalizedSession("parent", "Parent");
     let signature = "child-before-parent";
-    let entries = [
-      sourceEntry("child", child, "native-child", "native-parent"),
-    ];
+    let entries = [sourceEntry("child", child, "native-child", "native-parent")];
     const store = new CatalogSnapshotStore(
       [mutableSource(() => ({ signature, entries }))],
       0,
@@ -158,10 +154,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const childId = idByTitle(snapshot, "Child");
     expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBeNull();
 
-    entries = [
-      ...entries,
-      sourceEntry("parent", parent, "native-parent"),
-    ];
+    entries = [...entries, sourceEntry("parent", parent, "native-parent")];
     signature = "parent-appears";
     snapshot = await store.refresh();
     const parentId = idByTitle(snapshot, "Parent");
@@ -174,10 +167,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     snapshot = await store.refresh();
     expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBeNull();
 
-    entries = [
-      ...entries,
-      sourceEntry("parent", parent, "native-parent"),
-    ];
+    entries = [...entries, sourceEntry("parent", parent, "native-parent")];
     signature = "parent-reappears";
     snapshot = await store.refresh();
     expect(snapshot.sessions.get(parentId)!.normalized).not.toBe(firstParent);
@@ -203,10 +193,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const parentId = idByTitle(snapshot, "Parent");
     expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(parentId);
 
-    entries = [
-      ...entries,
-      sourceEntry("duplicate", duplicateParent, "native-parent"),
-    ];
+    entries = [...entries, sourceEntry("duplicate", duplicateParent, "native-parent")];
     signature = "native-duplicate";
     snapshot = await store.refresh();
     const duplicateId = idByTitle(snapshot, "Duplicate parent");
@@ -230,13 +217,12 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     let failPrefix = false;
     const prefixCalls: string[] = [];
     const store = new CatalogSnapshotStore(
-      [mutableSource(() => ({
-        signature,
-        entries: [
-          sourceEntry("left", left),
-          sourceEntry("right", right),
-        ],
-      }))],
+      [
+        mutableSource(() => ({
+          signature,
+          entries: [sourceEntry("left", left), sourceEntry("right", right)],
+        })),
+      ],
       0,
       () => 0,
       {
@@ -293,17 +279,12 @@ describe("CatalogSnapshotStore incremental derivation", () => {
         };
       },
     };
-    const store = new CatalogSnapshotStore(
-      [source],
-      0,
-      () => 0,
-      {
-        timelinePrefixIndexBuilder(value, prefixKey) {
-          prefixCalls += 1;
-          return deriveTimelinePrefixIndex(value, prefixKey);
-        },
+    const store = new CatalogSnapshotStore([source], 0, () => 0, {
+      timelinePrefixIndexBuilder(value, prefixKey) {
+        prefixCalls += 1;
+        return deriveTimelinePrefixIndex(value, prefixKey);
       },
-    );
+    });
     const initial = await store.current();
     const id = idByTitle(initial, "Session");
 
@@ -313,10 +294,10 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const recovered = await store.refresh();
 
     expect(prefixCalls).toBe(1);
-    expect(recovered.sessions.get(id)!.normalized)
-      .toBe(initial.sessions.get(id)!.normalized);
-    expect(recovered.sessions.get(id)!.timelinePrefixIndex)
-      .toBe(initial.sessions.get(id)!.timelinePrefixIndex);
+    expect(recovered.sessions.get(id)!.normalized).toBe(initial.sessions.get(id)!.normalized);
+    expect(recovered.sessions.get(id)!.timelinePrefixIndex).toBe(
+      initial.sessions.get(id)!.timelinePrefixIndex,
+    );
   });
 });
 
@@ -395,10 +376,7 @@ function normalizedSession(id: string, title: string): NormalizedSession {
   };
 }
 
-function withMessage(
-  normalized: NormalizedSession,
-  markdown: string,
-): NormalizedSession {
+function withMessage(normalized: NormalizedSession, markdown: string): NormalizedSession {
   const timeline: DomainTimelineRecord[] = [
     ...normalized.timeline,
     {
@@ -433,12 +411,8 @@ function idByTitle(snapshot: CatalogSnapshot, title: string): DomainSessionId {
   return matches[0]![0];
 }
 
-function normalizedReferences(
-  snapshot: CatalogSnapshot,
-): Map<string, NormalizedSession> {
-  return new Map(
-    [...snapshot.sessions].map(([id, value]) => [id, value.normalized]),
-  );
+function normalizedReferences(snapshot: CatalogSnapshot): Map<string, NormalizedSession> {
+  return new Map([...snapshot.sessions].map(([id, value]) => [id, value.normalized]));
 }
 
 function expectChanged(

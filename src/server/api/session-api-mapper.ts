@@ -1,49 +1,56 @@
+import { createHash } from "node:crypto";
+
 import type {
   DirectiveDetailResponse,
-  ItemPageResponse,
   InternalDetailResponse,
-  ListCursor,
+  ItemPageResponse,
   SessionDetailResponse,
   SessionListResponse,
   TimelineCursor,
   ToolDetailResponse,
 } from "../../shared/api-contract.js";
-import type {
-  Diagnostic,
-  SessionDetail,
-  SessionSummary,
-  TimelineItem,
-} from "../../shared/domain.js";
-import type {
-  DomainDiagnostic,
-  DomainSession,
-  DomainTimelineRecord,
-} from "../domain/session-domain.js";
+import type { SessionDetail, TimelineItem } from "../../shared/domain.js";
+import type { DomainSession, DomainTimelineRecord } from "../domain/session-domain.js";
 import type {
   DirectiveDetailResult,
-  ItemPageResult,
   InternalDetailResult,
-  SessionListResult,
+  ItemPageResult,
   ToolDetailResult,
 } from "../repository/session-queries.js";
+import { opaqueIdForParts } from "../security/opaque-id.js";
 
 export type SessionNicknameResolver = (session: DomainSession) => string | null;
 
 export class SessionApiMapper {
-  constructor(
-    private readonly resolveNickname: SessionNicknameResolver = () => null,
-  ) {}
+  constructor(private readonly resolveNickname: SessionNicknameResolver = () => null) {}
 
-  list(
-    result: SessionListResult,
-    diagnostics: readonly DomainDiagnostic[],
-  ): SessionListResponse {
+  list(sessions: readonly DomainSession[]): SessionListResponse {
+    const projects = new Map<string, { id: string; directory: string }>();
+    const summaries = sessions
+      .map((session) => {
+        const directory = session.projectDirectory;
+        const projectId = directory === null ? null : opaqueIdForParts("project", directory);
+        if (directory !== null && projectId !== null)
+          projects.set(projectId, { id: projectId, directory });
+        return {
+          id: session.id,
+          title: this.resolveNickname(session) ?? session.title,
+          projectId,
+          archived: session.archived,
+          parentId: session.parentId,
+          isChild: session.isChild ?? session.parentId !== null,
+          updatedAt: session.updatedAt,
+        };
+      })
+      .sort((a, b) => compareIds(a.id, b.id));
+    const structure = {
+      projects: [...projects.values()].sort((a, b) => compareIds(a.id, b.id)),
+      sessions: summaries.map(({ updatedAt, ...summary }) => summary),
+    };
     return {
-      sessions: result.sessions.map((session) => this.summary(session)),
-      projects: result.projects.map((facet) => ({ ...facet })),
-      total: result.total,
-      nextCursor: result.nextCursor as ListCursor | null,
-      diagnostics: diagnostics.map((item) => this.diagnostic(item)),
+      revision: createHash("sha256").update(JSON.stringify(structure)).digest("base64url"),
+      projects: structure.projects,
+      sessions: summaries,
     };
   }
 
@@ -60,9 +67,7 @@ export class SessionApiMapper {
     };
   }
 
-  toolDetail(
-    result: ToolDetailResult,
-  ): ToolDetailResponse {
+  toolDetail(result: ToolDetailResult): ToolDetailResponse {
     return {
       input: result.detail.input,
       output: result.detail.output,
@@ -70,25 +75,21 @@ export class SessionApiMapper {
     };
   }
 
-  directiveDetail(
-    result: DirectiveDetailResult,
-  ): DirectiveDetailResponse {
+  directiveDetail(result: DirectiveDetailResult): DirectiveDetailResponse {
     return {
       text: result.detail.text,
       truncated: result.detail.truncated,
     };
   }
 
-  internalDetail(
-    result: InternalDetailResult,
-  ): InternalDetailResponse {
+  internalDetail(result: InternalDetailResult): InternalDetailResponse {
     return {
       json: result.detail.json,
       truncated: result.detail.truncated,
     };
   }
 
-  summary(session: DomainSession): SessionSummary {
+  sessionDetail(session: DomainSession): SessionDetail {
     return {
       id: session.id,
       origin: { ...session.origin },
@@ -104,15 +105,7 @@ export class SessionApiMapper {
       agent: session.agent === null ? null : { ...session.agent },
       messageCount: session.messageCount,
       toolCount: session.toolCount,
-      warningCount: session.warningCount,
-    };
-  }
-
-  sessionDetail(session: DomainSession): SessionDetail {
-    return {
-      ...this.summary(session),
       sourceId: session.sourceId,
-      diagnostics: session.diagnostics.map((item) => this.diagnostic(item)),
       itemCount: session.itemCount,
     };
   }
@@ -213,8 +206,8 @@ export class SessionApiMapper {
         return { ...base, kind: "internal", eventType: item.eventType };
     }
   }
+}
 
-  diagnostic(item: DomainDiagnostic): Diagnostic {
-    return { ...item };
-  }
+function compareIds(a: string, b: string) {
+  return a < b ? -1 : a > b ? 1 : 0;
 }

@@ -1,7 +1,5 @@
-import type { SessionSummary } from "../shared/domain";
+import type { SessionDetail } from "../shared/domain";
 
-export function sessionDisplayTitle(
-  session: Pick<SessionSummary, "title" | "nickname">,
-): string {
+export function sessionDisplayTitle(session: Pick<SessionDetail, "title" | "nickname">): string {
   return session.nickname ?? session.title;
 }

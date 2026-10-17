@@ -1,6 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
 import type { TimelineCursor } from "../../shared/api-contract";
-import { ApiClientError } from "../api/client";
+
+import { createRequestChannel } from "./request-channel";
+import { isTimelineConflict } from "./request-errors";
 
 interface LazyDetailOptions<T> {
   enabled: boolean;
@@ -17,28 +20,37 @@ export function useLazyDetail<T>({
   unavailableMessage,
   onTimelineConflict,
 }: LazyDetailOptions<T>) {
-  const [detail, setDetail] = useState<T | null>(null);
+  const [result, setResult] = useState<{
+    load: typeof load;
+    detail: T;
+  } | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
-
+  const [attempt, setAttempt] = useState(0);
+  const channel = useRef(createRequestChannel());
+  const callbacks = useRef(onTimelineConflict);
+  callbacks.current = onTimelineConflict;
+  // Appending timeline pages keeps the same detail scope. A new loader identifies a new item/session.
+  const cursorRef = useRef(cursor);
+  cursorRef.current = cursor;
+  const detail = result?.load === load ? result.detail : null;
   useEffect(() => {
     if (!enabled || detail !== null) return;
-    const controller = new AbortController();
+    const requestChannel = channel.current;
+    const request = requestChannel.begin();
     setFailure(null);
-    void load(cursor, controller.signal)
+    const requestCursor = cursorRef.current;
+    void load(requestCursor, request.signal)
       .then((value) => {
-        if (!controller.signal.aborted) setDetail(value);
+        if (request.isCurrent()) setResult({ load, detail: value });
       })
       .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        if (reason instanceof ApiClientError && reason.code === "timeline_changed") {
+        if (!request.isCurrent()) return;
+        if (isTimelineConflict(reason)) {
           setFailure(unavailableMessage);
-          onTimelineConflict();
-          return;
-        }
-        setFailure(reason instanceof Error ? reason.message : unavailableMessage);
+          callbacks.current();
+        } else setFailure(reason instanceof Error ? reason.message : unavailableMessage);
       });
-    return () => controller.abort();
-  }, [detail, enabled, load, onTimelineConflict, unavailableMessage]);
-
-  return { detail, error: failure };
+    return () => requestChannel.cancel();
+  }, [detail, enabled, load, unavailableMessage, attempt]);
+  return { detail, error: failure, retry: () => setAttempt((value) => value + 1) };
 }

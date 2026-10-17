@@ -20,6 +20,7 @@ export interface ServerConfig {
   clientDirectory: string;
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
+  tmuxSocket?: string;
 }
 
 export type CommandLineResult =
@@ -58,7 +59,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       "ssl-key": { type: "string" },
       "ssl-ca": { type: "string" },
       help: { type: "boolean" },
-      "enable-interaction": { type: "boolean" },
+      "tmux-socket": { type: "string" },
     },
   });
 
@@ -98,7 +99,10 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       codexHome: codexHome ? resolve(codexHome) : resolve(homedir(), ".codex"),
       clientDirectory: resolve(process.cwd(), "dist/client"),
       tls,
-      interactionEnabled: values["enable-interaction"] ?? false,
+      interactionEnabled: true,
+      ...(values["tmux-socket"] !== undefined
+        ? { tmuxSocket: resolve(nonEmptyOption("tmux-socket", values["tmux-socket"])!) }
+        : {}),
     },
   };
 }
@@ -114,7 +118,7 @@ Options:
   --ssl-cert <path>    PEM server certificate or certificate chain
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
-  --enable-interaction Allow prompts and control keys for bound active sessions
+  --tmux-socket <path> tmux socket (default: tmux default selection)
   --help               Show this help
 
 TLS example:

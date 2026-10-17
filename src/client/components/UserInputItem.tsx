@@ -3,6 +3,7 @@ import type {
   UserInputItem as UserInputTimelineItem,
   UserInputRequestItem,
 } from "../../shared/domain";
+
 import { EventTime } from "./EventTime";
 
 type UserInputResponseItem = Exclude<UserInputTimelineItem, { stage: "request" }>;
@@ -17,9 +18,10 @@ export interface UserInputCardEntry {
 }
 
 export function UserInputItem({ entry }: { entry: UserInputCardEntry }) {
-  const answers = entry.response?.outcome === "answered"
-    ? new Map(entry.response.answers.map((answer) => [answer.questionId, answer]))
-    : new Map<string, UserInputAnswer>();
+  const answers =
+    entry.response?.outcome === "answered"
+      ? new Map(entry.response.answers.map((answer) => [answer.questionId, answer]))
+      : new Map<string, UserInputAnswer>();
   const knownQuestionIds = new Set(entry.request?.questions.map((question) => question.id) ?? []);
   const unmatchedAnswers = [...answers.values()].filter(
     (answer) => !knownQuestionIds.has(answer.questionId),
@@ -29,31 +31,32 @@ export function UserInputItem({ entry }: { entry: UserInputCardEntry }) {
     <article className="user-input-card">
       <div className="user-input-heading">
         <p className="event-label">
-          User input · {entry.ordinal}<EventTime timestamp={entry.timestamp} />
+          User input · {entry.ordinal}
+          <EventTime timestamp={entry.timestamp} />
         </p>
         <span className={`user-input-status ${statusClass(entry.response)}`}>
           {statusLabel(entry.response)}
         </span>
       </div>
-      {entry.request === null || entry.request.questions.length === 0
-        ? <p className="user-input-unavailable">Request details unavailable.</p>
-        : entry.request.questions.map((question) => (
-            <section className="user-input-question" key={question.id}>
-              <p className="user-input-header">{question.header}</p>
-              <h3>{question.question}</h3>
-              <OptionList
-                options={question.options}
-                answer={answers.get(question.id) ?? null}
-                answered={entry.response?.outcome === "answered"}
-              />
-            </section>
-          ))}
-      {unmatchedAnswers.length > 0
-        ? <RecordedAnswers answers={unmatchedAnswers} />
-        : null}
-      {entry.response?.outcome === "unavailable"
-        ? <p className="user-input-unavailable">{entry.response.summary}</p>
-        : null}
+      {entry.request === null || entry.request.questions.length === 0 ? (
+        <p className="user-input-unavailable">Request details unavailable.</p>
+      ) : (
+        entry.request.questions.map((question) => (
+          <section className="user-input-question" key={question.id}>
+            <p className="user-input-header">{question.header}</p>
+            <h3>{question.question}</h3>
+            <OptionList
+              options={question.options}
+              answer={answers.get(question.id) ?? null}
+              answered={entry.response?.outcome === "answered"}
+            />
+          </section>
+        ))
+      )}
+      {unmatchedAnswers.length > 0 ? <RecordedAnswers answers={unmatchedAnswers} /> : null}
+      {entry.response?.outcome === "unavailable" ? (
+        <p className="user-input-unavailable">{entry.response.summary}</p>
+      ) : null}
     </article>
   );
 }
@@ -86,16 +89,16 @@ function OptionList({
           );
         })}
       </ul>
-      {freeform.length > 0
-        ? (
-            <div className="user-input-freeform">
-              <span>Recorded answer</span>
-              {freeform.map((value, index) => <p key={`${index}:${value}`}>{value}</p>)}
-            </div>
-          )
-        : answered && (answer === null || answer.answers.length === 0)
-        ? <p className="user-input-unavailable">No answer recorded.</p>
-        : null}
+      {freeform.length > 0 ? (
+        <div className="user-input-freeform">
+          <span>Recorded answer</span>
+          {freeform.map((value, index) => (
+            <p key={`${index}:${value}`}>{value}</p>
+          ))}
+        </div>
+      ) : answered && (answer === null || answer.answers.length === 0) ? (
+        <p className="user-input-unavailable">No answer recorded.</p>
+      ) : null}
     </>
   );
 }
@@ -107,9 +110,11 @@ function RecordedAnswers({ answers }: { answers: UserInputAnswer[] }) {
       {answers.map((answer) => (
         <div className="user-input-freeform" key={answer.questionId}>
           <span>{answer.questionId}</span>
-          {answer.answers.length === 0
-            ? <p>No answer recorded.</p>
-            : answer.answers.map((value, index) => <p key={`${index}:${value}`}>{value}</p>)}
+          {answer.answers.length === 0 ? (
+            <p>No answer recorded.</p>
+          ) : (
+            answer.answers.map((value, index) => <p key={`${index}:${value}`}>{value}</p>)
+          )}
         </div>
       ))}
     </section>

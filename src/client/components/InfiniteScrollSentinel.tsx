@@ -24,23 +24,33 @@ export function InfiniteScrollSentinel({
     if (!enabled || element.current === null || typeof IntersectionObserver === "undefined") {
       return;
     }
-    const observer = new IntersectionObserver((entries) => {
-      if (!entries.some((entry) => entry.isIntersecting) ||
-        lastTriggeredKey.current === triggerKey) return;
-      lastTriggeredKey.current = triggerKey;
-      callback.current();
-    }, {
-      root: null,
-      rootMargin: "0px 0px 300px 0px",
-      threshold: 0,
-    });
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          !entries.some((entry) => entry.isIntersecting) ||
+          lastTriggeredKey.current === triggerKey
+        )
+          return;
+        lastTriggeredKey.current = triggerKey;
+        callback.current();
+      },
+      {
+        root: null,
+        rootMargin: "0px 0px 300px 0px",
+        threshold: 0,
+      },
+    );
     observer.observe(element.current);
     return () => observer.disconnect();
   }, [enabled, triggerKey]);
 
   return (
     <div className="infinite-scroll-sentinel" ref={element}>
-      {loading ? <p className="loading" role="status">{loadingLabel}</p> : null}
+      {loading ? (
+        <p className="loading" role="status">
+          {loadingLabel}
+        </p>
+      ) : null}
     </div>
   );
 }

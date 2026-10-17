@@ -1,23 +1,19 @@
-import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
-import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract.js";
-import type {
-  InteractionBindingAttempt,
-  TmuxKey,
-} from "../domain/session-domain.js";
+import { createConnection } from "node:net";
 
-export { MAX_INTERACTION_MESSAGE_BYTES };
+import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
+import { normalizeMessage } from "./message.js";
+import {
+  type InteractionTransport,
+  InteractionTransportError,
+  type TmuxBinding,
+} from "./transport.js";
+
 export const MAX_TERMINAL_PREVIEW_BYTES = 256_000;
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_COMMAND_OUTPUT_BYTES = 64 * 1024;
-
-export interface TmuxBinding {
-  readonly socketPath: string;
-  readonly serverStartTime: string;
-  readonly paneId: string;
-  readonly panePid: string;
-}
 
 export interface TmuxCommandRunner {
   run(
@@ -34,17 +30,7 @@ export interface TmuxCommandOptions {
   readonly truncateStart: boolean;
 }
 
-export class TmuxInteractionError extends Error {
-  constructor(
-    readonly code: "disconnected" | "timeout" | "command_failed" | "invalid_message",
-    message: string,
-  ) {
-    super(message);
-    this.name = "TmuxInteractionError";
-  }
-}
-
-export class TmuxInteractionService {
+export class TmuxInteractionService implements InteractionTransport {
   readonly #queues = new Map<string, Promise<void>>();
 
   constructor(
@@ -52,28 +38,101 @@ export class TmuxInteractionService {
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
+  readonly #queries = new Map<string, Promise<TmuxBinding | null>>();
+
   async connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding> {
-    if (!attempt.valid) throw disconnected();
-    await validateSocket(attempt.socketPath);
-    const identity = await this.#display(attempt.socketPath, attempt.paneId);
-    return {
-      socketPath: attempt.socketPath,
-      serverStartTime: identity.serverStartTime,
-      paneId: identity.paneId,
-      panePid: identity.panePid,
-    };
+    const binding = await this.archiveTarget(attempt);
+    if (!binding) throw disconnected();
+    return binding;
   }
 
-  sendMessage(binding: TmuxBinding, message: string): Promise<void> {
+  archiveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null> {
+    if (!attempt.valid) return Promise.resolve(null);
+    const key = `${attempt.socketPath}\0${attempt.paneId}`;
+    const pending = this.#queries.get(key);
+    if (pending) return pending;
+    const query = this.#query(attempt.socketPath, attempt.paneId);
+    this.#queries.set(key, query);
+    void query.then(
+      () => this.#queries.delete(key),
+      () => this.#queries.delete(key),
+    );
+    return query;
+  }
+
+  async #query(socketPath: string, paneId: string): Promise<TmuxBinding | null> {
+    if (!socketPath.startsWith("/") || !/^%\d+$/.test(paneId)) return null;
+    try {
+      await validateSocket(socketPath);
+    } catch (error) {
+      if (error instanceof InteractionTransportError && error.code === "disconnected") return null;
+      throw error;
+    }
+    let result: { stdout: string };
+    try {
+      result = await this.runner.run(
+        socketPath,
+        ["list-panes", "-a", "-F", "#{pane_id}|#{pane_dead}|#{session_name}"],
+        undefined,
+        this.timeoutMs,
+      );
+    } catch (error) {
+      if (
+        error instanceof InteractionTransportError &&
+        error.code === "command_failed" &&
+        !(await socketListening(socketPath, this.timeoutMs))
+      )
+        return null;
+      throw error;
+    }
+    const rows = result.stdout
+      .replace(/\n$/, "")
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => line.split("|"));
+    if (
+      rows.some(
+        (row) =>
+          row.length < 3 ||
+          !/^%\d+$/.test(row[0]!) ||
+          !/^[01]$/.test(row[1]!) ||
+          !row.slice(2).join("|"),
+      )
+    ) {
+      throw new InteractionTransportError("command_failed", "Invalid tmux pane observation");
+    }
+    const row = rows.find((row) => row[0] === paneId);
+    return !row || row[1] === "1"
+      ? null
+      : { socketPath, paneId, sessionName: row.slice(2).join("|") };
+  }
+
+  /** Clear the Codex draft and request EOF without ever submitting composer text. */
+  exitTarget(binding: TmuxBinding): Promise<void> {
+    return this.sendKeys(binding, ["C-c", "C-d"]);
+  }
+
+  sendMessage(
+    binding: TmuxBinding,
+    message: string,
+    assertAvailable: () => void = () => {},
+  ): Promise<void> {
     const normalized = normalizeMessage(message);
     return this.#serialize(binding, async () => {
       await this.#revalidate(binding);
-      const bufferName = `codex-viewer-${process.pid}-${randomUUID()}`;
+      assertAvailable();
+      const bufferName = `codex-hub-${process.pid}-${randomUUID()}`;
       let bufferMayExist = true;
       try {
         await this.#run(binding, ["load-buffer", "-b", bufferName, "-"], normalized);
         await this.#run(binding, [
-          "paste-buffer", "-p", "-d", "-b", bufferName, "-t", binding.paneId,
+          "paste-buffer",
+          "-p",
+          "-d",
+          "-b",
+          bufferName,
+          "-t",
+          binding.paneId,
         ]);
         bufferMayExist = false;
         await this.#run(binding, ["send-keys", "-t", binding.paneId, "Enter"]);
@@ -89,9 +148,14 @@ export class TmuxInteractionService {
     });
   }
 
-  sendKeys(binding: TmuxBinding, keys: readonly TmuxKey[]): Promise<void> {
+  sendKeys(
+    binding: TmuxBinding,
+    keys: readonly TmuxKey[],
+    assertAvailable: () => void = () => {},
+  ): Promise<void> {
     return this.#serialize(binding, async () => {
       await this.#revalidate(binding);
+      assertAvailable();
       await this.#run(binding, ["send-keys", "-t", binding.paneId, ...keys]);
     });
   }
@@ -113,54 +177,16 @@ export class TmuxInteractionService {
     });
   }
 
+  /** Query errors never establish that the selected pane exited. */
+  async inspect(binding: TmuxBinding): Promise<"alive" | "exited"> {
+    return (await this.archiveTarget({ valid: true, ordinal: 0, ...binding })) ? "alive" : "exited";
+  }
+
   async #revalidate(binding: TmuxBinding): Promise<void> {
-    await validateSocket(binding.socketPath);
-    const current = await this.#display(binding.socketPath, binding.paneId);
-    if (
-      current.serverStartTime !== binding.serverStartTime ||
-      current.paneId !== binding.paneId ||
-      current.panePid !== binding.panePid
-    ) {
-      throw disconnected();
-    }
+    if (!(await this.archiveTarget({ valid: true, ordinal: 0, ...binding }))) throw disconnected();
   }
 
-  async #display(socketPath: string, paneId: string) {
-    let result: { readonly stdout: string };
-    try {
-      result = await this.runner.run(
-        socketPath,
-        [
-          "display-message", "-p", "-t", paneId,
-          "#{start_time}|#{pane_id}|#{pane_pid}|#{pane_dead}",
-        ],
-        undefined,
-        this.timeoutMs,
-      );
-    } catch (error) {
-      if (error instanceof TmuxInteractionError && error.code === "timeout") throw error;
-      throw disconnected();
-    }
-    const [serverStartTime, actualPaneId, panePid, paneDead, ...extra] =
-      result.stdout.trimEnd().split("|");
-    if (
-      extra.length > 0 ||
-      !/^\d+$/.test(serverStartTime ?? "") ||
-      !/^%\d+$/.test(actualPaneId ?? "") ||
-      !/^\d+$/.test(panePid ?? "") ||
-      paneDead !== "0" ||
-      actualPaneId !== paneId
-    ) {
-      throw disconnected();
-    }
-    return { serverStartTime: serverStartTime!, paneId: actualPaneId!, panePid: panePid! };
-  }
-
-  async #run(
-    binding: TmuxBinding,
-    args: readonly string[],
-    input?: string,
-  ): Promise<void> {
+  async #run(binding: TmuxBinding, args: readonly string[], input?: string): Promise<void> {
     await this.runner.run(binding.socketPath, args, input, this.timeoutMs);
   }
 
@@ -168,7 +194,10 @@ export class TmuxInteractionService {
     const key = `${binding.socketPath}\0${binding.paneId}`;
     const previous = this.#queues.get(key) ?? Promise.resolve();
     const current = previous.catch(() => undefined).then(operation);
-    const settled = current.then(() => undefined, () => undefined);
+    const settled = current.then(
+      () => undefined,
+      () => undefined,
+    );
     this.#queues.set(key, settled);
     void settled.finally(() => {
       if (this.#queues.get(key) === settled) this.#queues.delete(key);
@@ -177,34 +206,20 @@ export class TmuxInteractionService {
   }
 }
 
-export function normalizeMessage(message: string): string {
-  const normalized = message.replace(/\r\n?/g, "\n");
-  const bytes = Buffer.byteLength(normalized, "utf8");
-  if (normalized.trim().length === 0) {
-    throw new TmuxInteractionError("invalid_message", "message must not be blank");
-  }
-  if (bytes > MAX_INTERACTION_MESSAGE_BYTES) {
-    throw new TmuxInteractionError(
-      "invalid_message",
-      `message must not exceed ${MAX_INTERACTION_MESSAGE_BYTES} UTF-8 bytes`,
-    );
-  }
-  return normalized;
-}
-
 async function validateSocket(socketPath: string): Promise<void> {
   try {
     const info = await lstat(socketPath);
     const currentUid = typeof process.getuid === "function" ? process.getuid() : null;
     if (!info.isSocket() || currentUid === null || info.uid !== currentUid) throw disconnected();
   } catch (error) {
-    if (error instanceof TmuxInteractionError) throw error;
-    throw disconnected();
+    if (error instanceof InteractionTransportError) throw error;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw disconnected();
+    throw error;
   }
 }
 
-function disconnected(): TmuxInteractionError {
-  return new TmuxInteractionError("disconnected", "tmux target is not connected");
+function disconnected(): InteractionTransportError {
+  return new InteractionTransportError("disconnected", "tmux target is not connected");
 }
 
 export class SpawnTmuxCommandRunner implements TmuxCommandRunner {
@@ -233,10 +248,14 @@ export class SpawnTmuxCommandRunner implements TmuxCommandRunner {
       };
       const timer = setTimeout(() => {
         child.kill("SIGKILL");
-        finish(() => reject(new TmuxInteractionError(
-          "timeout",
-          "tmux operation timed out; the result is unknown",
-        )));
+        finish(() =>
+          reject(
+            new InteractionTransportError(
+              "timeout",
+              "tmux operation timed out; the result is unknown",
+            ),
+          ),
+        );
       }, timeoutMs);
       const collectStdout = (chunk: Buffer) => {
         if (options?.truncateStart) {
@@ -260,22 +279,26 @@ export class SpawnTmuxCommandRunner implements TmuxCommandRunner {
       };
       child.stdout.on("data", collectStdout);
       child.stderr.on("data", collectStderr);
-      child.once("error", (error) => finish(() => reject(
-        new TmuxInteractionError("command_failed", error.message),
-      )));
-      child.stdin.once("error", (error) => finish(() => reject(
-        new TmuxInteractionError("command_failed", error.message),
-      )));
-      child.once("close", (code) => finish(() => {
-        if (outputBytes > MAX_COMMAND_OUTPUT_BYTES || code !== 0) {
-          reject(new TmuxInteractionError(
-            "command_failed",
-            Buffer.concat(stderr).toString("utf8").trim() || "tmux command failed",
-          ));
-          return;
-        }
-        resolve({ stdout: stdout.toString("utf8"), truncated });
-      }));
+      child.once("error", (error) =>
+        finish(() => reject(new InteractionTransportError("command_failed", error.message))),
+      );
+      child.stdin.once("error", (error) =>
+        finish(() => reject(new InteractionTransportError("command_failed", error.message))),
+      );
+      child.once("close", (code) =>
+        finish(() => {
+          if (outputBytes > MAX_COMMAND_OUTPUT_BYTES || code !== 0) {
+            reject(
+              new InteractionTransportError(
+                "command_failed",
+                Buffer.concat(stderr).toString("utf8").trim() || "tmux command failed",
+              ),
+            );
+            return;
+          }
+          resolve({ stdout: stdout.toString("utf8"), truncated });
+        }),
+      );
       if (input === undefined) child.stdin.end();
       else child.stdin.end(input, "utf8");
     });
@@ -286,4 +309,26 @@ function trimLeadingPartialUtf8(buffer: Buffer): Buffer {
   let start = 0;
   while (start < buffer.byteLength && (buffer[start]! & 0xc0) === 0x80) start += 1;
   return buffer.subarray(start);
+}
+
+// A refused connection establishes a stopped server even when tmux left its socket file.
+// Timeouts, permissions and other socket failures remain unknown.
+function socketListening(path: string, timeoutMs: number): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const socket = createConnection({ path });
+    socket.setTimeout(timeoutMs);
+    socket.once("connect", () => {
+      socket.destroy();
+      resolve(true);
+    });
+    socket.once("timeout", () => {
+      socket.destroy();
+      reject(new InteractionTransportError("timeout", "Socket validation timed out"));
+    });
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      socket.destroy();
+      if (error.code === "ECONNREFUSED" || error.code === "ENOENT") resolve(false);
+      else reject(error);
+    });
+  });
 }

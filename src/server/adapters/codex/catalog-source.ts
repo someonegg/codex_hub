@@ -1,4 +1,4 @@
-import type { Diagnostic } from "../../../shared/domain.js";
+import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
 import type { RolloutDescriptor } from "./path-policy.js";
 
 export interface CatalogEntry {

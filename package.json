@@ -1,7 +1,7 @@
 {
-  "name": "codex-sessions-reader",
+  "name": "codex-hub",
   "version": "1.0.0",
-  "description": "Read-only local browser for Codex session history",
+  "description": "Local project and session hub for Codex",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,9 +13,13 @@
     "start": "node dist/server/server/main.js",
     "benchmark:scale": "tsx scripts/benchmark-scale.ts",
     "test": "vitest run",
-    "test:all": "npm test && npm run test:integration:tmux",
+    "test:integration:codex": "vitest run --config vitest.integration.config.ts tests/integration/codex-management.integration.ts",
+    "test:all": "npm test && npm run test:integration:tmux && npm run test:integration:codex",
     "test:integration:tmux": "vitest run --config vitest.integration.config.ts tests/integration/tmux-service.integration.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.tests-server.json"
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.tests-server.json",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "lint-client"
   },
   "keywords": [
     "codex",
@@ -37,6 +41,7 @@
     "remark-math": "^6.0.0"
   },
   "devDependencies": {
+    "@codex-hub/client-lint": "file:tools/client-lint",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -45,6 +50,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.4",
     "jsdom": "^30.0.0",
+    "prettier": "3.6.2",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",

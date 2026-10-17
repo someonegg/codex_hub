@@ -1,13 +1,16 @@
+import type { ComponentProps, ReactNode } from "react";
+import { memo, useId, useMemo, useState } from "react";
+import ReactMarkdown, { defaultUrlTransform, type ExtraProps } from "react-markdown";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
 import { toString } from "mdast-util-to-string";
 import { gfm } from "micromark-extension-gfm";
-import { memo, useId, useMemo, useState } from "react";
-import ReactMarkdown, { defaultUrlTransform, type ExtraProps } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+
 import type { MessageItem as Message } from "../../shared/domain";
+
 import { EventTime } from "./EventTime";
 
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
@@ -18,38 +21,42 @@ const PREVIEW_PARSE_OPTIONS = {
   mdastExtensions: [gfmFromMarkdown()],
 };
 const MARKDOWN_COMPONENTS = {
-  a: ({ href, children }: React.ComponentProps<"a">) => href
-    ? <a href={href} target="_blank" rel="noreferrer noopener">{children}</a>
-    : <span>{children}</span>,
-  img: ({ alt }: React.ComponentProps<"img">) => (
-    <span className="image-placeholder">
-      [Image omitted{alt ? `: ${alt}` : ""}]
-    </span>
+  a: ({ href, children }: ComponentProps<"a">) =>
+    href ? (
+      <a href={href} target="_blank" rel="noreferrer noopener">
+        {children}
+      </a>
+    ) : (
+      <span>{children}</span>
+    ),
+  img: ({ alt }: ComponentProps<"img">) => (
+    <span className="image-placeholder">[Image omitted{alt ? `: ${alt}` : ""}]</span>
   ),
-  table: ({ node: _node, children, ...props }: React.ComponentProps<"table"> & ExtraProps) => (
+  table: ({ node: _node, children, ...props }: ComponentProps<"table"> & ExtraProps) => (
     <MarkdownScrollRegion label="Scrollable table" kind="table">
       <table {...props}>{children}</table>
     </MarkdownScrollRegion>
   ),
-  pre: ({ node: _node, children, ...props }: React.ComponentProps<"pre"> & ExtraProps) => (
+  pre: ({ node: _node, children, ...props }: ComponentProps<"pre"> & ExtraProps) => (
     <MarkdownScrollRegion label="Scrollable code block" kind="code">
       <pre {...props}>{children}</pre>
     </MarkdownScrollRegion>
   ),
-  span: ({
-    node: _node,
-    className,
-    children,
-    ...props
-  }: React.ComponentProps<"span"> & ExtraProps) => {
+  span: ({ node: _node, className, children, ...props }: ComponentProps<"span"> & ExtraProps) => {
     if (className?.split(" ").includes("katex-display")) {
       return (
         <MarkdownScrollRegion label="Scrollable math formula" kind="math">
-          <span className={className} {...props}>{children}</span>
+          <span className={className} {...props}>
+            {children}
+          </span>
         </MarkdownScrollRegion>
       );
     }
-    return <span className={className} {...props}>{children}</span>;
+    return (
+      <span className={className} {...props}>
+        {children}
+      </span>
+    );
   },
 };
 
@@ -58,7 +65,7 @@ function MarkdownScrollRegion({
   kind,
   label,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   kind: "code" | "math" | "table";
   label: string;
 }) {
@@ -87,47 +94,62 @@ export const MessageItem = memo(function MessageItem({ item }: { item: Message }
   const itemType = item.itemType === null ? "" : ` · ${item.itemType}`;
   if (isPlan(item)) return <PlanMessage item={item} />;
   return (
-    <article className="message-body">
+    <article
+      className={`message-body ${item.role === "user" ? "user-message" : "assistant-message"}`}
+    >
       <p className="event-label">
-        {messageLabel(item)}{itemType} · {item.ordinal}<EventTime timestamp={item.timestamp} />
+        {messageLabel(item)}
+        {itemType} · {item.ordinal}
+        <EventTime timestamp={item.timestamp} />
       </p>
-      <MarkdownContent markdown={item.markdown} />
+      <div className="message-content">
+        <MarkdownContent markdown={item.markdown} />
+      </div>
     </article>
   );
 });
 
 function PlanMessage({ item }: { item: Message }) {
   const [open, setOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const contentId = useId();
   const preview = useMemo(() => planPreview(item.markdown), [item.markdown]);
   return (
-    <article className="message-body plan-message">
+    <article className="message-body assistant-message plan-message">
       <button
         type="button"
         className="plan-toggle"
         aria-expanded={open}
         aria-controls={contentId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => {
+          setMounted(true);
+          setOpen((value) => !value);
+        }}
       >
         <span className="event-label">
-          Assistant final · Plan · {item.ordinal}<EventTime timestamp={item.timestamp} />
+          Assistant final · Plan · {item.ordinal}
+          <EventTime timestamp={item.timestamp} />
         </span>
         <span className="plan-toggle-action">
           {open ? "Hide" : "Show"}
-          <span className="plan-toggle-mark" aria-hidden="true">›</span>
+          <span className="plan-toggle-mark" aria-hidden="true">
+            ›
+          </span>
         </span>
       </button>
-      {open
-        ? null
-        : <p className="plan-preview">{preview || "Plan content unavailable."}</p>}
-      <div className="plan-content" id={contentId} hidden={!open}>
-        <MarkdownContent markdown={item.markdown} />
-      </div>
+      {open ? null : (
+        <p className="plan-preview message-content">{preview || "Plan content unavailable."}</p>
+      )}
+      {mounted ? (
+        <div className="plan-content message-content" id={contentId} hidden={!open}>
+          <MarkdownContent markdown={item.markdown} />
+        </div>
+      ) : null}
     </article>
   );
 }
 
-export const MarkdownContent = memo(function MarkdownContent({ markdown }: { markdown: string }) {
+const MarkdownContent = memo(function MarkdownContent({ markdown }: { markdown: string }) {
   return (
     <ReactMarkdown
       remarkPlugins={REMARK_PLUGINS}
@@ -152,19 +174,23 @@ function isPlan(item: Message): boolean {
   return item.role === "assistant" && item.phase === "final" && item.itemType === "Plan";
 }
 
-export function planPreview(markdown: string): string {
+function parsePlanPreview(markdown: string): string {
   try {
     const root = fromMarkdown(markdown, PREVIEW_PARSE_OPTIONS);
     return root.children
-      .flatMap((node) => node.type === "list"
-        ? node.children.map((item) => toString(item))
-        : node.type === "table"
-        ? node.children.map((row) => row.children.map((cell) => toString(cell)).join(" · "))
-        : [toString(node)])
-      .map((block) => block
-        .replaceAll(/<\/?proposed_plan>/gi, "")
-        .replaceAll(/\s+/g, " ")
-        .trim())
+      .flatMap((node) =>
+        node.type === "list"
+          ? node.children.map((item) => toString(item))
+          : node.type === "table"
+            ? node.children.map((row) => row.children.map((cell) => toString(cell)).join(" · "))
+            : [toString(node)],
+      )
+      .map((block) =>
+        block
+          .replaceAll(/<\/?proposed_plan>/gi, "")
+          .replaceAll(/\s+/g, " ")
+          .trim(),
+      )
       .filter(Boolean)
       .join("\n");
   } catch {
@@ -173,4 +199,15 @@ export function planPreview(markdown: string): string {
       .replaceAll(/\s+/g, " ")
       .trim();
   }
+}
+
+export function planPreview(markdown: string): string {
+  const source: string[] = [];
+  for (const point of markdown) {
+    source.push(point);
+    if (source.length > 2000) break;
+  }
+  const text = Array.from(parsePlanPreview(source.slice(0, 2000).join("")));
+  const truncated = source.length > 2000 || text.length > 320;
+  return text.slice(0, truncated ? 319 : 320).join("") + (truncated ? "…" : "");
 }

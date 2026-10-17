@@ -33,6 +33,15 @@ Chosen option: "Repository-probed bounded HTTP long polling", because it removes
 
 Waiting requests are limited to 100 per process and 10 per session. Interaction connection descriptions use a 1.5-second cache that coalesces concurrent promises, while mutation operations retain their real-time validation. Client disconnect, server shutdown, and abort signals release waiters immediately.
 
+Composition creates shared tmux transport, catalog polling, Live, and operation
+tracking services; interaction explicitly receives transport. The API router
+receives business services without creating or closing them. Composition exposes
+idempotent `close()`, called by the HTTP server before it stops accepting and
+waits for existing connections, releasing long polls and operation tracking.
+Construction/listen failures also release resources. Entry points share the same
+services; polling intervals, capacity, and tmux protocol remain unchanged.
+Diagnostics stay in server logs, outside public session state and Live revisions.
+
 ### Positive Consequences
 
 - An unchanged visible session normally holds one request instead of repeatedly transferring empty item pages.

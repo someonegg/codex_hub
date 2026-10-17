@@ -1,8 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type {
-  DomainSessionId,
-  NormalizedSession,
-} from "../domain/session-domain.js";
+
+import type { DomainSessionId, NormalizedSession } from "../domain/session-domain.js";
 import {
   deriveTimelinePrefixIndex,
   extendsTimelinePrefix,
@@ -33,15 +31,15 @@ function buildTimelinePrefixIndex(
   previous?: IndexedSession,
 ): TimelinePrefixIndex {
   return previous !== undefined &&
-      extendsTimelinePrefix(previous.normalized, normalized) &&
-      previous.normalized.timeline.length < normalized.timeline.length
+    extendsTimelinePrefix(previous.normalized, normalized) &&
+    previous.normalized.timeline.length < normalized.timeline.length
     ? extendTimelinePrefixIndex(
-      previous.timelinePrefixIndex,
-      previous.normalized,
-      normalized,
-      prefixKey,
-      true,
-    )
+        previous.timelinePrefixIndex,
+        previous.normalized,
+        normalized,
+        prefixKey,
+        true,
+      )
     : deriveTimelinePrefixIndex(normalized, prefixKey);
 }
 
@@ -63,16 +61,13 @@ export class TimelinePrefixRegistry {
     const indexed = new Map<DomainSessionId, IndexedSession>();
     for (const [id, normalized] of sessions) {
       const previous = this.#published.get(id);
-      if (
-        previous !== undefined &&
-        dirtyIds !== undefined &&
-        !dirtyIds.has(id)
-      ) {
+      if (previous !== undefined && dirtyIds !== undefined && !dirtyIds.has(id)) {
         next.set(id, previous);
         indexed.set(id, previous);
         continue;
       }
-      const unchangedPrefix = previous !== undefined &&
+      const unchangedPrefix =
+        previous !== undefined &&
         previous.normalized.timeline.length === normalized.timeline.length &&
         extendsTimelinePrefix(previous.normalized, normalized);
       const published = {
@@ -90,9 +85,7 @@ export class TimelinePrefixRegistry {
       commit: () => {
         if (committed) return;
         if (this.#generation !== baseGeneration) {
-          throw new Error(
-            "Cannot commit stale prepared timeline prefixes",
-          );
+          throw new Error("Cannot commit stale prepared timeline prefixes");
         }
         this.#published = next;
         this.#generation += 1n;
@@ -100,5 +93,4 @@ export class TimelinePrefixRegistry {
       },
     };
   }
-
 }

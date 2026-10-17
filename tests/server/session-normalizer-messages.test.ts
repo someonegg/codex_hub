@@ -1,18 +1,23 @@
 import { describe, expect, it } from "vitest";
-import {
-  MAX_INLINE_DIRECTIVE_CHARS,
-} from "../../src/server/adapters/codex/limits.js";
+
+import { MAX_INLINE_DIRECTIVE_CHARS } from "../../src/server/adapters/codex/limits.js";
 import { normalizeRecords } from "./session-normalizer.fixtures.js";
 
 describe("message and directive normalization", () => {
   it("keeps explicit metadata titles ahead of Markdown user headings", () => {
-    const normalized = normalizeRecords("metadata-title", [{
-      ordinal: 1,
-      value: {
-        type: "event_msg",
-        payload: { type: "user_message", message: "# Markdown title" },
-      },
-    }], { title: "Metadata title" });
+    const normalized = normalizeRecords(
+      "metadata-title",
+      [
+        {
+          ordinal: 1,
+          value: {
+            type: "event_msg",
+            payload: { type: "user_message", message: "# Markdown title" },
+          },
+        },
+      ],
+      { title: "Metadata title" },
+    );
 
     expect(normalized.session.title).toBe("Metadata title");
   });
@@ -24,7 +29,8 @@ describe("message and directive normalization", () => {
         value: {
           type: "response_item",
           payload: {
-            type: "message", role: "user",
+            type: "message",
+            role: "user",
             content: [{ type: "input_text", text: "Actual user" }],
           },
         },
@@ -41,7 +47,9 @@ describe("message and directive normalization", () => {
         value: {
           type: "response_item",
           payload: {
-            type: "message", role: "assistant", phase: "commentary",
+            type: "message",
+            role: "assistant",
+            phase: "commentary",
             content: [{ type: "output_text", text: "Canonical assistant" }],
           },
         },
@@ -65,55 +73,58 @@ describe("message and directive normalization", () => {
       [3, "directive"],
       [4, "message"],
     ]);
-    expect(normalized.timeline[0]).toEqual(expect.objectContaining({
-      hasDetail: false,
-      text: "Actual user",
-    }));
+    expect(normalized.timeline[0]).toEqual(
+      expect.objectContaining({
+        hasDetail: false,
+        text: "Actual user",
+      }),
+    );
     expect(normalized.directiveDetails.has("directive-1")).toBe(false);
-    expect(normalized.session).toEqual(expect.objectContaining({
-      title: "Actual user",
-      messageCount: 2,
-    }));
-    expect(normalized.timeline.filter((item) => item.kind === "message"))
-      .toEqual([
-        expect.objectContaining({ role: "user", markdown: "Actual user" }),
-        expect.objectContaining({
-          role: "assistant",
-          phase: "commentary",
-          markdown: "Canonical assistant",
-        }),
-      ]);
+    expect(normalized.session).toEqual(
+      expect.objectContaining({
+        title: "Actual user",
+        messageCount: 2,
+      }),
+    );
+    expect(normalized.timeline.filter((item) => item.kind === "message")).toEqual([
+      expect.objectContaining({ role: "user", markdown: "Actual user" }),
+      expect.objectContaining({
+        role: "assistant",
+        phase: "commentary",
+        markdown: "Canonical assistant",
+      }),
+    ]);
   });
 
   it("accepts only allowlisted message content parts and does not guess string content", () => {
     const normalized = normalizeRecords("strict-message-content-session", [
-        {
-          ordinal: 1,
-          value: {
-            type: "response_item",
-            payload: {
-              type: "message",
-              role: "assistant",
-              content: "STRING_CONTENT_MUST_NOT_RENDER",
-            },
+      {
+        ordinal: 1,
+        value: {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: "STRING_CONTENT_MUST_NOT_RENDER",
           },
         },
-        {
-          ordinal: 2,
-          value: {
-            type: "response_item",
-            payload: {
-              type: "message",
-              role: "assistant",
-              content: [
-                { type: "image_url", text: "NON_TEXT_PART_MUST_NOT_RENDER" },
-                { type: "output_text", text: "Allowed assistant text" },
-              ],
-            },
+      },
+      {
+        ordinal: 2,
+        value: {
+          type: "response_item",
+          payload: {
+            type: "message",
+            role: "assistant",
+            content: [
+              { type: "image_url", text: "NON_TEXT_PART_MUST_NOT_RENDER" },
+              { type: "output_text", text: "Allowed assistant text" },
+            ],
           },
         },
+      },
     ]);
-  
+
     expect(normalized.timeline).toEqual([
       expect.objectContaining({
         kind: "directive",
@@ -135,18 +146,22 @@ describe("message and directive normalization", () => {
       responseMessage(2, lazyText),
     ]);
 
-    expect(normalized.timeline[0]).toEqual(expect.objectContaining({
-      kind: "directive",
-      hasDetail: false,
-      text: inlineText,
-    }));
+    expect(normalized.timeline[0]).toEqual(
+      expect.objectContaining({
+        kind: "directive",
+        hasDetail: false,
+        text: inlineText,
+      }),
+    );
     expect(normalized.directiveDetails.has("directive-1")).toBe(false);
-    expect(normalized.timeline[1]).toEqual(expect.objectContaining({
-      kind: "directive",
-      hasDetail: true,
-      summary: "l".repeat(256),
-      charCount: MAX_INLINE_DIRECTIVE_CHARS + 1,
-    }));
+    expect(normalized.timeline[1]).toEqual(
+      expect.objectContaining({
+        kind: "directive",
+        hasDetail: true,
+        summary: "l".repeat(256),
+        charCount: MAX_INLINE_DIRECTIVE_CHARS + 1,
+      }),
+    );
     expect(normalized.timeline[1]).not.toHaveProperty("text");
     expect(normalized.directiveDetails.get("directive-2")).toEqual({
       text: lazyText,
@@ -161,8 +176,7 @@ describe("message and directive normalization", () => {
     ]);
     const item = normalized.timeline[0];
 
-    expect(item.kind === "directive" && item.hasDetail ? item.summary : null)
-      .toBe("x".repeat(255));
+    expect(item.kind === "directive" && item.hasDetail ? item.summary : null).toBe("x".repeat(255));
   });
 
   it("emits a completed UserMessage and uses it for the title", () => {
@@ -178,17 +192,21 @@ describe("message and directive normalization", () => {
       }),
     ]);
 
-    expect(normalized.timeline).toEqual([expect.objectContaining({
-      kind: "message",
-      role: "user",
-      phase: null,
-      itemType: null,
-      markdown: "First user line\n\nSecond user paragraph",
-    })]);
-    expect(normalized.session).toEqual(expect.objectContaining({
-      title: "First user line",
-      messageCount: 1,
-    }));
+    expect(normalized.timeline).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "user",
+        phase: null,
+        itemType: null,
+        markdown: "First user line\n\nSecond user paragraph",
+      }),
+    ]);
+    expect(normalized.session).toEqual(
+      expect.objectContaining({
+        title: "First user line",
+        messageCount: 1,
+      }),
+    );
     expect(JSON.stringify(normalized)).not.toContain("NON_TEXT_MUST_NOT_RENDER");
     expect(JSON.stringify(normalized)).not.toContain("WRONG_CASE_MUST_NOT_RENDER");
   });
@@ -211,35 +229,41 @@ describe("message and directive normalization", () => {
       }),
     ]);
 
-    expect(normalized.timeline).toEqual([expect.objectContaining({
-      kind: "message",
-      role: "assistant",
-      phase: expectedPhase,
-      itemType: null,
-      markdown: "First assistant paragraph\n\nSecond assistant paragraph",
-    })]);
+    expect(normalized.timeline).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+        phase: expectedPhase,
+        itemType: null,
+        markdown: "First assistant paragraph\n\nSecond assistant paragraph",
+      }),
+    ]);
     expect(JSON.stringify(normalized)).not.toContain("WRONG_CASE_MUST_NOT_RENDER");
   });
 
   it("keeps completed Plan text as a typed assistant final message", () => {
-    const normalized = normalizeRecords("completed-item-session", [{
-      ordinal: 1,
-      value: {
-        type: "event_msg",
-        payload: {
-          type: "item_completed",
-          item: { type: "Plan", text: "# Plan\n\n- First step" },
+    const normalized = normalizeRecords("completed-item-session", [
+      {
+        ordinal: 1,
+        value: {
+          type: "event_msg",
+          payload: {
+            type: "item_completed",
+            item: { type: "Plan", text: "# Plan\n\n- First step" },
+          },
         },
       },
-    }]);
+    ]);
 
-    expect(normalized.timeline).toEqual([expect.objectContaining({
-      kind: "message",
-      role: "assistant",
-      phase: "final",
-      itemType: "Plan",
-      markdown: "# Plan\n\n- First step",
-    })]);
+    expect(normalized.timeline).toEqual([
+      expect.objectContaining({
+        kind: "message",
+        role: "assistant",
+        phase: "final",
+        itemType: "Plan",
+        markdown: "# Plan\n\n- First step",
+      }),
+    ]);
   });
 
   it("reduces empty, non-text, and unknown completed items to safe internals", () => {
@@ -277,13 +301,15 @@ describe("message and directive normalization", () => {
       "ReviewMode",
       "Extension",
     ];
-    expect(normalized.timeline).toEqual(subtypes.map((subtype, index) => ({
-      kind: "internal",
-      id: `internal-${index + 1}`,
-      ordinal: index + 1,
-      timestamp: null,
-      eventType: `item_completed.${subtype}`,
-    })));
+    expect(normalized.timeline).toEqual(
+      subtypes.map((subtype, index) => ({
+        kind: "internal",
+        id: `internal-${index + 1}`,
+        ordinal: index + 1,
+        timestamp: null,
+        eventType: `item_completed.${subtype}`,
+      })),
+    );
     expect(normalized.session.messageCount).toBe(0);
     const serialized = JSON.stringify(normalized.timeline);
     expect(serialized).not.toContain("AGENT_PAYLOAD_MUST_NOT_RENDER");

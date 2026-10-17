@@ -2,10 +2,7 @@ import type {
   DomainToolDetail as NormalizedToolDetail,
   DomainToolRecord as ToolItem,
 } from "../../domain/session-domain.js";
-import {
-  MAX_PREVIEW_CHARS,
-  truncateText,
-} from "../../domain/session-text.js";
+import { MAX_PREVIEW_CHARS, truncateText } from "../../domain/session-text.js";
 import { MAX_TOOL_DETAIL_CHARS } from "./limits.js";
 
 export interface ToolCall {
@@ -57,9 +54,7 @@ export function normalizeToolOutput(
   const input = truncateNullable(call?.input ?? null);
   const result = truncateNullable(output.output);
   const preview = previewText(
-    output.output !== null && output.output.length > 0
-      ? output.output
-      : call?.input ?? null,
+    output.output !== null && output.output.length > 0 ? output.output : (call?.input ?? null),
   );
   const detailTruncated = input.truncated || result.truncated;
   return {
@@ -74,8 +69,7 @@ export function normalizeToolOutput(
       status: output.failed ? "failed" : "completed",
       preview: preview.text,
       charCount: (call?.input?.length ?? 0) + (output.output?.length ?? 0),
-      hasDetail: (call?.input !== null && call?.input !== undefined) ||
-        output.output !== null,
+      hasDetail: (call?.input !== null && call?.input !== undefined) || output.output !== null,
     },
     detail: {
       input: input.text,
@@ -86,9 +80,7 @@ export function normalizeToolOutput(
 }
 
 function previewText(value: string | null): { text: string | null; truncated: boolean } {
-  return value === null
-    ? { text: null, truncated: false }
-    : truncateText(value, MAX_PREVIEW_CHARS);
+  return value === null ? { text: null, truncated: false } : truncateText(value, MAX_PREVIEW_CHARS);
 }
 
 function truncateNullable(value: string | null): { text: string | null; truncated: boolean } {

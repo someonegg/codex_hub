@@ -1,4 +1,5 @@
 import { createHmac, randomBytes } from "node:crypto";
+
 import type {
   InteractionResponse,
   LiveRevision,
@@ -16,18 +17,18 @@ export type LiveRevisionSession = Omit<SessionDetail, "nickname">;
 export function createProcessLiveRevisionFactory(
   secret: Uint8Array = randomBytes(32),
 ): LiveRevisionFactory {
-  return (session, interaction) => createHmac("sha256", secret)
-    .update(canonicalJson({ session, interaction }))
-    .digest("base64url") as LiveRevision;
+  return (session, interaction) =>
+    createHmac("sha256", secret)
+      .update(canonicalJson({ session, interaction }))
+      .digest("base64url") as LiveRevision;
 }
 
-export function withLiveRevision<T extends {
-  readonly session: SessionDetail;
-  readonly interaction: InteractionResponse;
-}>(
-  value: T,
-  createRevision: LiveRevisionFactory,
-): T & Pick<SessionLiveResponse, "liveRevision"> {
+export function withLiveRevision<
+  T extends {
+    readonly session: SessionDetail;
+    readonly interaction: InteractionResponse;
+  },
+>(value: T, createRevision: LiveRevisionFactory): T & Pick<SessionLiveResponse, "liveRevision"> {
   const { nickname: _nickname, ...revisionSession } = value.session;
   return {
     ...value,

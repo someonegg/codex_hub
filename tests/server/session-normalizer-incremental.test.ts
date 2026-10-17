@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
+
 import { IdentityResolver } from "../../src/server/adapters/codex/identity-resolver.js";
-import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import type { DecodedRecord } from "../../src/server/adapters/codex/rollout-decoder.js";
+import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import { sessionMetadata } from "./session-normalizer.fixtures.js";
 
 const descriptor = {
@@ -17,20 +18,24 @@ describe("incremental Codex derivation", () => {
   it("updates identity copy-on-write when the first filename match arrives later", () => {
     const resolver = new IdentityResolver();
     const empty = resolver.create(descriptor);
-    const before = resolver.append(empty, [record(1, {
-      timestamp: "2026-08-08T00:00:01.000Z",
-      type: "session_meta",
-      payload: { id: "fallback", cwd: "/fallback" },
-    })]);
-    const after = resolver.append(before, [record(2, {
-      timestamp: "2026-08-08T00:00:02.000Z",
-      type: "session_meta",
-      payload: {
-        id: "matching-thread",
-        cwd: "/matching",
-        timestamp: "2026-08-07T23:59:00.000Z",
-      },
-    })]);
+    const before = resolver.append(empty, [
+      record(1, {
+        timestamp: "2026-08-08T00:00:01.000Z",
+        type: "session_meta",
+        payload: { id: "fallback", cwd: "/fallback" },
+      }),
+    ]);
+    const after = resolver.append(before, [
+      record(2, {
+        timestamp: "2026-08-08T00:00:02.000Z",
+        type: "session_meta",
+        payload: {
+          id: "matching-thread",
+          cwd: "/matching",
+          timestamp: "2026-08-07T23:59:00.000Z",
+        },
+      }),
+    ]);
 
     expect(resolver.metadata(before)).toMatchObject({
       threadId: "fallback",
@@ -51,25 +56,37 @@ describe("incremental Codex derivation", () => {
 
   it("consumes cross-batch matches without mutating the old snapshot", () => {
     const normalizer = new DefaultSessionNormalizer();
-    const firstState = normalizer.append(normalizer.create(descriptor), [
-      toolCall(1, "tool", "inspect", "input"),
-      userInputRequest(2, "question"),
-      eventMessage(3, "user_message", "First user title"),
-      binding(4, "/tmp/valid.sock,1,0", "%1"),
-    ], []);
+    const firstState = normalizer.append(
+      normalizer.create(descriptor),
+      [
+        toolCall(1, "tool", "inspect", "input"),
+        userInputRequest(2, "question"),
+        eventMessage(3, "user_message", "First user title"),
+        binding(4, "/tmp/valid.sock", "%1"),
+      ],
+      [],
+    );
     const before = normalizer.materialize(firstState, sessionMetadata());
     const oldCall = before.timeline[0];
     const oldCallDetail = before.toolDetails.get("tool-1");
     expect(firstState.pendingToolCalls.size).toBe(1);
     expect(firstState.pendingUserInputRequests.size).toBe(1);
 
-    const secondState = normalizer.append(firstState, [
-      toolOutput(5, "tool", "result"),
-      toolOutput(6, "question", JSON.stringify({
-        answers: { choice: { answers: ["Second"] } },
-      })),
-      binding(7, "malformed", "pane"),
-    ], []);
+    const secondState = normalizer.append(
+      firstState,
+      [
+        toolOutput(5, "tool", "result"),
+        toolOutput(
+          6,
+          "question",
+          JSON.stringify({
+            answers: { choice: { answers: ["Second"] } },
+          }),
+        ),
+        binding(7, "malformed", "pane"),
+      ],
+      [],
+    );
     const after = normalizer.materialize(secondState, sessionMetadata());
 
     expect(secondState.pendingToolCalls.size).toBe(0);
@@ -77,59 +94,84 @@ describe("incremental Codex derivation", () => {
     expect(after.timeline[0]).toBe(oldCall);
     expect(after.toolDetails.get("tool-1")).toBe(oldCallDetail);
     expect(after.timeline[4]).toMatchObject({
-      kind: "tool", stage: "output", toolName: "inspect", preview: "result",
+      kind: "tool",
+      stage: "output",
+      toolName: "inspect",
+      preview: "result",
     });
     expect(after.timeline[5]).toMatchObject({
-      kind: "user_input", stage: "response", outcome: "answered",
+      kind: "user_input",
+      stage: "response",
+      outcome: "answered",
     });
     expect(after.interaction?.bindingAttempt).toEqual({ ordinal: 7, valid: false });
     expect(after.session).toMatchObject({
-      title: "First user title", messageCount: 1, toolCount: 1, itemCount: 7,
+      title: "First user title",
+      messageCount: 1,
+      toolCount: 1,
+      itemCount: 7,
     });
     expect(before.timeline).toHaveLength(4);
     expect(before.toolDetails).toHaveLength(1);
     expect(before.interaction?.bindingAttempt).toMatchObject({ ordinal: 4, valid: true });
 
-    const forkedState = normalizer.append(firstState, [
-      toolOutput(8, "tool", "forked result"),
-      toolOutput(9, "question", JSON.stringify({
-        answers: { choice: { answers: ["First"] } },
-      })),
-    ], []);
+    const forkedState = normalizer.append(
+      firstState,
+      [
+        toolOutput(8, "tool", "forked result"),
+        toolOutput(
+          9,
+          "question",
+          JSON.stringify({
+            answers: { choice: { answers: ["First"] } },
+          }),
+        ),
+      ],
+      [],
+    );
     const forked = normalizer.materialize(forkedState, sessionMetadata());
     expect(firstState.pendingToolCalls.size).toBe(1);
     expect(firstState.pendingUserInputRequests.size).toBe(1);
     expect(forkedState.pendingToolCalls.size).toBe(0);
     expect(forkedState.pendingUserInputRequests.size).toBe(0);
     expect(forked.timeline[4]).toMatchObject({
-      kind: "tool", stage: "output", toolName: "inspect", preview: "forked result",
+      kind: "tool",
+      stage: "output",
+      toolName: "inspect",
+      preview: "forked result",
     });
     expect(forked.timeline[5]).toMatchObject({
-      kind: "user_input", stage: "response", outcome: "answered",
+      kind: "user_input",
+      stage: "response",
+      outcome: "answered",
     });
 
-    const consumedState = normalizer.append(secondState, [
-      toolOutput(8, "tool", "duplicate tool result"),
-      toolOutput(9, "question", "duplicate user-input result"),
-    ], []);
+    const consumedState = normalizer.append(
+      secondState,
+      [
+        toolOutput(8, "tool", "duplicate tool result"),
+        toolOutput(9, "question", "duplicate user-input result"),
+      ],
+      [],
+    );
     const consumed = normalizer.materialize(consumedState, sessionMetadata());
     expect(consumed.timeline.slice(7)).toEqual([
       expect.objectContaining({
-        kind: "tool", stage: "output", toolName: "unknown tool",
+        kind: "tool",
+        stage: "output",
+        toolName: "unknown tool",
       }),
       expect.objectContaining({
-        kind: "tool", stage: "output", toolName: "unknown tool",
+        kind: "tool",
+        stage: "output",
+        toolName: "unknown tool",
       }),
     ]);
   });
 
   it("recombines cumulative decoder diagnostics ahead of retained normalizer diagnostics", () => {
     const normalizer = new DefaultSessionNormalizer();
-    const first = normalizer.append(
-      normalizer.create(descriptor),
-      [record(1, {})],
-      [],
-    );
+    const first = normalizer.append(normalizer.create(descriptor), [record(1, {})], []);
     const before = normalizer.materialize(first, sessionMetadata());
     const decoderDiagnostics = Array.from({ length: 50 }, (_, index) => ({
       code: `decoder_${index}`,
@@ -174,15 +216,17 @@ function userInputRequest(ordinal: number, callId: string): DecodedRecord {
       name: "request_user_input",
       call_id: callId,
       arguments: JSON.stringify({
-        questions: [{
-          header: "Choice",
-          id: "choice",
-          question: "Which option?",
-          options: [
-            { label: "First", description: "First option." },
-            { label: "Second", description: "Second option." },
-          ],
-        }],
+        questions: [
+          {
+            header: "Choice",
+            id: "choice",
+            question: "Which option?",
+            options: [
+              { label: "First", description: "First option." },
+              { label: "Second", description: "Second option." },
+            ],
+          },
+        ],
       }),
     },
   });
@@ -197,16 +241,18 @@ function eventMessage(
 }
 
 function binding(ordinal: number, tmux: string, pane: string): DecodedRecord {
-  const command = "printf 'CODEX_VIEWER_TMUX_BIND_V1\\n%s\\n%s\\n' \"$TMUX\" \"$TMUX_PANE\"";
+  const command = 'printf \'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n\' "$TMUX" "$TMUX_PANE"';
   return record(ordinal, {
     type: "response_item",
     payload: {
       type: "message",
       role: "user",
-      content: [{
-        type: "input_text",
-        text: `<user_shell_command>\n${command}\nCODEX_VIEWER_TMUX_BIND_V1\n${tmux}\n${pane}\n</user_shell_command>`,
-      }],
+      content: [
+        {
+          type: "input_text",
+          text: `<user_shell_command>\n${command}\nCODEX_HUB_TMUX_BIND_V3\n${tmux}\n${pane}\n00000000-0000-4000-8000-000000000001\n</user_shell_command>`,
+        },
+      ],
     },
   });
 }

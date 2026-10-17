@@ -1,22 +1,21 @@
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
+  InternalDetailQuery,
+  InternalDetailResponse,
   ItemPageQuery,
   ItemPageResponse,
   SessionDetailResponse,
-  SessionListQuery,
   SessionListResponse,
   TimelineCursor,
   ToolDetailQuery,
   ToolDetailResponse,
-  InternalDetailQuery,
-  InternalDetailResponse,
 } from "../../shared/api-contract.js";
 import type { SessionId } from "../../shared/domain.js";
 import type { DomainAgentInteraction } from "../domain/session-domain.js";
 
 export interface SessionReader {
-  list(query: SessionListQuery): Promise<SessionListResponse>;
+  list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionReadDetailResponse | null>;
   getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null>;
   getLiveSession(id: SessionId, cursor: TimelineCursor): Promise<LiveSessionSnapshot | null>;
@@ -39,15 +38,9 @@ export interface SessionReader {
   getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
 }
 
-export type SessionReadDetailResponse = Omit<
-  SessionDetailResponse,
-  "interaction" | "liveRevision"
->;
+export type SessionReadDetailResponse = Omit<SessionDetailResponse, "interaction" | "liveRevision">;
 
-export type SessionItemPageResponse = Omit<
-  ItemPageResponse,
-  "interaction" | "liveRevision"
->;
+export type SessionItemPageResponse = Omit<ItemPageResponse, "interaction" | "liveRevision">;
 
 export interface LiveSessionSnapshot {
   readonly session: SessionDetailResponse["session"];

@@ -16,10 +16,7 @@ export const DEFAULT_TIMELINE_VISIBILITY: TimelineVisibility = {
   internal: false,
 };
 
-export function isTimelineItemVisible(
-  item: TimelineItem,
-  visibility: TimelineVisibility,
-): boolean {
+function isTimelineItemVisible(item: TimelineItem, visibility: TimelineVisibility): boolean {
   switch (item.kind) {
     case "message":
     case "user_input":
@@ -39,16 +36,13 @@ export function filterVisibleTimelineItems(
   items: readonly TimelineItem[],
   visibility: TimelineVisibility,
 ): TimelineItem[] {
-  return items.filter((item, index) =>
-    isTimelineItemVisible(item, visibility) &&
-    !isDuplicateInlineDirective(items, index)
+  return items.filter(
+    (item, index) =>
+      isTimelineItemVisible(item, visibility) && !isDuplicateInlineDirective(items, index),
   );
 }
 
-function isDuplicateInlineDirective(
-  items: readonly TimelineItem[],
-  index: number,
-): boolean {
+function isDuplicateInlineDirective(items: readonly TimelineItem[], index: number): boolean {
   const item = items[index];
   if (item?.kind !== "directive" || item.hasDetail) return false;
 

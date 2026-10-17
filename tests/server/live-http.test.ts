@@ -1,14 +1,17 @@
 import { writeFile } from "node:fs/promises";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { LiveRevision, TimelineCursor } from "../../src/shared/api-contract.js";
-import type { SessionDetail } from "../../src/shared/domain.js";
+
+import type { SessionReader } from "../../src/server/application/session-reader.js";
+import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
 import { SessionLiveService } from "../../src/server/live/session-live-service.js";
-import type { SessionReader } from "../../src/server/application/session-reader.js";
+import type { LiveRevision, TimelineCursor } from "../../src/shared/api-contract.js";
+import type { SessionDetail } from "../../src/shared/domain.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const SESSION_ID = "abcdefghijklmnopqrstuvwx";
@@ -18,14 +21,19 @@ const OTHER_REVISION = "b".repeat(43) as LiveRevision;
 const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
-  await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => {
-    if (!server.listening) return resolve();
-    server.close(() => resolve());
-  })));
+  await Promise.all(
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          if (!server.listening) return resolve();
+          server.close(() => resolve());
+        }),
+    ),
+  );
 });
 
 describe("Live update HTTP API", () => {
-  it("closes the injected Live service when the API router closes", () => {
+  it("does not take ownership of injected services", () => {
     const unavailable = async () => null;
     const sessions = {
       list: vi.fn(),
@@ -41,35 +49,63 @@ describe("Live update HTTP API", () => {
     const live = new SessionLiveService(sessions);
     const close = vi.spyOn(live, "close");
 
-    createApiRouter({ sessions, live }).close?.();
+    const catalog = new SessionCatalogService(sessions);
+    createApiRouter({ sessions, catalog, live });
 
-    expect(close).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+    catalog.close();
+    live.close();
   });
 
   it("returns 200, 204, 400, and 404 with no-store semantics", async () => {
-    const getLiveSession = vi.fn<SessionReader["getLiveSession"]>()
+    const getLiveSession = vi
+      .fn<SessionReader["getLiveSession"]>()
       .mockResolvedValue(snapshot(false));
     const { base } = await start(getLiveSession, { waitTimeoutMs: 12, probeIntervalMs: 4 });
     const changed = await fetch(url(base, OTHER_REVISION));
     expect(changed.status).toBe(200);
     expect(changed.headers.get("cache-control")).toBe("no-store");
-    expect(await changed.json()).toEqual(expect.objectContaining({
-      cursor: CURSOR,
-      hasMore: false,
-      liveRevision: REVISION,
-    }));
+    expect(await changed.json()).toEqual(
+      expect.objectContaining({
+        cursor: CURSOR,
+        hasMore: false,
+        liveRevision: REVISION,
+      }),
+    );
 
     expect((await fetch(url(base, REVISION))).status).toBe(204);
-    expect((await fetch(`${base}/api/v1/sessions/${SESSION_ID}/live?after=${REVISION}`)).status)
-      .toBe(400);
-    expect((await fetch(`${base}/api/v1/sessions/${SESSION_ID}/live?cursor=x&after=bad`)).status)
-      .toBe(400);
+    expect(
+      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/live?after=${REVISION}`)).status,
+    ).toBe(400);
+    expect(
+      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/live?cursor=x&after=bad`)).status,
+    ).toBe(400);
     getLiveSession.mockResolvedValue(null);
     expect((await fetch(url(base, OTHER_REVISION))).status).toBe(404);
   });
 
+  it.each([
+    ["cursor=x&after=REV&unknown=x", "unknown is not supported"],
+    ["cursor=x&cursor=y&after=REV", "cursor must appear once"],
+    ["cursor=x&after=REV&after=REV", "after must appear once"],
+    ["after=REV", "cursor is required for Live updates"],
+    ["cursor=x", "after is required for Live updates"],
+  ])("preserves query validation for %s", async (query, message) => {
+    const getLiveSession = vi
+      .fn<SessionReader["getLiveSession"]>()
+      .mockResolvedValue(snapshot(false));
+    const { base } = await start(getLiveSession, {});
+    const response = await fetch(
+      `${base}/api/v1/sessions/${SESSION_ID}/live?${query.replaceAll("REV", REVISION)}`,
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: { code: "invalid_query", message } });
+    expect(getLiveSession).not.toHaveBeenCalled();
+  });
+
   it("returns 429 at capacity and releases the slot when the client disconnects", async () => {
-    const getLiveSession = vi.fn<SessionReader["getLiveSession"]>()
+    const getLiveSession = vi
+      .fn<SessionReader["getLiveSession"]>()
       .mockResolvedValue(snapshot(false));
     const { base } = await start(getLiveSession, {
       waitTimeoutMs: 5_000,
@@ -99,7 +135,7 @@ async function start(
   options: ConstructorParameters<typeof SessionLiveService>[1],
 ) {
   const clientDirectory = await createTempDirectory("codex-live-http-");
-  await writeFile(join(clientDirectory, "index.html"), "viewer");
+  await writeFile(join(clientDirectory, "index.html"), "hub");
   const unavailable = async () => null;
   const repository = {
     list: vi.fn(),
@@ -124,9 +160,14 @@ async function start(
     tls: { enabled: false },
     interactionEnabled: false,
   };
+  const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, live }),
+    createApiRouter({ sessions: repository, catalog, live }),
+    () => {
+      catalog.close();
+      live.close();
+    },
   );
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
@@ -168,8 +209,6 @@ const SESSION: SessionDetail = {
   agent: null,
   messageCount: 0,
   toolCount: 0,
-  warningCount: 0,
   sourceId: "session",
-  diagnostics: [],
   itemCount: 0,
 };

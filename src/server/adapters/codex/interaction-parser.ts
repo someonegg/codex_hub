@@ -1,16 +1,12 @@
+import { isAbsolute } from "node:path";
+
 import type {
   DomainAgentInteraction,
   InteractionBindingAttempt,
   InteractionKeyBindings,
 } from "../../domain/session-domain.js";
-import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
+import type { DecodedRecord } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
-
-const CODEX_TMUX_ACTIVATION_COMMAND =
-  "printf 'CODEX_VIEWER_TMUX_BIND_V1\\n%s\\n%s\\n' \"$TMUX\" \"$TMUX_PANE\"";
-export const CODEX_TMUX_ACTIVATION = `! ${CODEX_TMUX_ACTIVATION_COMMAND}`;
-
-const BIND_MARKER = "CODEX_VIEWER_TMUX_BIND_V1";
 
 export const CODEX_INTERACTION_KEY_BINDINGS = {
   enter: "Enter",
@@ -22,33 +18,18 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   plan: "BTab",
 } as const satisfies InteractionKeyBindings;
 
-export function codexInteraction(decoded: DecodedRollout): DomainAgentInteraction {
-  let bindingAttempt: InteractionBindingAttempt | null = null;
-
-  for (const record of decoded.records) {
-    const attempt = codexBindingAttemptFrom(record);
-    if (
-      attempt !== null &&
-      (bindingAttempt === null || attempt.ordinal >= bindingAttempt.ordinal)
-    ) bindingAttempt = attempt;
-  }
-
-  return codexInteractionFromBindingAttempt(bindingAttempt);
-}
-
 export function codexInteractionFromBindingAttempt(
   bindingAttempt: InteractionBindingAttempt | null,
 ): DomainAgentInteraction {
   return {
-    activation: CODEX_TMUX_ACTIVATION,
+    transport: "tmux",
+    rebindCommand: codexBindingCommand(),
     bindingAttempt,
     keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
   };
 }
 
-export function codexBindingAttemptFrom(
-  record: DecodedRecord,
-): InteractionBindingAttempt | null {
+export function codexBindingAttemptFrom(record: DecodedRecord): InteractionBindingAttempt | null {
   if (record.value.type !== "response_item") return null;
   const payload = record.value.payload;
   if (!isObject(payload) || payload.type !== "message" || payload.role !== "user") {
@@ -62,33 +43,29 @@ export function codexBindingAttemptFrom(
     const lines = (block[1] ?? "").replace(/\r\n?/g, "\n").split("\n");
     let blockAttempt: InteractionBindingAttempt | null = null;
     for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index] !== BIND_MARKER) continue;
+      if (lines[index] !== "CODEX_HUB_TMUX_BIND_V3") continue;
       const tmux = lines[index + 1] ?? "";
       const paneId = lines[index + 2] ?? "";
-      const match = /^(.*),(\d+),(\d+)$/.exec(tmux);
-      blockAttempt = match !== null && match[1] !== "" && /^%\d+$/.test(paneId)
-        ? {
-            ordinal: record.ordinal,
-            valid: true,
-            socketPath: match[1],
-            paneId,
-          }
-        : { ordinal: record.ordinal, valid: false };
+      const operationId = lines[index + 3] ?? "";
+      blockAttempt =
+        isAbsolute(tmux) && /^%\d+$/.test(paneId) && (!operationId || validOperationId(operationId))
+          ? {
+              ordinal: record.ordinal,
+              valid: true,
+              socketPath: tmux,
+              paneId,
+              ...(operationId ? { operationId } : {}),
+            }
+          : { ordinal: record.ordinal, valid: false };
     }
     if (blockAttempt !== null) found = blockAttempt;
-    else if (lines.includes(CODEX_TMUX_ACTIVATION_COMMAND)) {
-      found = { ordinal: record.ordinal, valid: false };
-    }
   }
   const lastOpen = text.lastIndexOf("<user_shell_command>");
   const lastClose = text.lastIndexOf("</user_shell_command>");
   if (lastOpen > lastClose) {
     const incomplete = text.slice(lastOpen + "<user_shell_command>".length);
     const incompleteLines = incomplete.replace(/\r\n?/g, "\n").split("\n");
-    if (
-      incompleteLines.includes(BIND_MARKER) ||
-      incompleteLines.includes(CODEX_TMUX_ACTIVATION_COMMAND)
-    ) {
+    if (incompleteLines.includes("CODEX_HUB_TMUX_BIND_V3")) {
       found = { ordinal: record.ordinal, valid: false };
     }
   }
@@ -103,4 +80,14 @@ function contentText(value: unknown): string | null {
     if (part.type === "input_text" || part.type === "text") parts.push(part.text);
   }
   return parts.length === 0 ? null : parts.join("\n\n");
+}
+
+export function codexBindingCommand(operationId?: string): string {
+  if (operationId !== undefined && !validOperationId(operationId))
+    throw new Error("Invalid operation ID");
+  return `! printf 'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n${operationId === undefined ? "" : `${operationId}\\n`}' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`;
+}
+
+function validOperationId(id: string): boolean {
+  return /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(id);
 }

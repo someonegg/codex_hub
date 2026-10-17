@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  encodeStringTuple,
-  opaqueIdForParts,
-} from "../../src/server/security/opaque-id.js";
+
+import { encodeStringTuple, opaqueIdForParts } from "../../src/server/security/opaque-id.js";
 
 describe("opaque IDs", () => {
   it("unambiguously encodes tuple parts containing NUL", () => {

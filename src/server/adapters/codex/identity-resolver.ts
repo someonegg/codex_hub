@@ -1,5 +1,6 @@
 import { basename } from "node:path";
-import type { AgentIdentity } from "../../../shared/domain.js";
+
+import type { DomainAgentIdentity as AgentIdentity } from "../../domain/session-domain.js";
 import { nonEmptyAgentIdentity, taskNameFromAgentPath } from "./agent-identity.js";
 import type { RolloutDescriptor } from "./path-policy.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
@@ -74,9 +75,11 @@ export class IdentityResolver {
       if (metadata === null) continue;
       firstMetadata ??= metadata;
       if (
-        firstMatchingMetadata === null && metadata.id !== null &&
+        firstMatchingMetadata === null &&
+        metadata.id !== null &&
         state.fileName.includes(metadata.id)
-      ) firstMatchingMetadata = metadata;
+      )
+        firstMatchingMetadata = metadata;
     }
 
     return {
@@ -119,9 +122,8 @@ function rawMetadata(value: unknown): RawMetadata | null {
     title: string(value.title),
     cwd: string(value.cwd),
     timestamp: string(value.timestamp),
-    parentThreadId: string(value.parent_thread_id) ??
-      string(value.parent_id) ??
-      string(spawn?.parent_thread_id),
+    parentThreadId:
+      string(value.parent_thread_id) ?? string(value.parent_id) ?? string(spawn?.parent_thread_id),
     agent: rawAgent(value, spawn),
   };
 }
@@ -129,9 +131,7 @@ function rawMetadata(value: unknown): RawMetadata | null {
 function threadSpawn(value: Record<string, unknown>): Record<string, unknown> | null {
   const source = isObject(value.source) ? value.source : null;
   const subagent = source?.subagent;
-  return isObject(subagent) && isObject(subagent.thread_spawn)
-    ? subagent.thread_spawn
-    : null;
+  return isObject(subagent) && isObject(subagent.thread_spawn) ? subagent.thread_spawn : null;
 }
 
 function rawAgent(
@@ -143,7 +143,9 @@ function rawAgent(
   return nonEmptyAgentIdentity({
     taskName: taskNameFromAgentPath(string(value.agent_path) ?? string(spawn?.agent_path)),
     nickname: string(value.agent_nickname) ?? string(spawn?.agent_nickname),
-    role: string(value.agent_role) ?? string(spawn?.agent_role) ??
+    role:
+      string(value.agent_role) ??
+      string(spawn?.agent_role) ??
       (typeof subagent === "string" ? subagent : null),
   });
 }

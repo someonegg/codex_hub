@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0021
 date: 2026-08-01
 ---
 
@@ -64,3 +64,5 @@ This decision supersedes [ADR-0005](0005-use-query-scoped-revisions-for-session-
 
 - Good: Avoids hashing the complete match set.
 - Bad: Does not directly detect earlier membership changes and changes traversal semantics.
+
+Superseded by the hub redesign; see [ADR-0021](0021-split-catalog-structure-and-activity.md).

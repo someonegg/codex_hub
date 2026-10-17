@@ -1,21 +1,17 @@
 import { appendFile, cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+
 import { describe, expect, it } from "vitest";
-import {
-  createCodexSessionReadService,
-} from "../../src/server/create-session-read-service.js";
-import type {
-  SessionSource,
-  SourceSessionEntry,
-} from "../../src/server/source/session-source.js";
-import {
-  SessionReadService,
-  MAX_ITEM_PAGE_BYTES,
-} from "../../src/server/application/session-read-service.js";
+
+import { SessionReadService } from "../../src/server/application/session-read-service.js";
+import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import type {
   DomainTimelineRecord,
   NormalizedSession,
 } from "../../src/server/domain/session-domain.js";
+import { MAX_ITEM_PAGE_BYTES } from "../../src/server/repository/session-queries.js";
+import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
+import type { TimelineCursor } from "../../src/shared/api-contract.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 async function fixtureRepository() {
@@ -26,13 +22,10 @@ async function fixtureRepository() {
 
 async function basicFixtureSession() {
   const { home, repository } = await fixtureRepository();
-  const catalogSessions = (await repository.list({})).sessions;
+  const catalogSessions = (await repository.list()).sessions;
   const session = catalogSessions.find(({ title }) => title === "Synthetic trace");
   if (session === undefined) throw new Error("Expected the basic fixture session");
-  const rollout = join(
-    home,
-    "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
-  );
+  const rollout = join(home, "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl");
   return { catalogSessions, home, repository, rollout, session };
 }
 
@@ -57,59 +50,48 @@ describe("SessionReadService", () => {
         return { signature: "empty", sessions: [], diagnostics: [] };
       },
     };
-    const repository = new SessionReadService(
-      [source],
-      undefined,
-      () => now,
-    );
+    const repository = new SessionReadService([source], undefined, () => now);
 
-    const firstList = repository.list({});
-    const secondList = repository.list({});
+    const firstList = repository.list();
+    const secondList = repository.list();
     release();
-    expect((await firstList).nextCursor).toBeNull();
+    expect((await firstList).revision).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect((await secondList).sessions).toEqual([]);
     expect(discoveries).toBe(1);
-    await repository.list({});
+    await repository.list();
     expect(discoveries).toBe(1);
     now = 1_499;
-    await repository.list({});
+    await repository.list();
     expect(discoveries).toBe(1);
     now = 1_500;
-    await repository.list({});
+    await repository.list();
     expect(discoveries).toBe(2);
     await expect(repository.refresh()).resolves.toBeUndefined();
     expect(discoveries).toBe(3);
   });
 
-  it("uses session-index nicknames without invalidating list or timeline cursors", async () => {
+  it("updates structural titles from session-index without invalidating timeline cursors", async () => {
     const { home, repository } = await fixtureRepository();
-    const baseline = await repository.list({ limit: 1 });
-    const expectedSecondId = (await repository.list({})).sessions[1]!.id;
-    const basic = (await repository.list({})).sessions.find(
+    const baseline = await repository.list();
+    const basic = (await repository.list()).sessions.find(
       ({ title }) => title === "Synthetic trace",
     )!;
     const firstItems = await repository.getItems(basic.id, { limit: 1 });
 
-    await writeFile(join(home, "session_index.jsonl"), [
-      JSON.stringify({ id: "basic-session", thread_name: "Old nickname" }),
-      JSON.stringify({ id: "basic-session", thread_name: "Current nickname" }),
-      JSON.stringify({ id: "basic-session", thread_name: "  " }),
-      "{incomplete",
-    ].join("\n"));
+    await writeFile(
+      join(home, "session_index.jsonl"),
+      [
+        JSON.stringify({ id: "basic-session", thread_name: "Old nickname" }),
+        JSON.stringify({ id: "basic-session", thread_name: "Current nickname" }),
+        JSON.stringify({ id: "basic-session", thread_name: "  " }),
+        "{incomplete",
+      ].join("\n"),
+    );
     await repository.refresh();
 
-    const continuation = await repository.list({
-      limit: 1,
-      cursor: baseline.nextCursor!,
-    });
-    expect(continuation.sessions[0]!.id).toBe(expectedSecondId);
-    const renamed = (await repository.list({})).sessions.find(
-      ({ id }) => id === basic.id,
-    );
-    expect(renamed).toMatchObject({
-      title: "Synthetic trace",
-      nickname: "Current nickname",
-    });
+    expect((await repository.list()).revision).not.toBe(baseline.revision);
+    const renamed = (await repository.list()).sessions.find(({ id }) => id === basic.id);
+    expect(renamed).toMatchObject({ title: "Current nickname" });
 
     const detail = await repository.getSession(basic.id);
     expect(detail?.session).toMatchObject({
@@ -133,179 +115,92 @@ describe("SessionReadService", () => {
 
   it("keeps catalog contents stable when only source diagnostics change", async () => {
     let signature = "warning";
-    let diagnostics = [{
-      code: "temporary_source_warning",
-      severity: "warning" as const,
-      message: "temporarily unavailable",
-      ordinal: null,
-    }];
+    let diagnostics = [
+      {
+        code: "temporary_source_warning",
+        severity: "warning" as const,
+        message: "temporarily unavailable",
+        ordinal: null,
+      },
+    ];
     const source: SessionSource = {
       ...staticSource("diagnostics", []),
       async refresh() {
         return {
           signature,
-          sessions: [sourceEntry(
-            "stable",
-            normalizedSession("stable", "Stable", "/project", []),
-          )],
+          sessions: [sourceEntry("stable", normalizedSession("stable", "Stable", "/project", []))],
           diagnostics,
         };
       },
     };
     const repository = new SessionReadService([source]);
-    const first = await repository.list({});
-    expect(first.diagnostics).toEqual(diagnostics);
-    first.diagnostics[0]!.message = "mutated response";
-    expect(diagnostics[0]!.message).toBe("temporarily unavailable");
+    const first = await repository.list();
+    expect(first).not.toHaveProperty("diagnostics");
 
     signature = "recovered";
     diagnostics = [];
     await repository.refresh();
 
-    const recovered = await repository.list({});
+    const recovered = await repository.list();
     expect(recovered.sessions).toEqual(first.sessions);
-    expect(recovered.diagnostics).toEqual([]);
-  });
-
-  it("returns catalog diagnostics independently of list filters and without source paths", async () => {
-    const source = {
-      ...staticSource("catalog-diagnostics", []),
-      async refresh() {
-        const duplicate = sourceEntry(
-          "duplicate",
-          normalizedSession("duplicate", "Duplicate", "/project/a", []),
-        );
-        return {
-          signature: "catalog-diagnostics",
-          sessions: [duplicate, duplicate],
-          diagnostics: [
-            {
-              code: "session_root_unreadable",
-              severity: "warning" as const,
-              message: "A configured session root could not be read.",
-              ordinal: null,
-            },
-            {
-              code: "rollout_unavailable",
-              severity: "warning" as const,
-              message: "A session rollout is temporarily unavailable.",
-              ordinal: null,
-            },
-          ],
-        };
-      },
-    };
-    const sessions = new SessionReadService([source]);
-
-    const result = await sessions.list({
-      project: "/project/missing",
-      from: "2026-06-01T00:00:00.000Z",
-      limit: 1,
-    });
-
-    expect(result.sessions).toEqual([]);
-    expect(result.diagnostics.map(({ code }) => code)).toEqual([
-      "session_root_unreadable",
-      "rollout_unavailable",
-      "duplicate_source_session_id",
-    ]);
-    expect(JSON.stringify(result.diagnostics)).not.toContain("/private/");
-  });
-
-  it("computes project facets before applying the selected project", async () => {
-    const archived = normalizedSession(
-      "archived",
-      "Archived",
-      "/project/archived",
-      [],
-      "2026-04-01T00:00:00.000Z",
-    );
-    const sessions = new SessionReadService([staticSource("facets", [
-      sourceEntry(
-        "a",
-        normalizedSession("a", "Project A", "/project/a", [], "2026-02-01T00:00:00.000Z"),
-      ),
-      sourceEntry(
-        "b",
-        normalizedSession("b", "Project B", "/project/b", [], "2026-03-01T00:00:00.000Z"),
-      ),
-      sourceEntry(
-        "outside-date",
-        normalizedSession("outside-date", "Old", "/project/old", [], "2025-03-01T00:00:00.000Z"),
-      ),
-      sourceEntry("archived", {
-        ...archived,
-        session: { ...archived.session, archived: true },
-      }),
-    ])]);
-    const range = {
-      project: "/project/a",
-      from: "2026-01-01T00:00:00.000Z",
-      to: "2026-12-31T23:59:59.999Z",
-    } as const;
-
-    const selectedProject = await sessions.list(range);
-    expect(selectedProject.sessions.map(({ projectDirectory }) => projectDirectory)).toEqual(["/project/a"]);
-    expect(selectedProject.total).toBe(1);
-    expect(selectedProject.projects).toEqual([
-      { project: "/project/a", count: 1 },
-      { project: "/project/archived", count: 1 },
-      { project: "/project/b", count: 1 },
-    ]);
-
-    const archivedProject = await sessions.list({
-      ...range,
-      project: "/project/archived",
-    });
-    expect(archivedProject.sessions).toHaveLength(1);
-    expect(archivedProject.sessions[0]?.archived).toBe(true);
-    expect(archivedProject.projects).toEqual([
-      { project: "/project/a", count: 1 },
-      { project: "/project/archived", count: 1 },
-      { project: "/project/b", count: 1 },
-    ]);
+    expect(recovered.revision).toBe(first.revision);
   });
 
   it("publishes linked summaries and pages timeline details", async () => {
     const { catalogSessions, repository, session: parent } = await basicFixtureSession();
-    const child = catalogSessions.find((session) => session.workingDirectory === "/synthetic/child")!;
+    const child = catalogSessions.find((session) => session.parentId === parent.id)!;
     expect(child.parentId).toBe(parent.id);
-    expect(parent.childIds).toContain(child.id);
+    expect(child.isChild).toBe(true);
+    expect((await repository.getSession(parent.id))?.session.childIds).toContain(child.id);
 
     const page = await repository.getItems(parent.id, {
       limit: 2,
     });
     expect(page?.hasMore).toBe(true);
-    await expect(repository.getItems(parent.id, {
-      cursor: page!.cursor,
-      limit: 2,
-    })).resolves.not.toBeNull();
+    await expect(
+      repository.getItems(parent.id, {
+        cursor: page!.cursor,
+        limit: 2,
+      }),
+    ).resolves.not.toBeNull();
     const allItems = await repository.getItems(parent.id, {
       limit: 200,
     });
     const directive = allItems!.items.find((item) => item.id === "directive-4")!;
     expect(JSON.stringify(allItems)).not.toContain("DIRECTIVE_DETAIL_CANARY");
-    expect(await repository.getDirectiveDetail(parent.id, directive.id, {
-      cursor: allItems!.cursor,
-    })).toEqual(expect.objectContaining({
-      text: expect.stringContaining("DIRECTIVE_DETAIL_CANARY"),
-      truncated: false,
-    }));
+    expect(
+      await repository.getDirectiveDetail(parent.id, directive.id, {
+        cursor: allItems!.cursor,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        text: expect.stringContaining("DIRECTIVE_DETAIL_CANARY"),
+        truncated: false,
+      }),
+    );
     const internal = allItems!.items.find((item) => item.id === "internal-6")!;
     expect(allItems).not.toHaveProperty("internalDetails");
     expect(JSON.stringify(allItems)).not.toContain("REASONING_CANARY_NEVER_RENDER");
-    expect(await repository.getInternalDetail(parent.id, internal.id, {
-      cursor: allItems!.cursor,
-    })).toEqual(expect.objectContaining({
-      json: expect.stringContaining("REASONING_CANARY_NEVER_RENDER"),
-      truncated: false,
-    }));
-    await expect(repository.getInternalDetail(parent.id, internal.id, {
-      cursor: page!.cursor,
-    })).rejects.toMatchObject({ code: "invalid_query" });
-    await expect(repository.getInternalDetail(parent.id, directive.id, {
-      cursor: allItems!.cursor,
-    })).resolves.toBeNull();
+    expect(
+      await repository.getInternalDetail(parent.id, internal.id, {
+        cursor: allItems!.cursor,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        json: expect.stringContaining("REASONING_CANARY_NEVER_RENDER"),
+        truncated: false,
+      }),
+    );
+    await expect(
+      repository.getInternalDetail(parent.id, internal.id, {
+        cursor: page!.cursor,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_query" });
+    await expect(
+      repository.getInternalDetail(parent.id, directive.id, {
+        cursor: allItems!.cursor,
+      }),
+    ).resolves.toBeNull();
   });
 
   it("keeps confirmed timeline and detail cursors valid after append", async () => {
@@ -324,18 +219,23 @@ describe("SessionReadService", () => {
       cursor: page!.cursor,
       limit: 2,
     });
-    expect(second!.session.messageCount)
-      .toBe(session.messageCount);
+    expect(second!.session.messageCount).toBe(allItems!.session.messageCount);
     expect(second!.hasMore).toBe(true);
-    await expect(repository.getItems(session.id, {
-      cursor: page!.cursor,
-    })).resolves.not.toBeNull();
-    await expect(repository.getDirectiveDetail(session.id, directive.id, {
-      cursor: allItems!.cursor,
-    })).resolves.toEqual(expect.objectContaining({ text: expect.any(String) }));
-    await expect(repository.getInternalDetail(session.id, internal.id, {
-      cursor: allItems!.cursor,
-    })).resolves.toEqual(expect.objectContaining({ json: expect.any(String) }));
+    await expect(
+      repository.getItems(session.id, {
+        cursor: page!.cursor,
+      }),
+    ).resolves.not.toBeNull();
+    await expect(
+      repository.getDirectiveDetail(session.id, directive.id, {
+        cursor: allItems!.cursor,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ text: expect.any(String) }));
+    await expect(
+      repository.getInternalDetail(session.id, internal.id, {
+        cursor: allItems!.cursor,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ json: expect.any(String) }));
   });
 
   it("invalidates confirmed cursors after rollout replacement", async () => {
@@ -346,21 +246,25 @@ describe("SessionReadService", () => {
     await writeFile(
       replacement,
       '{"timestamp":"2026-07-28T13:00:00.000Z","type":"session_meta","payload":{"id":"basic-session","title":"Replacement trace"}}\n' +
-      '{"timestamp":"2026-07-28T13:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"replacement"}]}}\n',
+        '{"timestamp":"2026-07-28T13:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"replacement"}]}}\n',
     );
     await rename(replacement, rollout);
     await repository.refresh();
     const third = await repository.getSession(session.id);
     expect(third!.session.title).toBe("Replacement trace");
     expect(third!.session.messageCount).toBe(0);
-    await expect(repository.getItems(session.id, {
-      cursor: page!.cursor,
-    })).rejects.toMatchObject({
+    await expect(
+      repository.getItems(session.id, {
+        cursor: page!.cursor,
+      }),
+    ).rejects.toMatchObject({
       code: "timeline_changed",
     });
-    await expect(repository.getInternalDetail(session.id, "internal-6", {
-      cursor: allItems!.cursor,
-    })).rejects.toMatchObject({ code: "timeline_changed" });
+    await expect(
+      repository.getInternalDetail(session.id, "internal-6", {
+        cursor: allItems!.cursor,
+      }),
+    ).rejects.toMatchObject({ code: "timeline_changed" });
   });
 
   it("keeps a loaded call prefix stable when an output is appended", async () => {
@@ -371,10 +275,10 @@ describe("SessionReadService", () => {
     await writeFile(
       rollout,
       '{"timestamp":"2026-07-28T10:00:00Z","type":"session_meta","payload":{"id":"tool-append","title":"Tool append"}}\n' +
-      '{"timestamp":"2026-07-28T10:00:01Z","type":"response_item","payload":{"type":"function_call","name":"inspect","arguments":"input","call_id":"stable-call"}}\n',
+        '{"timestamp":"2026-07-28T10:00:01Z","type":"response_item","payload":{"type":"function_call","name":"inspect","arguments":"input","call_id":"stable-call"}}\n',
     );
     const repository = await createCodexSessionReadService(home);
-    const listed = await repository.list({});
+    const listed = await repository.list();
     const sessionId = listed.sessions[0]!.id;
     const callPage = await repository.getItems(sessionId, {
       limit: 1,
@@ -441,7 +345,7 @@ describe("SessionReadService", () => {
       '{"timestamp":"2026-07-28T10:00:00Z","type":"session_meta","payload":{"id":"silent-tail","title":"Silent tail"}}\n',
     );
     const repository = await createCodexSessionReadService(home);
-    const sessionId = (await repository.list({})).sessions[0]!.id;
+    const sessionId = (await repository.list()).sessions[0]!.id;
     const before = await repository.getSession(sessionId);
     const beforePage = await repository.getItems(sessionId, {});
 
@@ -452,17 +356,19 @@ describe("SessionReadService", () => {
     await repository.refresh();
     const pending = await repository.getSession(sessionId);
     expect(pending!.session).toEqual(before!.session);
-    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor }))
-      .resolves.toEqual(expect.objectContaining({ items: [] }));
+    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor })).resolves.toEqual(
+      expect.objectContaining({ items: [] }),
+    );
 
     await appendFile(rollout, "\n");
     await repository.refresh();
     const committed = await repository.getSession(sessionId);
     expect(committed!.session).toMatchObject({ toolCount: 1, itemCount: 1 });
-    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor }))
-      .resolves.toEqual(expect.objectContaining({
+    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor })).resolves.toEqual(
+      expect.objectContaining({
         items: [expect.objectContaining({ kind: "tool" })],
-      }));
+      }),
+    );
   });
 
   it("keeps session A reader requests valid while only session B changes", async () => {
@@ -499,10 +405,7 @@ describe("SessionReadService", () => {
     ]);
     let sessionAWithDetail: NormalizedSession = {
       ...sessionA,
-      directiveDetails: new Map([[
-        "directive-2",
-        { text: "secret", truncated: false },
-      ]]),
+      directiveDetails: new Map([["directive-2", { text: "secret", truncated: false }]]),
     };
     let sourceSignature = "initial";
     let sessionB = normalizedSession("session-b", "Session B", null, []);
@@ -520,7 +423,7 @@ describe("SessionReadService", () => {
       },
     };
     const repository = new SessionReadService([source]);
-    const list = await repository.list({});
+    const list = await repository.list();
     const sessionAId = list.sessions.find((session) => session.title === "Session A")!.id;
     const first = await repository.getItems(sessionAId, {
       limit: 2,
@@ -531,21 +434,26 @@ describe("SessionReadService", () => {
       sourceSignature = `session-b-${change}`;
       sessionB = normalizedSession("session-b", `Session B ${change}`, null, []);
       await repository.refresh();
-      expect((await repository.getSession(sessionAId))?.session.title)
-        .toBe("Session A");
+      expect((await repository.getSession(sessionAId))?.session.title).toBe("Session A");
     }
 
-    await expect(repository.getItems(sessionAId, {
-      cursor: first!.cursor,
-      limit: 2,
-    })).resolves.toEqual(expect.objectContaining({
-      items: [expect.objectContaining({ id: "message-3" })],
-    }));
-    await expect(repository.getDirectiveDetail(sessionAId, directive.id, {
-      cursor: first!.cursor,
-    })).resolves.toEqual(expect.objectContaining({ text: "secret" }));
+    await expect(
+      repository.getItems(sessionAId, {
+        cursor: first!.cursor,
+        limit: 2,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        items: [expect.objectContaining({ id: "message-3" })],
+      }),
+    );
+    await expect(
+      repository.getDirectiveDetail(sessionAId, directive.id, {
+        cursor: first!.cursor,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ text: "secret" }));
 
-    const currentList = await repository.list({});
+    const currentList = await repository.list();
     const sessionBId = currentList.sessions.find(
       (session) => session.title === "Session B changed-twice",
     )!.id;
@@ -557,16 +465,22 @@ describe("SessionReadService", () => {
     sourceSignature = "session-a-changed";
     await repository.refresh();
 
-    await expect(repository.getItems(sessionAId, {
-      cursor: first!.cursor,
-      limit: 2,
-    })).resolves.toEqual(expect.objectContaining({
-      session: expect.objectContaining({ title: "Session A changed" }),
-    }));
-    await expect(repository.getItems(sessionBId, {
-      cursor: sessionBPage!.cursor,
-      limit: 2,
-    })).resolves.toEqual(expect.objectContaining({ items: [] }));
+    await expect(
+      repository.getItems(sessionAId, {
+        cursor: first!.cursor,
+        limit: 2,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        session: expect.objectContaining({ title: "Session A changed" }),
+      }),
+    );
+    await expect(
+      repository.getItems(sessionBId, {
+        cursor: sessionBPage!.cursor,
+        limit: 2,
+      }),
+    ).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
   it("keeps a parent revision stable when source child enumeration order changes", async () => {
@@ -578,16 +492,9 @@ describe("SessionReadService", () => {
         return {
           signature: sourceSignature,
           sessions: [
-            sourceEntry(
-              "parent",
-              normalizedSession("parent", "Parent", null, []),
-            ),
+            sourceEntry("parent", normalizedSession("parent", "Parent", null, [])),
             ...childIds.map((childId) =>
-              sourceEntry(
-                childId,
-                normalizedSession(childId, childId, null, []),
-                "parent",
-              )
+              sourceEntry(childId, normalizedSession(childId, childId, null, []), "parent"),
             ),
           ],
           diagnostics: [],
@@ -595,15 +502,11 @@ describe("SessionReadService", () => {
       },
     };
     const repository = new SessionReadService([source]);
-    const firstList = await repository.list({});
-    const parentId = firstList.sessions.find(
-      (session) => session.title === "Parent",
-    )!.id;
+    const firstList = await repository.list();
+    const parentId = firstList.sessions.find((session) => session.title === "Parent")!.id;
     const first = await repository.getSession(parentId);
 
-    expect(first?.session.childIds).toEqual(
-      [...first!.session.childIds].sort(),
-    );
+    expect(first?.session.childIds).toEqual([...first!.session.childIds].sort());
 
     sourceSignature = "children-a-z";
     childIds = [...childIds].reverse();
@@ -615,21 +518,17 @@ describe("SessionReadService", () => {
 
   it("returns every timeline event type in one unfiltered view", async () => {
     const { repository } = await fixtureRepository();
-    const list = await repository.list({});
+    const list = await repository.list();
     const session = list.sessions.find((session) => session.title === "Synthetic trace")!;
     const page = await repository.getItems(session.id, {
       limit: 200,
     });
-    expect(new Set(page?.items.map((item) => item.kind))).toEqual(new Set([
-      "message",
-      "directive",
-      "tool",
-      "token",
-      "internal",
-    ]));
-    expect(page?.items.find((item) =>
-      item.kind === "internal" && item.eventType === "reasoning"
-    )).toEqual(
+    expect(new Set(page?.items.map((item) => item.kind))).toEqual(
+      new Set(["message", "directive", "tool", "token", "internal"]),
+    );
+    expect(
+      page?.items.find((item) => item.kind === "internal" && item.eventType === "reasoning"),
+    ).toEqual(
       expect.objectContaining({
         id: "internal-6",
         eventType: "reasoning",
@@ -639,41 +538,40 @@ describe("SessionReadService", () => {
 
   it("accepts item pages up to 300 entries", async () => {
     const { repository } = await fixtureRepository();
-    const list = await repository.list({});
+    const list = await repository.list();
     const session = list.sessions.find((session) => session.title === "Synthetic trace")!;
-    await expect(repository.getItems(session.id, {
-      limit: 300,
-    }))
-      .resolves.not.toBeNull();
-    await expect(repository.getItems(session.id, {
-      limit: 301,
-    }))
-      .rejects.toMatchObject({ code: "invalid_query" });
+    await expect(
+      repository.getItems(session.id, {
+        limit: 300,
+      }),
+    ).resolves.not.toBeNull();
+    await expect(
+      repository.getItems(session.id, {
+        limit: 301,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_query" });
   });
 
   it("defaults timeline pages to 100 entries", async () => {
-    const timeline: DomainTimelineRecord[] = Array.from(
-      { length: 101 },
-      (_, index) => ({
-        kind: "message",
-        id: `message-${index + 1}`,
-        ordinal: index + 1,
-        timestamp: "2026-07-28T00:00:00Z",
-        role: "assistant",
-        phase: "commentary",
-        itemType: null,
-        markdown: `Message ${index + 1}`,
-      }),
-    );
-    const repository = new SessionReadService(
-      [staticSource("timeline-default", [
+    const timeline: DomainTimelineRecord[] = Array.from({ length: 101 }, (_, index) => ({
+      kind: "message",
+      id: `message-${index + 1}`,
+      ordinal: index + 1,
+      timestamp: "2026-07-28T00:00:00Z",
+      role: "assistant",
+      phase: "commentary",
+      itemType: null,
+      markdown: `Message ${index + 1}`,
+    }));
+    const repository = new SessionReadService([
+      staticSource("timeline-default", [
         sourceEntry(
           "timeline-default",
           normalizedSession("timeline-default", "Timeline default", null, timeline),
         ),
-      ])],
-    );
-    const session = (await repository.list({})).sessions[0]!;
+      ]),
+    ]);
+    const session = (await repository.list()).sessions[0]!;
     const page = await repository.getItems(session.id, {});
 
     expect(page?.items).toHaveLength(100);
@@ -688,7 +586,7 @@ describe("SessionReadService", () => {
       '{"timestamp":"2026-07-28T10:00:00.000Z","type":"session_meta","payload":{"id":"active-session","title":"Active trace"}}\n',
     );
     const repository = await createCodexSessionReadService(home);
-    expect((await repository.list({})).sessions).toHaveLength(1);
+    expect((await repository.list()).sessions).toHaveLength(1);
 
     await mkdir(join(home, "archived_sessions"), { recursive: true });
     await writeFile(
@@ -697,17 +595,15 @@ describe("SessionReadService", () => {
     );
     await repository.refresh();
 
-    const sessions = await repository.list({});
+    const sessions = await repository.list();
     expect(sessions.sessions).toHaveLength(2);
     expect(sessions.sessions.find(({ archived }) => archived)?.title).toBe("Late archive");
   });
 
   it("keeps a native Codex session identity stable when its rollout moves", async () => {
     const { home, repository } = await fixtureRepository();
-    const before = await repository.list({});
-    const session = before.sessions.find(
-      (session) => session.title === "Synthetic trace",
-    )!;
+    const before = await repository.list();
+    const session = before.sessions.find((session) => session.title === "Synthetic trace")!;
     const original = join(
       home,
       "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
@@ -717,31 +613,13 @@ describe("SessionReadService", () => {
     await rename(original, join(archiveDirectory, "rollout-moved-basic-session.jsonl"));
 
     await repository.refresh();
-    const after = await repository.list({});
-    const moved = after.sessions.find(
-      (session) => session.title === "Synthetic trace",
-    )!;
+    const after = await repository.list();
+    const moved = after.sessions.find((session) => session.title === "Synthetic trace")!;
     expect(moved.id).toBe(session.id);
     expect(moved.archived).toBe(true);
   });
 
-  it("compares time filters as instants and rejects an inverted range", async () => {
-    const { repository } = await fixtureRepository();
-    const equivalentOffset = await repository.list({
-      from: "2026-07-28T05:00:00-05:00",
-      to: "2026-07-28T13:00:00Z",
-    });
-    expect(equivalentOffset.sessions.some(
-      (session) => session.title === "Synthetic trace",
-    )).toBe(true);
-
-    await expect(repository.list({
-      from: "2026-07-29T00:00:00Z",
-      to: "2026-07-28T00:00:00Z",
-    })).rejects.toMatchObject({ code: "invalid_query" });
-  });
-
-  it("defaults catalog pages to 100 entries and accepts up to 300", async () => {
+  it("returns every catalog record without truncation", async () => {
     const entries = Array.from({ length: 305 }, (_, index) =>
       sourceEntry(
         `thread-${index}`,
@@ -752,60 +630,56 @@ describe("SessionReadService", () => {
           [],
           new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
         ),
-      )
+      ),
     );
-    const repository = new SessionReadService(
-      [staticSource("large", entries)],
-    );
+    const repository = new SessionReadService([staticSource("large", entries)]);
 
-    const first = await repository.list({});
-    expect(first).toMatchObject({ total: 305 });
-    expect(first.nextCursor).not.toBeNull();
-    expect(first.sessions).toHaveLength(100);
-    const second = await repository.list({
-      cursor: first.nextCursor!,
-      limit: 300,
-    });
-    expect(second).toMatchObject({ total: 305, nextCursor: null });
-    expect(second.sessions).toHaveLength(205);
-    expect(new Set([...first.sessions, ...second.sessions].map((session) => session.id)).size)
-      .toBe(305);
-    await expect(repository.list({ limit: 301 }))
-      .rejects.toMatchObject({ code: "invalid_query" });
+    const first = await repository.list();
+    expect(first.sessions).toHaveLength(305);
+    expect(new Set(first.sessions.map((session) => session.id)).size).toBe(305);
+    expect(Object.keys(first).sort()).toEqual(["projects", "revision", "sessions"]);
   });
 
-  it("bounds a page of individually valid long messages by response bytes", async () => {
+  it("fills byte-bounded pages and reads every long message exactly once", async () => {
     const longText = "x".repeat(1_000_000);
-    const timeline: DomainTimelineRecord[] = Array.from(
-      { length: 10 },
-      (_, index) => ({
-        kind: "message",
-        id: `message-${index + 1}`,
-        ordinal: index + 1,
-        timestamp: "2026-07-28T00:00:00Z",
-        role: "assistant",
-        phase: "commentary",
-        itemType: null,
-        markdown: longText,
-      }),
-    );
-    const repository = new SessionReadService(
-      [staticSource("long", [
+    const timeline: DomainTimelineRecord[] = Array.from({ length: 10 }, (_, index) => ({
+      kind: "message",
+      id: `message-${index + 1}`,
+      ordinal: index + 1,
+      timestamp: "2026-07-28T00:00:00Z",
+      role: "assistant",
+      phase: "commentary",
+      itemType: null,
+      markdown: longText,
+    }));
+    const repository = new SessionReadService([
+      staticSource("long", [
         sourceEntry(
           "long-session",
           normalizedSession("long-session", "Long session", null, timeline),
         ),
-      ])],
-    );
+      ]),
+    ]);
 
-    const list = await repository.list({});
-    const page = await repository.getItems(list.sessions[0]!.id, {
-      limit: 200,
-    });
-    expect(page?.hasMore).toBe(true);
-    expect(page?.cursor).toEqual(expect.any(String));
-    expect(Buffer.byteLength(JSON.stringify(page?.items), "utf8"))
-      .toBeLessThanOrEqual(MAX_ITEM_PAGE_BYTES + 2);
+    const list = await repository.list();
+    const sessionId = list.sessions[0]!.id;
+    const ids: string[] = [];
+    let cursor: TimelineCursor | undefined;
+    // Four million-character messages fit under 4 MiB; a fifth does not.
+    for (const [index, count] of [4, 4, 2].entries()) {
+      const page = await repository.getItems(sessionId, { limit: 200, cursor });
+      expect(page).not.toBeNull();
+      expect(page!.items).toHaveLength(count);
+      expect(page!.hasMore).toBe(index < 2);
+      expect(page!.cursor).toEqual(expect.any(String));
+      expect(page!.cursor).not.toBe(cursor);
+      expect(Buffer.byteLength(JSON.stringify(page!.items), "utf8")).toBeLessThanOrEqual(
+        MAX_ITEM_PAGE_BYTES + 2,
+      );
+      ids.push(...page!.items.map((item) => item.id));
+      cursor = page!.cursor;
+    }
+    expect(ids).toEqual(timeline.map((item) => item.id));
   });
 });
 
@@ -839,9 +713,7 @@ function normalizedSession(
       childIds: [],
       agent: null,
       messageCount: timeline.filter((item) => item.kind === "message").length,
-      toolCount: timeline.filter(
-        (item) => item.kind === "tool" && item.stage === "call",
-      ).length,
+      toolCount: timeline.filter((item) => item.kind === "tool" && item.stage === "call").length,
       warningCount: 0,
       diagnostics: [],
       itemCount: timeline.length,
@@ -867,10 +739,7 @@ function sourceEntry(
   };
 }
 
-function staticSource(
-  key: string,
-  sessions: readonly SourceSessionEntry[],
-): SessionSource {
+function staticSource(key: string, sessions: readonly SourceSessionEntry[]): SessionSource {
   return {
     descriptor: {
       sourceType: "test",
@@ -883,3 +752,76 @@ function staticSource(
     },
   };
 }
+
+describe("catalog structure and updatedAt isolation", () => {
+  it("isolates updatedAt, body and diagnostics from structure, preserving canonical order", async () => {
+    let entries = [
+      sourceEntry("one", normalizedSession("one", "One", "/project", [])),
+      sourceEntry("two", normalizedSession("two", "Two", "/project", [])),
+    ];
+    let generation = 0;
+    const repository = new SessionReadService([
+      {
+        ...staticSource("isolation", []),
+        async refresh() {
+          return { signature: String(generation), sessions: entries, diagnostics: [] };
+        },
+      },
+    ]);
+    const first = await repository.list();
+    entries = entries.reverse().map((entry) => ({
+      ...entry,
+      normalized: {
+        ...entry.normalized,
+        session: {
+          ...entry.normalized.session,
+          updatedAt: "2030-01-01T00:00:00Z",
+          messageCount: 42,
+          diagnostics: [
+            { code: "warning", severity: "warning", message: "warning", ordinal: null },
+          ],
+        },
+      },
+    }));
+    generation++;
+    await repository.refresh();
+    const updated = await repository.list();
+    expect(updated.revision).toBe(first.revision);
+    expect(updated.sessions.map(({ updatedAt, ...session }) => session)).toEqual(
+      first.sessions.map(({ updatedAt, ...session }) => session),
+    );
+    expect(updated.sessions.every((session) => session.updatedAt === "2030-01-01T00:00:00Z")).toBe(
+      true,
+    );
+    entries = entries.map((entry) => ({
+      ...entry,
+      normalized: { ...entry.normalized, session: { ...entry.normalized.session, archived: true } },
+    }));
+    generation++;
+    await repository.refresh();
+    expect((await repository.list()).revision).not.toBe(first.revision);
+  });
+  it("preserves child identity when its parent is missing or ambiguous", async () => {
+    const child = {
+      ...sourceEntry("child", normalizedSession("child", "Child", null, [])),
+      parentNativeSessionId: "missing",
+    };
+    const list = await new SessionReadService([staticSource("orphans", [child])]).list();
+    expect(list.sessions[0]).toMatchObject({ isChild: true, parentId: null, projectId: null });
+    expect(list.projects).toEqual([]);
+    const parent = sourceEntry("duplicate", normalizedSession("duplicate", "Parent", "/same", []));
+    const secondParent = { ...parent, localId: "duplicate-2" };
+    const ambiguous = await new SessionReadService([
+      staticSource("ambiguous", [
+        parent,
+        secondParent,
+        { ...child, parentNativeSessionId: "duplicate" },
+      ]),
+    ]).list();
+    expect(ambiguous.sessions.find((session) => session.title === "Child")).toMatchObject({
+      isChild: true,
+      parentId: null,
+    });
+    expect(ambiguous.projects).toHaveLength(1);
+  });
+});

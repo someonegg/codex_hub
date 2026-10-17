@@ -1,6 +1,6 @@
 import type {
-  DomainDiagnostic,
   DomainAgentInteraction,
+  DomainDiagnostic,
   DomainDirectiveDetail,
   DomainInternalDetail,
   DomainSession,
@@ -10,25 +10,17 @@ import type {
   InteractionBindingAttempt,
   NormalizedSession,
 } from "../../domain/session-domain.js";
-import {
-  normalizeSessionTitle,
-  sessionTitleFromMarkdown,
-} from "../../domain/session-text.js";
-import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
-import {
-  internalDetail,
-  internalItem,
-  internalItemFromPayload,
-} from "./internal-event-parser.js";
-import {
-  eventMessage,
-} from "./message-normalizer.js";
+import { normalizeSessionTitle, sessionTitleFromMarkdown } from "../../domain/session-text.js";
 import type { SessionMetadata } from "./identity-resolver.js";
-import type { RolloutDescriptor } from "./path-policy.js";
 import {
-  parseResponseItem,
-  type ParsedResponseItem,
-} from "./response-item-parser.js";
+  codexBindingAttemptFrom,
+  codexInteractionFromBindingAttempt,
+} from "./interaction-parser.js";
+import { internalDetail, internalItem, internalItemFromPayload } from "./internal-event-parser.js";
+import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
+import { eventMessage } from "./message-normalizer.js";
+import type { RolloutDescriptor } from "./path-policy.js";
+import { type ParsedResponseItem, parseResponseItem } from "./response-item-parser.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
 import {
@@ -43,10 +35,6 @@ import {
   normalizeUserInputResponse,
   type UserInputRequest,
 } from "./user-input-normalizer.js";
-import {
-  codexBindingAttemptFrom,
-  codexInteractionFromBindingAttempt,
-} from "./interaction-parser.js";
 
 export interface SessionNormalizer {
   create(descriptor: RolloutDescriptor): SessionNormalizerState;
@@ -131,7 +119,8 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       if (
         attempt !== null &&
         (bindingAttempt === null || attempt.ordinal >= bindingAttempt.ordinal)
-      ) bindingAttempt = attempt;
+      )
+        bindingAttempt = attempt;
       consumeRecord(
         record,
         items,
@@ -169,9 +158,7 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       internalDetails: sameMapEntries(state.internalDetails, internalDetails)
         ? state.internalDetails
         : internalDetails,
-      toolDetails: sameMapEntries(state.toolDetails, toolDetails)
-        ? state.toolDetails
-        : toolDetails,
+      toolDetails: sameMapEntries(state.toolDetails, toolDetails) ? state.toolDetails : toolDetails,
       pendingToolCalls,
       pendingUserInputRequests,
       decoderDiagnostics: decoderDiagnosticsUnchanged
@@ -192,12 +179,9 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     origin: DomainSessionOrigin = DEFAULT_SESSION_ORIGIN,
   ): NormalizedSession {
     const diagnostics = combinedDiagnostics(state);
-    const warningCount = diagnostics.filter(
-      (diagnostic) => diagnostic.severity !== "info",
-    ).length;
-    const title = normalizeSessionTitle(metadata.title) ??
-      state.firstUserTitle ??
-      "Untitled session";
+    const warningCount = diagnostics.filter((diagnostic) => diagnostic.severity !== "info").length;
+    const title =
+      normalizeSessionTitle(metadata.title) ?? state.firstUserTitle ?? "Untitled session";
     const session: DomainSession = {
       id: state.descriptor.id,
       sourceId: metadata.threadId,
@@ -241,26 +225,28 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
   }
 }
 
-function combinedDiagnostics(
-  state: SessionNormalizerState,
-): readonly DomainDiagnostic[] {
+function combinedDiagnostics(state: SessionNormalizerState): readonly DomainDiagnostic[] {
   const remaining = MAX_SESSION_DIAGNOSTICS - state.decoderDiagnostics.length;
-  return [
-    ...state.decoderDiagnostics,
-    ...state.normalizerDiagnostics.slice(0, remaining),
-  ];
+  return [...state.decoderDiagnostics, ...state.normalizerDiagnostics.slice(0, remaining)];
 }
 
 function sameDiagnostics(
   left: readonly DomainDiagnostic[],
   right: readonly DomainDiagnostic[],
 ): boolean {
-  return left.length === right.length && left.every((item, index) => {
-    const candidate = right[index];
-    return candidate !== undefined && item.code === candidate.code &&
-      item.severity === candidate.severity && item.message === candidate.message &&
-      item.ordinal === candidate.ordinal;
-  });
+  return (
+    left.length === right.length &&
+    left.every((item, index) => {
+      const candidate = right[index];
+      return (
+        candidate !== undefined &&
+        item.code === candidate.code &&
+        item.severity === candidate.severity &&
+        item.message === candidate.message &&
+        item.ordinal === candidate.ordinal
+      );
+    })
+  );
 }
 
 function sameMapEntries<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boolean {
@@ -354,10 +340,7 @@ function addInternalDetail(
   details.set(item.id, detail);
 }
 
-function appendDiagnostic(
-  diagnostics: DomainDiagnostic[],
-  diagnostic: DomainDiagnostic,
-): void {
+function appendDiagnostic(diagnostics: DomainDiagnostic[], diagnostic: DomainDiagnostic): void {
   if (diagnostics.length < MAX_SESSION_DIAGNOSTICS) {
     diagnostics.push(diagnostic);
   }

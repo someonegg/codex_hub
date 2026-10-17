@@ -3,15 +3,8 @@ import type {
   DomainDirectiveRecord,
   DomainMessageRecord,
 } from "../../domain/session-domain.js";
-import {
-  MAX_PREVIEW_CHARS,
-  truncateText,
-} from "../../domain/session-text.js";
-import {
-  MAX_DIRECTIVE_CHARS,
-  MAX_INLINE_DIRECTIVE_CHARS,
-  MAX_MESSAGE_CHARS,
-} from "./limits.js";
+import { MAX_PREVIEW_CHARS, truncateText } from "../../domain/session-text.js";
+import { MAX_DIRECTIVE_CHARS, MAX_INLINE_DIRECTIVE_CHARS, MAX_MESSAGE_CHARS } from "./limits.js";
 import { isObject } from "./rollout-decoder.js";
 
 export interface ParsedDirective {
@@ -75,22 +68,13 @@ export function eventMessage(
   const itemType = string(item.type);
   if (itemType === "UserMessage") {
     const markdown = itemContentText(item.content, "text");
-    return markdown === null
-      ? null
-      : messageItem(ordinal, timestamp, "user", null, null, markdown);
+    return markdown === null ? null : messageItem(ordinal, timestamp, "user", null, null, markdown);
   }
   if (itemType === "AgentMessage") {
     const markdown = itemContentText(item.content, "Text");
     return markdown === null
       ? null
-      : messageItem(
-        ordinal,
-        timestamp,
-        "assistant",
-        normalizePhase(item.phase),
-        null,
-        markdown,
-      );
+      : messageItem(ordinal, timestamp, "assistant", normalizePhase(item.phase), null, markdown);
   }
   if (itemType !== "Plan") return null;
   const markdown = string(item.text);
@@ -114,15 +98,16 @@ function messageItem(
     timestamp,
     role,
     phase,
-    itemType: itemType === null
-      ? null
-      : truncateText(itemType, MAX_MESSAGE_CHARS).text,
+    itemType: itemType === null ? null : truncateText(itemType, MAX_MESSAGE_CHARS).text,
     markdown: truncateText(markdown, MAX_MESSAGE_CHARS).text,
   };
 }
 
 function directiveSummary(value: string): string {
-  const firstLine = value.split(/\r?\n/).map((line) => line.trim()).find(Boolean);
+  const firstLine = value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
   return truncateText(firstLine ?? "Directive", MAX_PREVIEW_CHARS).text;
 }
 

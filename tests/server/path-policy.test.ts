@@ -1,8 +1,10 @@
 import { mkdir, realpath, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
-import { opaqueIdForPath } from "../../src/server/security/opaque-id.js";
+
 import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
+import { opaqueIdForPath } from "../../src/server/security/opaque-id.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("PathPolicy", () => {
@@ -23,9 +25,7 @@ describe("PathPolicy", () => {
     const descriptor = await policy.register(valid);
     const canonical = await realpath(valid);
     expect(descriptor?.canonicalPath).toBe(canonical);
-    expect(descriptor?.sourceRelativePath).toBe(
-      "sessions/2026/07/28/rollout-safe.jsonl",
-    );
+    expect(descriptor?.sourceRelativePath).toBe("sessions/2026/07/28/rollout-safe.jsonl");
     expect(descriptor?.id).toBe(opaqueIdForPath(canonical));
     expect(await policy.register(invalidName)).toBeNull();
     expect(await policy.register(outside)).toBeNull();

@@ -36,9 +36,8 @@ export function internalItemFromPayload(
 ): DomainInternalEventRecord | DomainTokenRecord {
   const eventType = string(payload.type) ?? "event";
   if (eventType !== "token_count") {
-    const subtype = eventType === "item_completed" && isObject(payload.item)
-      ? string(payload.item.type)
-      : null;
+    const subtype =
+      eventType === "item_completed" && isObject(payload.item) ? string(payload.item.type) : null;
     return internalItem(
       ordinal,
       timestamp,
@@ -72,9 +71,7 @@ function tokenUsageCounters(value: unknown): DomainTokenUsageCounters | null {
 }
 
 function tokenCount(value: unknown): number | null {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
-    ? value
-    : null;
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
 function string(value: unknown): string | null {

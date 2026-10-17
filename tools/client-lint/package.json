@@ -1,0 +1,17 @@
+{
+  "name": "@codex-hub/client-lint",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "exports": "./index.js",
+  "bin": {
+    "lint-client": "./cli.js"
+  },
+  "dependencies": {
+    "eslint": "^9.39.0",
+    "typescript": "~6.0.0",
+    "typescript-eslint": "^8.71.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1"
+  }
+}

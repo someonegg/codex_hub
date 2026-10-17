@@ -11,7 +11,7 @@ export default defineConfig({
         server.middlewares.use((request, _response, next) => {
           const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
           if (/^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(pathname)) {
-            request.url = `/session.html${(request.url ?? "").slice(pathname.length)}`;
+            request.url = `/index.html${(request.url ?? "").slice(pathname.length)}`;
           }
           next();
         });
@@ -26,7 +26,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         index: resolve(import.meta.dirname, "index.html"),
-        session: resolve(import.meta.dirname, "session.html"),
       },
     },
   },

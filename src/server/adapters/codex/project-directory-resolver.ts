@@ -31,9 +31,9 @@ export class ProjectDirectoryResolver {
     for (const key of this.#cache.keys()) {
       if (!unique.has(key)) this.#cache.delete(key);
     }
-    const pairs = await Promise.all([...unique].map(async (directory) =>
-      [directory, await this.resolve(directory)] as const,
-    ));
+    const pairs = await Promise.all(
+      [...unique].map(async (directory) => [directory, await this.resolve(directory)] as const),
+    );
     return new Map(pairs);
   }
 
@@ -47,7 +47,9 @@ export class ProjectDirectoryResolver {
       result: this.#query(workingDirectory),
     };
     this.#cache.set(workingDirectory, entry);
-    void entry.result.then(() => { entry.expiresAt = this.now() + CACHE_TTL_MS; });
+    void entry.result.then(() => {
+      entry.expiresAt = this.now() + CACHE_TTL_MS;
+    });
     return entry.result;
   }
 
@@ -58,7 +60,7 @@ export class ProjectDirectoryResolver {
       this.#active += 1;
     }
     try {
-      return await this.query(workingDirectory) ?? workingDirectory;
+      return (await this.query(workingDirectory)) ?? workingDirectory;
     } catch {
       return workingDirectory;
     } finally {
@@ -71,7 +73,7 @@ export class ProjectDirectoryResolver {
 
 async function queryProjectDirectory(workingDirectory: string): Promise<string | null> {
   if (!isAbsolute(workingDirectory)) return null;
-  // A Git environment inherited from the viewer must not override the session's repository.
+  // A Git environment inherited from the hub must not override the session's repository.
   const env = Object.fromEntries(
     Object.entries(process.env).filter(([key]) => !key.startsWith("GIT_")),
   );

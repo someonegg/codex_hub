@@ -7,7 +7,7 @@ date: 2026-09-04
 
 ## Context and Problem Statement
 
-Codex records user-facing thread names in `session_index.jsonl`, separately from rollout files. The viewer should prefer these names without conflating presentation metadata with the canonical rollout title or allowing an advisory file to create sessions, reorder paginated results, invalidate cursors, or wake Live polling when only a nickname changes.
+Codex records user-facing thread names in `session_index.jsonl`, separately from rollout files. The hub should prefer these names without conflating presentation metadata with the canonical rollout title or allowing an advisory file to create sessions, reorder paginated results, invalidate cursors, or wake Live polling when only a nickname changes.
 
 ## Decision Drivers
 
@@ -60,3 +60,11 @@ The Codex adapter refreshes a bounded, best-effort snapshot of `session_index.js
 - Good: Preserves authoritative repository and cursor semantics while presenting one resolved title.
 - Good: Applies consistently to list, detail, item-page, and Live response shapes.
 - Bad: Requires a separate canonical session value for revision calculation.
+
+## Catalog protocol update, 2026-10-16
+
+[ADR-0021](0021-split-catalog-structure-and-activity.md) supersedes only catalog
+behavior: server-resolved display titles wake structural long polls; pagination
+and three-second summary refreshes become structural long polling with best-effort
+timestamps included in list snapshots. Details retain separate title/nickname fields; reader Live
+and timeline cursor semantics are unchanged.

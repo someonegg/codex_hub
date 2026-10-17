@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+
 import type {
   InteractionResponse,
   ItemPageResponse,
   SessionLiveResponse,
 } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
+
 import { api, ApiClientError } from "../api/client";
+import { createRequestChannel } from "./request-channel";
 import { isAbort, isTimelineConflict, messageFor } from "./request-errors";
 import {
   INITIAL_RETRY_MS,
@@ -13,13 +16,12 @@ import {
   nextRetryMs,
   waitForRetry,
 } from "./retry-policy";
-import { useSessionLive, type LiveSnapshot } from "./use-session-live";
-import { useLiveUpdatesPreference } from "./use-live-updates-preference";
 import type { ReaderContext } from "./session-reader-state";
+import { type LiveSnapshot, useSessionLive } from "./use-session-live";
 
 const TIMELINE_PAGE_SIZE = 300;
 
-export type ReaderOperation = "open" | "page" | "poll" | "reload" | null;
+type ReaderOperation = "open" | "page" | "poll" | "reload" | null;
 
 interface ReaderState {
   operation: ReaderOperation;
@@ -65,8 +67,9 @@ const initialState: ReaderState = {
 
 export function useSessionReader(sessionId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useLiveUpdatesPreference();
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
   const active = useRef<ActiveRequest | null>(null);
+  const channel = useRef(createRequestChannel());
   const generation = useRef(0);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -78,60 +81,71 @@ export function useSessionReader(sessionId: string) {
     dispatch({ type: "timeline-conflict" });
   }, []);
 
-  const isCurrent = useCallback((request: ActiveRequest) => (
-    active.current === request &&
-    request.generation === generation.current &&
-    !request.controller.signal.aborted
-  ), []);
+  const isCurrent = useCallback(
+    (request: ActiveRequest) =>
+      active.current === request &&
+      request.generation === generation.current &&
+      !request.controller.signal.aborted,
+    [],
+  );
 
-  const requestPage = useCallback(async (
-    operation: Exclude<ReaderOperation, null>,
-    cursor: ReaderContext["cursor"] | undefined,
-    mode: PageRequestMode,
-  ): Promise<boolean> => {
-    if (active.current !== null) return false;
-    const request: ActiveRequest = {
-      controller: new AbortController(),
-      generation: generation.current,
-    };
-    active.current = request;
-    dispatch({ type: "start", operation, preserve: mode.preserveCurrent });
-    let retryMs = INITIAL_RETRY_MS;
-    try {
-      while (isCurrent(request)) {
-        try {
-          const page = await api.items(sessionId, {
-            cursor,
-            limit: TIMELINE_PAGE_SIZE,
-          }, request.controller.signal);
-          if (!isCurrent(request)) return false;
-          dispatch({ type: "success", page, replace: mode.replaceItems });
-          return true;
-        } catch (reason) {
-          if (!isCurrent(request) || isAbort(reason)) return false;
-          if (isTimelineConflict(reason)) {
-            markTimelineConflict();
-            return false;
+  const requestPage = useCallback(
+    async (
+      operation: Exclude<ReaderOperation, null>,
+      cursor: ReaderContext["cursor"] | undefined,
+      mode: PageRequestMode,
+    ): Promise<boolean> => {
+      if (active.current !== null) return false;
+      const request: ActiveRequest = {
+        controller: channel.current.begin().controller,
+        generation: generation.current,
+      };
+      active.current = request;
+      dispatch({ type: "start", operation, preserve: mode.preserveCurrent });
+      let retryMs = INITIAL_RETRY_MS;
+      try {
+        while (isCurrent(request)) {
+          try {
+            const page = await api.items(
+              sessionId,
+              {
+                cursor,
+                limit: TIMELINE_PAGE_SIZE,
+              },
+              request.controller.signal,
+            );
+            if (!isCurrent(request)) return false;
+            dispatch({ type: "success", page, replace: mode.replaceItems });
+            return true;
+          } catch (reason) {
+            if (!isCurrent(request) || isAbort(reason)) return false;
+            if (isTimelineConflict(reason)) {
+              markTimelineConflict();
+              return false;
+            }
+            const retryablePagination =
+              (operation === "page" || operation === "poll") && isRetryableRequestError(reason);
+            if (!retryablePagination) throw reason;
+            dispatch({ type: "page-retry", error: messageFor(reason) });
+            await waitForRetry(retryMs, request.controller.signal);
+            retryMs = nextRetryMs(retryMs);
           }
-          const retryablePagination = (operation === "page" || operation === "poll") &&
-            isRetryableRequestError(reason);
-          if (!retryablePagination) throw reason;
-          dispatch({ type: "page-retry", error: messageFor(reason) });
-          await waitForRetry(retryMs, request.controller.signal);
-          retryMs = nextRetryMs(retryMs);
         }
+        return false;
+      } catch (reason) {
+        if (!isCurrent(request) || isAbort(reason)) return false;
+        const missing =
+          reason instanceof ApiClientError &&
+          reason.status === 404 &&
+          reason.code === "session_not_found";
+        dispatch({ type: "failure", error: messageFor(reason), missing });
+        return false;
+      } finally {
+        if (active.current === request) active.current = null;
       }
-      return false;
-    } catch (reason) {
-      if (!isCurrent(request) || isAbort(reason)) return false;
-      const missing = reason instanceof ApiClientError &&
-        reason.status === 404 && reason.code === "session_not_found";
-      dispatch({ type: "failure", error: messageFor(reason), missing });
-      return false;
-    } finally {
-      if (active.current === request) active.current = null;
-    }
-  }, [isCurrent, markTimelineConflict, sessionId]);
+    },
+    [isCurrent, markTimelineConflict, sessionId],
+  );
 
   useEffect(() => {
     generation.current += 1;
@@ -159,51 +173,69 @@ export function useSessionReader(sessionId: string) {
     });
   }, [requestPage]);
 
-  const retryOpen = useCallback(() => requestPage("open", undefined, {
-    preserveCurrent: false,
-    replaceItems: true,
-  }), [requestPage]);
+  const retryOpen = useCallback(
+    () =>
+      requestPage("open", undefined, {
+        preserveCurrent: false,
+        replaceItems: true,
+      }),
+    [requestPage],
+  );
 
   const reloadLatest = useCallback(() => {
     active.current?.controller.abort();
     active.current = null;
     generation.current += 1;
+    setAutoRefreshEnabled(true);
     return requestPage("reload", undefined, {
       preserveCurrent: true,
       replaceItems: true,
     });
   }, [requestPage]);
 
-  const onLiveUpdate = useCallback(async (
-    response: SessionLiveResponse,
-    expected: LiveSnapshot,
-  ) => {
-    const current = stateRef.current;
-    if (current.context === null || current.timelineConflict ||
-      current.context.cursor !== expected.cursor ||
-      current.context.liveRevision !== expected.liveRevision ||
-      response.cursor !== expected.cursor) return;
-    if (response.hasMore) {
-      const loaded = await requestPage("poll", expected.cursor, {
-        preserveCurrent: true,
-        replaceItems: false,
-      });
-      if (!loaded && !stateRef.current.timelineConflict) setAutoRefreshEnabled(false);
-      return;
-    }
-    dispatch({ type: "live-success", response });
-  }, [requestPage]);
+  const onLiveUpdate = useCallback(
+    async (response: SessionLiveResponse, expected: LiveSnapshot) => {
+      const current = stateRef.current;
+      if (
+        current.context === null ||
+        current.timelineConflict ||
+        current.context.cursor !== expected.cursor ||
+        current.context.liveRevision !== expected.liveRevision ||
+        response.cursor !== expected.cursor
+      )
+        return;
+      if (active.current !== null) return;
+      if (response.hasMore) {
+        const version = generation.current;
+        const loaded = await requestPage("poll", expected.cursor, {
+          preserveCurrent: true,
+          replaceItems: false,
+        });
+        if (version === generation.current && !loaded && !stateRef.current.timelineConflict)
+          setAutoRefreshEnabled(false);
+        return;
+      }
+      dispatch({ type: "live-success", response });
+    },
+    [requestPage],
+  );
 
   useSessionLive({
     sessionId,
-    enabled: autoRefreshEnabled && state.operation === null &&
-      state.context !== null && state.context.session.id === sessionId &&
+    enabled:
+      autoRefreshEnabled &&
+      state.operation === null &&
+      state.context !== null &&
+      state.context.session.id === sessionId &&
       !state.context.session.archived &&
       !state.timelineConflict,
-    snapshot: state.context === null ? null : {
-      cursor: state.context.cursor,
-      liveRevision: state.context.liveRevision,
-    },
+    snapshot:
+      state.context === null
+        ? null
+        : {
+            cursor: state.context.cursor,
+            liveRevision: state.context.liveRevision,
+          },
     onUpdate: onLiveUpdate,
     onTimelineConflict: markTimelineConflict,
     onError: (reason, terminal) => {
@@ -218,15 +250,13 @@ export function useSessionReader(sessionId: string) {
     items: state.items,
     interaction: state.interaction,
     operation: state.operation,
-    readerLoading: state.operation === "open" || state.operation === "page" ||
-      state.operation === "reload",
+    readerLoading:
+      state.operation === "open" || state.operation === "page" || state.operation === "reload",
     readerError: state.error,
     missing: state.missing,
     timelineConflict: state.timelineConflict,
     timelineRenderGeneration: state.timelineRenderGeneration,
     clearReaderError: () => dispatch({ type: "clear-error" }),
-    autoRefreshEnabled: autoRefreshEnabled && state.context?.session.archived !== true,
-    setAutoRefreshEnabled,
     loadMore,
     retryOpen,
     markTimelineConflict,
@@ -260,9 +290,10 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
         error: null,
         missing: false,
         timelineConflict: false,
-        timelineRenderGeneration: action.replace && state.timelineConflict
-          ? state.timelineRenderGeneration + 1
-          : state.timelineRenderGeneration,
+        timelineRenderGeneration:
+          action.replace && state.timelineConflict
+            ? state.timelineRenderGeneration + 1
+            : state.timelineRenderGeneration,
       };
     }
     case "live-success":

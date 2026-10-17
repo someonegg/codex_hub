@@ -19,12 +19,11 @@ export function PageJumpControls() {
       const viewportBottom = window.scrollY + window.innerHeight;
       const next = {
         top: window.scrollY > EDGE_DISTANCE_PX,
-        bottom: pageHeight > window.innerHeight &&
-          pageHeight - viewportBottom > EDGE_DISTANCE_PX,
+        bottom: pageHeight > window.innerHeight && pageHeight - viewportBottom > EDGE_DISTANCE_PX,
       };
-      setVisible((current) => (
-        current.top === next.top && current.bottom === next.bottom ? current : next
-      ));
+      setVisible((current) =>
+        current.top === next.top && current.bottom === next.bottom ? current : next,
+      );
     };
     const scheduleVisibilityUpdate = () => {
       if (typeof window.requestAnimationFrame !== "function") {
@@ -43,9 +42,8 @@ export function PageJumpControls() {
     };
 
     updateVisibility();
-    const resizeObserver = typeof ResizeObserver === "undefined"
-      ? null
-      : new ResizeObserver(updatePageGeometry);
+    const resizeObserver =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updatePageGeometry);
     const onScroll = () => {
       if (resizeObserver === null) pageHeight = document.documentElement.scrollHeight;
       scheduleVisibilityUpdate();
@@ -62,8 +60,7 @@ export function PageJumpControls() {
   }, []);
 
   const scrollTo = (top: number) => {
-    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
-      ?? false;
+    const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     window.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
   };
 

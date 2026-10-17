@@ -1,4 +1,40 @@
 :root {
+  --terminal-surface: #213138;
+  --terminal-output-surface: #18262c;
+  --terminal-ink: #dce8e8;
+  --terminal-border: #62777d;
+  --terminal-muted: #9fb3b7;
+  --error-ink: #74392e;
+  --error-surface: #fff0ed;
+  --error-border: #d9aaa2;
+  --connection-ink: #175c50;
+  --connection-surface: #e2f0eb;
+  --connection-border: #a9c9bd;
+  --warning-ink: #765126;
+  --warning-surface: #f7ead5;
+  --warning-border: #dbc49d;
+  --scrollbar-thumb: #8fa6ab;
+
+  --text-small: 0.8125rem;
+  --text-control: 0.875rem;
+  --control-height: 36px;
+  --space-small: 0.5rem;
+  --space-medium: 1rem;
+  --space-large: 1.5rem;
+  --surface: #fff;
+  --current-hover: #105d66;
+
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --hover-surface: #e3eded;
+  --notice-border: #bdcccf;
+  --archive-ink: #9a6700;
+  --archive-surface: transparent;
+  --archive-border: #9a6700;
+  --unavailable-ink: #704727;
+  --unavailable-surface: #f4e5d4;
+  --unavailable-border: #d6b995;
+
   --paper: #f7fafa;
   --paper-deep: #eef4f4;
   --ink: #18262d;
@@ -7,11 +43,11 @@
   --current: #176b75;
   --human: #9d4e3a;
   --signal: #c4862d;
-  --title-font: Charter, "Iowan Old Style", Georgia, serif;
-  --body-font: "Avenir Next", Inter, system-ui, sans-serif;
+  --title-font: var(--body-font);
+  --body-font: "Avenir Next", "PingFang SC", Inter, system-ui, sans-serif;
   --mono-font: "SFMono-Regular", Consolas, monospace;
+  font-size: 16px;
   color: var(--ink);
   font-family: var(--body-font);
   background: var(--paper);
 }
-

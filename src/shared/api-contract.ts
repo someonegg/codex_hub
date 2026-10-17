@@ -1,27 +1,7 @@
-import type {
-  Diagnostic,
-  SessionDetail,
-  SessionSummary,
-  TimelineItem,
-} from "./domain.js";
+import type { SessionDetail, SessionSummary, TimelineItem } from "./domain.js";
 
-export const MAX_INTERACTION_MESSAGE_BYTES = 64 * 1024;
-export const MAX_INTERACTION_KEY_SEQUENCE_LENGTH = 64;
+export * from "./interaction.js";
 
-export const INTERACTION_KEYS = [
-  "enter",
-  "up",
-  "down",
-  "left",
-  "right",
-  "interrupt",
-  "plan",
-] as const;
-
-export type InteractionKey = typeof INTERACTION_KEYS[number];
-
-declare const listCursorBrand: unique symbol;
-export type ListCursor = string & { readonly [listCursorBrand]: true };
 declare const timelineCursorBrand: unique symbol;
 export type TimelineCursor = string & { readonly [timelineCursorBrand]: true };
 declare const liveRevisionBrand: unique symbol;
@@ -36,25 +16,18 @@ export interface ApiError {
 }
 
 export interface SessionListQuery {
-  project?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-  cursor?: ListCursor;
-  fresh?: boolean;
+  after?: string;
 }
 
-export interface ProjectFacet {
-  project: string;
-  count: number;
+export interface SessionProject {
+  id: string;
+  directory: string;
 }
 
 export interface SessionListResponse {
+  revision: string;
+  projects: SessionProject[];
   sessions: SessionSummary[];
-  projects: ProjectFacet[];
-  total: number;
-  nextCursor: ListCursor | null;
-  diagnostics: Diagnostic[];
 }
 
 export interface SessionDetailResponse {
@@ -118,21 +91,35 @@ export interface InternalDetailQuery {
   cursor: TimelineCursor;
 }
 
-export type InteractionState =
-  | "unbound"
-  | "disconnected"
-  | "connected";
+export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected";
 
 export type InteractionResponse =
-  | { supported: false }
+  | { supported: false; attachCommand: string | null }
   | {
       supported: true;
       state: InteractionState;
-      activation: string;
+      attachCommand: string | null;
     };
 
 export interface TerminalPreviewResponse {
   content: string;
   truncated: boolean;
   capturedAt: string;
+}
+
+export interface HubOperation {
+  phase: "sending_exit" | "waiting_exit" | "archiving" | "confirming_archive" | null;
+  attachCommand: string | null;
+  operationId: string;
+  type: "create" | "archive" | "delete";
+  status: "pending" | "succeeded" | "failed" | "unknown";
+  sessionId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  error: string | null;
+}
+export interface CreateSessionRequest {
+  directory: string;
+  worktree: boolean;
+  requestId: string;
 }

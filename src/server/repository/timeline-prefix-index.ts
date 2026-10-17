@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
+
 import type {
   DomainTimelineRecord,
   DomainTokenUsageCounters,
@@ -36,10 +37,7 @@ export function extendsTimelinePrefix(
   previous: NormalizedSession,
   next: NormalizedSession,
 ): boolean {
-  if (
-    previous.session.id !== next.session.id ||
-    previous.timeline.length > next.timeline.length
-  ) {
+  if (previous.session.id !== next.session.id || previous.timeline.length > next.timeline.length) {
     return false;
   }
   for (let index = 0; index < previous.timeline.length; index += 1) {
@@ -78,12 +76,7 @@ export function extendTimelinePrefixIndex(
   if (!continuityValidated && !extendsTimelinePrefix(previous, next)) {
     throw new Error("Cannot extend a timeline prefix index across a changed prefix");
   }
-  return TimelinePrefixIndex.fromAppend(
-    previousIndex,
-    previous,
-    next,
-    prefixKey,
-  );
+  return TimelinePrefixIndex.fromAppend(previousIndex, previous, next, prefixKey);
 }
 
 export interface TimelinePrefixBoundary {
@@ -114,10 +107,7 @@ export class TimelinePrefixIndex {
     this.#segmentEnds = segmentEnds;
   }
 
-  static fromCompleteStates(
-    itemCount: number,
-    states: Uint8Array,
-  ): TimelinePrefixIndex {
+  static fromCompleteStates(itemCount: number, states: Uint8Array): TimelinePrefixIndex {
     return new TimelinePrefixIndex(itemCount, [states.slice()]);
   }
 
@@ -147,10 +137,7 @@ export class TimelinePrefixIndex {
       validateOrdinal(item.ordinal, previousOrdinal);
       previousOrdinal = item.ordinal;
       state = advancePrefix(state, item, normalized, prefixKey);
-      appendedStates.set(
-        state,
-        (itemIndex - previousItemCount) * PREFIX_BYTES,
-      );
+      appendedStates.set(state, (itemIndex - previousItemCount) * PREFIX_BYTES);
     }
     return new TimelinePrefixIndex(normalized.timeline.length, [
       ...previous.#segments,
@@ -196,24 +183,19 @@ export class TimelinePrefixIndex {
   ): boolean {
     const encoded = Buffer.from(candidate, "base64url");
     if (encoded.byteLength !== PREFIX_BYTES) return false;
-    const slotIndex = boundary.throughOrdinal === 0
-      ? 0
-      : upperBound(timeline, boundary.throughOrdinal);
-    const slot = slotIndex === 0 ||
-        timeline[slotIndex - 1]?.ordinal === boundary.throughOrdinal
-      ? this.#slot(slotIndex)
-      : null;
+    const slotIndex =
+      boundary.throughOrdinal === 0 ? 0 : upperBound(timeline, boundary.throughOrdinal);
+    const slot =
+      slotIndex === 0 || timeline[slotIndex - 1]?.ordinal === boundary.throughOrdinal
+        ? this.#slot(slotIndex)
+        : null;
     return slot !== null && timingSafeEqual(slot, encoded);
   }
 
-  #boundary(
-    timeline: readonly DomainTimelineRecord[],
-    slot: number,
-  ): TimelinePrefixBoundary {
+  #boundary(timeline: readonly DomainTimelineRecord[], slot: number): TimelinePrefixBoundary {
     return {
       throughOrdinal: slot === 0 ? 0 : timeline[slot - 1]!.ordinal,
-      timelinePrefixRevision: Buffer.from(this.#slot(slot))
-        .toString("base64url"),
+      timelinePrefixRevision: Buffer.from(this.#slot(slot)).toString("base64url"),
     };
   }
 
@@ -235,10 +217,7 @@ export class TimelinePrefixIndex {
   }
 }
 
-function validateOrdinal(
-  ordinal: number,
-  previousOrdinal: number | undefined,
-): void {
+function validateOrdinal(ordinal: number, previousOrdinal: number | undefined): void {
   if (
     !Number.isSafeInteger(ordinal) ||
     ordinal < 1 ||
@@ -255,11 +234,13 @@ function advancePrefix(
   prefixKey: Uint8Array,
 ): Uint8Array {
   const chunks: Buffer[] = [];
-  writeTimelineItem(new DigestWriter((chunk) => {
-    chunks.push(
-      typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk),
-    );
-  }), item, normalized);
+  writeTimelineItem(
+    new DigestWriter((chunk) => {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk, "utf8") : Buffer.from(chunk));
+    }),
+    item,
+    normalized,
+  );
   return createHmac("sha256", prefixKey)
     .update(state)
     .update(Buffer.concat(chunks))
@@ -267,10 +248,7 @@ function advancePrefix(
     .subarray(0, PREFIX_BYTES);
 }
 
-function upperBound(
-  timeline: readonly DomainTimelineRecord[],
-  ordinal: number,
-): number {
+function upperBound(timeline: readonly DomainTimelineRecord[], ordinal: number): number {
   let low = 0;
   let high = timeline.length;
   while (low < high) {
@@ -377,10 +355,7 @@ function writeTimelineItem(
   }
 }
 
-function writeTokenCounters(
-  writer: DigestWriter,
-  counters: DomainTokenUsageCounters,
-): void {
+function writeTokenCounters(writer: DigestWriter, counters: DomainTokenUsageCounters): void {
   writer.nullableNumber("totalTokens", counters.totalTokens);
   writer.nullableNumber("inputTokens", counters.inputTokens);
   writer.nullableNumber("cachedInputTokens", counters.cachedInputTokens);
@@ -390,10 +365,7 @@ function writeTokenCounters(
 }
 
 class DigestWriter {
-  constructor(
-    private readonly update: (chunk: string | Uint8Array) => void,
-  ) {
-  }
+  constructor(private readonly update: (chunk: string | Uint8Array) => void) {}
 
   string(name: string, value: string): void {
     this.#field(name, "string");

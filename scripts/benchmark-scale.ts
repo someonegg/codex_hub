@@ -1,25 +1,16 @@
-import {
-  appendFile,
-  chmod,
-  mkdir,
-  mkdtemp,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from "node:fs/promises";
+import { appendFile, chmod, mkdir, mkdtemp, rename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
+
 import { createCodexSessionSource } from "../src/server/adapters/codex/codex-session-source.js";
-import {
-  DEFAULT_CATALOG_FRESHNESS_MS,
-  SessionReadService,
-} from "../src/server/application/session-read-service.js";
+import { SessionReadService } from "../src/server/application/session-read-service.js";
+import { DEFAULT_CATALOG_FRESHNESS_MS } from "../src/server/repository/catalog-snapshot-store.js";
 import {
   deriveTimelinePrefixIndex,
   extendsTimelinePrefix,
   extendTimelinePrefixIndex,
 } from "../src/server/repository/timeline-prefix-index.js";
+import type { TimelineCursor } from "../src/shared/api-contract.js";
 
 const SESSION_COUNT = 3_000;
 const MIN_CORPUS_BYTES = 100 * 1024 * 1024;
@@ -32,7 +23,7 @@ interface Measurement {
   rssAfterBytes: number;
 }
 
-const root = await mkdtemp("/private/tmp/codex-viewer-scale-");
+const root = await mkdtemp("/private/tmp/codex-hub-scale-");
 const sessions = join(root, "sessions", "2026", "07", "28");
 
 try {
@@ -57,82 +48,69 @@ try {
       timelinePrefixIndexBuilder(normalized, prefixKey, previous) {
         derivationCalls += 1;
         const startedAt = performance.now();
-        const append = previous !== undefined &&
+        const append =
+          previous !== undefined &&
           extendsTimelinePrefix(previous.normalized, normalized) &&
           previous.normalized.timeline.length < normalized.timeline.length;
         const mode = append ? "append" : "full";
         prefixCalls[mode] += 1;
         const result = append
           ? extendTimelinePrefixIndex(
-            previous.timelinePrefixIndex,
-            previous.normalized,
-            normalized,
-            prefixKey,
-            true,
-          )
+              previous.timelinePrefixIndex,
+              previous.normalized,
+              normalized,
+              prefixKey,
+              true,
+            )
           : deriveTimelinePrefixIndex(normalized, prefixKey);
         prefixMs[mode] += performance.now() - startedAt;
         const expectedPrefixBytes = (normalized.timeline.length + 1) * 24;
         if (result.byteLength !== expectedPrefixBytes) {
           throw new Error(
-            `Prefix index used ${result.byteLength} bytes; ` +
-              `expected ${expectedPrefixBytes}`,
+            `Prefix index used ${result.byteLength} bytes; ` + `expected ${expectedPrefixBytes}`,
           );
         }
-        prefixIndexBytesBySession.set(
-          normalized.session.id,
-          result.byteLength,
-        );
-        timelineItemsBySession.set(
-          normalized.session.id,
-          normalized.timeline.length,
-        );
+        prefixIndexBytesBySession.set(normalized.session.id, result.byteLength);
+        timelineItemsBySession.set(normalized.session.id, normalized.timeline.length);
         return result;
       },
     },
   );
-  const coldCatalog = await measure(() => repository.list({ limit: 200 }));
+  const coldCatalog = await measure(() => repository.list());
   const coldSourceTelemetry = source.lastRefreshTelemetry();
-  assertDerivationDelta(
-    "cold catalog",
-    0,
-    derivationCalls,
-    SESSION_COUNT,
-  );
+  assertDerivationDelta("cold catalog", 0, derivationCalls, SESSION_COUNT);
   const firstList = coldCatalog.value;
   const beforeNoChangeDerivations = derivationCalls;
   const noChangeRefresh = await measure(() => repository.refresh());
   const noChangeSourceTelemetry = source.lastRefreshTelemetry();
-  assertDerivationDelta(
-    "no-change refresh",
-    beforeNoChangeDerivations,
-    derivationCalls,
-    0,
-  );
-  const afterNoChangeList = await repository.list({ limit: 200 });
-  if (afterNoChangeList.nextCursor !== firstList.nextCursor) {
-    throw new Error("A no-change refresh changed the opaque list cursor");
+  if (
+    noChangeSourceTelemetry.decodeBytes !== 0 ||
+    noChangeSourceTelemetry.fullFiles !== 0 ||
+    noChangeSourceTelemetry.appendFiles !== 0
+  ) {
+    throw new Error("A no-change refresh decoded rollout content");
   }
-  const projectFilter = await measure(() =>
-    repository.list({
-      project: "/synthetic/project-0",
-      limit: 200,
-    }));
-  const selected = projectFilter.value.sessions.find(
+  assertDerivationDelta("no-change refresh", beforeNoChangeDerivations, derivationCalls, 0);
+  const afterNoChangeList = await repository.list();
+  if (afterNoChangeList.revision !== firstList.revision) {
+    throw new Error("A no-change refresh changed the structural revision");
+  }
+  const selected = firstList.sessions.find(
     (session) => session.title === "Synthetic scale session 00000",
   );
   if (selected === undefined) {
     throw new Error(
-      "Project filter did not find the special session: " +
+      "Catalog did not find the special session: " +
         JSON.stringify({
-          projectFilter: projectFilter.value,
+          catalog: firstList,
           firstTitles: firstList.sessions.slice(0, 3).map(({ title }) => title),
           derivationCalls,
         }),
     );
   }
   const unrelated = firstList.sessions.find((session) => session.id !== selected.id);
-  if (unrelated === undefined) throw new Error("Scale catalog did not contain an unrelated session");
+  if (unrelated === undefined)
+    throw new Error("Scale catalog did not contain an unrelated session");
   const detailFirstPage = await measure(async () => {
     const items = await repository.getItems(selected.id, {
       limit: 50,
@@ -144,11 +122,9 @@ try {
   if (unrelatedPage === null) throw new Error("Unrelated scale session disappeared");
   const tool = detailFirstPage.value.items.find((item) => item.kind === "tool");
   if (tool?.kind !== "tool") throw new Error("Large tool was not normalized");
-  const toolDetail = await repository.getToolDetail(
-    selected.id,
-    tool.id,
-    { cursor: detailFirstPage.value.cursor },
-  );
+  const toolDetail = await repository.getToolDetail(selected.id, tool.id, {
+    cursor: detailFirstPage.value.cursor,
+  });
   if (!toolDetail?.truncated) throw new Error("Large tool detail was not truncated");
   const message = detailFirstPage.value.items.find((item) => item.kind === "message");
   if (message?.kind !== "message" || message.markdown.length !== 1_000_000) {
@@ -157,7 +133,7 @@ try {
 
   const specialPath = paths[0]!;
   const beforeAppendBytes = (await stat(specialPath)).size;
-  const beforeMutationListCursor = firstList.nextCursor;
+  const beforeMutationStructureRevision = firstList.revision;
   const beforeMutatedCursor = detailFirstPage.value.cursor;
   const unrelatedCursor = unrelatedPage.cursor;
   await appendFile(
@@ -178,7 +154,9 @@ try {
   const appendSourceTelemetry = source.lastRefreshTelemetry();
   const appendedBytes = (await stat(specialPath)).size - beforeAppendBytes;
   if (appendSourceTelemetry.appendFiles !== 1 || appendSourceTelemetry.fullFiles !== 0) {
-    throw new Error(`Append did not use one incremental decode: ${JSON.stringify(appendSourceTelemetry)}`);
+    throw new Error(
+      `Append did not use one incremental decode: ${JSON.stringify(appendSourceTelemetry)}`,
+    );
   }
   if (appendSourceTelemetry.decodeBytes > appendedBytes) {
     throw new Error(
@@ -187,23 +165,14 @@ try {
   }
   if (
     appendSourceTelemetry.decodeBytes + appendSourceTelemetry.probeBytes >
-      appendedBytes + 2 * 4 * 1024
+    appendedBytes + 2 * 4 * 1024
   ) {
     throw new Error("Append read exceeded two probes plus the appended tail");
   }
-  assertDerivationDelta(
-    "single-session append",
-    beforeAppendDerivations,
-    derivationCalls,
-    1,
-  );
-  const afterAppendList = await repository.list({ limit: 200 });
+  assertDerivationDelta("single-session append", beforeAppendDerivations, derivationCalls, 1);
+  const afterAppendList = await repository.list();
   await assertCursorReadable(repository, selected.id, beforeMutatedCursor);
-  await assertCursorReadable(
-    repository,
-    unrelated.id,
-    unrelatedCursor,
-  );
+  await assertCursorReadable(repository, unrelated.id, unrelatedCursor);
 
   const replacement = `${specialPath}.replacement`;
   await writeFile(replacement, `${await rollout(0, "atomic-replacement", 256)}\n`);
@@ -217,20 +186,16 @@ try {
     derivationCalls,
     1,
   );
-  const afterReplaceList = await repository.list({ limit: 200 });
+  const afterReplaceList = await repository.list();
   let replacementConflict = false;
   try {
     await repository.getItems(selected.id, { cursor: beforeMutatedCursor, limit: 1 });
   } catch (error) {
-    replacementConflict = error instanceof Error &&
-      "code" in error && error.code === "timeline_changed";
+    replacementConflict =
+      error instanceof Error && "code" in error && error.code === "timeline_changed";
   }
   if (!replacementConflict) throw new Error("Replacement did not reject the old timeline cursor");
-  await assertCursorReadable(
-    repository,
-    unrelated.id,
-    unrelatedCursor,
-  );
+  await assertCursorReadable(repository, unrelated.id, unrelatedCursor);
 
   let permissionProbe: "hidden" | "portable-skip" = "portable-skip";
   try {
@@ -244,7 +209,7 @@ try {
 
   const result = {
     corpus: {
-      directory: "/private/tmp/codex-viewer-scale-<random>",
+      directory: "/private/tmp/codex-hub-scale-<random>",
       sessionCount: SESSION_COUNT,
       bytes: totalBytes,
     },
@@ -253,7 +218,6 @@ try {
       noChangeRefresh: round(noChangeRefresh.measurement.milliseconds),
       singleSessionAppendRefresh: round(appendRefresh.measurement.milliseconds),
       singleSessionReplaceRefresh: round(replaceRefresh.measurement.milliseconds),
-      projectFilter: round(projectFilter.measurement.milliseconds),
       detailFirstPage: round(detailFirstPage.measurement.milliseconds),
       decode: {
         cold: round(coldSourceTelemetry.decodeMs),
@@ -269,13 +233,9 @@ try {
     },
     baselineComparison: {
       priorSingleSessionAppendMs: PRIOR_SINGLE_APPEND_BASELINE_MS,
-      measuredSingleSessionAppendMs: round(
-        appendRefresh.measurement.milliseconds,
-      ),
+      measuredSingleSessionAppendMs: round(appendRefresh.measurement.milliseconds),
       reductionPercent: round(
-        100 *
-          (PRIOR_SINGLE_APPEND_BASELINE_MS -
-            appendRefresh.measurement.milliseconds) /
+        (100 * (PRIOR_SINGLE_APPEND_BASELINE_MS - appendRefresh.measurement.milliseconds)) /
           PRIOR_SINGLE_APPEND_BASELINE_MS,
       ),
       hardTimingGate: false,
@@ -286,21 +246,15 @@ try {
       noChangeRefreshRssAfterBytes: noChangeRefresh.measurement.rssAfterBytes,
       appendRefreshRssAfterBytes: appendRefresh.measurement.rssAfterBytes,
       replaceRefreshRssAfterBytes: replaceRefresh.measurement.rssAfterBytes,
-      projectFilterRssAfterBytes: projectFilter.measurement.rssAfterBytes,
       detailFirstPageRssAfterBytes: detailFirstPage.measurement.rssAfterBytes,
       timelinePrefixIndexes: {
         bytes: sum(prefixIndexBytesBySession.values()),
         sessions: prefixIndexBytesBySession.size,
         timelineItems: sum(timelineItemsBySession.values()),
-        storedBoundaries:
-          sum(timelineItemsBySession.values()) + prefixIndexBytesBySession.size,
+        storedBoundaries: sum(timelineItemsBySession.values()) + prefixIndexBytesBySession.size,
         bytesPerStoredBoundary: round(
           sum(prefixIndexBytesBySession.values()) /
-            Math.max(
-              1,
-              sum(timelineItemsBySession.values()) +
-                prefixIndexBytesBySession.size,
-            ),
+            Math.max(1, sum(timelineItemsBySession.values()) + prefixIndexBytesBySession.size),
         ),
         amortizedBytesPerTimelineItem: round(
           sum(prefixIndexBytesBySession.values()) /
@@ -313,12 +267,10 @@ try {
     },
     responseBytes: {
       firstList: jsonBytes(firstList),
-      projectFilter: jsonBytes(projectFilter.value),
       firstItemPage: jsonBytes(detailFirstPage.value),
     },
     bounds: {
-      catalogHasMore: firstList.nextCursor !== null,
-      catalogTotal: firstList.total,
+      catalogTotal: firstList.sessions.length,
       toolDetailLimitExercised: toolDetail.truncated,
       longMessageLimitExercised: message.markdown.length === 1_000_000,
       partialTailExercised: true,
@@ -332,11 +284,9 @@ try {
       appendHistoricalTimelineItems: detailFirstPage.value.session.itemCount,
     },
     mutations: {
-      opaqueListCursor: {
-        unchangedAfterContentAppend:
-          beforeMutationListCursor === afterAppendList.nextCursor,
-        changedAfterReplacementReorder:
-          afterAppendList.nextCursor !== afterReplaceList.nextCursor,
+      structuralRevision: {
+        unchangedAfterContentAppend: beforeMutationStructureRevision === afterAppendList.revision,
+        unchangedAfterContentReplacement: afterAppendList.revision === afterReplaceList.revision,
       },
       appendCursorReadable: true,
       replacementConflict,
@@ -367,8 +317,7 @@ function assertDerivationDelta(
   const prefixIndex = after - before;
   if (prefixIndex !== expected) {
     throw new Error(
-      `${label} derivation calls: expected ${expected}, got ` +
-        `prefixIndex=${prefixIndex}`,
+      `${label} derivation calls: expected ${expected}, got ` + `prefixIndex=${prefixIndex}`,
     );
   }
 }
@@ -386,41 +335,48 @@ async function generateCorpus(directory: string): Promise<string[]> {
     const batch = Array.from({ length: Math.min(50, SESSION_COUNT - start) }, async (_, offset) => {
       const index = start + offset;
       const id = `scale-${String(index).padStart(5, "0")}`;
-      const path = join(
-        directory,
-        `rollout-2026-07-28T12-00-00-${id}.jsonl`,
-      );
+      const path = join(directory, `rollout-2026-07-28T12-00-00-${id}.jsonl`);
       const records = [
-        await rollout(index, index === 0 ? "needle-scale" : filler, index === 0 ? 1_000_000 : FILLER_CHARS),
+        await rollout(
+          index,
+          index === 0 ? "needle-scale" : filler,
+          index === 0 ? 1_000_000 : FILLER_CHARS,
+        ),
       ];
       if (index === 0) {
-        records.push(JSON.stringify({
-          timestamp: "2026-07-28T12:00:02.000Z",
-          type: "response_item",
-          payload: {
-            type: "function_call",
-            name: "large_tool",
-            call_id: "large-tool",
-            arguments: "I".repeat(512_000),
-          },
-        }));
-        records.push(JSON.stringify({
-          timestamp: "2026-07-28T12:00:03.000Z",
-          type: "response_item",
-          payload: {
-            type: "function_call_output",
-            call_id: "large-tool",
-            output: "O".repeat(512_000),
-          },
-        }));
-        for (let item = 0; item < APPEND_PREFIX_ITEMS; item += 1) {
-          records.push(JSON.stringify({
+        records.push(
+          JSON.stringify({
+            timestamp: "2026-07-28T12:00:02.000Z",
+            type: "response_item",
+            payload: {
+              type: "function_call",
+              name: "large_tool",
+              call_id: "large-tool",
+              arguments: "I".repeat(512_000),
+            },
+          }),
+        );
+        records.push(
+          JSON.stringify({
             timestamp: "2026-07-28T12:00:03.000Z",
-            type: "turn_context",
-          }));
+            type: "response_item",
+            payload: {
+              type: "function_call_output",
+              call_id: "large-tool",
+              output: "O".repeat(512_000),
+            },
+          }),
+        );
+        for (let item = 0; item < APPEND_PREFIX_ITEMS; item += 1) {
+          records.push(
+            JSON.stringify({
+              timestamp: "2026-07-28T12:00:03.000Z",
+              type: "turn_context",
+            }),
+          );
         }
       }
-      const tail = index === 1 ? "\n{\"timestamp\":\"partial" : "\n";
+      const tail = index === 1 ? '\n{"timestamp":"partial' : "\n";
       await writeFile(path, `${(await Promise.all(records)).join("\n")}${tail}`);
       paths[index] = path;
     });
@@ -457,9 +413,10 @@ async function rollout(index: number, marker: string, messageChars: number): Pro
     JSON.stringify({
       timestamp,
       type: "event_msg",
-      payload: index % 2 === 0
-        ? { type: "user_message", message }
-        : { type: "agent_message", phase: "final_answer", message },
+      payload:
+        index % 2 === 0
+          ? { type: "user_message", message }
+          : { type: "agent_message", phase: "final_answer", message },
     }),
   ].join("\n");
 }
@@ -496,15 +453,13 @@ type Reader = SessionReadService;
 async function assertCursorReadable(
   sessions: Reader,
   sessionId: string,
-  cursor: import("../src/shared/api-contract.js").TimelineCursor,
+  cursor: TimelineCursor,
 ): Promise<void> {
   const page = await sessions.getItems(sessionId, {
     cursor,
     limit: 1,
   });
-  if (
-    page === null
-  ) {
+  if (page === null) {
     throw new Error("An unrelated session cursor was not readable");
   }
 }

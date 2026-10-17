@@ -1,0 +1,182 @@
+.create-session {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-panel);
+}
+.create-session h2 {
+  font-size: 1rem;
+  margin-top: 0;
+  min-height: 36px;
+  padding-right: 44px;
+}
+.create-session form {
+  display: grid;
+  gap: 0.8rem;
+}
+.create-session label:first-child {
+  display: grid;
+  gap: 0.4rem;
+}
+.create-session input[list] {
+  padding: 0.65rem;
+  width: 100%;
+  min-width: 0;
+}
+.create-session button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  border: 1px solid var(--mist);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.875rem;
+}
+.session-management button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+.operation-status button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+.operation-status {
+  padding: 1rem;
+  margin-top: 0.8rem;
+  border-left: 3px solid currentColor;
+  overflow-wrap: anywhere;
+}
+.operation-status small {
+  display: block;
+}
+.attach-command pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.session-management {
+  position: static;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  margin: 0;
+}
+.session-menu-trigger {
+  font-size: 1.6rem;
+  line-height: 1;
+  min-width: 44px;
+  min-height: 44px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-control);
+}
+.session-action-menu {
+  position: absolute;
+  right: 0;
+  top: 44px;
+  z-index: 30;
+  padding: 0.5rem;
+  min-width: 10rem;
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  box-shadow: 0 8px 30px rgb(33 49 56 / 8%);
+}
+.session-action-menu button {
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border-radius: var(--radius-control);
+  font-size: 0.875rem;
+}
+.session-operation-details {
+  position: relative;
+  font-size: var(--text-small);
+  overflow-wrap: anywhere;
+}
+.session-title-row:has(.session-operation-details :is(.operation-status, [role="alert"])) {
+  flex-wrap: wrap;
+}
+.session-management:has(.session-operation-details :is(.operation-status, [role="alert"])) {
+  display: contents;
+}
+.session-management:has(.session-operation-details :is(.operation-status, [role="alert"]))
+  .session-operation-details {
+  flex-basis: 100%;
+}
+dialog.create-session,
+dialog.terminal-connection-dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  color: var(--ink);
+  width: min(30rem, calc(100vw - 2rem));
+  border: 1px solid var(--mist);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  padding: 26px;
+  box-shadow: 0 20px 80px #0002;
+}
+dialog::backdrop {
+  background: #13282c88;
+}
+.terminal-connection-dialog .attach-command > p {
+  padding-right: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  font-weight: 650;
+}
+.dialog-close {
+  position: absolute;
+  top: var(--space-medium);
+  right: var(--space-medium);
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1.3rem;
+  cursor: pointer;
+}
+.session-action-menu button:hover {
+  background: var(--hover-surface);
+}
+.create-session input {
+  border: 1px solid var(--mist);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.create-session button[type="submit"] {
+  color: var(--surface);
+  background: var(--current);
+  border-color: var(--current);
+}
+.create-session button[type="submit"]:hover:not(:disabled) {
+  background: var(--current-hover);
+  border-color: var(--current-hover);
+}
+.attach-command pre {
+  padding: var(--space-medium);
+  background: var(--paper-deep);
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-panel);
+  font-family: var(--mono-font);
+}
+.operation-status {
+  background: var(--paper-deep);
+  border-radius: var(--radius-panel);
+}
+
+.terminal-connection-dialog button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  border: 1px solid var(--mist);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-control);
+}

@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+.playwright-cli/
+_features/
+tests/fixtures/
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.webp
+**/*.ico
+**/*.svg
+package-lock.json
+docs/adr/
+docs/benchmarks/

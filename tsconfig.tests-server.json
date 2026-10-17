@@ -13,11 +13,5 @@
     "types": ["node", "vitest/globals"],
     "noEmit": true
   },
-  "include": [
-    "src/server",
-    "src/shared",
-    "tests/helpers",
-    "tests/integration",
-    "tests/server"
-  ]
+  "include": ["src/server", "src/shared", "tests/helpers", "tests/integration", "tests/server"]
 }

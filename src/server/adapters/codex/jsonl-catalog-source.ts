@@ -1,8 +1,10 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
-import type { Diagnostic } from "../../../shared/domain.js";
-import type { PathPolicy, RolloutDescriptor } from "./path-policy.js";
+
+import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
 import type { CatalogDiscovery, CatalogEntry, CodexCatalogSource } from "./catalog-source.js";
+import { isExpectedIoError } from "./io-errors.js";
+import type { PathPolicy, RolloutDescriptor } from "./path-policy.js";
 
 export class JsonlCatalogSource implements CodexCatalogSource {
   constructor(private readonly policy: PathPolicy) {}
@@ -11,17 +13,21 @@ export class JsonlCatalogSource implements CodexCatalogSource {
     const descriptors = new Map<string, RolloutDescriptor>();
     const diagnostics: Diagnostic[] = [];
     for (const root of this.policy.roots()) {
-      await scan(root.canonicalPath, async (candidate) => {
-        const descriptor = await this.policy.register(candidate);
-        if (descriptor !== null) descriptors.set(descriptor.canonicalPath, descriptor);
-      }, diagnostics);
+      await scan(
+        root.canonicalPath,
+        async (candidate) => {
+          const descriptor = await this.policy.register(candidate);
+          if (descriptor !== null) descriptors.set(descriptor.canonicalPath, descriptor);
+        },
+        diagnostics,
+      );
     }
     const entries: CatalogEntry[] = [...descriptors.values()]
       .sort((left, right) => left.canonicalPath.localeCompare(right.canonicalPath))
       .map((descriptor) => ({ descriptor }));
     return {
       entries,
-      diagnostics,
+      diagnostics: [...this.policy.diagnostics, ...diagnostics].slice(0, 50),
     };
   }
 }
@@ -34,13 +40,15 @@ async function scan(
   let entries;
   try {
     entries = await readdir(directory, { withFileTypes: true });
-  } catch {
-    diagnostics.push({
-      code: "session_root_unreadable",
-      severity: "warning",
-      message: "An allowlisted session directory could not be read.",
-      ordinal: null,
-    });
+  } catch (error) {
+    if (!isExpectedIoError(error)) throw error;
+    if (diagnostics.length < 50)
+      diagnostics.push({
+        code: "session_root_unreadable",
+        severity: "warning",
+        message: "An allowlisted session directory could not be read.",
+        ordinal: null,
+      });
     return;
   }
   for (const entry of entries) {

@@ -1,12 +1,12 @@
 import { useCallback, useState } from "react";
+
 import {
   DEFAULT_TIMELINE_VISIBILITY,
   type TimelineVisibility,
   type TimelineVisibilityKey,
 } from "./timeline-visibility";
 
-export const TIMELINE_VISIBILITY_STORAGE_KEY =
-  "codex-sessions-reader.timeline-visibility.v1";
+export const TIMELINE_VISIBILITY_STORAGE_KEY = "codex-sessions-reader.timeline-visibility.v1";
 
 export function useTimelineVisibility() {
   const [visibility, setVisibilityState] = useState<TimelineVisibility>(readVisibility);

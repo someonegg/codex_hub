@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+
+import type { TimelineItem } from "../../src/shared/domain";
+
 import {
   filterVisibleTimelineItems,
   type TimelineVisibility,
 } from "../../src/client/state/timeline-visibility";
-import type { TimelineItem } from "../../src/shared/domain";
 
 const SHOW_ALL: TimelineVisibility = {
   directive: true,
@@ -21,19 +23,11 @@ describe("timeline visibility", () => {
       "message-1",
       "internal-2",
     ]);
-    expect(ids(filterVisibleTimelineItems(forward, SHOW_ALL))).toEqual([
-      "internal-2",
-      "message-3",
-    ]);
+    expect(ids(filterVisibleTimelineItems(forward, SHOW_ALL))).toEqual(["internal-2", "message-3"]);
   });
 
   it("uses raw timeline positions rather than collapsing hidden technical events", () => {
-    const items = [
-      directive(1, "same"),
-      internal(2),
-      internal(3),
-      message(4, "same"),
-    ];
+    const items = [directive(1, "same"), internal(2), internal(3), message(4, "same")];
     const messagesAndDirectivesOnly = { ...SHOW_ALL, internal: false };
 
     expect(ids(filterVisibleTimelineItems(items, messagesAndDirectivesOnly))).toEqual([

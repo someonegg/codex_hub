@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import type { NormalizedSession } from "../../src/server/domain/session-domain.js";
 import {
   deriveTimelinePrefixIndex,
@@ -6,8 +7,8 @@ import {
   extendTimelinePrefixIndex,
 } from "../../src/server/repository/timeline-prefix-index.js";
 import {
-  TimelinePrefixRegistry,
   type TimelinePrefixIndexBuilder,
+  TimelinePrefixRegistry,
 } from "../../src/server/repository/timeline-prefix-registry.js";
 
 describe("timeline prefix index", () => {
@@ -23,7 +24,9 @@ describe("timeline prefix index", () => {
 
     expect(before.byteLength).toBe(72);
     expect(after.matches(appended.timeline, boundary, boundary.timelinePrefixRevision)).toBe(true);
-    expect(changed.matches(rewritten.timeline, boundary, boundary.timelinePrefixRevision)).toBe(false);
+    expect(changed.matches(rewritten.timeline, boundary, boundary.timelinePrefixRevision)).toBe(
+      false,
+    );
   });
 
   it("requires strictly increasing positive ordinals", () => {
@@ -31,10 +34,12 @@ describe("timeline prefix index", () => {
     const value = {
       ...original,
       timeline: original.timeline.map((item, index) =>
-        index === 1 ? { ...item, ordinal: 1 } : item),
+        index === 1 ? { ...item, ordinal: 1 } : item,
+      ),
     };
-    expect(() => deriveTimelinePrefixIndex(value, Buffer.alloc(32)))
-      .toThrow("Timeline ordinals must be strictly increasing");
+    expect(() => deriveTimelinePrefixIndex(value, Buffer.alloc(32))).toThrow(
+      "Timeline ordinals must be strictly increasing",
+    );
   });
 
   it("extends from the prior tail state while preserving every old boundary", () => {
@@ -48,15 +53,14 @@ describe("timeline prefix index", () => {
     expect(extendsTimelinePrefix(original, appended)).toBe(true);
     expect(after.byteLength).toBe(fullyRebuilt.byteLength);
     for (const ordinal of [0, 1, 2, 3]) {
-      expect(after.boundaryAt(appended.timeline, ordinal))
-        .toEqual(fullyRebuilt.boundaryAt(appended.timeline, ordinal));
+      expect(after.boundaryAt(appended.timeline, ordinal)).toEqual(
+        fullyRebuilt.boundaryAt(appended.timeline, ordinal),
+      );
     }
     const oldBoundary = before.boundaryAt(original.timeline, 2)!;
-    expect(after.matches(
-      appended.timeline,
-      oldBoundary,
-      oldBoundary.timelinePrefixRevision,
-    )).toBe(true);
+    expect(after.matches(appended.timeline, oldBoundary, oldBoundary.timelinePrefixRevision)).toBe(
+      true,
+    );
   });
 
   it("only offers an append checkpoint for reference-continuous prefixes", () => {
@@ -78,39 +82,39 @@ describe("timeline prefix index", () => {
     );
     second.commit();
     expect(second.sessions.get("session-id")!.normalized).toBe(metadataOnly);
-    expect(second.sessions.get("session-id")!.timelinePrefixIndex)
-      .toBe(firstIndexed.timelinePrefixIndex);
+    expect(second.sessions.get("session-id")!.timelinePrefixIndex).toBe(
+      firstIndexed.timelinePrefixIndex,
+    );
 
     const appended = appendMessage(metadataOnly, "two");
-    const third = registry.prepare(
-      new Map([["session-id", appended]]),
-      new Set(["session-id"]),
-    );
+    const third = registry.prepare(new Map([["session-id", appended]]), new Set(["session-id"]));
     third.commit();
-    const oldBoundary = firstIndexed.timelinePrefixIndex.boundaryAt(
-      original.timeline,
-      1,
-    )!;
-    expect(third.sessions.get("session-id")!.timelinePrefixIndex.matches(
-      appended.timeline,
-      oldBoundary,
-      oldBoundary.timelinePrefixRevision,
-    )).toBe(true);
+    const oldBoundary = firstIndexed.timelinePrefixIndex.boundaryAt(original.timeline, 1)!;
+    expect(
+      third.sessions
+        .get("session-id")!
+        .timelinePrefixIndex.matches(
+          appended.timeline,
+          oldBoundary,
+          oldBoundary.timelinePrefixRevision,
+        ),
+    ).toBe(true);
 
     const rewritten = {
       ...appended,
       timeline: [{ ...appended.timeline[0]!, markdown: "changed" }, appended.timeline[1]!],
     } as NormalizedSession;
-    const fourth = registry.prepare(
-      new Map([["session-id", rewritten]]),
-      new Set(["session-id"]),
-    );
+    const fourth = registry.prepare(new Map([["session-id", rewritten]]), new Set(["session-id"]));
     expect(modes).toEqual(["full", "append", "full"]);
-    expect(fourth.sessions.get("session-id")!.timelinePrefixIndex.matches(
-      rewritten.timeline,
-      oldBoundary,
-      oldBoundary.timelinePrefixRevision,
-    )).toBe(false);
+    expect(
+      fourth.sessions
+        .get("session-id")!
+        .timelinePrefixIndex.matches(
+          rewritten.timeline,
+          oldBoundary,
+          oldBoundary.timelinePrefixRevision,
+        ),
+    ).toBe(false);
   });
 
   it("forces a full rebuild when an old detail reference changes", () => {
@@ -118,54 +122,42 @@ describe("timeline prefix index", () => {
       const original = normalizedWithDetails();
       const replaced = replaceDetail(original, detailKind);
       const modes: string[] = [];
-      const registry = new TimelinePrefixRegistry(
-        trackedBuilder(modes),
-        Buffer.alloc(32, 5),
-      );
+      const registry = new TimelinePrefixRegistry(trackedBuilder(modes), Buffer.alloc(32, 5));
       const first = registry.prepare(new Map([["session-id", original]]));
       first.commit();
       const firstIndex = first.sessions.get("session-id")!.timelinePrefixIndex;
       const changedOrdinal = detailKind === "tool" ? 1 : detailKind === "directive" ? 2 : 3;
-      const oldBoundary = firstIndex.boundaryAt(
-        original.timeline,
-        changedOrdinal,
-      )!;
-      const second = registry.prepare(
-        new Map([["session-id", replaced]]),
-        new Set(["session-id"]),
-      );
+      const oldBoundary = firstIndex.boundaryAt(original.timeline, changedOrdinal)!;
+      const second = registry.prepare(new Map([["session-id", replaced]]), new Set(["session-id"]));
       const secondIndex = second.sessions.get("session-id")!.timelinePrefixIndex;
 
       expect(extendsTimelinePrefix(original, replaced)).toBe(false);
       expect(modes).toEqual(["full", "full"]);
-      expect(secondIndex.matches(
-        replaced.timeline,
-        oldBoundary,
-        oldBoundary.timelinePrefixRevision,
-      )).toBe(false);
-      expect(firstIndex.matches(
-        original.timeline,
-        oldBoundary,
-        oldBoundary.timelinePrefixRevision,
-      )).toBe(true);
+      expect(
+        secondIndex.matches(replaced.timeline, oldBoundary, oldBoundary.timelinePrefixRevision),
+      ).toBe(false);
+      expect(
+        firstIndex.matches(original.timeline, oldBoundary, oldBoundary.timelinePrefixRevision),
+      ).toBe(true);
     }
   });
 });
 
 function trackedBuilder(modes: string[]): TimelinePrefixIndexBuilder {
   return (value, prefixKey, previous) => {
-    const append = previous !== undefined &&
+    const append =
+      previous !== undefined &&
       extendsTimelinePrefix(previous.normalized, value) &&
       previous.normalized.timeline.length < value.timeline.length;
     modes.push(append ? "append" : "full");
     return append
       ? extendTimelinePrefixIndex(
-        previous.timelinePrefixIndex,
-        previous.normalized,
-        value,
-        prefixKey,
-        true,
-      )
+          previous.timelinePrefixIndex,
+          previous.normalized,
+          value,
+          prefixKey,
+          true,
+        )
       : deriveTimelinePrefixIndex(value, prefixKey);
   };
 }
@@ -196,10 +188,7 @@ function replaceDetail(
   return { ...original, internalDetails };
 }
 
-function appendMessage(
-  value: NormalizedSession,
-  markdown: string,
-): NormalizedSession {
+function appendMessage(value: NormalizedSession, markdown: string): NormalizedSession {
   const ordinal = value.timeline.length + 1;
   return {
     ...value,
@@ -259,19 +248,34 @@ function normalizedWithDetails(): NormalizedSession {
         eventType: "reasoning",
       },
     ],
-    toolDetails: new Map([["tool-1", {
-      input: "input",
-      output: null,
-      truncated: false,
-    }]]),
-    directiveDetails: new Map([["directive-2", {
-      text: "directive",
-      truncated: false,
-    }]]),
-    internalDetails: new Map([["internal-3", {
-      json: "{\n  \"type\": \"reasoning\"\n}",
-      truncated: false,
-    }]]),
+    toolDetails: new Map([
+      [
+        "tool-1",
+        {
+          input: "input",
+          output: null,
+          truncated: false,
+        },
+      ],
+    ]),
+    directiveDetails: new Map([
+      [
+        "directive-2",
+        {
+          text: "directive",
+          truncated: false,
+        },
+      ],
+    ]),
+    internalDetails: new Map([
+      [
+        "internal-3",
+        {
+          json: '{\n  "type": "reasoning"\n}',
+          truncated: false,
+        },
+      ],
+    ]),
   };
 }
 

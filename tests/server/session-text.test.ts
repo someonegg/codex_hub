@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+
 import {
   MAX_SESSION_TITLE_CHARS,
   sessionTitleFromMarkdown,
@@ -25,9 +26,11 @@ describe("session title text", () => {
   });
 
   it("uses the first H1 or H2 in document order and extracts plain text", () => {
-    expect(sessionTitleFromMarkdown(
-      "## **First** [heading](https://example.com) with `code`\n\n# Later heading",
-    )).toBe("First heading with code");
+    expect(
+      sessionTitleFromMarkdown(
+        "## **First** [heading](https://example.com) with `code`\n\n# Later heading",
+      ),
+    ).toBe("First heading with code");
   });
 
   it.each([
