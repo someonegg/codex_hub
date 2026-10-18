@@ -29,8 +29,10 @@ the same HTML; History API handles selection and browser navigation. The catalog
 stays mounted while the reader lifecycle follows session ID. CSS owns the single
 column transition below 768px.
 
-Tab storage contains only `includeArchived`, `collapsed`, and `scroll`; remove
-the old filter format without migration. Archived sessions support direct access
+The tab navigation state contains only `includeArchived`, `collapsed`, and `scroll`;
+remove the old navigation filter format without migration. The current home filter
+is stored separately in tab storage under `codex-hub.home`, using the source instance
+ID; a missing or removed home falls back to **All homes**. Archived sessions support direct access
 and stay open after archive. The sidebar shows main sessions matching the archive
 filter, also used by direct child links. Unknown projects without a directory
 have no creation entry point.

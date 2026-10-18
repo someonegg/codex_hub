@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 
+import type { SessionHome } from "../shared/api-contract";
 import type { SessionSummary } from "../shared/domain";
 
 import { ErrorState } from "./components/ErrorState";
@@ -11,6 +12,7 @@ import { useSessionReader } from "./state/use-session-reader";
 import { useTimelineVisibility } from "./state/use-timeline-visibility";
 
 interface SessionPageProps {
+  homes?: readonly SessionHome[];
   sessionId: string;
   sessions?: readonly SessionSummary[];
   includeArchived?: boolean;
@@ -22,6 +24,7 @@ interface SessionPageProps {
 export function SessionPage({
   sessionId,
   sessions = [],
+  homes = [],
   includeArchived = false,
   onNavigate,
   onCatalogChanged,
@@ -73,6 +76,17 @@ export function SessionPage({
           }
           related={
             <>
+              {homes.length > 1 ? (
+                <p className="session-home">
+                  Home:{" "}
+                  {
+                    homes.find(
+                      (home) =>
+                        home.sourceInstanceId === reader.context!.session.origin.sourceInstanceId,
+                    )?.nickname
+                  }
+                </p>
+              ) : null}
               {parentId !== null ? (
                 <nav className="parent-session child-sessions" aria-label="Parent session">
                   <InternalLink

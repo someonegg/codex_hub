@@ -637,7 +637,7 @@ describe("SessionReadService", () => {
     const first = await repository.list();
     expect(first.sessions).toHaveLength(305);
     expect(new Set(first.sessions.map((session) => session.id)).size).toBe(305);
-    expect(Object.keys(first).sort()).toEqual(["projects", "revision", "sessions"]);
+    expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
   });
 
   it("fills byte-bounded pages and reads every long message exactly once", async () => {

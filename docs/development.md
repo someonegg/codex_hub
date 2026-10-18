@@ -57,7 +57,8 @@ user sessions.
 ### README introduction animation
 
 The README GIF shows the real client with fabricated API responses: create a
-session, type and send a prompt, then read a preset reply. It does not start Codex,
+session with the `default` home preselected among multiple homes, type and send
+a prompt, then read a preset reply. It does not start Codex,
 call a model, or access the user's sessions. The browser intercepts all API requests.
 
 Requirements: `playwright-cli` with its browser installed, and Python 3 with Pillow.
@@ -89,7 +90,11 @@ Generate the demo outside the repository and start a built server:
 ```sh
 node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
 npm run build
-npm start -- --codex-home /tmp/codex-hub-docs-demo --port 4187
+mkdir -p /tmp/codex-hub-docs-work/sessions
+npm start -- \
+  --codex-home 'default=/tmp/codex-hub-docs-demo' \
+  --codex-home 'work=/tmp/codex-hub-docs-work' \
+  --port 4187
 ```
 
 With `playwright-cli` installed, open the server in a dedicated browser session:
@@ -181,8 +186,9 @@ async (page) => {
       return route.fulfill({
         json: {
           revision: "demo-catalog",
+          homes: [{ sourceInstanceId: "docs-demo", nickname: "default" }],
           projects: [{ id: "atlas", directory: session.projectDirectory }],
-          sessions: [{ ...session, projectId: "atlas", isChild: false }],
+          sessions: [{ ...session, sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false }],
         },
       });
     }

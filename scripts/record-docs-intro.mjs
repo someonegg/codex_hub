@@ -97,7 +97,11 @@ async function record(page, frames, origin) {
     if (path === "/api/v1/sessions") {
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON();
-        if (body.directory !== "/projects/atlas-dashboard" || body.worktree) {
+        if (
+          body.sourceInstanceId !== "docs-demo" ||
+          body.directory !== "/projects/atlas-dashboard" ||
+          body.worktree
+        ) {
           throw new Error("Unexpected create request");
         }
         created = true;
@@ -116,8 +120,14 @@ async function record(page, frames, origin) {
       await new Promise((resolve) => setTimeout(resolve, 200));
       return json({
         revision: String(created),
+        homes: [
+          { sourceInstanceId: "docs-work", nickname: "work" },
+          { sourceInstanceId: "docs-demo", nickname: "default" },
+        ],
         projects: [{ id: "atlas", directory: "/projects/atlas-dashboard" }],
-        sessions: created ? [{ ...session(), projectId: "atlas", isChild: false }] : [],
+        sessions: created
+          ? [{ ...session(), sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false }]
+          : [],
       });
     }
     if (path.endsWith("/items")) return json({ ...snapshot(), items: items() });
@@ -151,6 +161,9 @@ async function record(page, frames, origin) {
     await demo.getByText(/Loading sessions/).waitFor({ state: "hidden" });
     await capture(1100);
     await demo.getByRole("button", { name: "New session", exact: true }).first().click();
+    await demo.waitForFunction(
+      () => document.querySelector('select[aria-label="Session home"]')?.value === "docs-demo",
+    );
     await capture(900);
     const directory = demo.getByRole("combobox", { name: "Project directory" });
     await directory.fill("/projects/atlas-dashboard");

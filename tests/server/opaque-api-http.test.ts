@@ -160,13 +160,14 @@ describe("opaque cursor API", () => {
     expect(await head.text()).toBe("");
     const first = await fetch(`${base}/api/v1/sessions`).then((response) => response.json());
     expect(first.sessions).toHaveLength(4);
-    expect(Object.keys(first).sort()).toEqual(["projects", "revision", "sessions"]);
+    expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
     expect(Object.keys(first.sessions[0]).sort()).toEqual([
       "archived",
       "id",
       "isChild",
       "parentId",
       "projectId",
+      "sourceInstanceId",
       "title",
       "updatedAt",
     ]);

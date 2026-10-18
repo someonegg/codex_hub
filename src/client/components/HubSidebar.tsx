@@ -8,9 +8,17 @@ import { InternalLink } from "./InternalLink";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
+  homeFilter?: string;
+  onHomeFilter?: (value: string) => void;
   onCreate: (directory: string | null) => void;
 }
-export function HubSidebar({ catalog, hub, onCreate }: HubSidebarProps) {
+export function HubSidebar({
+  catalog,
+  hub,
+  onCreate,
+  homeFilter = "",
+  onHomeFilter,
+}: HubSidebarProps) {
   const {
     sessionId,
     navigation,
@@ -42,6 +50,23 @@ export function HubSidebar({ catalog, hub, onCreate }: HubSidebarProps) {
           Codex Hub
         </InternalLink>
       </header>
+      {(catalog.list?.homes?.length ?? 0) > 1 ? (
+        <label className="archive-switch">
+          Home
+          <select
+            aria-label="Filter by home"
+            value={homeFilter}
+            onChange={(event) => onHomeFilter?.(event.target.value)}
+          >
+            <option value="">All homes</option>
+            {catalog.list!.homes.map((home) => (
+              <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                {home.nickname}
+              </option>
+            ))}
+          </select>
+        </label>
+      ) : null}
       <label className="check-row archive-switch">
         <input
           type="checkbox"
@@ -122,6 +147,15 @@ export function HubSidebar({ catalog, hub, onCreate }: HubSidebarProps) {
                         >
                           <span className="session-nav-copy">
                             <span>{session.title}</span>
+                            {(catalog.list?.homes?.length ?? 0) > 1 ? (
+                              <small>
+                                {
+                                  catalog.list!.homes.find(
+                                    (home) => home.sourceInstanceId === session.sourceInstanceId,
+                                  )?.nickname
+                                }
+                              </small>
+                            ) : null}
                             {updatedAtLabel ? (
                               <time dateTime={session.updatedAt!}>{updatedAtLabel}</time>
                             ) : null}

@@ -4,6 +4,7 @@ import type {
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
+  SessionHome,
   SessionListResponse,
   TimelineCursor,
   ToolDetailQuery,
@@ -27,6 +28,7 @@ import type {
 } from "./session-reader.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
+  readonly homes?: SessionHome[];
   readonly resolveNickname?: SessionNicknameResolver;
 }
 
@@ -41,8 +43,8 @@ export class SessionReadService implements SessionReader {
     now: () => number = performance.now.bind(performance),
     dependencies: SessionReadServiceDependencies = {},
   ) {
-    const { resolveNickname, ...storeDependencies } = dependencies;
-    this.#mapper = new SessionApiMapper(resolveNickname);
+    const { resolveNickname, homes, ...storeDependencies } = dependencies;
+    this.#mapper = new SessionApiMapper(resolveNickname, homes);
     this.#store = new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
     this.#queries = new SessionQueries();
   }

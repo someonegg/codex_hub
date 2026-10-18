@@ -45,8 +45,10 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           throw new RequestBodyError(400, "invalid_json", "requestId is required");
         if (
           Object.keys(body).some(
-            (key) => !["directory", "worktree", "yolo", "requestId"].includes(key),
+            (key) =>
+              !["directory", "worktree", "yolo", "requestId", "sourceInstanceId"].includes(key),
           ) ||
+          (body.sourceInstanceId !== undefined && typeof body.sourceInstanceId !== "string") ||
           typeof body.directory !== "string" ||
           typeof body.worktree !== "boolean" ||
           (body.yolo !== undefined && typeof body.yolo !== "boolean")
@@ -61,6 +63,9 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           response,
           202,
           operations.create({
+            ...(typeof body.sourceInstanceId === "string"
+              ? { sourceInstanceId: body.sourceInstanceId }
+              : {}),
             directory: body.directory,
             worktree: body.worktree,
             yolo: body.yolo ?? false,

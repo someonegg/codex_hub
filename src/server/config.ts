@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -13,7 +14,13 @@ export type ServerTlsConfig =
       readonly certificateAuthorityPath?: string;
     };
 
+export interface CodexHomeConfig {
+  nickname: string;
+  path: string;
+}
+
 export interface ServerConfig {
+  homes?: CodexHomeConfig[];
   host: string;
   port: number;
   codexHome: string;
@@ -51,7 +58,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     allowPositionals: false,
     strict: true,
     options: {
-      "codex-home": { type: "string" },
+      "codex-home": { type: "string", multiple: true },
       host: { type: "string" },
       port: { type: "string" },
       ssl: { type: "boolean" },
@@ -66,7 +73,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
   if (values.help) return { kind: "help" };
 
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
-  const codexHome = nonEmptyOption("codex-home", values["codex-home"]);
+  const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
   const privateKeyPath = nonEmptyOption("ssl-key", values["ssl-key"]);
   const certificateAuthorityPath = nonEmptyOption("ssl-ca", values["ssl-ca"]);
@@ -96,7 +103,8 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     config: {
       host,
       port: parsePort(values.port),
-      codexHome: codexHome ? resolve(codexHome) : resolve(homedir(), ".codex"),
+      codexHome: homes[0]!.path,
+      homes,
       clientDirectory: resolve(process.cwd(), "dist/client"),
       tls,
       interactionEnabled: true,
@@ -111,7 +119,8 @@ export function commandLineHelp(): string {
   return `Usage: npm start -- [options]
 
 Options:
-  --codex-home <path>  Codex home directory (default: ~/.codex)
+  --codex-home <nickname=path>
+                       Codex home; repeat for multiple homes (default: default=~/.codex)
   --host <host>        Listen host (default: 127.0.0.1)
   --port <port>        Listen port, or 0 for a free port (default: 4173)
   --ssl                Enable TLS; the port will accept HTTPS only
@@ -126,4 +135,39 @@ TLS example:
 
 mTLS example:
   npm start -- --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
+}
+
+function parseHomes(values: readonly string[]): CodexHomeConfig[] {
+  const names = new Set<string>();
+  const paths = new Set<string>();
+  return values.map((value) => {
+    const separator = value.indexOf("=");
+    const nickname = value.slice(0, separator).trim();
+    const homePath = value.slice(separator + 1).trim();
+    if (separator < 0 || !nickname || !homePath) {
+      throw new Error("--codex-home requires nickname=path with a non-empty nickname and path");
+    }
+    const path = resolve(
+      homePath.startsWith("~/") ? resolve(homedir(), homePath.slice(2)) : homePath,
+    );
+    let canonical = path;
+    try {
+      canonical = realpathSync(path);
+    } catch (error) {
+      if (
+        !(
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          ["ENOENT", "EACCES", "EPERM"].includes(String(error.code))
+        )
+      )
+        throw error;
+    }
+    if (names.has(nickname)) throw new Error(`Duplicate home nickname: ${nickname}`);
+    if (paths.has(canonical)) throw new Error("Duplicate home path");
+    names.add(nickname);
+    paths.add(canonical);
+    return { nickname, path };
+  });
 }

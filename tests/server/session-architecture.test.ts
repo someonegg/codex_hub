@@ -116,6 +116,7 @@ describe("server architecture boundaries", () => {
     const catalog = mapper.list([session]);
     expect(catalog.sessions[0]).toEqual({
       id: session.id,
+      sourceInstanceId: session.origin.sourceInstanceId,
       title: session.title,
       projectId: expect.any(String),
       archived: false,

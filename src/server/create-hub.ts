@@ -5,6 +5,7 @@ import {
   type SessionReadServiceDependencies,
 } from "./application/session-read-service.js";
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
+import type { CodexHomeConfig } from "./config.js";
 import { SessionInteractionService } from "./interaction/interaction-service.js";
 import { livePaneBindings } from "./interaction/live-pane-binding-manager.js";
 import { TmuxInteractionService } from "./interaction/tmux-service.js";
@@ -26,22 +27,37 @@ export async function createCodexSessionReadService(
   const source = await createCodexSessionSource(codexHome, livePaneBindings);
   return createSessionReadService([source], {
     resolveNickname: (session) => source.nicknameFor(session),
+    homes: [{ sourceInstanceId: source.descriptor.sourceInstanceId, nickname: "default" }],
   });
 }
 
 /** Compose reading and management using the adapter's published source identity. */
 export async function createCodexHub(
-  codexHome: string,
+  codexHome: string | readonly CodexHomeConfig[],
   socket?: string,
   interactionEnabled = true,
 ) {
-  const source = await createCodexSessionSource(codexHome, livePaneBindings);
-  const sessions = createSessionReadService([source], {
-    resolveNickname: (session) => source.nicknameFor(session),
+  const homes =
+    typeof codexHome === "string" ? [{ nickname: "default", path: codexHome }] : codexHome;
+  const sources = await Promise.all(
+    homes.map((home) => createCodexSessionSource(home.path, livePaneBindings)),
+  );
+  const sessions = createSessionReadService(sources, {
+    resolveNickname: (session) =>
+      sources
+        .find((source) => source.descriptor.sourceInstanceId === session.origin.sourceInstanceId)
+        ?.nicknameFor(session) ?? null,
+    homes: sources.map((source, index) => ({
+      sourceInstanceId: source.descriptor.sourceInstanceId,
+      nickname: homes[index]!.nickname,
+    })),
   });
-  const managers = new SessionManagerRegistry(source.descriptor.sourceInstanceId).register(
-    source.descriptor.sourceInstanceId,
-    createCodexSessionManager(codexHome, socket),
+  const managers = new SessionManagerRegistry(sources[0]!.descriptor.sourceInstanceId);
+  sources.forEach((source, index) =>
+    managers.register(
+      source.descriptor.sourceInstanceId,
+      createCodexSessionManager(homes[index]!.path, socket),
+    ),
   );
   const transport = new TmuxInteractionService();
   const interaction = new SessionInteractionService(

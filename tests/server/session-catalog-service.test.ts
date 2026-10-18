@@ -11,7 +11,12 @@ import {
 } from "../../src/server/catalog/session-catalog-service.js";
 import type { SessionListResponse } from "../../src/shared/api-contract.js";
 
-const initial: SessionListResponse = { revision: "a".repeat(43), projects: [], sessions: [] };
+const initial: SessionListResponse = {
+  homes: [],
+  revision: "a".repeat(43),
+  projects: [],
+  sessions: [],
+};
 function setup() {
   vi.useFakeTimers();
   let snapshot = initial;
@@ -62,6 +67,7 @@ describe("session catalog long polling", () => {
       ...initial,
       sessions: [
         {
+          sourceInstanceId: "source-instance",
           id: "one",
           title: "One",
           projectId: null,

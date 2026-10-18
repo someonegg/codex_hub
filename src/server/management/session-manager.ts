@@ -42,6 +42,18 @@ export class SessionManagerRegistry {
     return this;
   }
 
+  resolveCreateSource(sourceInstanceId?: string): string {
+    if (sourceInstanceId === undefined && this.#managers.size === 1)
+      return this.defaultSourceInstanceId;
+    if (!sourceInstanceId || !this.#managers.has(sourceInstanceId))
+      throw new Error(
+        sourceInstanceId
+          ? "Unknown sourceInstanceId"
+          : "sourceInstanceId is required when multiple homes are configured",
+      );
+    return sourceInstanceId;
+  }
+
   get(sourceInstanceId: string): SessionManager {
     const manager = this.#managers.get(sourceInstanceId);
     if (!manager) {

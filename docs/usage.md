@@ -4,19 +4,59 @@
 
 Pass options after `npm start --`. Restart the server after configuration changes.
 
-| Option                 | Default      | Description                                                          |
-| ---------------------- | ------------ | -------------------------------------------------------------------- |
-| `--codex-home <path>`  | `~/.codex`   | Directory containing `sessions/` and optionally `archived_sessions/` |
-| `--host <host>`        | `127.0.0.1`  | Listen address                                                       |
-| `--port <port>`        | `4173`       | Listen port; `0` selects a free port                                 |
-| `--ssl`                | disabled     | Accept HTTPS only                                                    |
-| `--ssl-cert <path>`    | none         | PEM server certificate or chain; required with `--ssl`               |
-| `--ssl-key <path>`     | none         | PEM private key; required with `--ssl`                               |
-| `--ssl-ca <path>`      | none         | Trusted client CA bundle; requires client certificates               |
-| `--tmux-socket <path>` | tmux default | Socket path, resolved to an absolute path                            |
-| `--help`               | —            | Print command-line help                                              |
+| Option                         | Default            | Description                                                          |
+| ------------------------------ | ------------------ | -------------------------------------------------------------------- |
+| `--codex-home <nickname=path>` | `default=~/.codex` | Directory containing `sessions/` and optionally `archived_sessions/` |
+| `--host <host>`                | `127.0.0.1`        | Listen address                                                       |
+| `--port <port>`                | `4173`             | Listen port; `0` selects a free port                                 |
+| `--ssl`                        | disabled           | Accept HTTPS only                                                    |
+| `--ssl-cert <path>`            | none               | PEM server certificate or chain; required with `--ssl`               |
+| `--ssl-key <path>`             | none               | PEM private key; required with `--ssl`                               |
+| `--ssl-ca <path>`              | none               | Trusted client CA bundle; requires client certificates               |
+| `--tmux-socket <path>`         | tmux default       | Socket path, resolved to an absolute path                            |
+| `--help`                       | —                  | Print command-line help                                              |
 
 The server prints its URL at startup and detects session changes without a restart.
+
+## Multiple homes
+
+A home is one independent `CODEX_HOME`, containing `sessions/` and optionally
+`archived_sessions/`. Repeat the option to configure multiple homes:
+
+```sh
+npm start -- \
+  --codex-home 'personal=~/.codex' \
+  --codex-home 'work=/path/to/codex-work'
+```
+
+Each value is split at the first `=`. The nickname and path are trimmed at both
+ends; internal spaces and additional `=` characters in the path are preserved.
+Quote values containing spaces or `~/` as shown above. Missing `=`, empty nicknames,
+and empty paths prevent startup. Trimmed nicknames must be unique and are
+case-sensitive (`work` and `Work` are distinct).
+
+Relative paths resolve from the server's current working directory; `~/` expands
+to the user's home directory. Duplicate paths, including equivalent paths and
+symlink aliases, prevent startup. With no home options, the server uses
+`default=~/.codex`. Explicit options replace that default and retain their supplied
+order. Configuration is read at startup; restart after changing options.
+
+The sidebar defaults to **All homes** and remembers the home filter within the tab.
+Projects sharing a directory merge across homes. Counts and archive filtering use
+visible sessions. Filtering leaves the current reader open; direct links, parent/child
+navigation, and tmux takeover links remain available across homes. Removed home filters
+fall back to **All homes**. Multi-home lists and readers display the home nickname,
+which is separate from a session's nickname.
+
+The create dialog preselects the filtered home, otherwise the home nicknamed
+`default`, or the sole configured home. With multiple homes and no `default` in
+aggregate view, select one explicitly, including an empty home.
+Creation, archive, and deletion always use the owning home. Every home uses the same
+local `codex` executable. A recoverable read failure
+in one home does not prevent browsing other homes.
+
+Session IDs depend on the configured absolute home path. Renaming, reordering, or
+adding homes preserves existing IDs. Moving a home creates a new source identity.
 
 ## Reading and managing sessions
 
@@ -126,7 +166,7 @@ unsafe links. File reads and responses are bounded.
 
 ## Troubleshooting
 
-**No sessions appear:** point `--codex-home` at the directory containing `sessions/`,
+**No sessions appear:** use `--codex-home 'personal=/path/to/codex-home'` with the directory containing `sessions/`,
 not at `sessions/` itself. Rollouts must be regular files named `rollout-*.jsonl`.
 Check server stderr for skipped or unreadable data.
 

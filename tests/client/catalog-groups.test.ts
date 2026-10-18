@@ -6,6 +6,7 @@ import { catalogGroups, projectForSession } from "../../src/client/state/catalog
 
 const session = (id: string, projectId: string | null, extra = {}) => ({
   id,
+  sourceInstanceId: "source-instance",
   projectId,
   title: id,
   archived: false,
@@ -16,6 +17,7 @@ const session = (id: string, projectId: string | null, extra = {}) => ({
 });
 const list: SessionListResponse = {
   revision: "revision",
+  homes: [],
   projects: [
     { id: "p1", directory: "/one/app" },
     { id: "p2", directory: "/two/app" },

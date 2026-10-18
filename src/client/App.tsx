@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
@@ -8,6 +8,37 @@ import { useHubNavigation } from "./state/use-hub-navigation";
 import { useSessionList } from "./state/use-session-list";
 export function App() {
   const catalog = useSessionList();
+  const [homeFilter, setHomeFilter] = useState(() => {
+    try {
+      return sessionStorage.getItem("codex-hub.home") ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const homes = catalog.list?.homes ?? [];
+  const selectedHome = homes.some((home) => home.sourceInstanceId === homeFilter) ? homeFilter : "";
+  useEffect(() => {
+    if (!catalog.list) return;
+    if (homeFilter !== selectedHome) setHomeFilter("");
+    try {
+      sessionStorage.setItem("codex-hub.home", selectedHome);
+    } catch {
+      /* Storage may be unavailable. */
+    }
+  }, [catalog.list, homeFilter, selectedHome]);
+  const visibleList = useMemo(
+    () =>
+      !selectedHome || !catalog.list
+        ? catalog.list
+        : {
+            ...catalog.list,
+            sessions: catalog.list.sessions.filter(
+              (session) => session.sourceInstanceId === selectedHome,
+            ),
+          },
+    [catalog.list, selectedHome],
+  );
+  const visibleCatalog = { ...catalog, list: visibleList };
   const hub = useHubNavigation(catalog.list);
   const { sessionId, navigation, navigate, selectedProject } = hub;
   const [createDirectory, setCreateDirectory] = useState<string | null>(null);
@@ -37,7 +68,9 @@ export function App() {
         </aside>
       ) : null}
       <HubSidebar
-        catalog={catalog}
+        catalog={visibleCatalog}
+        homeFilter={selectedHome}
+        onHomeFilter={setHomeFilter}
         hub={hub}
         onCreate={(directory) => {
           setCreateDirectory(directory);
@@ -67,6 +100,7 @@ export function App() {
               key={sessionId}
               sessionId={sessionId}
               sessions={catalog.list?.sessions ?? []}
+              homes={homes}
               includeArchived={navigation.includeArchived}
               onNavigate={navigate}
               onCatalogChanged={catalog.refresh}
@@ -91,6 +125,8 @@ export function App() {
         )}
       </div>
       <CreateSession
+        homes={homes}
+        selectedHome={selectedHome}
         project={createDirectory ?? ""}
         projects={(catalog.list?.projects ?? []).map((item) => ({ project: item.directory }))}
         open={createOpen}

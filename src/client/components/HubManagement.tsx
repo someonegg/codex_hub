@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import type { HubOperation } from "../../shared/api-contract";
+import type { HubOperation, SessionHome } from "../../shared/api-contract";
 import type { SessionDetail } from "../../shared/domain";
 
 import { api } from "../api/client";
@@ -77,6 +77,8 @@ function OperationStatus({ controller }: { controller: OperationController }) {
   );
 }
 interface CreateSessionProps {
+  homes?: readonly SessionHome[];
+  selectedHome?: string;
   project: string;
   projects: readonly { project: string }[];
   onCreated: (op: HubOperation) => void;
@@ -86,6 +88,8 @@ interface CreateSessionProps {
 }
 
 export function CreateSession({
+  homes = [],
+  selectedHome = "",
   project,
   projects,
   onCreated,
@@ -103,6 +107,14 @@ export function CreateSession({
     }
   }
   const [directory, setDirectory] = useState(project);
+  const initialHome =
+    selectedHome ||
+    homes.find((home) => home.nickname === "default")?.sourceInstanceId ||
+    (homes.length === 1 ? homes[0]!.sourceInstanceId : "");
+  const [sourceInstanceId, setSourceInstanceId] = useState(initialHome);
+  useEffect(() => {
+    if (open) setSourceInstanceId(initialHome);
+  }, [open, initialHome]);
   useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
@@ -138,14 +150,41 @@ export function CreateSession({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const fingerprint = JSON.stringify([directory, worktree, yolo]);
+          const fingerprint = JSON.stringify([sourceInstanceId, directory, worktree, yolo]);
           if (request.current?.fingerprint !== fingerprint)
             request.current = { fingerprint, id: newRequestId() };
           void controller.start(() =>
-            api.createSession({ directory, worktree, yolo, requestId: request.current!.id }),
+            api.createSession({
+              ...(sourceInstanceId ? { sourceInstanceId } : {}),
+              directory,
+              worktree,
+              yolo,
+              requestId: request.current!.id,
+            }),
           );
         }}
       >
+        {homes.length > 1 ? (
+          <label>
+            Home
+            <select
+              required
+              aria-label="Session home"
+              value={sourceInstanceId}
+              disabled={controller.busy}
+              onChange={(event) => setSourceInstanceId(event.target.value)}
+            >
+              <option value="" disabled>
+                Select a home
+              </option>
+              {homes.map((home) => (
+                <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                  {home.nickname}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Project directory
           <input
@@ -181,7 +220,14 @@ export function CreateSession({
           />
           Enable --yolo
         </label>
-        <button type="submit" disabled={controller.busy || !directory.startsWith("/")}>
+        <button
+          type="submit"
+          disabled={
+            controller.busy ||
+            !directory.startsWith("/") ||
+            (homes.length > 1 && !homes.some((home) => home.sourceInstanceId === sourceInstanceId))
+          }
+        >
           {controller.busy ? "Creating…" : "Create session"}
         </button>
       </form>

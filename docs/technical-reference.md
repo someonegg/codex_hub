@@ -10,10 +10,11 @@ and revisions are opaque; clients must use returned values.
 
 ## Catalog
 
-`GET /api/v1/sessions` returns a complete `{ revision, projects, sessions }` snapshot:
+`GET /api/v1/sessions` returns a complete `{ revision, homes, projects, sessions }` snapshot:
 
+- Homes: `{ sourceInstanceId, nickname }`, including empty homes; home paths are private.
 - Projects: `{ id, directory }`.
-- Sessions: `{ id, title, projectId, archived, parentId, isChild, updatedAt }`.
+- Sessions: `{ id, sourceInstanceId, title, projectId, archived, parentId, isChild, updatedAt }`.
 - Titles are resolved display names. Missing directories produce `projectId: null`.
   `isChild` preserves a declared parent relationship even if `parentId` cannot resolve.
 
@@ -24,7 +25,7 @@ probe that stops when idle. Capacity is 100 waiters; excess requests receive `42
 with `Retry-After`. Disconnects and server shutdown release waiters. Legacy
 pagination, filtering, and `fresh` parameters return `400`.
 
-Revisions hash the minimal structure sorted by ID. Title, project, archive, and
+Revisions hash the minimal structure sorted by ID. Home metadata, title, project, archive, and
 parent changes affect them; timestamps, content, statistics, and diagnostics do not.
 Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 
@@ -128,12 +129,12 @@ loop until a new expand, visibility, or connection transition.
 
 ## Asynchronous management
 
-| Endpoint                              | Body                                        | Result            |
-| ------------------------------------- | ------------------------------------------- | ----------------- |
-| `POST /api/v1/sessions`               | `{ directory, worktree, yolo?, requestId }` | `202` operation   |
-| `POST /api/v1/sessions/:id/archive`   | `{}`                                        | `202` operation   |
-| `DELETE /api/v1/sessions/:id`         | `{}`                                        | `202` operation   |
-| `GET /api/v1/operations/:operationId` | —                                           | Current operation |
+| Endpoint                              | Body                                                           | Result            |
+| ------------------------------------- | -------------------------------------------------------------- | ----------------- |
+| `POST /api/v1/sessions`               | `{ sourceInstanceId?, directory, worktree, yolo?, requestId }` | `202` operation   |
+| `POST /api/v1/sessions/:id/archive`   | `{}`                                                           | `202` operation   |
+| `DELETE /api/v1/sessions/:id`         | `{}`                                                           | `202` operation   |
+| `GET /api/v1/operations/:operationId` | —                                                              | Current operation |
 
 Operations contain `operationId`, `type`, `status`, nullable `sessionId`,
 `createdAt`, `updatedAt`, nullable `error`, `phase`, and `attachCommand`.
@@ -185,3 +186,20 @@ and returned operation IDs retain recovery markers. Reload can resume polling.
 All terminal states and `404` clear recovery markers; nonretryable query errors
 require manual retry. Network retries of create reuse its request ID until a
 terminal result, after which the ID is discarded.
+
+## Home identity and routing
+
+See [Multiple homes](usage.md#multiple-homes) for command-line usage.
+
+Each home has its own source, session index reader, and management adapter. Source
+identity retains the configured absolute path, not the nickname, list position, or
+canonical symlink target. Renaming, reordering, or adding homes preserves session IDs;
+moving a configured path creates a new source. Native IDs and relationships are scoped
+to that source. Projects merge by directory across sources. Recoverable I/O errors
+remain scoped to their home; configuration errors prevent startup.
+
+Creation requires `sourceInstanceId` with multiple homes; omission with a single home
+selects that home. Unknown IDs and ambiguous omission return `400`. The source is part
+of the idempotency fingerprint, so reuse of a request ID for another home returns
+`409`. Launch environment, association, archive, deletion, and confirmation use the
+selected or owning home.

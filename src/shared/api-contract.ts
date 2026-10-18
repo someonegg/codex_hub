@@ -24,7 +24,13 @@ export interface SessionProject {
   directory: string;
 }
 
+export interface SessionHome {
+  sourceInstanceId: string;
+  nickname: string;
+}
+
 export interface SessionListResponse {
+  homes: SessionHome[];
   revision: string;
   projects: SessionProject[];
   sessions: SessionSummary[];
@@ -120,6 +126,7 @@ export interface HubOperation {
   error: string | null;
 }
 export interface CreateSessionRequest {
+  sourceInstanceId?: string;
   directory: string;
   worktree: boolean;
   yolo?: boolean;

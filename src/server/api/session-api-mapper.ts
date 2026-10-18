@@ -5,6 +5,7 @@ import type {
   InternalDetailResponse,
   ItemPageResponse,
   SessionDetailResponse,
+  SessionHome,
   SessionListResponse,
   TimelineCursor,
   ToolDetailResponse,
@@ -22,7 +23,10 @@ import { opaqueIdForParts } from "../security/opaque-id.js";
 export type SessionNicknameResolver = (session: DomainSession) => string | null;
 
 export class SessionApiMapper {
-  constructor(private readonly resolveNickname: SessionNicknameResolver = () => null) {}
+  constructor(
+    private readonly resolveNickname: SessionNicknameResolver = () => null,
+    private readonly homes: SessionHome[] = [],
+  ) {}
 
   list(sessions: readonly DomainSession[]): SessionListResponse {
     const projects = new Map<string, { id: string; directory: string }>();
@@ -34,6 +38,7 @@ export class SessionApiMapper {
           projects.set(projectId, { id: projectId, directory });
         return {
           id: session.id,
+          sourceInstanceId: session.origin.sourceInstanceId,
           title: this.resolveNickname(session) ?? session.title,
           projectId,
           archived: session.archived,
@@ -44,11 +49,13 @@ export class SessionApiMapper {
       })
       .sort((a, b) => compareIds(a.id, b.id));
     const structure = {
+      homes: [...this.homes].sort((a, b) => compareIds(a.sourceInstanceId, b.sourceInstanceId)),
       projects: [...projects.values()].sort((a, b) => compareIds(a.id, b.id)),
       sessions: summaries.map(({ updatedAt, ...summary }) => summary),
     };
     return {
       revision: createHash("sha256").update(JSON.stringify(structure)).digest("base64url"),
+      homes: structure.homes,
       projects: structure.projects,
       sessions: summaries,
     };

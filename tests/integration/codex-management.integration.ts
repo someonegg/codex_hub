@@ -307,12 +307,26 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const hub = await createCodexHub(home, socket);
+  const emptyHome = join(root, "empty-home");
+  await mkdir(emptyHome);
+  const hub = await createCodexHub(
+    [
+      { nickname: "empty", path: emptyHome },
+      { nickname: "work", path: home },
+    ],
+    socket,
+  );
+  const catalog = await hub.sessions.list();
+  expect(catalog.homes).toHaveLength(2);
+  const sourceInstanceId = catalog.homes.find(
+    (entry) => entry.nickname === "work",
+  )!.sourceInstanceId;
   try {
     const operation = hub.operations.create({
       directory,
       worktree: false,
       requestId: "hub-composition",
+      sourceInstanceId,
     });
     await until(async () => {
       const result = await hub.operations.get(operation.operationId);
@@ -320,6 +334,10 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
       return result?.status === "succeeded";
     });
     const result = (await hub.operations.get(operation.operationId))!;
+    expect(
+      (await hub.sessions.getSession(result.sessionId!))!.session.origin.sourceInstanceId,
+    ).toBe(sourceInstanceId);
+    expect(await readdir(emptyHome)).toEqual([]);
     expect(await hub.interaction.describe(result.sessionId!)).toMatchObject({ state: "connected" });
     const archive = hub.operations.manage("archive", result.sessionId!);
     await until(async () => {

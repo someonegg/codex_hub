@@ -33,8 +33,18 @@ Open <http://127.0.0.1:4173>. Press `Ctrl-C` to stop the server.
 To use a different Codex home or port:
 
 ```sh
-npm start -- --codex-home /path/to/codex-home --port 4180
+npm start -- --codex-home 'personal=/path/to/codex-home' --port 4180
 ```
+
+To use multiple Codex homes:
+
+```sh
+npm start -- \
+  --codex-home 'personal=~/.codex' \
+  --codex-home 'work=/path/to/codex-work'
+```
+
+See [home configuration and usage](docs/usage.md#multiple-homes) for detailed rules.
 
 ## Features
 

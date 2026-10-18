@@ -71,7 +71,14 @@ export class OperationService {
   }
 
   create(input: CreateSessionRequest): HubOperation {
+    let sourceInstanceId: string;
+    try {
+      sourceInstanceId = this.managers.resolveCreateSource(input.sourceInstanceId);
+    } catch (error) {
+      throw new ManagementError(400, (error as Error).message);
+    }
     const fingerprint = JSON.stringify([
+      sourceInstanceId,
       "create",
       input.directory,
       input.worktree,
@@ -80,6 +87,7 @@ export class OperationService {
     const duplicate = this.#duplicate(input.requestId, fingerprint);
     if (duplicate) return { ...duplicate };
     const entry = this.#new("create", null);
+    entry.sourceInstanceId = sourceInstanceId;
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
     void (async () => {
       try {

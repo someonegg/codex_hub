@@ -737,3 +737,61 @@ it("does not change attach timestamps on unchanged polls", async () => {
   await service.poll();
   expect(await service.get(op.operationId)).toEqual(result);
 });
+
+it("requires an explicit home, isolates creation association and fingerprints the selected source", async () => {
+  const { service, manager, registry, set } = setup();
+  const other = {
+    ...manager,
+    launch: vi.fn(async () => target),
+    archive: vi.fn(async () => undefined),
+    delete: vi.fn(async () => undefined),
+  };
+  registry.register("other", other);
+  const input = { directory: "/project", worktree: false, requestId: "multi-home-create" };
+  expect(() => service.create(input)).toThrow("sourceInstanceId is required");
+  expect(() => service.create({ ...input, sourceInstanceId: "missing" })).toThrow(
+    "Unknown sourceInstanceId",
+  );
+  const operation = service.create({ ...input, sourceInstanceId: "other" });
+  expect(() => service.create({ ...input, sourceInstanceId: "test" })).toThrow(
+    "different parameters",
+  );
+  await flush();
+  expect(other.launch).toHaveBeenCalledTimes(1);
+  expect(manager.launch).not.toHaveBeenCalled();
+  const wrong = session("wrong-home", operation.operationId);
+  set({ sessions: [wrong] });
+  await service.poll();
+  expect((await service.get(operation.operationId))!.status).toBe("pending");
+  const candidate = session("right-home", operation.operationId);
+  const correct = { ...candidate, origin: { ...candidate.origin, sourceInstanceId: "other" } };
+  set({ sessions: [wrong, correct] });
+  await service.poll();
+  expect((await service.get(operation.operationId))!.sessionId).toBe(correct.id);
+});
+
+it("routes archive and delete confirmation to the owning home for identical native IDs", async () => {
+  const { service, manager, registry, set } = setup();
+  const other = {
+    ...manager,
+    archive: vi.fn(async () => undefined),
+    delete: vi.fn(async () => undefined),
+  };
+  registry.register("other", other);
+  const a = session("a");
+  const b = { ...session("b"), origin: { ...a.origin, sourceInstanceId: "other" } };
+  set({ sessions: [a, b] });
+  const archive = service.manage("archive", b.id);
+  await flush();
+  expect(other.archive).toHaveBeenCalledWith(b.sourceId);
+  expect(manager.archive).not.toHaveBeenCalled();
+  set({ sessions: [a, { ...b, archived: true }] });
+  await service.poll();
+  expect((await service.get(archive.operationId))!.status).toBe("succeeded");
+  const deletion = service.manage("delete", b.id);
+  await flush();
+  expect(other.delete).toHaveBeenCalledWith(b.sourceId);
+  set({ sessions: [a] });
+  await service.poll();
+  expect((await service.get(deletion.operationId))!.status).toBe("succeeded");
+});

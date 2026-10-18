@@ -14,11 +14,12 @@
   display: grid;
   gap: 0.8rem;
 }
-.create-session label:first-child {
+.create-session label:not(.check-row) {
   display: grid;
   gap: 0.4rem;
 }
-.create-session input[list] {
+.create-session input[list],
+.create-session select {
   padding: 0.65rem;
   width: 100%;
   min-width: 0;

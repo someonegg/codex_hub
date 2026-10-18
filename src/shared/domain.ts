@@ -16,6 +16,7 @@ export interface SessionOrigin {
 }
 
 export interface SessionSummary {
+  sourceInstanceId: string;
   id: SessionId;
   title: string;
   projectId: string | null;
