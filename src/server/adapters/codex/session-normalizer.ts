@@ -1,5 +1,4 @@
 import type {
-  DomainAgentInteraction,
   DomainDiagnostic,
   DomainDirectiveDetail,
   DomainInternalDetail,
@@ -7,15 +6,11 @@ import type {
   DomainSessionOrigin,
   DomainTimelineRecord,
   DomainToolDetail,
-  InteractionBindingAttempt,
   NormalizedSession,
 } from "../../domain/session-domain.js";
 import { normalizeSessionTitle, sessionTitleFromMarkdown } from "../../domain/session-text.js";
 import type { SessionMetadata } from "./identity-resolver.js";
-import {
-  codexBindingAttemptFrom,
-  codexInteractionFromBindingAttempt,
-} from "./interaction-parser.js";
+import { codexInteraction } from "./interaction-parser.js";
 import { internalDetail, internalItem, internalItemFromPayload } from "./internal-event-parser.js";
 import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import { eventMessage } from "./message-normalizer.js";
@@ -69,7 +64,6 @@ export interface SessionNormalizerState {
   readonly firstUserTitle: string | null;
   readonly messageCount: number;
   readonly toolCount: number;
-  readonly bindingAttempt: InteractionBindingAttempt | null;
 }
 
 export class DefaultSessionNormalizer implements SessionNormalizer {
@@ -88,7 +82,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       firstUserTitle: null,
       messageCount: 0,
       toolCount: 0,
-      bindingAttempt: null,
     };
   }
 
@@ -113,14 +106,7 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     const pendingToolCalls = new Map(state.pendingToolCalls);
     const pendingUserInputRequests = new Map(state.pendingUserInputRequests);
     const normalizerDiagnostics = [...state.normalizerDiagnostics];
-    let bindingAttempt = state.bindingAttempt;
     for (const record of records) {
-      const attempt = codexBindingAttemptFrom(record);
-      if (
-        attempt !== null &&
-        (bindingAttempt === null || attempt.ordinal >= bindingAttempt.ordinal)
-      )
-        bindingAttempt = attempt;
       consumeRecord(
         record,
         items,
@@ -169,7 +155,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       firstUserTitle: firstTitle,
       messageCount,
       toolCount,
-      bindingAttempt,
     };
   }
 
@@ -207,7 +192,7 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       toolDetails: state.toolDetails,
       directiveDetails: state.directiveDetails,
       internalDetails: state.internalDetails,
-      interaction: interaction(state),
+      interaction: codexInteraction(),
     };
   }
 
@@ -255,10 +240,6 @@ function sameMapEntries<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>)
     if (left.get(key) !== value) return false;
   }
   return true;
-}
-
-function interaction(state: SessionNormalizerState): DomainAgentInteraction {
-  return codexInteractionFromBindingAttempt(state.bindingAttempt);
 }
 
 const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {

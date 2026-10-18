@@ -2,6 +2,7 @@ import { expect, it, vi } from "vitest";
 
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import type { DomainDiagnostic } from "../../src/server/domain/session-domain.js";
+import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
 import { SessionLiveService } from "../../src/server/live/session-live-service.js";
 import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import { RefreshDiagnosticLogger } from "../../src/server/repository/diagnostic-logger.js";
@@ -230,6 +231,7 @@ it.each(["instanceKey", "sourceInstanceId"] as const)(
 it.each(["create", "archive", "delete"] as const)(
   "confirms %s despite source and session diagnostics",
   async (kind) => {
+    const bindings = new LivePaneBindingManager();
     const { OperationService } = await import("../../src/server/management/operation-service.js");
     const { SessionManagerRegistry } = await import(
       "../../src/server/management/session-manager.js"
@@ -264,6 +266,14 @@ it.each(["create", "archive", "delete"] as const)(
     const manager = {
       resolveDirectory: vi.fn(async () => ({ directory: "/project", project: "/project" })),
       launch: vi.fn(async (operationId: string) => {
+        const sessionId = opaqueIdForParts(descriptor.instanceKey, current.localId);
+        bindings.submit({
+          sessionId,
+          time: 0,
+          ordinal: 1,
+          position: 0,
+          attempt: { ordinal: 1, valid: true, operationId, ...target },
+        });
         entries = [
           {
             ...current,
@@ -271,9 +281,8 @@ it.each(["create", "archive", "delete"] as const)(
               ...current.normalized,
               interaction: {
                 transport: "tmux",
-                rebindCommand: "! bind",
+                bindingCommand: "! bind",
                 keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
-                bindingAttempt: { ordinal: 1, valid: true, operationId, ...target },
               },
             },
           },
@@ -306,6 +315,7 @@ it.each(["create", "archive", "delete"] as const)(
       matchesTarget: vi.fn(async () => true),
       describe: vi.fn(async () => ({
         supported: true as const,
+        supersededBySessionId: null,
         state: "connected" as const,
         attachCommand: null,
       })),
@@ -314,6 +324,9 @@ it.each(["create", "archive", "delete"] as const)(
       reader,
       interaction,
       new SessionManagerRegistry("source").register("source", manager),
+      undefined,
+      undefined,
+      bindings,
     );
     try {
       const operation =

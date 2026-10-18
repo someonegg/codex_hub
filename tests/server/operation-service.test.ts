@@ -1,10 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { DomainSession } from "../../src/server/domain/session-domain.js";
+import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
-import type {
-  ManagedSession,
-  ManagementSnapshot,
-} from "../../src/server/management/session-manager.js";
+import type { ManagementSnapshot } from "../../src/server/management/session-manager.js";
 import {
   SessionLaunchError,
   SessionManagerRegistry,
@@ -12,11 +11,20 @@ import {
 
 const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
 const services: OperationService[] = [];
+let bindings = new LivePaneBindingManager();
 afterEach(() => services.splice(0).forEach((service) => service.close()));
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
 };
-function session(id = "session", operationId?: string): ManagedSession {
+function session(id = "session", operationId?: string): DomainSession {
+  if (operationId)
+    bindings.submit({
+      sessionId: id,
+      time: 0,
+      ordinal: 1,
+      position: 0,
+      attempt: { ordinal: 1, valid: true, ...target, operationId },
+    });
   return {
     id,
     sourceId: "00000000-0000-4000-8000-000000000001",
@@ -41,31 +49,10 @@ function session(id = "session", operationId?: string): ManagedSession {
       agentVersion: null,
       formatVersion: null,
     },
-    interaction: {
-      transport: "tmux",
-      rebindCommand: "! bind",
-      keyBindings: {
-        enter: "Enter",
-        up: "Up",
-        down: "Down",
-        left: "Left",
-        right: "Right",
-        interrupt: "C-c",
-        plan: "BTab",
-      },
-      bindingAttempt: operationId
-        ? {
-            ordinal: 1,
-            valid: true,
-            socketPath: target.socketPath,
-            paneId: target.paneId,
-            operationId,
-          }
-        : null,
-    },
   };
 }
 function setup() {
+  bindings = new LivePaneBindingManager();
   let snapshot: ManagementSnapshot = { sessions: [] };
   let now = 0;
   const reader = { managementSnapshot: vi.fn(async () => snapshot) };
@@ -77,6 +64,7 @@ function setup() {
     matchesTarget: vi.fn(async () => true),
     describe: vi.fn(async () => ({
       supported: true as const,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "connected" as const,
     })),
@@ -88,11 +76,18 @@ function setup() {
     delete: vi.fn(async () => undefined),
   };
   const registry = new SessionManagerRegistry("test").register("test", manager);
-  const service = new OperationService(reader, interaction, registry, () => now, {
-    create: 300_000,
-    archive: 30,
-    delete: 30,
-  });
+  const service = new OperationService(
+    reader,
+    interaction,
+    registry,
+    () => now,
+    {
+      create: 300_000,
+      archive: 30,
+      delete: 30,
+    },
+    bindings,
+  );
   services.push(service);
   return {
     service,
@@ -189,18 +184,25 @@ describe("observed management operations", () => {
       });
       await flush();
       let record = session("one", op.operationId);
-      if (scenario === "wrong-target" && record.interaction?.bindingAttempt?.valid)
-        record = {
-          ...record,
-          interaction: {
-            ...record.interaction,
-            bindingAttempt: { ...record.interaction.bindingAttempt, paneId: "%999" },
+      if (scenario === "wrong-target")
+        bindings.submit({
+          sessionId: record.id,
+          time: 1,
+          ordinal: 2,
+          position: 0,
+          attempt: {
+            ordinal: 2,
+            valid: true,
+            ...target,
+            paneId: "%999",
+            operationId: op.operationId,
           },
-        };
+        });
       if (scenario === "wrong-project") record = { ...record, projectDirectory: "/other" };
       if (scenario === "binding-failure")
         interaction.describe.mockResolvedValue({
           supported: true,
+          supersededBySessionId: null,
           attachCommand: null,
           state: "disconnected",
         } as never);
@@ -232,6 +234,7 @@ describe("observed management operations", () => {
     set({ sessions: [session()] });
     interaction.describe.mockResolvedValue({
       supported: true,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "unbound",
     } as never);
@@ -304,7 +307,7 @@ describe("archive exit workflow", () => {
     expect(service.manage("archive", "session").operationId).toBe(op.operationId);
     await flush();
     expect(interaction.archiveTarget).toHaveBeenCalledWith("session");
-    expect(interaction.exitTarget).toHaveBeenCalledExactlyOnceWith(target);
+    expect(interaction.exitTarget).toHaveBeenCalledExactlyOnceWith(target, "session");
     expect(manager.archive).not.toHaveBeenCalled();
     expect(await service.get(op.operationId)).toMatchObject({
       phase: "waiting_exit",

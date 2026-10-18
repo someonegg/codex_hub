@@ -6,6 +6,7 @@ import { InteractionPanel } from "./InteractionPanel";
 
 interface SessionInteractionProps {
   interaction: InteractionResponse | null;
+  onNavigate?: (sessionId: string) => void;
   sessionId: string;
   itemCount: number;
   updatedAt: string | null;
@@ -14,6 +15,7 @@ interface SessionInteractionProps {
 
 export function SessionInteraction({
   interaction,
+  onNavigate,
   sessionId,
   itemCount,
   updatedAt,
@@ -27,6 +29,7 @@ export function SessionInteraction({
   return (
     <InteractionPanel
       interaction={interaction}
+      onNavigate={onNavigate}
       itemCount={itemCount}
       updatedAt={updatedAt}
       interactionBusy={controller.interactionBusy}
@@ -34,7 +37,7 @@ export function SessionInteraction({
       onDismissError={controller.clearError}
       onSendMessage={controller.sendMessage}
       onSendKeys={controller.sendKeys}
-      onRebind={controller.rebind}
+      onHandoffPaneBinding={controller.handoffPaneBinding}
       {...preview}
     />
   );

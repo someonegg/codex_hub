@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HubOperation, SessionListResponse } from "../../src/shared/api-contract";
 
-import { api } from "../../src/client/api/client";
+import { api, ApiClientError } from "../../src/client/api/client";
 import { App } from "../../src/client/App";
 import { baseSession, CHILD_ID, firstPage, listBody, SESSION_ID } from "./session.fixtures";
 
@@ -49,6 +49,45 @@ beforeEach(() => {
   }));
 });
 describe("unified hub", () => {
+  it("offers a home link below a missing session error without redirecting automatically", async () => {
+    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
+    vi.mocked(api.items).mockRejectedValue(
+      new ApiClientError(404, "session_not_found", "Session missing"),
+    );
+    render(<App />);
+    await flush();
+
+    const error = screen.getByRole("alert");
+    expect(error).toHaveTextContent("Session not found");
+    const link = screen.getByRole("link", { name: "Back to home" });
+    expect(link).toHaveAttribute("href", "/");
+    expect(error.nextElementSibling).toBe(link);
+    expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
+    expect(screen.queryByRole("button", { name: "Retry opening session" })).toBeNull();
+
+    fireEvent.click(link);
+    await flush();
+    expect(window.location.pathname).toBe("/");
+    expect(
+      screen.getByRole("heading", { name: "Select a session from the sidebar" }),
+    ).toBeInTheDocument();
+  });
+
+  it("keeps retry available for other session loading errors", async () => {
+    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
+    vi.mocked(api.items).mockRejectedValueOnce(
+      new ApiClientError(500, "internal_error", "Load failed"),
+    );
+    render(<App />);
+    await flush();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not load session");
+    expect(screen.queryByRole("link", { name: "Back to home" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry opening session" }));
+    await flush();
+    expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
+  });
+
   it.each([false, true])(
     "respects creation dialog dismissal on completion: %s",
     async (dismiss) => {

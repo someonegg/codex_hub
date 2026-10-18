@@ -137,8 +137,12 @@ export const api = {
       { message },
       signal,
     ),
-  rebind: (sessionId: string, signal?: AbortSignal) =>
-    postJson<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/rebind`, {}, signal),
+  handoffPaneBinding: (sessionId: string, signal?: AbortSignal) =>
+    postJson<void>(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/handoff-pane-binding`,
+      {},
+      signal,
+    ),
   sendKeys: (sessionId: string, keys: readonly InteractionKey[], signal?: AbortSignal) =>
     postJson<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/keys`, { keys }, signal),
   terminalPreview: (sessionId: string, signal?: AbortSignal) =>

@@ -79,6 +79,7 @@ describe("session Live updates", () => {
     });
     const connected = {
       supported: true as const,
+      supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: null,
     };
@@ -101,6 +102,7 @@ describe("session Live updates", () => {
     installIntersectionObserver();
     const connected = {
       supported: true as const,
+      supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: null,
     };
@@ -131,6 +133,7 @@ describe("session Live updates", () => {
   it("keeps the draft and in-flight send across connection loss, then hides on archival", async () => {
     const connected = {
       supported: true as const,
+      supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: "tmux attach-session -t test",
     };
@@ -157,7 +160,12 @@ describe("session Live updates", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await act(async () => {
       resolveLive(
-        live(false, NEXT_REVISION, { supported: true, state: "unknown", attachCommand: null }),
+        live(false, NEXT_REVISION, {
+          supported: true,
+          supersededBySessionId: null,
+          state: "unknown",
+          attachCommand: null,
+        }),
       );
     });
     await flush();
@@ -218,7 +226,12 @@ describe("session Live updates", () => {
   it("never opens Live for archived sessions", async () => {
     installIntersectionObserver();
     const archivedPage = page([], TIMELINE_CURSOR, true, true);
-    archivedPage.interaction = { supported: true, state: "connected", attachCommand: null };
+    archivedPage.interaction = {
+      supported: true,
+      supersededBySessionId: null,
+      state: "connected",
+      attachCommand: null,
+    };
     const fetchMock = vi.fn().mockResolvedValue(json(archivedPage));
     vi.stubGlobal("fetch", fetchMock);
     render(<SessionPage sessionId={SESSION_ID} />);
@@ -306,6 +319,7 @@ describe("session Live updates", () => {
   it("adopts interaction and metadata-only Live changes without advancing cursor", async () => {
     const changed = live(false, NEXT_REVISION, {
       supported: true,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "connected",
     });

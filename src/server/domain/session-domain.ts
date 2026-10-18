@@ -45,8 +45,7 @@ export type InteractionKeyBindings = Readonly<Record<InteractionKey, TmuxKey>>;
 
 export type DomainAgentInteraction = {
   readonly transport: "tmux";
-  readonly rebindCommand: string;
-  readonly bindingAttempt: InteractionBindingAttempt | null;
+  readonly bindingCommand: string;
   readonly keyBindings: InteractionKeyBindings;
 };
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CODEX_INTERACTION_KEY_BINDINGS } from "../../src/server/adapters/codex/interaction-parser.js";
 import type {
@@ -6,8 +6,20 @@ import type {
   SessionReader,
 } from "../../src/server/application/session-reader.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
+
+let bindings: LivePaneBindingManager;
+beforeEach(() => {
+  bindings = new LivePaneBindingManager();
+});
+
+class TestSessionInteractionService extends SessionInteractionService {
+  constructor(reader: SessionReader, enabled: boolean, tmux: TmuxInteractionService) {
+    super(reader, enabled, tmux, bindings);
+  }
+}
 
 function repository(snapshot: InteractionSessionSnapshot | null): SessionReader {
   return {
@@ -27,26 +39,26 @@ function session(archived = false): InteractionSessionSnapshot {
   return {
     archived,
     interaction: {
-      bindingAttempt: null,
       transport: "tmux",
-      rebindCommand: "! bind",
+      bindingCommand: "! bind",
       keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
     },
   };
 }
 
 function boundSession(): InteractionSessionSnapshot {
+  bindings.submit({
+    sessionId: "session",
+    time: 0,
+    ordinal: 4,
+    position: 0,
+    attempt: { ordinal: 4, valid: true, socketPath: "/tmp/codex-hub.sock", paneId: "%7" },
+  });
   return {
     archived: false,
     interaction: {
-      bindingAttempt: {
-        ordinal: 4,
-        valid: true,
-        socketPath: "/tmp/codex-hub.sock",
-        paneId: "%7",
-      },
       transport: "tmux",
-      rebindCommand: "! bind",
+      bindingCommand: "! bind",
       keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
     },
   };
@@ -55,14 +67,14 @@ function boundSession(): InteractionSessionSnapshot {
 describe("session interaction policy", () => {
   it("is unsupported when disabled or archived", async () => {
     expect(
-      await new SessionInteractionService(
+      await new TestSessionInteractionService(
         repository(session()),
         false,
         new TmuxInteractionService(),
       ).describe("session"),
     ).toEqual({ supported: false, attachCommand: null });
     expect(
-      await new SessionInteractionService(
+      await new TestSessionInteractionService(
         repository(session(true)),
         true,
         new TmuxInteractionService(),
@@ -71,20 +83,21 @@ describe("session interaction policy", () => {
   });
 
   it("reports unbound and rejects actions before transport", async () => {
-    const service = new SessionInteractionService(
+    const service = new TestSessionInteractionService(
       repository(session()),
       true,
       new TmuxInteractionService(),
     );
     expect(await service.describe("session")).toEqual({
       supported: true,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "unbound",
     });
     await expect(service.sendMessage("session", "hello")).rejects.toMatchObject({
       code: "interaction_not_connected",
     });
-    await expect(service.rebind("session")).rejects.toMatchObject({
+    await expect(service.handoffPaneBinding("session")).rejects.toMatchObject({
       code: "interaction_not_connected",
     });
     await expect(service.sendKeys("session", ["interrupt"])).rejects.toMatchObject({
@@ -106,15 +119,16 @@ describe("session interaction policy", () => {
         truncated: false,
       }),
     } as unknown as TmuxInteractionService;
-    const service = new SessionInteractionService(repository(boundSession()), true, tmux);
+    const service = new TestSessionInteractionService(repository(boundSession()), true, tmux);
 
     await expect(service.describe("session")).resolves.toEqual({
       supported: true,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "connected",
     });
     await service.sendMessage("session", "hello");
-    await service.rebind("session");
+    await service.handoffPaneBinding("session");
     await service.sendKeys("session", [
       "enter",
       "up",
@@ -136,7 +150,7 @@ describe("session interaction policy", () => {
       ["Enter", "Up", "Down", "Left", "Right", "C-c", "BTab"],
       expect.any(Function),
     );
-    expect(tmux.captureTerminal).toHaveBeenCalledWith(binding);
+    expect(tmux.captureTerminal).toHaveBeenCalledWith(binding, expect.any(Function));
   });
 });
 
@@ -147,7 +161,7 @@ it("refreshes connection status after each completed query", async () => {
       .mockRejectedValueOnce(new InteractionTransportError("disconnected", "gone"))
       .mockResolvedValue({ paneId: "%7" }),
   } as unknown as TmuxInteractionService;
-  const service = new SessionInteractionService(repository(boundSession()), true, tmux);
+  const service = new TestSessionInteractionService(repository(boundSession()), true, tmux);
   expect(await service.describe("session")).toMatchObject({ state: "disconnected" });
   expect(await service.describe("session")).toMatchObject({ state: "connected" });
   expect(tmux.connect).toHaveBeenCalledTimes(2);
@@ -166,7 +180,7 @@ it("bypasses stale connection checks for archive and rejects input while busy", 
     sendMessage: vi.fn(),
     sendKeys: vi.fn(),
   } as unknown as TmuxInteractionService;
-  const service = new SessionInteractionService(reader, true, tmux);
+  const service = new TestSessionInteractionService(reader, true, tmux);
   expect(await service.describe("session")).toMatchObject({
     state: "connected",
     attachCommand: "tmux -S '/tmp/codex-hub.sock' attach-session -t 'codex-hub-test'",
@@ -193,22 +207,202 @@ it.each([
   ["disconnected", "interaction_not_connected"],
   ["timeout", "operation_result_unknown"],
   ["command_failed", "interaction_failed"],
-] as const)("translates rebind transport failure %s without retry", async (transportCode, code) => {
-  const tmux = {
-    connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
-    sendMessage: vi.fn().mockRejectedValue(new InteractionTransportError(transportCode, "failed")),
-  } as unknown as TmuxInteractionService;
-  const service = new SessionInteractionService(repository(boundSession()), true, tmux);
-  await expect(service.rebind("session")).rejects.toMatchObject({ code });
-  expect(tmux.sendMessage).toHaveBeenCalledOnce();
-});
+] as const)(
+  "translates handoffPaneBinding transport failure %s without retry",
+  async (transportCode, code) => {
+    const tmux = {
+      connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
+      sendMessage: vi
+        .fn()
+        .mockRejectedValue(new InteractionTransportError(transportCode, "failed")),
+    } as unknown as TmuxInteractionService;
+    const service = new TestSessionInteractionService(repository(boundSession()), true, tmux);
+    await expect(service.handoffPaneBinding("session")).rejects.toMatchObject({ code });
+    expect(tmux.sendMessage).toHaveBeenCalledOnce();
+  },
+);
 
-it("rejects rebind for missing sessions and while management is busy", async () => {
+it("rejects handoffPaneBinding for missing sessions and while management is busy", async () => {
   const tmux = { connect: vi.fn(), sendMessage: vi.fn() } as unknown as TmuxInteractionService;
-  const missing = new SessionInteractionService(repository(null), true, tmux);
-  await expect(missing.rebind("session")).rejects.toMatchObject({ code: "session_not_found" });
-  const busy = new SessionInteractionService(repository(boundSession()), true, tmux);
+  const missing = new TestSessionInteractionService(repository(null), true, tmux);
+  await expect(missing.handoffPaneBinding("session")).rejects.toMatchObject({
+    code: "session_not_found",
+  });
+  const busy = new TestSessionInteractionService(repository(boundSession()), true, tmux);
   busy.setBusy("session", true);
-  await expect(busy.rebind("session")).rejects.toMatchObject({ code: "session_busy" });
+  await expect(busy.handoffPaneBinding("session")).rejects.toMatchObject({ code: "session_busy" });
   expect(tmux.sendMessage).not.toHaveBeenCalled();
 });
+
+it.each(["message", "keys", "preview", "handoffPaneBinding", "archive"] as const)(
+  "rechecks ownership immediately before queued %s executes",
+  async (action) => {
+    const reader = repository(boundSession());
+    const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    let execute!: () => void;
+    const queue = (check?: () => void) =>
+      new Promise<void>((resolve, reject) => {
+        execute = () => {
+          try {
+            check?.();
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        };
+      });
+    const tmux = {
+      connect: vi.fn().mockResolvedValue(target),
+      sendMessage: vi.fn((_target, _message, check) => queue(check)),
+      sendKeys: vi.fn((_target, _keys, check) => queue(check)),
+      exitTarget: vi.fn((_target, check) => queue(check)),
+      captureTerminal: vi.fn((_target, check) =>
+        queue(check).then(() => ({ content: "pane", truncated: false })),
+      ),
+    } as unknown as TmuxInteractionService;
+    const service = new TestSessionInteractionService(reader, true, tmux);
+    const operation =
+      action === "message"
+        ? service.sendMessage("session", "hello")
+        : action === "keys"
+          ? service.sendKeys("session", ["enter"])
+          : action === "preview"
+            ? service.preview("session")
+            : action === "handoffPaneBinding"
+              ? service.handoffPaneBinding("session")
+              : service.exitTarget(target, "session");
+    const rejected = expect(operation).rejects.toMatchObject({ code: "interaction_not_connected" });
+    await vi.waitFor(() => expect(execute).toBeTypeOf("function"));
+    bindings.submit({
+      sessionId: "replacement",
+      time: 1,
+      ordinal: 1,
+      position: 0,
+      attempt: { valid: true, ordinal: 1, ...target },
+    });
+    execute();
+    await rejected;
+  },
+);
+
+it("rechecks archive ownership after target validation", async () => {
+  const reader = repository(boundSession());
+  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  const tmux = {
+    archiveTarget: vi.fn(async () => {
+      bindings.submit({
+        sessionId: "replacement",
+        time: 1,
+        ordinal: 1,
+        position: 0,
+        attempt: { valid: true, ordinal: 1, ...target },
+      });
+      return target;
+    }),
+  } as unknown as TmuxInteractionService;
+  expect(
+    await new TestSessionInteractionService(reader, true, tmux).archiveTarget("session"),
+  ).toBeNull();
+});
+
+it.each([false, true])(
+  "does not retry status validation when the binding changes (failure=%s)",
+  async (failure) => {
+    const reader = repository(boundSession());
+    const tmux = {
+      connect: vi.fn(async () => {
+        bindings.submit({
+          sessionId: "session",
+          time: 1,
+          ordinal: 5,
+          position: 0,
+          attempt: { ordinal: 5, valid: true, socketPath: "/tmp/new.sock", paneId: "%8" },
+        });
+        if (failure) throw new Error("query failed");
+        return { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+      }),
+    } as unknown as TmuxInteractionService;
+    expect(
+      await new TestSessionInteractionService(reader, true, tmux).describe("session"),
+    ).toMatchObject({ state: "unknown", attachCommand: null });
+    expect(tmux.connect).toHaveBeenCalledOnce();
+  },
+);
+
+it("does not recurse when a replacement changes during lookup", async () => {
+  const reader = repository(boundSession());
+  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  bindings.submit({
+    sessionId: "replacement",
+    time: 1,
+    ordinal: 1,
+    position: 0,
+    attempt: { ordinal: 1, valid: true, ...target },
+  });
+  vi.mocked(reader.getInteractionSession).mockImplementation(async (id) => {
+    if (id === "replacement")
+      bindings.submit({
+        sessionId: "session",
+        time: 2,
+        ordinal: 5,
+        position: 0,
+        attempt: { ordinal: 5, valid: true, ...target },
+      });
+    return session();
+  });
+  const tmux = { connect: vi.fn().mockResolvedValue(target) } as unknown as TmuxInteractionService;
+  expect(
+    await new TestSessionInteractionService(reader, true, tmux).describe("session"),
+  ).toMatchObject({ state: "unknown" });
+  expect(reader.getInteractionSession).toHaveBeenCalledTimes(2);
+  expect(tmux.connect).toHaveBeenCalledOnce();
+});
+
+it.each(["present", "missing", "error", "replacement missing", "binding changed"])(
+  "validates superseded pane: %s",
+  async (scenario) => {
+    const reader = repository(boundSession());
+    const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    bindings.submit({
+      sessionId: "replacement",
+      time: 1,
+      ordinal: 1,
+      position: 0,
+      attempt: { valid: true, ordinal: 1, ...target },
+    });
+    if (scenario === "replacement missing")
+      vi.mocked(reader.getInteractionSession).mockImplementation(async (id) =>
+        id === "replacement" ? null : session(),
+      );
+    const tmux = {
+      connect: vi.fn(async () => {
+        if (scenario === "missing") throw new InteractionTransportError("disconnected", "gone");
+        if (scenario === "error") throw new Error("failed");
+        if (scenario === "binding changed")
+          bindings.submit({
+            sessionId: "session",
+            time: 2,
+            ordinal: 6,
+            position: 0,
+            attempt: { valid: true, ordinal: 6, ...target },
+          });
+        return target;
+      }),
+    } as unknown as TmuxInteractionService;
+    const service = new TestSessionInteractionService(reader, true, tmux);
+    expect(await service.describe("session")).toMatchObject({
+      state:
+        scenario === "missing"
+          ? "disconnected"
+          : scenario === "error" || scenario === "binding changed"
+            ? "unknown"
+            : "superseded",
+      supersededBySessionId: scenario === "present" ? "replacement" : null,
+    });
+    expect(tmux.connect).toHaveBeenCalledOnce();
+    if (scenario !== "binding changed")
+      await expect(service.sendKeys("session", ["enter"])).rejects.toMatchObject({
+        code: "interaction_not_connected",
+      });
+  },
+);

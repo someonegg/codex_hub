@@ -72,7 +72,8 @@ it("cancels on hide and collapse, resumes immediately, and isolates sessions", a
   rerender({ id: "a", connected: false });
   expect(result.current.preview).toBeNull();
   await act(async () => rerender({ id: "a", connected: true }));
-  expect(result.current.preview).toEqual(frame);
+  expect(result.current.preview).toBeNull();
+  expect(result.current.previewExpanded).toBe(false);
   rerender({ id: "b", connected: true });
   expect(result.current.previewExpanded).toBe(false);
   expect(result.current.preview).toBeNull();
@@ -108,7 +109,12 @@ it("connects the panel toggle to the preview lifecycle", async () => {
   const { unmount } = render(
     <SessionInteraction
       sessionId="a"
-      interaction={{ supported: true, state: "connected", attachCommand: null }}
+      interaction={{
+        supported: true,
+        supersededBySessionId: null,
+        state: "connected",
+        attachCommand: null,
+      }}
       itemCount={0}
       updatedAt={null}
     />,
@@ -145,3 +151,118 @@ it("auto-expands once per latest message, waits for connection, and resets acros
   await act(async () => rerender({ id: "b", connected: true, key: "plan-b" }));
   expect(result.current.previewExpanded).toBe(true);
 });
+
+it("cancels preview polling when a live update marks the session superseded", async () => {
+  vi.useFakeTimers();
+  let complete!: (value: TerminalPreviewResponse) => void;
+  const capture = vi.spyOn(api, "terminalPreview").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const properties = { sessionId: "old", itemCount: 1, updatedAt: null };
+  const view = render(
+    <SessionInteraction
+      {...properties}
+      interaction={{
+        supported: true,
+        state: "connected",
+        supersededBySessionId: null,
+        attachCommand: null,
+      }}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+  expect(capture).toHaveBeenCalledOnce();
+  const signal = capture.mock.calls[0]![1];
+  view.rerender(
+    <SessionInteraction
+      {...properties}
+      interaction={{
+        supported: true,
+        state: "superseded",
+        supersededBySessionId: "new",
+        attachCommand: null,
+      }}
+    />,
+  );
+  expect(signal?.aborted).toBe(true);
+  await act(async () => {
+    complete(frame);
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(capture).toHaveBeenCalledOnce();
+  expect(screen.queryByText("output")).not.toBeInTheDocument();
+});
+
+it("rejects delayed expansion callbacks while disconnected and stops pending captures", async () => {
+  vi.useFakeTimers();
+  let complete!: (value: TerminalPreviewResponse) => void;
+  const capture = vi.spyOn(api, "terminalPreview").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve;
+      }),
+  );
+  const { result, rerender } = renderHook(({ connected }) => useTerminalPreview("a", connected), {
+    initialProps: { connected: true },
+  });
+  const delayedExpand = result.current.onExpandPreview;
+  act(() => result.current.onExpandPreview());
+  const signal = capture.mock.calls[0]![1];
+  rerender({ connected: false });
+  expect(signal?.aborted).toBe(true);
+  expect(result.current.previewExpanded).toBe(false);
+  act(() => delayedExpand());
+  expect(result.current.previewExpanded).toBe(false);
+  await act(async () => {
+    complete(frame);
+    await vi.advanceTimersByTimeAsync(5000);
+  });
+  expect(result.current.preview).toBeNull();
+  expect(result.current.previewBusy).toBe(false);
+  rerender({ connected: true });
+  expect(result.current.previewExpanded).toBe(false);
+  expect(capture).toHaveBeenCalledOnce();
+});
+
+it.each(["command", "handoff"])(
+  "keeps preview folded when a delayed %s completes after disconnect",
+  async (action) => {
+    let complete!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    vi.spyOn(api, "terminalPreview").mockResolvedValue(frame);
+    const operation =
+      action === "command" ? vi.spyOn(api, "sendMessage") : vi.spyOn(api, "handoffPaneBinding");
+    operation.mockReturnValue(pending);
+    const properties = { sessionId: "a", itemCount: 0, updatedAt: null };
+    const connected = {
+      supported: true as const,
+      state: "connected" as const,
+      supersededBySessionId: null,
+      attachCommand: null,
+    };
+    const view = render(<SessionInteraction {...properties} interaction={connected} />);
+    if (action === "command") {
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
+      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    } else fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+    expect(operation).toHaveBeenCalledOnce();
+    view.rerender(
+      <SessionInteraction {...properties} interaction={{ ...connected, state: "disconnected" }} />,
+    );
+    await act(async () => complete());
+    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    view.rerender(<SessionInteraction {...properties} interaction={connected} />);
+    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  },
+);

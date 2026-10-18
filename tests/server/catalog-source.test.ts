@@ -297,7 +297,7 @@ describe("catalog discovery", () => {
     expect(source.lastRefreshTelemetry()).toMatchObject({ appendFiles: 1 });
   });
 
-  it("disambiguates duplicate native IDs and exposes declared agent versions", async () => {
+  it("ignores duplicate native IDs and exposes declared agent versions", async () => {
     const home = await createTempDirectory("codex-adapter-identities-");
     await mkdir(join(home, "sessions"), { recursive: true });
     const metadata = (title: string) =>
@@ -313,8 +313,8 @@ describe("catalog discovery", () => {
     );
 
     const snapshot = await new CodexSessionSource(home, "codex-identities").refresh();
-    expect(snapshot.sessions).toHaveLength(3);
-    expect(new Set(snapshot.sessions.map((entry) => entry.localId)).size).toBe(3);
+    expect(snapshot.sessions).toHaveLength(2);
+    expect(new Set(snapshot.sessions.map((entry) => entry.localId)).size).toBe(2);
     expect(snapshot.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "duplicate_native_session_id",
@@ -331,10 +331,11 @@ describe("catalog discovery", () => {
         .filter((entry) => entry.nativeSessionId === "duplicate")
         .map((entry) => entry.localId)
         .sort(),
-    ).toEqual([
-      "thread:duplicate\0resource:sessions/rollout-first.jsonl",
-      "thread:duplicate\0resource:sessions/rollout-second.jsonl",
-    ]);
+    ).toEqual(["thread:duplicate"]);
+    expect(
+      snapshot.sessions.find((entry) => entry.nativeSessionId === "duplicate")?.normalized.session
+        .title,
+    ).toBe("First");
   });
 
   it("keeps source identity stable when a symlinked Codex home is created later", async () => {

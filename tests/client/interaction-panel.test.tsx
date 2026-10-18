@@ -12,6 +12,7 @@ import { InteractionPanel as Panel } from "../../src/client/components/Interacti
 function interaction(state: "unbound" | "disconnected" | "connected"): InteractionResponse {
   return {
     supported: true,
+    supersededBySessionId: null,
     attachCommand: null,
     state,
   };
@@ -25,7 +26,7 @@ function props(value: InteractionResponse | null) {
     interactionBusy: false,
     error: null,
     onDismissError: vi.fn(),
-    onRebind: vi.fn().mockResolvedValue(undefined),
+    onHandoffPaneBinding: vi.fn().mockResolvedValue(undefined),
     onExpandPreview: vi.fn(),
     onSendMessage: vi.fn().mockResolvedValue(undefined),
     onSendKeys: vi.fn().mockResolvedValue(undefined),
@@ -82,7 +83,7 @@ describe("interaction panel", () => {
     });
     const states: Array<InteractionResponse | null> = [
       interaction("disconnected"),
-      { supported: true, state: "unknown", attachCommand: null },
+      { supported: true, supersededBySessionId: null, state: "unknown", attachCommand: null },
       interaction("unbound"),
       null,
       { supported: false, attachCommand: null },
@@ -128,7 +129,7 @@ describe("interaction panel", () => {
     const summary = screen.getByText(`12 events · Updated ${localTime}`);
     const preview = screen.getByRole("region", { name: "Terminal preview" });
     const prompt = screen.getByRole("textbox", { name: "Message to agent" });
-    const lastAction = screen.getByRole("button", { name: "Interrupt" });
+    const lastAction = screen.getByRole("button", { name: "Plan" });
     expect(summary).toBeInTheDocument();
     expect(preview.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
@@ -190,18 +191,18 @@ describe("interaction panel", () => {
     const { rerender } = render(<InteractionPanel {...handlers} />);
     expect(screen.getByText(/12 events · Updated/)).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Interrupt" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Plan" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Send" }).parentElement).toHaveClass(
       "interaction-primary-actions",
     );
     expect(screen.queryByRole("button", { name: "Esc" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terminal preview" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Interrupt" }));
-    expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["interrupt"]);
+    await user.click(screen.getByRole("button", { name: "Plan" }));
+    expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["plan"]);
     expect(handlers.onSendKeys).toHaveBeenCalledTimes(1);
 
     await user.type(screen.getByRole("textbox"), "draft");
-    const interrupt = screen.getByRole("button", { name: "Interrupt" });
+    const interrupt = screen.getByRole("button", { name: "Plan" });
     interrupt.focus();
     handlers.onSendKeys.mockClear();
     handlers.onSendMessage.mockClear();
@@ -348,19 +349,19 @@ describe("interaction panel", () => {
     expect([...keypad.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
       "Enter",
       "↑",
-      "Plan",
+      "^C",
       "←",
       "↓",
       "→",
     ]);
 
-    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "Interrupt", "Left", "Down", "Right"]) {
       await user.click(screen.getByRole("button", { name }));
     }
     expect(handlers.onSendKeys.mock.calls).toEqual([
       [["enter"]],
       [["up"]],
-      [["plan"]],
+      [["interrupt"]],
       [["left"]],
       [["down"]],
       [["right"]],
@@ -368,7 +369,7 @@ describe("interaction panel", () => {
 
     rerender(<InteractionPanel {...handlers} interactionBusy />);
     handlers.onSendKeys.mockClear();
-    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "Interrupt", "Left", "Down", "Right"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeEnabled();
       expect(button).toHaveAttribute("aria-disabled", "true");
@@ -491,24 +492,28 @@ it("does not expand on failed command delivery", async () => {
   expect(screen.getByRole("textbox")).toHaveValue("/plan");
 });
 
-it("rebinds without changing the draft or preview and disables rebind while busy or disconnected", async () => {
+it("expands the preview after handoff without changing the draft and disables Handoff while busy or disconnected", async () => {
   const handlers = props(interaction("connected"));
   const view = render(<InteractionPanel {...handlers} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft" } });
-  fireEvent.click(screen.getByRole("button", { name: "Rebind" }));
+  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
   await act(async () => {
     await Promise.resolve();
   });
-  expect(handlers.onRebind).toHaveBeenCalledOnce();
+  expect(handlers.onHandoffPaneBinding).toHaveBeenCalledOnce();
+  expect(screen.getByRole("button", { name: "Handoff" })).toHaveAttribute(
+    "title",
+    "Hand off this pane’s binding to the active Codex session.",
+  );
   expect(screen.getByRole("textbox")).toHaveValue("draft");
   expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
     "aria-expanded",
-    "false",
+    "true",
   );
   view.rerender(<InteractionPanel {...handlers} interactionBusy />);
-  expect(screen.getByRole("button", { name: "Rebind" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
   view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
-  expect(screen.getByRole("button", { name: "Rebind" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
 });
 
 it("ignores command completion after the panel unmounts", async () => {
@@ -526,4 +531,154 @@ it("ignores command completion after the panel unmounts", async () => {
   view.unmount();
   await act(async () => resolve());
   expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+});
+
+it("shows takeover beside the status, preserves drafts, and navigates to the replacement", () => {
+  const handlers = props(interaction("connected"));
+  const onNavigate = vi.fn();
+  const view = render(<InteractionPanel {...handlers} onNavigate={onNavigate} />);
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft" } });
+  view.rerender(
+    <InteractionPanel
+      {...handlers}
+      onNavigate={onNavigate}
+      interaction={{
+        supported: true,
+        state: "superseded",
+        supersededBySessionId: "replacement",
+        attachCommand: null,
+      }}
+    />,
+  );
+  const status = screen.getByText("Superseded");
+  expect(
+    screen.queryByText("This pane is bound to another session. Your draft is preserved."),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText(/Connection unavailable/)).not.toBeInTheDocument();
+  const link = screen.getByRole("link", { name: "Go to bound session" });
+  expect(link.parentElement).toBe(status.parentElement);
+  expect(link).toHaveAttribute("href", "/sessions/replacement");
+  fireEvent.click(link);
+  expect(onNavigate).toHaveBeenCalledWith("replacement");
+  expect(screen.getByRole("textbox")).toHaveValue("draft");
+  expect(screen.getByRole("textbox")).toBeDisabled();
+  for (const name of ["Send", "Handoff", "Plan", "Terminal preview"])
+    expect(screen.getByRole("button", { name })).toBeDisabled();
+});
+
+it("shows the takeover even on first load, with no link when its session is missing", () => {
+  render(
+    <InteractionPanel
+      {...props({
+        supported: true,
+        state: "superseded",
+        supersededBySessionId: null,
+        attachCommand: null,
+      })}
+    />,
+  );
+  expect(screen.getByText("Superseded")).toBeVisible();
+  expect(screen.getByText("Replacement session unavailable")).toBeVisible();
+  expect(screen.queryByRole("link")).not.toBeInTheDocument();
+});
+
+it("waits for successful handoff delivery before expanding the preview", async () => {
+  let resolve!: () => void;
+  const handlers = props(interaction("connected"));
+  handlers.onHandoffPaneBinding.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+  );
+  render(<InteractionPanel {...handlers} />);
+  const toggle = screen.getByRole("button", { name: "Terminal preview" });
+  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await act(async () => resolve());
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+it("does not expand the preview after failed handoff delivery", async () => {
+  const handlers = props(interaction("connected"));
+  handlers.onHandoffPaneBinding.mockRejectedValueOnce(new Error("offline"));
+  render(<InteractionPanel {...handlers} />);
+  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+});
+
+it.each([
+  ["Enter", "enter"],
+  ["ArrowUp", "up"],
+  ["ArrowDown", "down"],
+  ["ArrowLeft", "left"],
+  ["ArrowRight", "right"],
+])("maps physical %s in the preview and prevents defaults", (physical, key) => {
+  const handlers = props(interaction("connected"));
+  render(<Panel {...handlers} previewExpanded />);
+  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+  body.focus();
+  expect(body).toHaveFocus();
+  expect(fireEvent.keyDown(body, { key: physical })).toBe(false);
+  expect(handlers.onSendKeys).toHaveBeenLastCalledWith([key]);
+  const button = screen.getByRole("button", { name: /^Left$/ });
+  button.focus();
+  expect(fireEvent.keyDown(button, { key: physical })).toBe(false);
+  expect(handlers.onSendKeys).toHaveBeenCalledTimes(2);
+});
+
+it("preserves editing and unrelated keyboard actions and blocks sends while busy or folded", () => {
+  const handlers = props(interaction("connected"));
+  const view = render(<Panel {...handlers} previewExpanded />);
+  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+  for (const modifier of ["shiftKey", "ctrlKey", "altKey", "metaKey", "isComposing"]) {
+    expect(fireEvent.keyDown(body, { key: "Enter", [modifier]: true })).toBe(true);
+  }
+  expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "ArrowUp" })).toBe(true);
+  expect(
+    fireEvent.keyDown(screen.getByRole("button", { name: "Terminal preview" }), { key: "Enter" }),
+  ).toBe(true);
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  fireEvent.click(body);
+  expect(body).toHaveFocus();
+  view.rerender(<Panel {...handlers} interactionBusy previewExpanded />);
+  expect(fireEvent.keyDown(body, { key: "Enter" })).toBe(false);
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  view.rerender(<Panel {...handlers} previewExpanded interaction={interaction("disconnected")} />);
+  fireEvent.keyDown(body, { key: "Enter" });
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  view.rerender(<Panel {...handlers} previewExpanded={false} />);
+  expect(screen.queryByRole("group", { name: "Terminal controls" })).toBeNull();
+});
+
+it("sends once when Enter is pressed on a terminal button", async () => {
+  const handlers = props(interaction("connected"));
+  const user = userEvent.setup();
+  render(<Panel {...handlers} previewExpanded />);
+  screen.getByRole("button", { name: /^Up$/ }).focus();
+  await user.keyboard("{Enter}");
+  expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["enter"]);
+});
+
+it("places Plan beside Send, expands on click, and keeps the interrupt compact without a tooltip", () => {
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  const plan = screen.getByRole("button", { name: "Plan" });
+  expect(plan.parentElement).toBe(screen.getByRole("button", { name: "Send" }).parentElement);
+  fireEvent.click(plan);
+  expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["plan"]);
+  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+  const interrupt = screen.getByRole("button", { name: "Interrupt" });
+  expect(interrupt).toHaveTextContent("^C");
+  expect(interrupt).not.toHaveAttribute("title");
+  expect(interrupt.closest(".terminal-keypad")).not.toBeNull();
 });

@@ -17,21 +17,21 @@ function deferred() {
 }
 
 describe("session interaction state", () => {
-  it("shares the interaction lock and error handling with rebind", async () => {
+  it("shares the interaction lock and error handling with handoffPaneBinding", async () => {
     const pending = deferred();
-    const rebind = vi.spyOn(api, "rebind").mockReturnValue(pending.promise);
+    const handoffPaneBinding = vi.spyOn(api, "handoffPaneBinding").mockReturnValue(pending.promise);
     const { result } = renderHook(() => useSessionInteraction("session-a"));
     let operation!: Promise<void>;
     act(() => {
-      operation = result.current.rebind();
+      operation = result.current.handoffPaneBinding();
     });
     const failure = operation.catch((reason: unknown) => reason);
     expect(result.current.interactionBusy).toBe(true);
-    await expect(result.current.rebind()).rejects.toThrow("already in progress");
-    expect(rebind).toHaveBeenCalledTimes(1);
-    await act(async () => pending.reject(new Error("rebind failed")));
+    await expect(result.current.handoffPaneBinding()).rejects.toThrow("already in progress");
+    expect(handoffPaneBinding).toHaveBeenCalledTimes(1);
+    await act(async () => pending.reject(new Error("handoffPaneBinding failed")));
     await failure;
-    expect(result.current.error).toBe("rebind failed");
+    expect(result.current.error).toBe("handoffPaneBinding failed");
     expect(result.current.interactionBusy).toBe(false);
   });
 

@@ -12,15 +12,43 @@ Permanent caching prevents recovery; process identity checks reject deliberate p
 
 ## Decision Outcome
 
-Parse only the latest `CODEX_HUB_TMUX_BIND_V3` declaration in user-message
+Parse every `CODEX_HUB_TMUX_BIND_V3` declaration in user-message
 `<user_shell_command>` output. Read an absolute socket path, a `%`-prefixed numeric
 pane ID, and optional operation UUID on successive lines. An invalid latest
 declaration does not fall back. Created tmux sessions use `codex-hub-<operationId>`;
 manual bindings have no name restriction. Creation confirms the unique operation
 ID, project, and socket/pane pair.
 
+The process-wide live pane binding manager is the sole binding source. Adapters
+submit all binding attempts from accepted decoded records, including incremental
+appends; normalized interaction values contain only transport capabilities.
+Order events by timestamp (invalid timestamps use zero), global session ID,
+record ordinal, then position within the record. Retain the latest attempt per
+session and the latest valid claim per socket/pane, across source instances.
+Invalid latest attempts do not fall back; a new claim does not release older
+claims on other panes. Creation queries this same manager for `operationId`.
+The Hub explicitly injects the same process-wide manager into the Codex adapter,
+interaction service, and operation service. Their default parameters retain this
+shared instance for standalone callers; tests may inject an isolated manager.
+Closing a Hub does not clear binding history. Management snapshots contain only
+domain sessions; interaction capabilities are read through interaction snapshots.
+
+When a later claim takes a pane, its former owner returns `superseded` and cannot
+send input, hand off the binding, preview, or shut down that pane during archive. A supported
+interaction response always includes nullable `supersededBySessionId`: it names
+the replacing session only while that session is readable, including when
+archived. Missing replacements leave the state `superseded` with a null ID.
+Takeover facts survive archive, deletion, and full rereads for the process lifetime;
+a later explicit binding can reclaim a pane. Unsupported responses omit these
+state fields. `attachCommand` is null for `superseded`.
+
+Status queries never recurse or restart validation when bindings change during
+an await. Return the currently determinable state, using `unknown` for a new
+binding that has not been validated, and wait for the next refresh. Operations
+still validate ownership after resolution and immediately before queued effects.
+
 Internal declarations use a `transport: "tmux"` discriminant whose branch owns
-socket, pane, and tmux key mappings. Semantic keys and limits live in a shared
+tmux key mappings and the binding command. Semantic keys and limits live in a shared
 module re-exported by the API contract; domain types do not depend on the API.
 Application services inject transport and share message normalization/validation
 with it. HTTP does not depend on tmux implementation. Only tmux is provided.

@@ -74,9 +74,21 @@ loaded and the session is connected. Each qualifying message triggers this expan
 only once per session visit. Manually collapsing it keeps it folded until a new
 qualifying message arrives or another slash command is successfully delivered.
 
-Use **Rebind** in a connected interaction panel to resend the basic binding command
-to its current tmux pane. It preserves the hub draft and preview state.
-It requires an existing live connection; bind an unbound session manually.
+If another session binds the same tmux pane, the former session shows that its
+pane was taken over. Input, Handoff, and terminal preview become unavailable there;
+follow the replacement-session link when shown. The former session cannot stop
+the taken-over pane when archived. This state remains after the replacement is
+archived or deleted; the link disappears if that session is no longer readable.
+An explicit later binding can reclaim the pane.
+
+After `/clear`, `/resume`, or running a plan after clearing context, if the Codex
+session has changed and is not yet bound, click **Handoff** on the **previously
+connected old session page**. It sends the binding command through that page’s
+connected pane so the active Codex session can record its binding. Successful
+sending does not mean the handoff is complete. Once the new binding is recognized,
+the old page shows a link to the replacement session. An unbound new session cannot
+initiate this operation. Handoff preserves the hub draft and expands the terminal
+preview after successful delivery.
 
 Without `--tmux-socket`, creation follows tmux's default socket selection. With it,
 creation uses the resolved absolute path. Later interaction uses the actual socket

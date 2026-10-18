@@ -104,7 +104,6 @@ describe("incremental Codex derivation", () => {
       stage: "response",
       outcome: "answered",
     });
-    expect(after.interaction?.bindingAttempt).toEqual({ ordinal: 7, valid: false });
     expect(after.session).toMatchObject({
       title: "First user title",
       messageCount: 1,
@@ -113,7 +112,6 @@ describe("incremental Codex derivation", () => {
     });
     expect(before.timeline).toHaveLength(4);
     expect(before.toolDetails).toHaveLength(1);
-    expect(before.interaction?.bindingAttempt).toMatchObject({ ordinal: 4, valid: true });
 
     const forkedState = normalizer.append(
       firstState,

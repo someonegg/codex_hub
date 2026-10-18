@@ -50,10 +50,7 @@ export class SessionReadService implements SessionReader {
   async managementSnapshot() {
     const snapshot = await this.#store.refresh();
     return {
-      sessions: [...snapshot.sessions.values()].map(({ normalized }) => ({
-        ...normalized.session,
-        interaction: normalized.interaction ?? null,
-      })),
+      sessions: [...snapshot.sessions.values()].map(({ normalized }) => normalized.session),
     };
   }
 

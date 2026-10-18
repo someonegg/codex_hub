@@ -43,6 +43,21 @@ npm start -- --codex-home /path/to/codex-home --port 4180
 - Create sessions with optional worktrees, send input, and preview their terminals.
 - Archive sessions and permanently delete archived sessions.
 
+## Live pane
+
+Send prompts, preview terminal output, and use terminal controls from the session
+page. Connect an existing Codex session with the [tmux setup steps](docs/usage.md#binding-an-existing-tmux-session).
+
+![Live pane: terminal preview, controls, message input, and Handoff](docs/images/codex-hub-live-pane.png)
+
+### Continue with Handoff
+
+After `/clear`, `/resume`, or clearing context to run a plan, Codex may switch to
+another session in the same terminal. On the **previous session's page**, click
+**Handoff** to connect the hub to that session. The terminal preview opens after
+the request is sent. When the old page shows **Superseded**, follow **Go to bound
+session** to continue there. Your draft stays on the old page.
+
 ## Security
 
 The server binds to loopback by default. Interaction and management are enabled

@@ -1,12 +1,8 @@
-import type { DomainAgentInteraction, DomainSession } from "../domain/session-domain.js";
+import type { DomainSession } from "../domain/session-domain.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 
-export interface ManagedSession extends DomainSession {
-  readonly interaction: DomainAgentInteraction | null;
-}
-
 export interface ManagementSnapshot {
-  readonly sessions: readonly ManagedSession[];
+  readonly sessions: readonly DomainSession[];
 }
 
 export interface SessionManager {

@@ -59,7 +59,7 @@ export function useSessionInteraction(sessionId: string) {
     error,
     clearError: () => setError(null),
     sendMessage: (message: string) => act(() => api.sendMessage(sessionId, message)),
-    rebind: () => act(() => api.rebind(sessionId)),
+    handoffPaneBinding: () => act(() => api.handoffPaneBinding(sessionId)),
     sendKeys: (keys: readonly InteractionKey[]) => act(() => api.sendKeys(sessionId, keys)),
   };
 }

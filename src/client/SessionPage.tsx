@@ -106,6 +106,7 @@ export function SessionPage({
           context={reader.context}
           items={reader.items}
           interaction={reader.interaction}
+          onNavigate={onNavigate}
           visibility={timelineVisibility.visibility}
           onVisibilityChange={timelineVisibility.setVisibility}
           readerLoading={reader.readerLoading}
@@ -124,7 +125,11 @@ export function SessionPage({
             title={reader.missing ? "Session not found" : "Could not load session"}
             message={reader.readerError}
           />
-          {!reader.missing ? (
+          {reader.missing ? (
+            <InternalLink href="/" onNavigate={onNavigate ? () => onNavigate(null) : undefined}>
+              Back to home
+            </InternalLink>
+          ) : (
             <button
               className="load-more"
               type="button"
@@ -133,7 +138,7 @@ export function SessionPage({
             >
               Retry opening session
             </button>
-          ) : null}
+          )}
         </section>
       ) : (
         <section className="reader reader-welcome">

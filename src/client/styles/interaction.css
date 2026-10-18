@@ -87,7 +87,7 @@
   display: flex;
   gap: 0.3rem;
 }
-.interaction-rebind {
+.interaction-handoff {
   margin-left: auto;
 }
 .interaction-actions button {
@@ -275,7 +275,7 @@
   font-size: var(--text-small);
   font-weight: 650;
 }
-.terminal-key-plan {
+.terminal-key-interrupt {
   font-size: var(--text-small);
   font-weight: 650;
 }

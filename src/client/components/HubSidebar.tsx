@@ -69,7 +69,7 @@ export function HubSidebar({ catalog, hub, onCreate }: HubSidebarProps) {
       >
         {catalog.listError ? (
           <ErrorState
-            title="会话目录更新失败"
+            title="Could not update session list"
             message={catalog.listError}
             onDismiss={catalog.clearListError}
             onRetry={catalog.retryList}

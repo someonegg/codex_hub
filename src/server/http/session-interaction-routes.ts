@@ -17,14 +17,14 @@ import { sendJson } from "./router.js";
 import { SESSION_ID_PATTERN, SESSION_ROOT, sessionPath } from "./session-path.js";
 
 const INTERACTION_PATH = new RegExp(
-  `^${SESSION_ROOT}/${SESSION_ID_PATTERN}/(?:terminal-preview|messages|keys|rebind)$`,
+  `^${SESSION_ROOT}/${SESSION_ID_PATTERN}/(?:terminal-preview|messages|keys|handoff-pane-binding)$`,
 );
 
 const INTERACTION_KEY_SET = new Set<string>(INTERACTION_KEYS);
 
 type InteractionRoutesService = Pick<
   SessionInteractionService,
-  "preview" | "sendMessage" | "rebind" | "sendKeys"
+  "preview" | "sendMessage" | "handoffPaneBinding" | "sendKeys"
 >;
 
 export function createSessionInteractionRoutes(
@@ -49,10 +49,10 @@ export function createSessionInteractionRoutes(
       }
       if (request.method !== "POST") return false;
       if (interaction === undefined) return interactionUnavailable(response);
-      if (operation === "rebind") {
+      if (operation === "handoff-pane-binding") {
         const body = await readJsonObject(request);
         if (Object.keys(body).length !== 0) invalidBody("Expected an empty object");
-        await interaction.rebind(id);
+        await interaction.handoffPaneBinding(id);
         return noContent(response);
       }
       if (operation === "messages") {

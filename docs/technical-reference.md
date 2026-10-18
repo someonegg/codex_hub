@@ -28,6 +28,15 @@ Revisions hash the minimal structure sorted by ID. Title, project, archive, and
 parent changes affect them; timestamps, content, statistics, and diagnostics do not.
 Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 
+Within a Codex source instance, a native session ID always determines the stable
+local identity. If multiple rollouts declare that ID, retain the previously
+accepted readable file; on first discovery choose the first readable file in the
+existing path order. Ignore the others: publish no additional session, submit no
+binding events, and retain no decode cache for them. Report duplicates only in
+server diagnostics, deduplicated by the diagnostic logger. If the retained file
+becomes unavailable, fully read the first remaining candidate. Rollouts without
+a native ID retain their path-based identity.
+
 `updatedAt` is best-effort metadata carried by list snapshots and excluded from
 revision calculation. Timestamp-only changes do not wake catalog waiters; unchanged
 requests still time out with `204`.
@@ -63,20 +72,48 @@ use separate constants and revisions. Session diagnostics stay in server logs.
 
 ## Tmux interaction
 
-| Endpoint                                    | Request or response                                                                            |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions/:id/messages`        | `{ message }`; success returns `204`                                                           |
-| `POST /api/v1/sessions/:id/keys`            | `{ keys }`; success returns `204`                                                              |
-| `POST /api/v1/sessions/:id/rebind`          | Empty object `{}`; returns `204` after sending the basic binding command to the connected pane |
-| `GET /api/v1/sessions/:id/terminal-preview` | `{ content, truncated, capturedAt }`                                                           |
+| Endpoint                                         | Request or response                                                                                                                              |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /api/v1/sessions/:id/messages`             | `{ message }`; success returns `204`                                                                                                             |
+| `POST /api/v1/sessions/:id/keys`                 | `{ keys }`; success returns `204`                                                                                                                |
+| `POST /api/v1/sessions/:id/handoff-pane-binding` | Empty object `{}`; returns `204` after sending the binding command to the connected pane; handoff is recognized from a subsequent binding record |
+| `GET /api/v1/sessions/:id/terminal-preview`      | `{ content, truncated, capturedAt }`                                                                                                             |
 
 Supported keys and message limits are defined in `src/shared/interaction.ts`.
-Interaction states are `unbound`, `disconnected`, `connected`, and `unknown`.
+Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
 
-The Codex adapter recognizes only the latest `CODEX_HUB_TMUX_BIND_V3`
+The Codex adapter recognizes every `CODEX_HUB_TMUX_BIND_V3`
 declaration in user-message `<user_shell_command>` output. Its following lines
 contain a nonempty absolute socket path, a `%`-prefixed numeric pane ID, and an
 optional operation UUID. An invalid latest declaration does not fall back to an older one.
+
+The process-wide live pane binding manager is the sole binding source. Adapters
+submit all binding attempts from accepted decoded records, including incremental
+appends; normalized interaction values contain only transport capabilities.
+Order events by timestamp (invalid timestamps use zero), global session ID,
+record ordinal, then position within the record. Retain the latest attempt per
+session and the latest valid claim per socket/pane, across source instances.
+Invalid latest attempts do not fall back; a new claim does not release older
+claims on other panes. Creation queries this same manager for `operationId`.
+The Hub explicitly injects the same process-wide manager into the Codex adapter,
+interaction service, and operation service. Their default parameters retain this
+shared instance for standalone callers; tests may inject an isolated manager.
+Closing a Hub does not clear binding history. Management snapshots contain only
+domain sessions; interaction capabilities are read through interaction snapshots.
+
+When a later claim takes a pane, its former owner returns `superseded` and cannot
+send input, hand off the binding, preview, or shut down that pane during archive. A supported
+interaction response always includes nullable `supersededBySessionId`: it names
+the replacing session only while that session is readable, including when
+archived. Missing replacements leave the state `superseded` with a null ID.
+Takeover facts survive archive, deletion, and full rereads for the process lifetime;
+a later explicit binding can reclaim a pane. Unsupported responses omit these
+state fields. `attachCommand` is null for `superseded`.
+
+Status queries never recurse or restart validation when bindings change during
+an await. Return the currently determinable state, using `unknown` for a new
+binding that has not been validated, and wait for the next refresh. Operations
+still validate ownership after resolution and immediately before queued effects.
 
 All interaction paths share live checks of socket ownership and pane liveness.
 Only concurrent checks for the same target are coalesced; completed results are
@@ -124,7 +161,7 @@ conflicting operations return `409` without queuing.
   Enter. Observe that fixed socket/pane until gone or dead, then archive once.
   Waiting for exit and confirming archive each allow 30 seconds; the native command
   allows 25 seconds. Query errors do not prove exit. While occupied, message, key,
-  and rebind requests return `409 session_busy`; no process is forcibly killed.
+  and handoff requests return `409 session_busy`; no process is forcibly killed.
 - **Delete:** require an archived session, run the native command, and confirm its
   same-source native identity is absent, within 30 seconds. A session already absent
   from a successful initial snapshot succeeds immediately.

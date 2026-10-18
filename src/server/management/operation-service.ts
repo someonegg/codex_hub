@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 
 import type { CreateSessionRequest, HubOperation } from "../../shared/api-contract.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
+import {
+  type LivePaneBindingManager,
+  livePaneBindings,
+} from "../interaction/live-pane-binding-manager.js";
 import { attachCommand } from "../interaction/tmux-launcher.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 import type { SessionManagerRegistry } from "./session-manager.js";
@@ -58,6 +62,7 @@ export class OperationService {
     private readonly managers: SessionManagerRegistry,
     private readonly now = Date.now,
     private readonly waitMs = { create: 300_000, archive: 30_000, delete: 30_000 },
+    private readonly bindings: LivePaneBindingManager = livePaneBindings,
   ) {
     this.#timer = setInterval(() => {
       void this.poll();
@@ -147,7 +152,7 @@ export class OperationService {
           if (target) {
             this.#transition(entry, { kind: "archive", phase: "sending_exit", nativeId, target });
             try {
-              await this.interaction.exitTarget(target);
+              await this.interaction.exitTarget(target, sessionId);
             } catch (error) {
               this.#finish(
                 entry,
@@ -244,7 +249,7 @@ export class OperationService {
       context = entry.stage;
       if (context.kind === "create" && context.phase === "observing") {
         const matches = snapshot.sessions.filter((session) => {
-          const attempt = session.interaction?.bindingAttempt;
+          const attempt = this.bindings.latest(session.id);
           return (
             session.origin.sourceInstanceId === entry.sourceInstanceId &&
             attempt?.valid &&
@@ -255,7 +260,7 @@ export class OperationService {
           throw new AssociationError("Multiple sessions claimed this operation ID");
         const match = matches[0];
         if (match) {
-          const attempt = match.interaction?.bindingAttempt;
+          const attempt = this.bindings.latest(match.id);
           if (
             !attempt?.valid ||
             attempt.socketPath !== context.target.socketPath ||

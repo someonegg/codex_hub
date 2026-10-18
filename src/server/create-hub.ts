@@ -6,6 +6,7 @@ import {
 } from "./application/session-read-service.js";
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
 import { SessionInteractionService } from "./interaction/interaction-service.js";
+import { livePaneBindings } from "./interaction/live-pane-binding-manager.js";
 import { TmuxInteractionService } from "./interaction/tmux-service.js";
 import { SessionLiveService } from "./live/session-live-service.js";
 import { OperationService } from "./management/operation-service.js";
@@ -22,7 +23,7 @@ function createSessionReadService(
 export async function createCodexSessionReadService(
   codexHome: string,
 ): Promise<SessionReadService> {
-  const source = await createCodexSessionSource(codexHome);
+  const source = await createCodexSessionSource(codexHome, livePaneBindings);
   return createSessionReadService([source], {
     resolveNickname: (session) => source.nicknameFor(session),
   });
@@ -34,7 +35,7 @@ export async function createCodexHub(
   socket?: string,
   interactionEnabled = true,
 ) {
-  const source = await createCodexSessionSource(codexHome);
+  const source = await createCodexSessionSource(codexHome, livePaneBindings);
   const sessions = createSessionReadService([source], {
     resolveNickname: (session) => source.nicknameFor(session),
   });
@@ -43,7 +44,12 @@ export async function createCodexHub(
     createCodexSessionManager(codexHome, socket),
   );
   const transport = new TmuxInteractionService();
-  const interaction = new SessionInteractionService(sessions, interactionEnabled, transport);
+  const interaction = new SessionInteractionService(
+    sessions,
+    interactionEnabled,
+    transport,
+    livePaneBindings,
+  );
   const cleanup: (() => void)[] = [];
   let closed = false;
   const close = () => {
@@ -56,7 +62,14 @@ export async function createCodexHub(
     cleanup.push(() => catalog.close());
     const live = new SessionLiveService(sessions, { interaction });
     cleanup.push(() => live.close());
-    const operations = new OperationService(sessions, interaction, managers);
+    const operations = new OperationService(
+      sessions,
+      interaction,
+      managers,
+      undefined,
+      undefined,
+      livePaneBindings,
+    );
     cleanup.push(() => operations.close());
     return { sessions, managers, interaction, catalog, live, operations, close };
   } catch (error) {

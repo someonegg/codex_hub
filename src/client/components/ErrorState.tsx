@@ -15,7 +15,7 @@ export function ErrorState({
       <p>{message}</p>
       {onRetry ? (
         <button type="button" onClick={onRetry}>
-          重试
+          Retry
         </button>
       ) : null}
       {onDismiss ? (

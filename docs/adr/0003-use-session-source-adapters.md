@@ -28,6 +28,15 @@ Chosen option: "Introduce high-level session source adapters that return normali
 
 Each source instance has a private stable instance key and a public opaque instance ID. Adapters return source-local stable session identities, native parent identities, normalized session content, a source signature, and diagnostics. The aggregate snapshot generates global opaque IDs from the source instance key and local identity, links parents only within a source instance, and publishes one immutable generation.
 
+Within a Codex source instance, a native session ID always determines the stable
+local identity. If multiple rollouts declare that ID, retain the previously
+accepted readable file; on first discovery choose the first readable file in the
+existing path order. Ignore the others: publish no additional session, submit no
+binding events, and retain no decode cache for them. Report duplicates only in
+server diagnostics, deduplicated by the diagnostic logger. If the retained file
+becomes unavailable, fully read the first remaining candidate. Rollouts without
+a native ID retain their path-based identity.
+
 Every normalized value returned by an adapter is a published immutable snapshot. An adapter must not mutate a previously returned `NormalizedSession`, timeline item, detail value, map, or other nested value in place when its source changes or a later refresh completes. It must instead publish new values for the changed path so earlier repository generations remain coherent.
 
 Adapters may preserve references for unchanged normalized sessions, timeline items, and tool or directive details. The repository treats such reference reuse only as an optimization hint: a reused reference must mean that value is unchanged, while a fresh reference may still contain equivalent content and remains valid at the cost of recomputing derived state. This permits copy-on-write adapters to extend timeline-prefix indexes cheaply without making reference reuse mandatory for other adapter implementations.

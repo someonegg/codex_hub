@@ -91,13 +91,14 @@ export interface InternalDetailQuery {
   cursor: TimelineCursor;
 }
 
-export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected";
+export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected" | "superseded";
 
 export type InteractionResponse =
   | { supported: false; attachCommand: string | null }
   | {
       supported: true;
       state: InteractionState;
+      supersededBySessionId: string | null;
       attachCommand: string | null;
     };
 

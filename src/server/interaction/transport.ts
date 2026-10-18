@@ -9,7 +9,7 @@ export interface TmuxBinding {
 export interface InteractionTransport {
   connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding>;
   archiveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;
-  exitTarget(target: TmuxBinding): Promise<void>;
+  exitTarget(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
   inspect(target: TmuxBinding): Promise<"alive" | "exited">;
   sendMessage(target: TmuxBinding, message: string, assertAvailable?: () => void): Promise<void>;
   sendKeys(
@@ -19,6 +19,7 @@ export interface InteractionTransport {
   ): Promise<void>;
   captureTerminal(
     target: TmuxBinding,
+    assertAvailable?: () => void,
   ): Promise<{ readonly content: string; readonly truncated: boolean }>;
 }
 

@@ -58,12 +58,10 @@ export class TimelinePrefixRegistry {
   ): PreparedTimelinePrefixes {
     const baseGeneration = this.#generation;
     const next = new Map<DomainSessionId, IndexedSession>();
-    const indexed = new Map<DomainSessionId, IndexedSession>();
     for (const [id, normalized] of sessions) {
       const previous = this.#published.get(id);
       if (previous !== undefined && dirtyIds !== undefined && !dirtyIds.has(id)) {
         next.set(id, previous);
-        indexed.set(id, previous);
         continue;
       }
       const unchangedPrefix =
@@ -77,11 +75,10 @@ export class TimelinePrefixRegistry {
           : this.buildIndex(normalized, this.prefixKey, previous),
       };
       next.set(id, published);
-      indexed.set(id, published);
     }
     let committed = false;
     return {
-      sessions: indexed,
+      sessions: next,
       commit: () => {
         if (committed) return;
         if (this.#generation !== baseGeneration) {

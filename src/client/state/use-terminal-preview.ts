@@ -17,6 +17,8 @@ export function useTerminalPreview(
   connected: boolean,
   autoExpandKey: string | null = null,
 ) {
+  const connection = useRef(connected);
+  connection.current = connected;
   const autoExpanded = useRef<{ sessionId: string; key: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<TerminalPreviewResponse | null>(null);
@@ -46,6 +48,8 @@ export function useTerminalPreview(
   }, []);
   useEffect(() => {
     if (!connected) {
+      setExpanded(false);
+      setBusy(false);
       setPreview(null);
       setError(null);
     }
@@ -93,8 +97,12 @@ export function useTerminalPreview(
     previewBusy: busy,
     previewError: error,
     previewExpanded: expanded,
-    onExpandPreview: () => setExpanded(true),
-    onTogglePreview: () => setExpanded((value) => !value),
+    onExpandPreview: () => {
+      if (connection.current) setExpanded(true);
+    },
+    onTogglePreview: () => {
+      if (connection.current) setExpanded((value) => !value);
+    },
     onDismissPreviewError: () => setError(null),
   };
 }

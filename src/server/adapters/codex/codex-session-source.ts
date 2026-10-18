@@ -1,3 +1,5 @@
+import { constants } from "node:fs";
+import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
@@ -7,6 +9,11 @@ import type {
   DomainSessionOrigin,
   NormalizedSession,
 } from "../../domain/session-domain.js";
+import {
+  type LivePaneBindEvent,
+  type LivePaneBindingManager,
+  livePaneBindings,
+} from "../../interaction/live-pane-binding-manager.js";
 import { opaqueIdForParts } from "../../security/opaque-id.js";
 import type {
   SessionSource,
@@ -15,6 +22,7 @@ import type {
   SourceSessionEntry,
 } from "../../source/session-source.js";
 import { type IdentityAccumulatorState, IdentityResolver } from "./identity-resolver.js";
+import { codexBindingAttemptsFrom } from "./interaction-parser.js";
 import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
 import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
@@ -69,11 +77,6 @@ const EMPTY_TELEMETRY: CodexRefreshTelemetry = {
   normalizeMs: 0,
 };
 
-interface SourceEntries {
-  readonly sessions: SourceSessionEntry[];
-  readonly diagnostics: DomainDiagnostic[];
-}
-
 export class CodexSessionSource implements SessionSource {
   readonly descriptor: SessionSourceDescriptor;
   #cache = new Map<string, CodexCacheEntry>();
@@ -89,6 +92,7 @@ export class CodexSessionSource implements SessionSource {
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
     private readonly projectDirectories = new ProjectDirectoryResolver(),
+    private readonly bindings: LivePaneBindingManager = livePaneBindings,
   ) {
     this.descriptor = {
       sourceType: "codex-jsonl",
@@ -118,23 +122,47 @@ export class CodexSessionSource implements SessionSource {
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
     });
     const nextCache = new Map<string, CodexCacheEntry>();
+    const binds = new Map<string, LivePaneBindEvent[]>();
     const telemetry = mutableTelemetry();
     const unavailableRollouts: string[] = [];
     const loadDiagnostics: DomainDiagnostic[] = [];
-    for (const { descriptor } of discovery.entries) {
+    const acceptedThreads = new Set<string>();
+    const duplicateThreads = new Set<string>();
+    // Previously accepted paths take precedence; discovery order breaks first-scan ties.
+    const candidates = [...discovery.entries].sort(
+      (left, right) =>
+        Number(this.#cache.has(right.descriptor.sourceRelativePath)) -
+        Number(this.#cache.has(left.descriptor.sourceRelativePath)),
+    );
+    for (const { descriptor } of candidates) {
       const fingerprint = fingerprintOf(descriptor);
       const cached = this.#cache.get(descriptor.sourceRelativePath);
+      let loaded: CodexCacheEntry | null;
       if (cached !== undefined && sameFingerprint(cached.fingerprint, fingerprint)) {
-        nextCache.set(descriptor.sourceRelativePath, cached);
-      } else {
-        const loaded = await this.#load(descriptor, fingerprint, cached, telemetry);
-        if (loaded === null) {
-          unavailableRollouts.push(descriptor.sourceRelativePath);
-          loadDiagnostics.push(rolloutUnavailableDiagnostic());
-        } else {
-          nextCache.set(descriptor.sourceRelativePath, loaded);
+        try {
+          await access(descriptor.canonicalPath, constants.R_OK);
+          loaded = cached;
+        } catch (error) {
+          if (!isExpectedIoError(error)) throw error;
+          loaded = null;
         }
+      } else {
+        loaded = await this.#load(descriptor, fingerprint, cached, telemetry, binds);
       }
+      if (loaded === null) {
+        unavailableRollouts.push(descriptor.sourceRelativePath);
+        loadDiagnostics.push(rolloutUnavailableDiagnostic());
+        continue;
+      }
+      if (loaded.threadId !== null) {
+        if (acceptedThreads.has(loaded.threadId)) {
+          duplicateThreads.add(loaded.threadId);
+          binds.delete(descriptor.id);
+          continue;
+        }
+        acceptedThreads.add(loaded.threadId);
+      }
+      nextCache.set(descriptor.sourceRelativePath, loaded);
     }
     const directories = await this.projectDirectories.resolveAll(
       [...nextCache.values()].map((entry) => entry.normalized.session.workingDirectory),
@@ -151,13 +179,28 @@ export class CodexSessionSource implements SessionSource {
         },
       });
     }
-    const entries = sourceEntries(nextCache);
+    const sessions = sourceEntries(nextCache);
     const diagnostics = [
       ...discovery.diagnostics.map((item) => ({ ...item })),
       ...loadDiagnostics,
-      ...entries.diagnostics,
+      ...[...duplicateThreads].map(
+        (): DomainDiagnostic => ({
+          code: "duplicate_native_session_id",
+          severity: "warning",
+          message:
+            "Multiple Codex rollouts declared the same native session ID; duplicate rollouts were ignored.",
+          ordinal: null,
+        }),
+      ),
     ];
-    const { sessions } = entries;
+    for (const entry of sessions) {
+      for (const event of binds.get(entry.normalized.session.id) ?? []) {
+        this.bindings.submit({
+          ...event,
+          sessionId: opaqueIdForParts(this.descriptor.instanceKey, entry.localId),
+        });
+      }
+    }
     const signature = JSON.stringify({
       discoverySignature,
       unavailableRollouts,
@@ -189,6 +232,7 @@ export class CodexSessionSource implements SessionSource {
     fingerprint: FileFingerprint,
     cached: CodexCacheEntry | undefined,
     telemetry: MutableCodexRefreshTelemetry,
+    binds: Map<string, LivePaneBindEvent[]>,
   ): Promise<CodexCacheEntry | null> {
     try {
       const appendCheckpoint =
@@ -216,6 +260,20 @@ export class CodexSessionSource implements SessionSource {
         normalizerBase,
         decoded.records,
         decoded.diagnostics,
+      );
+      binds.set(
+        descriptor.id,
+        decoded.records.flatMap((record) => {
+          const timestamp =
+            typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
+          return codexBindingAttemptsFrom(record).map((attempt, position) => ({
+            sessionId: descriptor.id,
+            time: Number.isFinite(timestamp) ? timestamp : 0,
+            ordinal: record.ordinal,
+            position,
+            attempt,
+          }));
+        }),
       );
       const metadata = this.identity.metadata(identityState);
       const origin = this.#origin(metadata.agentVersion);
@@ -255,52 +313,40 @@ export class CodexSessionSource implements SessionSource {
   }
 }
 
-export async function createCodexSessionSource(codexHome: string): Promise<CodexSessionSource> {
+export async function createCodexSessionSource(
+  codexHome: string,
+  bindings: LivePaneBindingManager = livePaneBindings,
+): Promise<CodexSessionSource> {
   const configured = resolve(codexHome);
-  return new CodexSessionSource(configured, `codex-jsonl\0${configured}`);
+  return new CodexSessionSource(
+    configured,
+    `codex-jsonl\0${configured}`,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    bindings,
+  );
 }
 
-function sourceEntries(cache: ReadonlyMap<string, CodexCacheEntry>): SourceEntries {
-  const threadCounts = new Map<string, number>();
-  for (const entry of cache.values()) {
-    if (entry.threadId !== null) {
-      threadCounts.set(entry.threadId, (threadCounts.get(entry.threadId) ?? 0) + 1);
-    }
-  }
-
+function sourceEntries(cache: ReadonlyMap<string, CodexCacheEntry>): SourceSessionEntry[] {
   const sessions: SourceSessionEntry[] = [];
-  const diagnostics: DomainDiagnostic[] = [];
-  const reportedDuplicates = new Set<string>();
   for (const entry of cache.values()) {
     const { threadId } = entry;
-    const duplicate = threadId !== null && (threadCounts.get(threadId) ?? 0) > 1;
-    if (duplicate && !reportedDuplicates.has(threadId)) {
-      reportedDuplicates.add(threadId);
-      diagnostics.push({
-        code: "duplicate_native_session_id",
-        severity: "warning",
-        message: "Multiple Codex rollouts declared the same native session ID.",
-        ordinal: null,
-      });
-    }
     sessions.push({
-      localId: sourceLocalId(threadId, entry.fingerprint.sourceRelativePath, duplicate),
+      localId: sourceLocalId(threadId, entry.fingerprint.sourceRelativePath),
       nativeSessionId: threadId,
       parentNativeSessionId: entry.parentThreadId,
       origin: entry.origin,
       normalized: entry.normalized,
     });
   }
-  return { sessions, diagnostics };
+  return sessions;
 }
 
-function sourceLocalId(
-  threadId: string | null,
-  sourceRelativePath: string,
-  duplicate: boolean,
-): string {
+function sourceLocalId(threadId: string | null, sourceRelativePath: string): string {
   if (threadId === null) return `resource:${sourceRelativePath}`;
-  if (duplicate) return `thread:${threadId}\0resource:${sourceRelativePath}`;
   return `thread:${threadId}`;
 }
 

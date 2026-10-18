@@ -1,15 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { NormalizedSession } from "../../src/server/domain/session-domain.js";
 import {
   deriveTimelinePrefixIndex,
   extendsTimelinePrefix,
   extendTimelinePrefixIndex,
+  TimelinePrefixIndex,
 } from "../../src/server/repository/timeline-prefix-index.js";
-import {
-  type TimelinePrefixIndexBuilder,
-  TimelinePrefixRegistry,
-} from "../../src/server/repository/timeline-prefix-registry.js";
+import { TimelinePrefixRegistry } from "../../src/server/repository/timeline-prefix-registry.js";
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("timeline prefix index", () => {
   it("retains old prefix tokens after append and rejects a rewritten prefix", () => {
@@ -65,12 +65,15 @@ describe("timeline prefix index", () => {
 
   it("only offers an append checkpoint for reference-continuous prefixes", () => {
     const key = Buffer.alloc(32, 9);
-    const modes: string[] = [];
-    const registry = new TimelinePrefixRegistry(trackedBuilder(modes), key);
+    const full = vi.spyOn(TimelinePrefixIndex, "fromCompleteStates");
+    const append = vi.spyOn(TimelinePrefixIndex, "fromAppend");
+    const registry = new TimelinePrefixRegistry(undefined, key);
     const original = normalized(["one"]);
     const first = registry.prepare(new Map([["session-id", original]]));
     first.commit();
     const firstIndexed = first.sessions.get("session-id")!;
+    expect(full).toHaveBeenCalledOnce();
+    expect(append).not.toHaveBeenCalled();
 
     const metadataOnly = {
       ...original,
@@ -86,9 +89,14 @@ describe("timeline prefix index", () => {
       firstIndexed.timelinePrefixIndex,
     );
 
+    expect(full).toHaveBeenCalledOnce();
+    expect(append).not.toHaveBeenCalled();
+
     const appended = appendMessage(metadataOnly, "two");
     const third = registry.prepare(new Map([["session-id", appended]]), new Set(["session-id"]));
     third.commit();
+    expect(full).toHaveBeenCalledOnce();
+    expect(append).toHaveBeenCalledOnce();
     const oldBoundary = firstIndexed.timelinePrefixIndex.boundaryAt(original.timeline, 1)!;
     expect(
       third.sessions
@@ -105,7 +113,8 @@ describe("timeline prefix index", () => {
       timeline: [{ ...appended.timeline[0]!, markdown: "changed" }, appended.timeline[1]!],
     } as NormalizedSession;
     const fourth = registry.prepare(new Map([["session-id", rewritten]]), new Set(["session-id"]));
-    expect(modes).toEqual(["full", "append", "full"]);
+    expect(full).toHaveBeenCalledTimes(2);
+    expect(append).toHaveBeenCalledOnce();
     expect(
       fourth.sessions
         .get("session-id")!
@@ -121,8 +130,9 @@ describe("timeline prefix index", () => {
     for (const detailKind of ["tool", "directive", "internal"] as const) {
       const original = normalizedWithDetails();
       const replaced = replaceDetail(original, detailKind);
-      const modes: string[] = [];
-      const registry = new TimelinePrefixRegistry(trackedBuilder(modes), Buffer.alloc(32, 5));
+      const full = vi.spyOn(TimelinePrefixIndex, "fromCompleteStates").mockClear();
+      const append = vi.spyOn(TimelinePrefixIndex, "fromAppend").mockClear();
+      const registry = new TimelinePrefixRegistry(undefined, Buffer.alloc(32, 5));
       const first = registry.prepare(new Map([["session-id", original]]));
       first.commit();
       const firstIndex = first.sessions.get("session-id")!.timelinePrefixIndex;
@@ -132,7 +142,8 @@ describe("timeline prefix index", () => {
       const secondIndex = second.sessions.get("session-id")!.timelinePrefixIndex;
 
       expect(extendsTimelinePrefix(original, replaced)).toBe(false);
-      expect(modes).toEqual(["full", "full"]);
+      expect(full).toHaveBeenCalledTimes(2);
+      expect(append).not.toHaveBeenCalled();
       expect(
         secondIndex.matches(replaced.timeline, oldBoundary, oldBoundary.timelinePrefixRevision),
       ).toBe(false);
@@ -142,25 +153,6 @@ describe("timeline prefix index", () => {
     }
   });
 });
-
-function trackedBuilder(modes: string[]): TimelinePrefixIndexBuilder {
-  return (value, prefixKey, previous) => {
-    const append =
-      previous !== undefined &&
-      extendsTimelinePrefix(previous.normalized, value) &&
-      previous.normalized.timeline.length < value.timeline.length;
-    modes.push(append ? "append" : "full");
-    return append
-      ? extendTimelinePrefixIndex(
-          previous.timelinePrefixIndex,
-          previous.normalized,
-          value,
-          prefixKey,
-          true,
-        )
-      : deriveTimelinePrefixIndex(value, prefixKey);
-  };
-}
 
 function replaceDetail(
   original: NormalizedSession,

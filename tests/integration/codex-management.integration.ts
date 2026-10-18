@@ -6,8 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
-import { createCodexSessionReadService } from "../../src/server/create-hub.js";
+import { SessionReadService } from "../../src/server/application/session-read-service.js";
+import { createCodexHub } from "../../src/server/create-hub.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
@@ -50,15 +52,25 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const reader = await createCodexSessionReadService(home);
-  const sourceId = (await createCodexSessionSource(home)).descriptor.sourceInstanceId;
-  const interaction = new SessionInteractionService(reader, true, new TmuxInteractionService());
+  const bindings = new LivePaneBindingManager();
+  const source = await createCodexSessionSource(home, bindings);
+  const reader = new SessionReadService([source]);
+  const sourceId = source.descriptor.sourceInstanceId;
+  const interaction = new SessionInteractionService(
+    reader,
+    true,
+    new TmuxInteractionService(),
+    bindings,
+  );
   const socket = join(root, "tmux.sock");
   const manager = new CodexSessionManager(home, new TmuxLauncher(socket));
   const operations = new OperationService(
     reader,
     interaction,
     new SessionManagerRegistry(sourceId).register(sourceId, manager),
+    undefined,
+    undefined,
+    bindings,
   );
   try {
     const first = operations.create({ directory, worktree: false, requestId: "native-first" });
@@ -92,9 +104,8 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
       `! printf 'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
     );
     await until(async () => {
-      const attempt = (await reader.managementSnapshot()).sessions.find(
-        (session) => session.id === manualId,
-      )?.interaction?.bindingAttempt;
+      await reader.managementSnapshot();
+      const attempt = bindings.latest(manualId);
       return attempt?.valid === true && attempt.operationId === undefined;
     });
     await interaction.sendKeys(manualId, ["left"]);
@@ -114,7 +125,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     const empty = snapshot.sessions.find((session) => session.id === manualId)!;
     for (const [index, record] of [original, worktree, empty].entries()) {
       // Cover a multiline draft, a cursor inside the draft, and an empty composer.
-      const attempt = record.interaction!.bindingAttempt!;
+      const attempt = bindings.latest(record.id)!;
       if (!attempt.valid) throw new Error("Expected a valid binding");
       if (index < 2) {
         execFileSync("tmux", ["-S", socket, "load-buffer", "-b", "archive-draft", "-"], {
@@ -164,16 +175,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
         try {
           terminal = execFileSync(
             "tmux",
-            [
-              "-S",
-              socket,
-              "capture-pane",
-              "-p",
-              "-t",
-              record.interaction!.bindingAttempt!.valid
-                ? record.interaction!.bindingAttempt!.paneId
-                : "",
-            ],
+            ["-S", socket, "capture-pane", "-p", "-t", attempt.valid ? attempt.paneId : ""],
             { encoding: "utf8" },
           );
         } catch {
@@ -228,10 +230,12 @@ it("reports the native refusal for a running unbound session and archives it aft
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const reader = await createCodexSessionReadService(home);
-  const sourceId = (await createCodexSessionSource(home)).descriptor.sourceInstanceId;
+  const bindings = new LivePaneBindingManager();
+  const source = await createCodexSessionSource(home, bindings);
+  const reader = new SessionReadService([source]);
+  const sourceId = source.descriptor.sourceInstanceId;
   const transport = new TmuxInteractionService();
-  const interaction = new SessionInteractionService(reader, true, transport);
+  const interaction = new SessionInteractionService(reader, true, transport, bindings);
   const operations = new OperationService(
     reader,
     interaction,
@@ -239,6 +243,9 @@ it("reports the native refusal for a running unbound session and archives it aft
       sourceId,
       new CodexSessionManager(home, new TmuxLauncher(socket)),
     ),
+    undefined,
+    undefined,
+    bindings,
   );
   try {
     const binding = await new TmuxLauncher(socket).launch(randomUUID(), directory, [
@@ -255,7 +262,7 @@ it("reports the native refusal for a running unbound session and archives it aft
         (await reader.managementSnapshot()).sessions.length === 1,
     );
     const record = (await reader.managementSnapshot()).sessions[0]!;
-    expect(record.interaction?.bindingAttempt).toBeNull();
+    expect(bindings.latest(record.id)).toBeNull();
     const running = operations.manage("archive", record.id);
     await until(async () => (await operations.get(running.operationId))?.status === "failed");
     expect((await operations.get(running.operationId))?.error).toContain(
@@ -276,6 +283,52 @@ it("reports the native refusal for a running unbound session and archives it aft
     expect((await reader.managementSnapshot()).sessions[0]?.archived).toBe(true);
   } finally {
     operations.close();
+    try {
+      execFileSync("tmux", ["-S", socket, "kill-server"], { stdio: "ignore" });
+    } catch {
+      /* already exited */
+    }
+  }
+}, 60_000);
+
+it("composes the Hub with shared adapter, interaction, and operation bindings", async () => {
+  const root = await realpath(await createTempDirectory("codex-hub-composition-"));
+  const home = join(root, "home");
+  const directory = join(root, "project");
+  const socket = join(root, "tmux.sock");
+  await mkdir(home);
+  await mkdir(directory);
+  await writeFile(
+    join(home, "config.toml"),
+    `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
+  );
+  execFileSync("codex", ["login", "--with-api-key"], {
+    env: { ...process.env, CODEX_HOME: home },
+    input: "test-only-not-a-real-key",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const hub = await createCodexHub(home, socket);
+  try {
+    const operation = hub.operations.create({
+      directory,
+      worktree: false,
+      requestId: "hub-composition",
+    });
+    await until(async () => {
+      const result = await hub.operations.get(operation.operationId);
+      if (result?.status === "failed") throw new Error(result.error!);
+      return result?.status === "succeeded";
+    });
+    const result = (await hub.operations.get(operation.operationId))!;
+    expect(await hub.interaction.describe(result.sessionId!)).toMatchObject({ state: "connected" });
+    const archive = hub.operations.manage("archive", result.sessionId!);
+    await until(async () => {
+      const result = await hub.operations.get(archive.operationId);
+      if (result?.status === "failed") throw new Error(result.error!);
+      return result?.status === "succeeded";
+    });
+  } finally {
+    hub.close();
     try {
       execFileSync("tmux", ["-S", socket, "kill-server"], { stdio: "ignore" });
     } catch {

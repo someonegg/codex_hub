@@ -108,8 +108,8 @@ export class TmuxInteractionService implements InteractionTransport {
   }
 
   /** Clear the Codex draft and request EOF without ever submitting composer text. */
-  exitTarget(binding: TmuxBinding): Promise<void> {
-    return this.sendKeys(binding, ["C-c", "C-d"]);
+  exitTarget(binding: TmuxBinding, assertAvailable?: () => void): Promise<void> {
+    return this.sendKeys(binding, ["C-c", "C-d"], assertAvailable);
   }
 
   sendMessage(
@@ -125,6 +125,7 @@ export class TmuxInteractionService implements InteractionTransport {
       let bufferMayExist = true;
       try {
         await this.#run(binding, ["load-buffer", "-b", bufferName, "-"], normalized);
+        assertAvailable();
         await this.#run(binding, [
           "paste-buffer",
           "-p",
@@ -135,6 +136,7 @@ export class TmuxInteractionService implements InteractionTransport {
           binding.paneId,
         ]);
         bufferMayExist = false;
+        assertAvailable();
         await this.#run(binding, ["send-keys", "-t", binding.paneId, "Enter"]);
       } finally {
         if (bufferMayExist) {
@@ -160,12 +162,16 @@ export class TmuxInteractionService implements InteractionTransport {
     });
   }
 
-  captureTerminal(binding: TmuxBinding): Promise<{
+  captureTerminal(
+    binding: TmuxBinding,
+    assertAvailable: () => void = () => {},
+  ): Promise<{
     readonly content: string;
     readonly truncated: boolean;
   }> {
     return this.#serialize(binding, async () => {
       await this.#revalidate(binding);
+      assertAvailable();
       const result = await this.runner.run(
         binding.socketPath,
         ["capture-pane", "-p", "-t", binding.paneId],

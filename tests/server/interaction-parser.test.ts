@@ -1,11 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { expect, it } from "vitest";
 
 import {
   CODEX_INTERACTION_KEY_BINDINGS,
+  codexBindingAttemptsFrom,
   codexBindingCommand,
+  codexInteraction,
 } from "../../src/server/adapters/codex/interaction-parser.js";
-import { normalizeRecords } from "./session-normalizer.fixtures.js";
-
 const operationId = "00000000-0000-4000-8000-000000000001";
 
 function response(ordinal: number, payload: Record<string, unknown>) {
@@ -23,72 +23,86 @@ function shellText(tmux: string, pane: string) {
   return `<user_shell_command>\nChunk ID: bind\nProcess exited with code 0\nFinal output:\nCODEX_HUB_TMUX_BIND_V3\n${tmux}\n${pane}\n${operationId}\n</user_shell_command>`;
 }
 
-describe("Codex interaction adapter", () => {
-  it("recognizes a binding only in a user response_item shell command", () => {
-    const normalized = normalizeRecords("binding", [
-      response(1, {
-        type: "custom_tool_call_output",
-        call_id: "tool",
-        output: "CODEX_HUB_TMUX_BIND_V3\n/tmp/wrong\n%1",
-      }),
+it("parses only user shell output and keeps binding outside normalized interaction", () => {
+  const text = shellText("/tmp/tmux.sock", "%7");
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, { type: "message", role: "assistant", content: [{ type: "text", text }] }),
+    ),
+  ).toEqual([]);
+  expect(
+    codexBindingAttemptsFrom(response(2, { type: "custom_tool_call_output", output: text })),
+  ).toEqual([]);
+  expect(
+    codexBindingAttemptsFrom(
+      response(3, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+    ),
+  ).toEqual([{ ordinal: 3, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId }]);
+  expect(codexInteraction()).toEqual({
+    transport: "tmux",
+    bindingCommand: codexBindingCommand(),
+    keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+  });
+});
+
+it.each(["invalid", "------------------------------------"])(
+  "rejects invalid operation ID %s",
+  (id) => {
+    expect(
+      codexBindingAttemptsFrom(
+        response(1, {
+          type: "message",
+          role: "user",
+          content: [
+            { type: "input_text", text: shellText("/tmp/a", "%1").replace(operationId, id) },
+          ],
+        }),
+      ),
+    ).toEqual([{ ordinal: 1, valid: false }]);
+  },
+);
+
+it.each([undefined, operationId])(
+  "accepts manual and created bindings with spaces and commas",
+  (id) => {
+    const text = `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n/tmp/a space,comma.sock\n%42${id ? `\n${id}` : ""}\n</user_shell_command>`;
+    expect(
+      codexBindingAttemptsFrom(
+        response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+      ),
+    ).toEqual([
       {
-        ordinal: 2,
-        value: {
-          type: "event_msg",
-          payload: { type: "user_message", message: shellText("/tmp/also-wrong", "%2") },
-        },
-      },
-      response(3, {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: shellText("/tmp/tmux.sock", "%7") }],
-      }),
-    ]);
-
-    expect(normalized.interaction).toEqual({
-      bindingAttempt: {
-        ordinal: 3,
+        ordinal: 1,
         valid: true,
-        socketPath: "/tmp/tmux.sock",
-        paneId: "%7",
-        operationId,
+        socketPath: "/tmp/a space,comma.sock",
+        paneId: "%42",
+        ...(id ? { operationId: id } : {}),
       },
-      transport: "tmux",
-      rebindCommand: codexBindingCommand(),
-      keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
-    });
-  });
-
-  it("uses only the latest binding attempt and does not fall back", () => {
-    const normalized = normalizeRecords("latest-binding", [
-      response(1, {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: shellText("/tmp/valid.sock", "%1") }],
-      }),
-      response(8, {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: shellText("malformed", "pane-8"),
-          },
-        ],
-      }),
     ]);
+  },
+);
 
-    expect(normalized.interaction?.bindingAttempt).toEqual({ ordinal: 8, valid: false });
-  });
-
-  it("treats a damaged latest shell-command wrapper as a failed attempt", () => {
-    const normalized = normalizeRecords("damaged-binding", [
+it.each([
+  ["relative/socket", "%1"],
+  ["", "%1"],
+  ["/tmp/a", "1"],
+  ["/tmp/a", "%a"],
+])("rejects invalid target %s %s", (socket, pane) => {
+  expect(
+    codexBindingAttemptsFrom(
       response(1, {
         type: "message",
         role: "user",
-        content: [{ type: "input_text", text: shellText("/tmp/valid.sock", "%1") }],
+        content: [{ type: "input_text", text: shellText(socket!, pane!) }],
       }),
-      response(9, {
+    ),
+  ).toEqual([{ ordinal: 1, valid: false }]);
+});
+
+it("reports a damaged shell wrapper as an invalid attempt", () => {
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, {
         type: "message",
         role: "user",
         content: [
@@ -98,98 +112,8 @@ describe("Codex interaction adapter", () => {
           },
         ],
       }),
-    ]);
-    expect(normalized.interaction?.bindingAttempt).toEqual({ ordinal: 9, valid: false });
-  });
-});
-
-it("recognizes operation IDs in V3 binding output with a valid UUID", () => {
-  const operationId = "00000000-0000-4000-8000-000000000001";
-  const normalized = normalizeRecords("operation-binding", [
-    response(1, {
-      type: "message",
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n/tmp/with spaces.sock\n%2\n${operationId}\n</user_shell_command>`,
-        },
-      ],
-    }),
-  ]);
-  expect(normalized.interaction?.bindingAttempt).toEqual({
-    ordinal: 1,
-    valid: true,
-    socketPath: "/tmp/with spaces.sock",
-    paneId: "%2",
-    operationId,
-  });
-});
-it("does not fall back to an older binding after an incomplete V3 record", () => {
-  const normalized = normalizeRecords("incomplete-operation", [
-    response(1, {
-      type: "message",
-      role: "user",
-      content: [{ type: "input_text", text: shellText("/tmp/old.sock", "%1") }],
-    }),
-    response(2, {
-      type: "message",
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: "<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n/tmp/new.sock\n%2",
-        },
-      ],
-    }),
-  ]);
-  expect(normalized.interaction?.bindingAttempt).toEqual({ ordinal: 2, valid: false });
-});
-
-it.each(["invalid", "------------------------------------"])(
-  "rejects invalid operation ID %s",
-  (id) => {
-    const result = normalizeRecords("invalid", [
-      response(1, {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: shellText("/tmp/a", "%1").replace(operationId, id) }],
-      }),
-    ]);
-    expect(result.interaction?.bindingAttempt).toEqual({ ordinal: 1, valid: false });
-  },
-);
-
-it.each([undefined, "00000000-0000-4000-8000-000000000001"])(
-  "accepts manual and created V3 bindings with spaces and commas",
-  (id) => {
-    const text = `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n/tmp/a space,comma.sock\n%42${id ? `\n${id}` : ""}\n</user_shell_command>`;
-    const parsed = normalizeRecords("manual", [
-      response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
-    ]);
-    expect(parsed.interaction?.bindingAttempt).toEqual({
-      ordinal: 1,
-      valid: true,
-      socketPath: "/tmp/a space,comma.sock",
-      paneId: "%42",
-      ...(id ? { operationId: id } : {}),
-    });
-  },
-);
-it.each([
-  ["relative/socket", "%1"],
-  ["", "%1"],
-  ["/tmp/a", "1"],
-  ["/tmp/a", "%a"],
-])("rejects invalid V3 target %s %s", (socket, pane) => {
-  const parsed = normalizeRecords("invalid", [
-    response(1, {
-      type: "message",
-      role: "user",
-      content: [{ type: "input_text", text: shellText(socket!, pane!) }],
-    }),
-  ]);
-  expect(parsed.interaction?.bindingAttempt).toEqual({ ordinal: 1, valid: false });
+    ),
+  ).toEqual([{ ordinal: 1, valid: false }]);
 });
 
 it("generates a basic binding command while retaining creation operation IDs", () => {
@@ -200,4 +124,21 @@ it("generates a basic binding command while retaining creation operation IDs", (
   expect(codexBindingCommand(operationId)).toContain(operationId);
   expect(basic).not.toContain(operationId);
   expect(() => codexBindingCommand("invalid")).toThrow("Invalid operation ID");
+});
+
+it("returns every bind including multiple binds within one record and shell block", () => {
+  const text =
+    shellText("/tmp/shared.sock", "%1").replace(
+      "</user_shell_command>",
+      `CODEX_HUB_TMUX_BIND_V3\n/tmp/shared.sock\n%2\n${operationId}\n</user_shell_command>`,
+    ) + shellText("bad", "%3");
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+    ),
+  ).toEqual([
+    { valid: true, ordinal: 1, socketPath: "/tmp/shared.sock", paneId: "%1", operationId },
+    { valid: true, ordinal: 1, socketPath: "/tmp/shared.sock", paneId: "%2", operationId },
+    { valid: false, ordinal: 1 },
+  ]);
 });

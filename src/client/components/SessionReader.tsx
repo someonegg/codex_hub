@@ -18,6 +18,7 @@ import { Timeline } from "./Timeline";
 
 interface SessionReaderProps {
   management?: ReactNode;
+  onNavigate?: (sessionId: string) => void;
   related?: ReactNode;
   context: ReaderContext;
   items: TimelineItem[];
@@ -37,6 +38,7 @@ interface SessionReaderProps {
 
 export function SessionReader({
   management,
+  onNavigate,
   related,
   context,
   items,
@@ -109,6 +111,7 @@ export function SessionReader({
         <SessionInteraction
           key={context.session.id}
           interaction={interaction}
+          onNavigate={onNavigate}
           sessionId={context.session.id}
           itemCount={context.session.itemCount}
           updatedAt={context.session.updatedAt}

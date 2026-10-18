@@ -5,6 +5,9 @@ import type {
   LiveSessionSnapshot,
   SessionReader,
 } from "../../src/server/application/session-reader.js";
+import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
+import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import {
   createProcessLiveRevisionFactory,
   withLiveRevision,
@@ -38,6 +41,7 @@ describe("SessionLiveService", () => {
     expect(
       revision(SESSION, {
         supported: true,
+        supersededBySessionId: null,
         attachCommand: null,
         state: "connected",
       }),
@@ -168,8 +172,7 @@ function snapshot(hasMore: boolean, interaction = false): LiveSessionSnapshot {
       interaction: interaction
         ? {
             transport: "tmux",
-            rebindCommand: "! bind",
-            bindingAttempt: null,
+            bindingCommand: "! bind",
             keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
           }
         : null,
@@ -225,3 +228,61 @@ const SESSION: SessionDetail = {
   sourceId: "session",
   itemCount: 0,
 };
+
+it("updates Live revisions on takeover and replacement deletion without changing the old session", async () => {
+  const bindings = new LivePaneBindingManager();
+  const pane = { socketPath: "/tmp/live.sock", paneId: "%1" };
+  bindings.submit({
+    sessionId: "session",
+    time: 1,
+    ordinal: 1,
+    position: 0,
+    attempt: { valid: true, ordinal: 1, ...pane },
+  });
+  const current = snapshot(false, true);
+  let replacementExists = true;
+  const interaction = new SessionInteractionService(
+    {
+      getInteractionSession: vi.fn(async (id) =>
+        id === "replacement" && !replacementExists ? null : current.interactionSession,
+      ),
+    },
+    true,
+    { connect: vi.fn(async () => pane) } as unknown as InteractionTransport,
+    bindings,
+  );
+  const live = new SessionLiveService(
+    { getLiveSession: vi.fn(async () => current) },
+    { interaction },
+  );
+  try {
+    const connected = (await live.wait("session", { cursor: CURSOR, after: OTHER_REVISION }))!;
+    expect(connected.interaction).toMatchObject({ state: "connected" });
+    bindings.submit({
+      sessionId: "replacement",
+      time: 2,
+      ordinal: 1,
+      position: 0,
+      attempt: { valid: true, ordinal: 1, ...pane },
+    });
+    const superseded = (await live.wait("session", {
+      cursor: CURSOR,
+      after: connected.liveRevision,
+    }))!;
+    expect(superseded.session).toEqual(connected.session);
+    expect(superseded.liveRevision).not.toBe(connected.liveRevision);
+    expect(superseded.interaction).toMatchObject({
+      state: "superseded",
+      supersededBySessionId: "replacement",
+    });
+    replacementExists = false;
+    const missing = (await live.wait("session", {
+      cursor: CURSOR,
+      after: superseded.liveRevision,
+    }))!;
+    expect(missing.liveRevision).not.toBe(superseded.liveRevision);
+    expect(missing.interaction).toMatchObject({ state: "superseded", supersededBySessionId: null });
+  } finally {
+    live.close();
+  }
+});

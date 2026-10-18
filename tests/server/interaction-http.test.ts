@@ -66,10 +66,11 @@ async function start() {
   const interaction = {
     describe: vi.fn().mockResolvedValue({
       supported: true,
+      supersededBySessionId: null,
       attachCommand: null,
       state: "connected",
     }),
-    rebind: vi.fn().mockResolvedValue(undefined),
+    handoffPaneBinding: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendKeys: vi.fn().mockResolvedValue(undefined),
     preview: vi.fn().mockResolvedValue({
@@ -103,19 +104,19 @@ async function start() {
 }
 
 describe("interaction HTTP API", () => {
-  it("accepts rebind with an empty object and rejects supplied commands", async () => {
+  it("accepts handoffPaneBinding with an empty object and rejects supplied commands", async () => {
     const { base, interaction } = await start();
     const post = (body: unknown) =>
-      fetch(`${base}/api/v1/sessions/${SESSION_ID}/rebind`, {
+      fetch(`${base}/api/v1/sessions/${SESSION_ID}/handoff-pane-binding`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
     expect((await post({})).status).toBe(204);
-    expect(interaction.rebind).toHaveBeenCalledWith(SESSION_ID);
+    expect(interaction.handoffPaneBinding).toHaveBeenCalledWith(SESSION_ID);
     expect((await post({ command: "arbitrary" })).status).toBe(400);
     expect((await post([])).status).toBe(400);
-    expect(interaction.rebind).toHaveBeenCalledTimes(1);
+    expect(interaction.handoffPaneBinding).toHaveBeenCalledTimes(1);
   });
 
   it("includes connection state in session reads and accepts messages", async () => {
@@ -126,6 +127,7 @@ describe("interaction HTTP API", () => {
       expect.objectContaining({
         interaction: expect.objectContaining({
           supported: true,
+          supersededBySessionId: null,
           attachCommand: null,
           state: "connected",
         }),

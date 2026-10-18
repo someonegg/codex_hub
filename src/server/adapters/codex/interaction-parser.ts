@@ -18,36 +18,32 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   plan: "BTab",
 } as const satisfies InteractionKeyBindings;
 
-export function codexInteractionFromBindingAttempt(
-  bindingAttempt: InteractionBindingAttempt | null,
-): DomainAgentInteraction {
+export function codexInteraction(): DomainAgentInteraction {
   return {
     transport: "tmux",
-    rebindCommand: codexBindingCommand(),
-    bindingAttempt,
+    bindingCommand: codexBindingCommand(),
     keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
   };
 }
 
-export function codexBindingAttemptFrom(record: DecodedRecord): InteractionBindingAttempt | null {
-  if (record.value.type !== "response_item") return null;
+export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBindingAttempt[] {
+  if (record.value.type !== "response_item") return [];
   const payload = record.value.payload;
   if (!isObject(payload) || payload.type !== "message" || payload.role !== "user") {
-    return null;
+    return [];
   }
   const text = contentText(payload.content);
-  if (text === null || !text.includes("<user_shell_command>")) return null;
+  if (text === null || !text.includes("<user_shell_command>")) return [];
   const shellBlocks = [...text.matchAll(/<user_shell_command>([\s\S]*?)<\/user_shell_command>/g)];
-  let found: InteractionBindingAttempt | null = null;
+  const found: InteractionBindingAttempt[] = [];
   for (const block of shellBlocks) {
     const lines = (block[1] ?? "").replace(/\r\n?/g, "\n").split("\n");
-    let blockAttempt: InteractionBindingAttempt | null = null;
     for (let index = 0; index < lines.length; index += 1) {
       if (lines[index] !== "CODEX_HUB_TMUX_BIND_V3") continue;
       const tmux = lines[index + 1] ?? "";
       const paneId = lines[index + 2] ?? "";
       const operationId = lines[index + 3] ?? "";
-      blockAttempt =
+      found.push(
         isAbsolute(tmux) && /^%\d+$/.test(paneId) && (!operationId || validOperationId(operationId))
           ? {
               ordinal: record.ordinal,
@@ -56,17 +52,17 @@ export function codexBindingAttemptFrom(record: DecodedRecord): InteractionBindi
               paneId,
               ...(operationId ? { operationId } : {}),
             }
-          : { ordinal: record.ordinal, valid: false };
+          : { ordinal: record.ordinal, valid: false },
+      );
     }
-    if (blockAttempt !== null) found = blockAttempt;
   }
   const lastOpen = text.lastIndexOf("<user_shell_command>");
   const lastClose = text.lastIndexOf("</user_shell_command>");
   if (lastOpen > lastClose) {
     const incomplete = text.slice(lastOpen + "<user_shell_command>".length);
     const incompleteLines = incomplete.replace(/\r\n?/g, "\n").split("\n");
-    if (incompleteLines.includes("CODEX_HUB_TMUX_BIND_V3")) {
-      found = { ordinal: record.ordinal, valid: false };
+    for (const line of incompleteLines) {
+      if (line === "CODEX_HUB_TMUX_BIND_V3") found.push({ ordinal: record.ordinal, valid: false });
     }
   }
   return found;

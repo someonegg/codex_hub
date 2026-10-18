@@ -7,16 +7,18 @@ import type {
 } from "../../shared/api-contract";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
+import { InternalLink } from "./InternalLink";
 import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
 interface InteractionPanelProps {
   interaction: InteractionResponse | null;
+  onNavigate?: (sessionId: string) => void;
   itemCount: number;
   updatedAt: string | null;
   interactionBusy: boolean;
   error: string | null;
   onDismissError: () => void;
-  onRebind: () => Promise<void>;
+  onHandoffPaneBinding: () => Promise<void>;
   onExpandPreview: () => void;
   onSendMessage: (message: string) => Promise<void>;
   onSendKeys: (keys: readonly InteractionKey[]) => Promise<void>;
@@ -30,13 +32,14 @@ interface InteractionPanelProps {
 
 export function InteractionPanel({
   interaction,
+  onNavigate,
   itemCount,
   updatedAt,
   interactionBusy,
   error,
   onDismissError,
   onSendMessage,
-  onRebind,
+  onHandoffPaneBinding,
   onExpandPreview,
   onSendKeys,
   preview,
@@ -83,7 +86,12 @@ export function InteractionPanel({
       scrollOnExpand.current = false;
     }
   }, [preview, previewExpanded]);
-  if (!hasShown && !previewConnected) return null;
+  if (
+    !hasShown &&
+    !previewConnected &&
+    !(interaction?.supported && interaction.state === "superseded")
+  )
+    return null;
 
   const send = async () => {
     if (!previewConnected || interactionBusy || messageIsBlank || messageTooLarge) return;
@@ -96,14 +104,41 @@ export function InteractionPanel({
     }
     setMessage("");
   };
+  const handoff = async () => {
+    if (!previewConnected || interactionBusy) return;
+    await onHandoffPaneBinding();
+    if (!mounted.current) return;
+    if (!previewExpanded) scrollOnExpand.current = true;
+    onExpandPreview();
+  };
   const sendKeys = (keys: readonly InteractionKey[]) => {
     if (!previewConnected || interactionBusy) return;
+    if (keys.includes("plan")) {
+      if (!previewExpanded) scrollOnExpand.current = true;
+      onExpandPreview();
+    }
     void onSendKeys(keys).catch(() => undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key !== "Enter" || !event.shiftKey || event.nativeEvent.isComposing) return;
     event.preventDefault();
     void send().catch(() => undefined);
+  };
+  const onPreviewKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (
+      !previewExpanded ||
+      !previewConnected ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.shiftKey ||
+      event.nativeEvent.isComposing
+    )
+      return;
+    const key = PREVIEW_KEYS[event.key];
+    if (!key) return;
+    event.preventDefault();
+    sendKeys([key]);
   };
   const status = interactionStatus(
     interaction?.supported ? interaction.state : "unavailable",
@@ -121,6 +156,20 @@ export function InteractionPanel({
         <span className={`interaction-status interaction-status-${status.kind}`}>
           {status.label}
         </span>
+        {interaction?.supported && interaction.state === "superseded" ? (
+          interaction.supersededBySessionId ? (
+            <InternalLink
+              href={`/sessions/${encodeURIComponent(interaction.supersededBySessionId)}`}
+              onNavigate={
+                onNavigate ? () => onNavigate(interaction.supersededBySessionId!) : undefined
+              }
+            >
+              Go to bound session
+            </InternalLink>
+          ) : (
+            <span>Replacement session unavailable</span>
+          )
+        ) : null}
         {attachCommand ? (
           <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
             tmux access
@@ -139,11 +188,6 @@ export function InteractionPanel({
             </button>
           </div>
         ) : null}
-        {!previewConnected ? (
-          <p role="status">
-            Connection unavailable. Your draft is preserved; input will resume when connected.
-          </p>
-        ) : null}
         {renderConnectedInteraction()}
         <p className="interaction-summary">{sessionSummary(itemCount, updatedAt)}</p>
       </div>
@@ -161,6 +205,7 @@ export function InteractionPanel({
               aria-expanded={previewExpanded}
               aria-controls={previewContentId}
               onClick={togglePreview}
+              disabled={!previewConnected}
             >
               <span className="terminal-preview-mark" aria-hidden="true">
                 {preview !== null && previewExpanded ? "▾" : "▸"}
@@ -184,7 +229,16 @@ export function InteractionPanel({
             </div>
           ) : null}
           {previewExpanded ? (
-            <div id={previewContentId} className="terminal-preview-body">
+            <div
+              id={previewContentId}
+              className="terminal-preview-body"
+              tabIndex={0}
+              onKeyDown={onPreviewKeyDown}
+              onClick={(event) => {
+                if (!(event.target instanceof Element) || !event.target.closest("button, pre"))
+                  event.currentTarget.focus();
+              }}
+            >
               {preview?.truncated ? (
                 <p className="terminal-preview-notice">
                   Terminal output exceeded the preview limit; the beginning was omitted.
@@ -255,18 +309,19 @@ export function InteractionPanel({
                 type="button"
                 disabled={!previewConnected}
                 aria-disabled={interactionBusy}
-                onClick={() => sendKeys(["interrupt"])}
+                onClick={() => sendKeys(["plan"])}
               >
-                Interrupt
+                Plan
               </button>
             </div>
             <button
               type="button"
-              className="interaction-rebind"
+              className="interaction-handoff"
+              title="Hand off this pane’s binding to the active Codex session."
               disabled={!previewConnected || interactionBusy}
-              onClick={() => void onRebind().catch(() => undefined)}
+              onClick={() => void handoff().catch(() => undefined)}
             >
-              Rebind
+              Handoff
             </button>
           </div>
         </div>
@@ -276,10 +331,11 @@ export function InteractionPanel({
 }
 
 function interactionStatus(
-  state: "unbound" | "disconnected" | "connected" | "unknown" | "unavailable",
+  state: "unbound" | "disconnected" | "connected" | "unknown" | "unavailable" | "superseded",
   error: string | null,
   previewError: string | null,
 ): { kind: "error" | "warning" | "connected"; label: string } {
+  if (state === "superseded") return { kind: "warning", label: "Superseded" };
   if (error !== null || previewError !== null) return { kind: "error", label: "Error" };
   if (state === "disconnected") return { kind: "warning", label: "Disconnected" };
   if (state === "unbound") return { kind: "warning", label: "Unbound" };
@@ -288,14 +344,22 @@ function interactionStatus(
   return { kind: "connected", label: "Connected" };
 }
 
+const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
+  Enter: "enter",
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
+
 const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
-  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "plan">;
+  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "interrupt">;
   readonly label: string;
   readonly glyph: string;
 }> = [
   { key: "enter", label: "Enter", glyph: "Enter" },
   { key: "up", label: "Up", glyph: "↑" },
-  { key: "plan", label: "Plan", glyph: "Plan" },
+  { key: "interrupt", label: "Interrupt", glyph: "^C" },
   { key: "left", label: "Left", glyph: "←" },
   { key: "down", label: "Down", glyph: "↓" },
   { key: "right", label: "Right", glyph: "→" },
