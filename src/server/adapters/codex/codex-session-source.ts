@@ -49,6 +49,7 @@ interface FileFingerprint {
 }
 
 interface CodexCacheEntry {
+  readonly descriptor: RolloutDescriptor;
   readonly fingerprint: FileFingerprint;
   readonly normalized: NormalizedSession;
   readonly threadId: string | null;
@@ -105,7 +106,12 @@ export class CodexSessionSource implements SessionSource {
   async refresh(): Promise<SessionSourceSnapshot> {
     await this.sessionIndex.refresh();
     const policy = await PathPolicy.create(this.codexHome);
-    const discovery = await new JsonlCatalogSource(policy).discover();
+    const archivedDescriptors = new Map(
+      [...this.#cache.values()]
+        .filter((entry) => entry.descriptor.archived)
+        .map((entry) => [entry.descriptor.canonicalPath, entry.descriptor] as const),
+    );
+    const discovery = await new JsonlCatalogSource(policy, archivedDescriptors).discover();
     const presentRoots = new Set(policy.roots().map((root) => root.canonicalPath));
     for (const root of this.#observedRoots) {
       if (!presentRoots.has(root))
@@ -139,12 +145,16 @@ export class CodexSessionSource implements SessionSource {
       const cached = this.#cache.get(descriptor.sourceRelativePath);
       let loaded: CodexCacheEntry | null;
       if (cached !== undefined && sameFingerprint(cached.fingerprint, fingerprint)) {
-        try {
-          await access(descriptor.canonicalPath, constants.R_OK);
+        if (descriptor.archived) {
           loaded = cached;
-        } catch (error) {
-          if (!isExpectedIoError(error)) throw error;
-          loaded = null;
+        } else {
+          try {
+            await access(descriptor.canonicalPath, constants.R_OK);
+            loaded = cached;
+          } catch (error) {
+            if (!isExpectedIoError(error)) throw error;
+            loaded = null;
+          }
         }
       } else {
         loaded = await this.#load(descriptor, fingerprint, cached, telemetry, binds);
@@ -287,6 +297,7 @@ export class CodexSessionSource implements SessionSource {
           : this.normalizer.materialize(normalizerState, metadata, origin);
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
       return {
+        descriptor,
         fingerprint,
         normalized,
         threadId: metadata.threadId,

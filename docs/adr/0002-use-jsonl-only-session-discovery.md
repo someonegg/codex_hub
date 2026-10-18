@@ -64,3 +64,8 @@ Catalog discovery now scans only the allowlisted `sessions/` and `archived_sessi
 - Good: Removes database schema and runtime dependencies without changing JSONL normalization.
 - Bad: Gives up metadata and rollout entries available only from SQLite.
 - Bad: Makes unavailable placeholders intentionally sparse.
+
+## Current behavior clarification, 2026-10-18
+
+Unreadable rollouts are now skipped with server-side diagnostics and retried on
+later refreshes; the placeholder behavior above is historical.

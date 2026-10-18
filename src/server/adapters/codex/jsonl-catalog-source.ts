@@ -7,7 +7,10 @@ import { isExpectedIoError } from "./io-errors.js";
 import type { PathPolicy, RolloutDescriptor } from "./path-policy.js";
 
 export class JsonlCatalogSource implements CodexCatalogSource {
-  constructor(private readonly policy: PathPolicy) {}
+  constructor(
+    private readonly policy: PathPolicy,
+    private readonly archivedDescriptors: ReadonlyMap<string, RolloutDescriptor> = new Map(),
+  ) {}
 
   async discover(): Promise<CatalogDiscovery> {
     const descriptors = new Map<string, RolloutDescriptor>();
@@ -15,8 +18,12 @@ export class JsonlCatalogSource implements CodexCatalogSource {
     for (const root of this.policy.roots()) {
       await scan(
         root.canonicalPath,
-        async (candidate) => {
-          const descriptor = await this.policy.register(candidate);
+        async (candidate, regularFile) => {
+          // Only reuse successfully loaded archives still enumerated as regular files
+          // under the same canonical root. New paths and symlinks retain validation.
+          const cached =
+            root.archived && regularFile ? this.archivedDescriptors.get(candidate) : undefined;
+          const descriptor = cached ?? (await this.policy.register(candidate));
           if (descriptor !== null) descriptors.set(descriptor.canonicalPath, descriptor);
         },
         diagnostics,
@@ -34,7 +41,7 @@ export class JsonlCatalogSource implements CodexCatalogSource {
 
 async function scan(
   directory: string,
-  visit: (path: string) => Promise<void>,
+  visit: (path: string, regularFile: boolean) => Promise<void>,
   diagnostics: Diagnostic[],
 ): Promise<void> {
   let entries;
@@ -54,6 +61,6 @@ async function scan(
   for (const entry of entries) {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) await scan(path, visit, diagnostics);
-    else if (entry.isFile() || entry.isSymbolicLink()) await visit(path);
+    else if (entry.isFile() || entry.isSymbolicLink()) await visit(path, entry.isFile());
   }
 }

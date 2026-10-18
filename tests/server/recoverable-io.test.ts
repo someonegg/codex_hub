@@ -12,7 +12,7 @@ const faults = vi.hoisted(() => new Map<string, Error>());
 vi.mock("node:fs/promises", async (importOriginal) => {
   const fs = await importOriginal<typeof FsPromises>();
   const wrap =
-    (name: "realpath" | "stat" | "lstat" | "readdir") =>
+    (name: "realpath" | "stat" | "lstat" | "readdir" | "access") =>
     async (...args: unknown[]) => {
       const fault = faults.get(`${name}:${String(args[0])}`);
       if (fault) throw fault;
@@ -24,6 +24,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     stat: wrap("stat"),
     lstat: wrap("lstat"),
     readdir: wrap("readdir"),
+    access: wrap("access"),
   };
 });
 afterEach(() => faults.clear());
@@ -37,12 +38,21 @@ async function fixture() {
   await mkdir(archived);
   const damaged = join(sessions, "rollout-damaged.jsonl");
   await writeFile(damaged, '{"type":"session_meta","payload":{"id":"damaged"}}\n');
-  await writeFile(
-    join(archived, "rollout-healthy.jsonl"),
-    '{"type":"session_meta","payload":{"id":"healthy"}}\n',
-  );
-  return { home, sessions, damaged };
+  const healthy = join(archived, "rollout-healthy.jsonl");
+  await writeFile(healthy, '{"type":"session_meta","payload":{"id":"healthy"}}\n');
+  return { home, sessions, damaged, healthy };
 }
+
+it("skips all per-file checks for successfully cached archives", async () => {
+  const { home, healthy } = await fixture();
+  const source = new CodexSessionSource(home, "archive-checks");
+  const initial = await source.refresh();
+  for (const operation of ["lstat", "realpath", "stat", "access"]) {
+    faults.set(`${operation}:${healthy}`, new Error(`Unexpected archived ${operation}`));
+  }
+  expect(await source.refresh()).toBe(initial);
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
+});
 
 it.each(codes)("recovers from %s in path checks, scanning and rollout loading", async (code) => {
   const { home, sessions, damaged } = await fixture();

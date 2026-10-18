@@ -5,6 +5,12 @@ metadata without reading Codex databases. Source adapters normalize data into
 shared snapshots. See [JSONL filtering](session-jsonl-filtering.md) for decoding,
 visibility, and truncation rules, and [ADRs](adr/README.md) for decision history.
 
+Successfully loaded archives reuse cached content without per-file checks or rereads.
+Directory discovery is unchanged: new files are validated, missing files evicted,
+symlinks rejected, and failed loads retried. Restored sessions resume normal validation;
+restart clears the cache. In-place content and permission changes are ignored while
+cached. Nicknames, project directories, and session relationships still refresh.
+
 Public contracts are defined in `src/shared/api-contract.ts`. IDs, timeline cursors,
 and revisions are opaque; clients must use returned values.
 

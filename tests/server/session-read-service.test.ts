@@ -483,7 +483,7 @@ describe("SessionReadService", () => {
     ).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
-  it("keeps a parent revision stable when source child enumeration order changes", async () => {
+  it("keeps parent metadata, catalog revision and cursor stable when child enumeration order changes", async () => {
     let sourceSignature = "children-z-a";
     let childIds = ["child-z", "child-a"];
     const source: SessionSource = {
@@ -505,6 +505,7 @@ describe("SessionReadService", () => {
     const firstList = await repository.list();
     const parentId = firstList.sessions.find((session) => session.title === "Parent")!.id;
     const first = await repository.getSession(parentId);
+    const firstPage = await repository.getItems(parentId, {});
 
     expect(first?.session.childIds).toEqual([...first!.session.childIds].sort());
 
@@ -514,6 +515,10 @@ describe("SessionReadService", () => {
     const second = await repository.getSession(parentId);
 
     expect(second?.session.childIds).toEqual(first?.session.childIds);
+    expect((await repository.list()).revision).toBe(firstList.revision);
+    expect((await repository.getItems(parentId, { cursor: firstPage!.cursor }))?.cursor).toBe(
+      firstPage!.cursor,
+    );
   });
 
   it("returns every timeline event type in one unfiltered view", async () => {

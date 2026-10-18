@@ -7,12 +7,13 @@ import {
   rename,
   stat,
   symlink,
+  unlink,
   utimes,
   writeFile,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CodexSessionSource,
@@ -45,6 +46,64 @@ describe("catalog discovery", () => {
       ),
     ).toBe(true);
     expect(discovery.diagnostics).toEqual([]);
+  });
+
+  it("reuses known archive descriptors without registering files again", async () => {
+    const home = await createTempDirectory("codex-archive-discovery-");
+    const directory = join(home, "archived_sessions");
+    await mkdir(directory);
+    const file = join(directory, "rollout-known.jsonl");
+    await writeFile(file, "{}\n");
+    const policy = await PathPolicy.create(home);
+    const descriptor = (await policy.register(file))!;
+    const register = vi.spyOn(policy, "register");
+    const discovery = new JsonlCatalogSource(
+      policy,
+      new Map([[descriptor.canonicalPath, descriptor]]),
+    );
+
+    expect((await discovery.discover()).entries).toEqual([{ descriptor }]);
+    expect(register).not.toHaveBeenCalled();
+
+    await unlink(file);
+    await symlink(join(home, "outside.jsonl"), file);
+    expect((await discovery.discover()).entries).toEqual([]);
+    expect(register).toHaveBeenCalledWith(descriptor.canonicalPath);
+  });
+
+  it("reads archives once while discovering additions, removals and restored sessions", async () => {
+    const home = await createTempDirectory("codex-archive-once-");
+    const directory = join(home, "archived_sessions");
+    await mkdir(directory);
+    await mkdir(join(home, "sessions"));
+    const file = join(directory, "rollout-first.jsonl");
+    const content = (id: string) =>
+      JSON.stringify({ type: "session_meta", payload: { id } }) + "\n";
+    await writeFile(file, content("first"));
+    const decoder = new CheckpointedRolloutDecoder();
+    const decode = vi.fn(decoder.decode.bind(decoder));
+    const source = new CodexSessionSource(home, "archive-once", { decode });
+    const first = await source.refresh();
+
+    await writeFile(file, content("changed"));
+    expect(await source.refresh()).toBe(first);
+    expect(decode).toHaveBeenCalledTimes(1);
+
+    const added = join(directory, "rollout-added.jsonl");
+    await writeFile(added, content("added"));
+    expect((await source.refresh()).sessions).toHaveLength(2);
+    expect(decode).toHaveBeenCalledTimes(2);
+
+    await unlink(added);
+    expect((await source.refresh()).sessions).toHaveLength(1);
+    expect(decode).toHaveBeenCalledTimes(2);
+
+    await rename(file, join(home, "sessions/rollout-first.jsonl"));
+    const restored = await source.refresh();
+    expect(restored.sessions).toHaveLength(1);
+    expect(restored.sessions[0]!.normalized.session.archived).toBe(false);
+    expect(restored.sessions[0]!.nativeSessionId).toBe("changed");
+    expect(decode).toHaveBeenCalledTimes(3);
   });
 
   it("degrades safely when allowlisted roots are absent or become unreadable", async () => {
@@ -136,49 +195,52 @@ describe("catalog discovery", () => {
     expect(second.sessions).toHaveLength(2);
   });
 
-  it("hides unreadable rollouts and retries them", async () => {
-    const home = await createTempDirectory("codex-adapter-errors-");
-    await mkdir(join(home, "sessions"));
-    await writeFile(
-      join(home, "sessions/rollout-error.jsonl"),
-      '{"type":"session_meta","payload":{"id":"error"}}\n',
-    );
-    const decoder = new CheckpointedRolloutDecoder();
-    let attempts = 0;
-    const recovering = new CodexSessionSource(home, "codex-errors", {
-      async decode(descriptor) {
-        attempts += 1;
-        if (attempts <= 2) {
-          throw Object.assign(new Error("gone"), { code: "ENOENT" });
-        }
-        return decoder.decode(descriptor);
-      },
-    });
-    const unavailable = await recovering.refresh();
-    expect(unavailable.sessions).toEqual([]);
-    expect(unavailable.diagnostics).toEqual([
-      expect.objectContaining({
-        code: "rollout_unavailable",
-        severity: "warning",
-      }),
-    ]);
-    expect(JSON.stringify(unavailable.diagnostics)).not.toContain(home);
+  it.each(["sessions", "archived_sessions"])(
+    "hides unreadable %s rollouts and retries them",
+    async (root) => {
+      const home = await createTempDirectory("codex-adapter-errors-");
+      await mkdir(join(home, root));
+      await writeFile(
+        join(home, root, "rollout-error.jsonl"),
+        '{"type":"session_meta","payload":{"id":"error"}}\n',
+      );
+      const decoder = new CheckpointedRolloutDecoder();
+      let attempts = 0;
+      const recovering = new CodexSessionSource(home, "codex-errors", {
+        async decode(descriptor) {
+          attempts += 1;
+          if (attempts <= 2) {
+            throw Object.assign(new Error("gone"), { code: "ENOENT" });
+          }
+          return decoder.decode(descriptor);
+        },
+      });
+      const unavailable = await recovering.refresh();
+      expect(unavailable.sessions).toEqual([]);
+      expect(unavailable.diagnostics).toEqual([
+        expect.objectContaining({
+          code: "rollout_unavailable",
+          severity: "warning",
+        }),
+      ]);
+      expect(JSON.stringify(unavailable.diagnostics)).not.toContain(home);
 
-    const repository = new SessionReadService([recovering]);
-    await expect(repository.list()).resolves.toMatchObject({
-      sessions: [],
-    });
+      const repository = new SessionReadService([recovering]);
+      await expect(repository.list()).resolves.toMatchObject({
+        sessions: [],
+      });
 
-    await repository.refresh();
-    await expect(repository.list()).resolves.toMatchObject({
-      sessions: [expect.objectContaining({ id: expect.any(String) })],
-    });
-    const recovered = await recovering.refresh();
-    expect(attempts).toBe(3);
-    expect(recovered.sessions).toHaveLength(1);
-    expect(recovered.diagnostics).toEqual([]);
-    expect(recovered.signature).not.toBe(unavailable.signature);
-  });
+      await repository.refresh();
+      await expect(repository.list()).resolves.toMatchObject({
+        sessions: [expect.objectContaining({ id: expect.any(String) })],
+      });
+      const recovered = await recovering.refresh();
+      expect(attempts).toBe(3);
+      expect(recovered.sessions).toHaveLength(1);
+      expect(recovered.diagnostics).toEqual([]);
+      expect(recovered.signature).not.toBe(unavailable.signature);
+    },
+  );
 
   it("propagates unexpected decoder failures", async () => {
     const home = await createTempDirectory("codex-adapter-broken-");

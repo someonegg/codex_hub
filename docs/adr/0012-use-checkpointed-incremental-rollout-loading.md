@@ -69,3 +69,9 @@ Identity and normalization use copy-on-write accumulators and publish only after
 - Good: Allows stable normalized objects and repository prefix slots to be reused.
 - Bad: Accepts the documented possibility of an undetected middle rewrite.
 - Bad: Requires explicit decoder and normalizer version invalidation.
+
+## Archived rollout scope update, 2026-10-18
+
+This policy now applies to unarchived rollouts. Successfully loaded archives reuse
+cached content; directory discovery is unchanged. See the
+[cache rules](../technical-reference.md) for details.

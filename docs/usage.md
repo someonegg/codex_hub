@@ -72,7 +72,9 @@ hub switches between them. Session URLs support direct access, refresh,
 and browser back/forward navigation; the home page does not select a session automatically.
 
 Unarchived conversations receive Live updates automatically. Archived conversations
-remain readable. History can load while Live is active without losing the reading position.
+remain readable. Restart the server to see external edits to cached archive content;
+archive, deletion, and restoration are detected normally.
+History can load while Live is active without losing the reading position.
 Technical event filters are optional; see [JSONL filtering](session-jsonl-filtering.md).
 
 Use the project **+** to prefill its directory, or the global **+** to choose an

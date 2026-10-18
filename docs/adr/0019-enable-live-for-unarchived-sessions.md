@@ -12,8 +12,8 @@ preferences add steps and can block history paging.
 
 ## Decision Drivers
 
-- Organize sessions by project while retaining the native Codex lifecycle.
-- Verify results without duplicate execution or guessed associations.
+- Receive conversation updates without requiring a toggle or stored preference.
+- Allow history paging and Live updates to coexist without losing reading position.
 
 ## Considered Options
 

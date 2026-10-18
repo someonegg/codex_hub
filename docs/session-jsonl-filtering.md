@@ -7,7 +7,10 @@ timeline items. Keep it synchronized with `rollout-decoder.ts`,
 
 ## Decode-time skips
 
-Successful refreshes keep an in-memory checkpoint. Growing files decode only new
+Archived rollouts are decoded once per cache lifetime; see the
+[cache rules](technical-reference.md).
+
+Unarchived rollouts keep an in-memory checkpoint. Growing files decode only new
 complete lines when decoder/normalizer versions and SHA-256 probes match; probes
 cover the first 4 KiB and up to 4 KiB before the previous EOF. Truncation,
 same-size changes, probe mismatches, incompatible state, and process startup
