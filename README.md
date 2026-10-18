@@ -1,9 +1,10 @@
 # Codex Hub
 
-A local hub for browsing, creating, and managing Codex sessions by project.
-Read conversations, follow live updates, and interact with sessions through tmux.
+A local web hub for Codex that pairs readable conversations with live CLI interaction.
+Browse sessions by project, follow responses in near real time, and keep working with
+Codex from desktop or mobile.
 
-![Codex Hub: project navigation and conversation](docs/images/codex-hub-desktop.png)
+![Codex Hub: create a session, send a prompt, and read the response](docs/images/codex-hub-intro.gif)
 
 <details>
 <summary>Mobile screenshots</summary>
@@ -46,7 +47,7 @@ npm start -- --codex-home /path/to/codex-home --port 4180
 ## Live pane
 
 Send prompts, preview terminal output, and use terminal controls from the session
-page. Connect an existing Codex session with the [tmux setup steps](docs/usage.md#binding-an-existing-tmux-session).
+page.
 
 ![Live pane: terminal preview, controls, message input, and Handoff](docs/images/codex-hub-live-pane.png)
 
@@ -59,6 +60,12 @@ the request is sent. When the old page shows **Superseded**, follow **Go to boun
 session** to continue there. Your draft stays on the old page.
 
 ## Security
+
+Codex Hub keeps its integration minimal: it reads local session logs and the
+session index to build conversations, and interacts with the Codex CLI as a black
+box through tmux. Session management uses native Codex commands. The hub does not
+read or manage Codex authentication tokens, API keys, or credential files;
+authentication stays with the Codex CLI.
 
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add

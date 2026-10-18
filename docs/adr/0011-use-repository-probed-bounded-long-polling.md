@@ -33,6 +33,10 @@ Chosen option: "Repository-probed bounded HTTP long polling", because it removes
 
 Waiting requests are limited to 100 per process and 10 per session. Interaction connection descriptions use a 1.5-second cache that coalesces concurrent promises, while mutation operations retain their real-time validation. Client disconnect, server shutdown, and abort signals release waiters immediately.
 
+The connection-description cache policy above is superseded by
+[ADR-0018](0018-cache-validation-per-binding-record.md). Current validation only
+coalesces concurrent checks for the same target; completed results are not cached.
+
 Composition creates shared tmux transport, catalog polling, Live, and operation
 tracking services; interaction explicitly receives transport. The API router
 receives business services without creating or closing them. Composition exposes
