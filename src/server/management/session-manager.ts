@@ -7,7 +7,12 @@ export interface ManagementSnapshot {
 
 export interface SessionManager {
   resolveDirectory(directory: string): Promise<{ directory: string; project: string }>;
-  launch(operationId: string, directory: string, worktree: boolean): Promise<TmuxBinding>;
+  launch(
+    operationId: string,
+    directory: string,
+    worktree: boolean,
+    yolo: boolean,
+  ): Promise<TmuxBinding>;
   archive(nativeId: string): Promise<void>;
   delete(nativeId: string): Promise<void>;
 }

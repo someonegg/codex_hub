@@ -110,6 +110,7 @@ export function CreateSession({
     } else dialog.current?.close?.();
   }, [open]);
   const [worktree, setWorktree] = useState(false);
+  const [yolo, setYolo] = useState(false);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
   const controller = useHubOperation("create", onCreated);
   useEffect(() => {
@@ -137,11 +138,11 @@ export function CreateSession({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const fingerprint = JSON.stringify([directory, worktree]);
+          const fingerprint = JSON.stringify([directory, worktree, yolo]);
           if (request.current?.fingerprint !== fingerprint)
             request.current = { fingerprint, id: newRequestId() };
           void controller.start(() =>
-            api.createSession({ directory, worktree, requestId: request.current!.id }),
+            api.createSession({ directory, worktree, yolo, requestId: request.current!.id }),
           );
         }}
       >
@@ -170,6 +171,15 @@ export function CreateSession({
             disabled={controller.busy}
           />
           Create Codex worktree
+        </label>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={yolo}
+            onChange={(event) => setYolo(event.target.checked)}
+            disabled={controller.busy}
+          />
+          Enable --yolo
         </label>
         <button type="submit" disabled={controller.busy || !directory.startsWith("/")}>
           {controller.busy ? "Creating…" : "Create session"}

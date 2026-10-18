@@ -216,6 +216,18 @@ describe("observed management operations", () => {
       });
     },
   );
+  it("defaults yolo off, forwards opt-in, and includes it in request deduplication", async () => {
+    const { service, manager } = setup();
+    const input = { directory: "/project", worktree: false, requestId: "yolo-request" };
+    const first = service.create(input);
+    expect(service.create({ ...input, yolo: false })).toEqual(first);
+    expect(() => service.create({ ...input, yolo: true })).toThrow(/different parameters/);
+    await flush();
+    expect(manager.launch).toHaveBeenLastCalledWith(first.operationId, "/project", false, false);
+    const second = service.create({ ...input, requestId: "yolo-enabled", yolo: true });
+    await flush();
+    expect(manager.launch).toHaveBeenLastCalledWith(second.operationId, "/project", false, true);
+  });
   it("keeps timeout terminal and never relaunches on queries", async () => {
     const { service, manager, set, time } = setup();
     const op = service.create({ directory: "/project", worktree: true, requestId: "request-one" });

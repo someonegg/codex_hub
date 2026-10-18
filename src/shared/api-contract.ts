@@ -122,5 +122,6 @@ export interface HubOperation {
 export interface CreateSessionRequest {
   directory: string;
   worktree: boolean;
+  yolo?: boolean;
   requestId: string;
 }

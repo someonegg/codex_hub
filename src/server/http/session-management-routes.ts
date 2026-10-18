@@ -44,11 +44,18 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
         if (typeof body.requestId !== "string")
           throw new RequestBodyError(400, "invalid_json", "requestId is required");
         if (
-          Object.keys(body).some((key) => !["directory", "worktree", "requestId"].includes(key)) ||
+          Object.keys(body).some(
+            (key) => !["directory", "worktree", "yolo", "requestId"].includes(key),
+          ) ||
           typeof body.directory !== "string" ||
-          typeof body.worktree !== "boolean"
+          typeof body.worktree !== "boolean" ||
+          (body.yolo !== undefined && typeof body.yolo !== "boolean")
         ) {
-          throw new RequestBodyError(400, "invalid_json", "directory and worktree are required");
+          throw new RequestBodyError(
+            400,
+            "invalid_json",
+            "directory and worktree are required; yolo must be a boolean if provided",
+          );
         }
         sendJson(
           response,
@@ -56,6 +63,7 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           operations.create({
             directory: body.directory,
             worktree: body.worktree,
+            yolo: body.yolo ?? false,
             requestId: body.requestId,
           }),
         );

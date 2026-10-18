@@ -71,7 +71,12 @@ export class OperationService {
   }
 
   create(input: CreateSessionRequest): HubOperation {
-    const fingerprint = JSON.stringify(["create", input.directory, input.worktree]);
+    const fingerprint = JSON.stringify([
+      "create",
+      input.directory,
+      input.worktree,
+      input.yolo ?? false,
+    ]);
     const duplicate = this.#duplicate(input.requestId, fingerprint);
     if (duplicate) return { ...duplicate };
     const entry = this.#new("create", null);
@@ -86,6 +91,7 @@ export class OperationService {
           entry.metadata.operationId,
           resolved.directory,
           input.worktree,
+          input.yolo ?? false,
         );
         if (!this.#pending(entry)) return;
         this.#transition(

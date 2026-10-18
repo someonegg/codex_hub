@@ -37,7 +37,7 @@ Technical event filters are optional; see [JSONL filtering](session-jsonl-filter
 
 Use the project **+** to prefill its directory, or the global **+** to choose an
 existing project or enter an absolute local directory. Creation optionally uses
-a native Codex worktree. The session **…** menu offers archive and, for archived
+a native Codex worktree and can enable `--yolo`. Both options are off by default. The session **…** menu offers archive and, for archived
 sessions, permanent deletion with confirmation.
 
 Creation starts Codex in a dedicated tmux session and waits for its recorded binding.

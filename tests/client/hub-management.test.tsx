@@ -39,12 +39,13 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     expect(document.querySelector(".session-action-menu")?.textContent).toBe("Archive session");
     fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
+    expect(screen.getByRole("checkbox", { name: "Enable --yolo" })).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
     await flush();
     expect(archive).toHaveBeenCalledWith(session.id);
     expect(screen.getByText("Waiting for exit")).toBeInTheDocument();
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ requestId: expect.stringMatching(/^[a-f0-9]{32}$/) }),
+      expect.objectContaining({ yolo: false, requestId: expect.stringMatching(/^[a-f0-9]{32}$/) }),
     );
   });
   it("uses a new request after definite failure but preserves it for uncertain retries", async () => {
@@ -75,10 +76,11 @@ describe("hub management", () => {
     const onCreated = vi.fn();
     render(<CreateSession project="/project with spaces" projects={[]} onCreated={onCreated} />);
     fireEvent.click(screen.getByRole("checkbox", { name: "Create Codex worktree" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable --yolo" }));
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
     await flush();
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ directory: "/project with spaces", worktree: true }),
+      expect.objectContaining({ directory: "/project with spaces", worktree: true, yolo: true }),
     );
     expect(screen.getByRole("status")).toHaveTextContent("pending");
     expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();

@@ -23,7 +23,7 @@ export class CodexSessionManager implements SessionManager {
     if (!(await stat(directory)).isDirectory()) throw new Error("Path is not a directory");
     return { directory, project: (await this.#projects.resolve(directory))! };
   }
-  launch(operationId: string, directory: string, worktree: boolean) {
+  launch(operationId: string, directory: string, worktree: boolean, yolo = false) {
     return this.tmux.launch(operationId, directory, [
       "env",
       `CODEX_HOME=${this.home}`,
@@ -31,6 +31,7 @@ export class CodexSessionManager implements SessionManager {
       "--no-daemon",
       "--no-alt-screen",
       ...(worktree ? ["--worktree"] : []),
+      ...(yolo ? ["--yolo"] : []),
       codexBindingCommand(operationId),
     ]);
   }

@@ -128,12 +128,12 @@ loop until a new expand, visibility, or connection transition.
 
 ## Asynchronous management
 
-| Endpoint                              | Body                                 | Result            |
-| ------------------------------------- | ------------------------------------ | ----------------- |
-| `POST /api/v1/sessions`               | `{ directory, worktree, requestId }` | `202` operation   |
-| `POST /api/v1/sessions/:id/archive`   | `{}`                                 | `202` operation   |
-| `DELETE /api/v1/sessions/:id`         | `{}`                                 | `202` operation   |
-| `GET /api/v1/operations/:operationId` | —                                    | Current operation |
+| Endpoint                              | Body                                        | Result            |
+| ------------------------------------- | ------------------------------------------- | ----------------- |
+| `POST /api/v1/sessions`               | `{ directory, worktree, yolo?, requestId }` | `202` operation   |
+| `POST /api/v1/sessions/:id/archive`   | `{}`                                        | `202` operation   |
+| `DELETE /api/v1/sessions/:id`         | `{}`                                        | `202` operation   |
+| `GET /api/v1/operations/:operationId` | —                                           | Current operation |
 
 Operations contain `operationId`, `type`, `status`, nullable `sessionId`,
 `createdAt`, `updatedAt`, nullable `error`, `phase`, and `attachCommand`.
@@ -151,7 +151,7 @@ conflicting operations return `409` without queuing.
 
 - **Create:** launch Codex as the main pane process in a dedicated
   `codex-hub-<operationId>` tmux session with `--no-daemon --no-alt-screen`, optional
-  `--worktree`, and `remain-on-exit off`. Supply the binding shell instruction as
+  `--worktree` and `--yolo` (both off by default), and `remain-on-exit off`. Supply the binding shell instruction as
   the initial CLI argument rather than pasting it. Confirm the operation marker,
   launch target, project, and valid binding. Wait up to 300 seconds after launch;
   show an attach command after 30 seconds and retain it on timeout.
