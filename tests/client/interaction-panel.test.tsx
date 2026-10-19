@@ -97,7 +97,12 @@ describe("interaction panel", () => {
     const scrollIntoView = vi.fn();
     panel.scrollIntoView = scrollIntoView;
     await user.click(screen.getByRole("button", { name: "Terminal preview" }));
-    const empty = { content: "", truncated: false, capturedAt: "2026-08-08" };
+    const empty = {
+      content: "",
+      truncated: false,
+      revision: "r".repeat(43),
+      capturedAt: "2026-08-08",
+    };
     rerender(<InteractionPanel {...handlers} preview={empty} />);
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     rerender(<InteractionPanel {...handlers} preview={{ ...empty, content: "first output" }} />);
@@ -123,7 +128,12 @@ describe("interaction panel", () => {
     rerender(
       <InteractionPanel
         {...handlers}
-        preview={{ content: "fresh output", truncated: false, capturedAt: "2026-08-08" }}
+        preview={{
+          content: "fresh output",
+          truncated: false,
+          revision: "r".repeat(43),
+          capturedAt: "2026-08-08",
+        }}
       />,
     );
     expect(composer).toHaveFocus();
@@ -309,6 +319,7 @@ describe("interaction panel", () => {
     const captured = {
       content: "first\nlatest",
       truncated: false,
+      revision: "r".repeat(43),
       capturedAt: "2026-08-08T12:00:00.000Z",
     };
     const scrollHeight = vi
@@ -339,6 +350,7 @@ describe("interaction panel", () => {
       preview: {
         content: "\u001b[31mplain text<img src=x onerror=alert(1)><script>alert(2)</script>",
         truncated: true,
+        revision: "r".repeat(43),
         capturedAt: "2026-08-08T12:00:00.000Z",
       },
     };
@@ -359,6 +371,7 @@ describe("interaction panel", () => {
       preview: {
         content: "terminal output",
         truncated: false,
+        revision: "r".repeat(43),
         capturedAt: "2026-08-08T12:00:00.000Z",
       },
     };
@@ -383,6 +396,7 @@ describe("interaction panel", () => {
       preview: {
         content: Array.from({ length: 80 }, (_, index) => `${staleLine} ${index + 1}`).join("\n"),
         truncated: false,
+        revision: "r".repeat(43),
         capturedAt: "2026-08-08T12:00:00.000Z",
       },
     };
@@ -396,6 +410,7 @@ describe("interaction panel", () => {
     const refreshedPreview = {
       ...handlers.preview,
       content: "short fresh output",
+      revision: "r".repeat(43),
       capturedAt: "2026-08-08T12:00:01.000Z",
     };
     rerender(<InteractionPanel {...handlers} preview={refreshedPreview} />);
@@ -417,7 +432,12 @@ describe("interaction panel", () => {
   it("sends the six terminal keys from the rectangular terminal keypad", async () => {
     const handlers = {
       ...props(interaction("connected")),
-      preview: { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00.000Z" },
+      preview: {
+        content: "output",
+        truncated: false,
+        revision: "r".repeat(43),
+        capturedAt: "2026-08-08T12:00:00.000Z",
+      },
     };
     const user = userEvent.setup();
     const { rerender } = render(<InteractionPanel {...handlers} />);

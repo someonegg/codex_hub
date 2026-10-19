@@ -11,6 +11,7 @@ import {
   nextRetryMs,
   retryDelayMs,
 } from "./retry-policy";
+import { applyPreview } from "./terminal-preview-patch";
 
 export function useTerminalPreview(
   sessionId: string,
@@ -58,19 +59,24 @@ export function useTerminalPreview(
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let retry = INITIAL_RETRY_MS;
+    let revision: string | undefined;
+    let confirmed: TerminalPreviewResponse | null = null;
     const capture = async () => {
       const request = channel.begin();
       setBusy(true);
       setError(null);
-      let delay: number | null = 1000;
+      let delay: number | null = 0;
       try {
-        const next = await api.terminalPreview(sessionId, request.signal);
+        const next = await api.terminalPreview(sessionId, request.signal, revision);
         if (!request.isCurrent()) return;
-        setPreview((current) =>
-          current?.content === next.content && current.truncated === next.truncated
-            ? current
-            : next,
-        );
+        if (next) {
+          const applied = applyPreview(confirmed, next);
+          if (applied) {
+            confirmed = applied;
+            revision = applied.revision;
+            setPreview(applied);
+          } else revision = undefined;
+        }
         retry = INITIAL_RETRY_MS;
       } catch (reason) {
         if (!request.isCurrent()) return;

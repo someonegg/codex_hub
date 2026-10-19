@@ -116,9 +116,9 @@ In Codex running inside tmux, execute:
 
 Session names are unrestricted for manual bindings. A valid, connected binding
 enables the full interaction panel. The terminal preview starts collapsed unless an
-automatic expansion rule below applies, and refreshes while expanded and visible.
-Collapsing or hiding it preserves its last frame;
-disconnection clears it. Switching sessions resets the preview.
+automatic expansion rule below applies. While expanded and visible, it updates as
+terminal output changes, merging bursts over one second. Collapsing or hiding it
+preserves its last frame; disconnection clears it. Switching sessions resets the preview.
 Sending a slash command consisting of a single English word (for example, `/plan`)
 automatically expands the preview after successful delivery. Leading and trailing
 whitespace is ignored for command detection. The preview also expands when the

@@ -10,7 +10,9 @@ import {
   type SessionInteractionService,
 } from "../interaction/interaction-service.js";
 import { MessageValidationError, normalizeMessage } from "../interaction/message.js";
+import { PreviewCapacityError } from "../interaction/terminal-preview-service.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
+import { only, optional } from "./query-params.js";
 import { HttpQueryError } from "./query-params.js";
 import { readJsonObject, RequestBodyError } from "./request-body.js";
 import { sendJson } from "./router.js";
@@ -40,11 +42,27 @@ export function createSessionInteractionRoutes(
       if (operation === "terminal-preview") {
         const headOnly = request.method === "HEAD";
         if (request.method !== "GET" && !headOnly) return false;
-        if ([...url.searchParams].length > 0) {
-          invalidQuery("terminal preview does not accept query parameters");
-        }
+        only(url.searchParams, ["after"]);
+        const after = optional(url.searchParams, "after");
+        if (after !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(after))
+          invalidQuery("after is malformed");
+        response.setHeader("Cache-Control", "no-store");
         if (interaction === undefined) return interactionUnavailable(response);
-        sendJson(response, 200, await interaction.preview(id), headOnly);
+        const abort = new AbortController();
+        const disconnect = () => {
+          if (!response.writableEnded) abort.abort();
+        };
+        request.once("aborted", disconnect);
+        response.once("close", disconnect);
+        try {
+          const result = await interaction.preview(id, headOnly ? undefined : after, abort.signal);
+          if (abort.signal.aborted || response.destroyed) return true;
+          if (result === null) return noContent(response);
+          sendJson(response, 200, result, headOnly);
+        } finally {
+          request.removeListener("aborted", disconnect);
+          response.removeListener("close", disconnect);
+        }
         return true;
       }
       if (request.method !== "POST") return false;
@@ -85,6 +103,20 @@ export function createSessionInteractionRoutes(
     },
     mapError(error, request, response) {
       const headOnly = request.method === "HEAD";
+      if (error instanceof DOMException && error.name === "AbortError") {
+        if (!response.destroyed) noContent(response);
+        return true;
+      }
+      if (error instanceof PreviewCapacityError) {
+        response.setHeader("Retry-After", "2");
+        sendJson(
+          response,
+          429,
+          { error: { code: "preview_capacity_exceeded", message: error.message } },
+          headOnly,
+        );
+        return true;
+      }
       if (error instanceof MessageValidationError && error.code === "invalid_message") {
         sendJson(
           response,

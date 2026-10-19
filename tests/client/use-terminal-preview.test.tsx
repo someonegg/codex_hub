@@ -8,10 +8,15 @@ import { api, ApiClientError } from "../../src/client/api/client";
 import { SessionInteraction } from "../../src/client/components/SessionInteraction";
 import { useTerminalPreview } from "../../src/client/state/use-terminal-preview";
 
-const frame = { content: "output", truncated: false, capturedAt: "2026-08-08T12:00:00Z" };
+const frame = {
+  content: "output",
+  truncated: false,
+  revision: "r".repeat(43),
+  capturedAt: "2026-08-08T12:00:00Z",
+};
 afterEach(() => vi.useRealTimers());
 
-it("starts folded, polls after completion without overlap, and preserves unchanged frames", async () => {
+it("starts folded, continues without overlap, and commits snapshot metadata while advancing revision", async () => {
   vi.useFakeTimers();
   let resolve!: (value: TerminalPreviewResponse) => void;
   const capture = vi
@@ -22,19 +27,29 @@ it("starts folded, polls after completion without overlap, and preserves unchang
           resolve = done;
         }),
     )
-    .mockResolvedValue(frame);
+    .mockResolvedValueOnce({
+      ...frame,
+      revision: "s".repeat(43),
+      capturedAt: "2026-08-08T12:00:01Z",
+    })
+    .mockImplementation(() => new Promise(() => {}));
   const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
   expect(capture).not.toHaveBeenCalled();
   act(() => result.current.onTogglePreview());
   await act(async () => vi.advanceTimersByTimeAsync(5000));
   expect(capture).toHaveBeenCalledTimes(1);
   await act(async () => resolve(frame));
-  const previous = result.current.preview;
-  await act(async () => vi.advanceTimersByTimeAsync(999));
-  expect(capture).toHaveBeenCalledTimes(1);
-  await act(async () => vi.advanceTimersByTimeAsync(1));
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(capture.mock.calls[1]?.[2]).toBe(frame.revision);
   expect(capture).toHaveBeenCalledTimes(2);
-  expect(result.current.preview).toBe(previous);
+  expect(result.current.preview).toEqual({
+    ...frame,
+    revision: "s".repeat(43),
+    capturedAt: "2026-08-08T12:00:01Z",
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(capture).toHaveBeenCalledTimes(3);
+  expect(capture.mock.calls[2]?.[2]).toBe("s".repeat(43));
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -91,7 +106,7 @@ it("backs off transient errors, retains the frame, and restarts stopped reads on
     .mockResolvedValue(frame);
   const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
   await act(async () => result.current.onTogglePreview());
-  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  await act(async () => vi.advanceTimersByTimeAsync(0));
   expect(result.current.previewError).toBe("offline");
   expect(result.current.preview).toEqual(frame);
   await act(async () => vi.advanceTimersByTimeAsync(1000));
@@ -105,7 +120,10 @@ it("backs off transient errors, retains the frame, and restarts stopped reads on
 });
 
 it("connects the panel toggle to the preview lifecycle", async () => {
-  const capture = vi.spyOn(api, "terminalPreview").mockResolvedValue(frame);
+  const capture = vi
+    .spyOn(api, "terminalPreview")
+    .mockResolvedValueOnce(frame)
+    .mockImplementation(() => new Promise(() => {}));
   const { unmount } = render(
     <SessionInteraction
       sessionId="a"
@@ -122,14 +140,17 @@ it("connects the panel toggle to the preview lifecycle", async () => {
   expect(capture).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Terminal preview" })));
   expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
-  expect(capture).toHaveBeenCalledOnce();
+  expect(capture.mock.calls[0]?.[0]).toBe("a");
   fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
   expect(screen.queryByLabelText("Terminal preview content")).toBeNull();
   unmount();
 });
 
 it("auto-expands once per latest message, waits for connection, and resets across sessions", async () => {
-  const capture = vi.spyOn(api, "terminalPreview").mockResolvedValue(frame);
+  const capture = vi
+    .spyOn(api, "terminalPreview")
+    .mockResolvedValueOnce(frame)
+    .mockImplementation(() => new Promise(() => {}));
   const { result, rerender } = renderHook(
     ({ id, connected, key }) => useTerminalPreview(id, connected, key),
     { initialProps: { id: "a", connected: false, key: "request-a" as string | null } },
@@ -263,3 +284,53 @@ it.each(["command", "handoff"])(
     );
   },
 );
+
+it("immediately reconnects after 204 with the last revision unchanged", async () => {
+  vi.useFakeTimers();
+  const capture = vi
+    .spyOn(api, "terminalPreview")
+    .mockResolvedValueOnce(frame)
+    .mockResolvedValueOnce(undefined)
+    .mockImplementation(() => new Promise(() => {}));
+  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
+  await act(async () => result.current.onTogglePreview());
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  expect(capture).toHaveBeenCalledTimes(3);
+  expect(capture.mock.calls[1]?.[2]).toBe(frame.revision);
+  expect(capture.mock.calls[2]?.[2]).toBe(frame.revision);
+  expect(result.current.preview).toEqual(frame);
+  unmount();
+});
+
+it("keeps the last frame on invalid deltas and requests a fresh full snapshot", async () => {
+  vi.useFakeTimers();
+  const capture = vi
+    .spyOn(api, "terminalPreview")
+    .mockResolvedValueOnce(frame)
+    .mockResolvedValueOnce({
+      baseRevision: frame.revision,
+      revision: "s".repeat(43),
+      truncated: true,
+      capturedAt: "next",
+      patches: [{ operations: [{ startLine: 0, deleteCount: 1, lines: ["changed"] }] }],
+    })
+    .mockResolvedValueOnce({
+      baseRevision: "wrong",
+      revision: "t".repeat(43),
+      truncated: false,
+      capturedAt: "bad",
+      patches: [],
+    })
+    .mockImplementation(() => new Promise(() => {}));
+  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
+  await act(async () => result.current.onTogglePreview());
+  await act(async () => vi.advanceTimersByTimeAsync(5));
+  expect(result.current.preview).toMatchObject({
+    content: "changed",
+    revision: "s".repeat(43),
+    truncated: true,
+  });
+  expect(capture.mock.calls[2]?.[2]).toBe("s".repeat(43));
+  expect(capture.mock.calls[3]?.[2]).toBeUndefined();
+  unmount();
+});

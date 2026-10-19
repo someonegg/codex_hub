@@ -1,14 +1,18 @@
+import { randomUUID } from "node:crypto";
+
 import type {
   InteractionKey,
   InteractionResponse,
-  TerminalPreviewResponse,
+  TerminalPreviewResult,
 } from "../../shared/api-contract.js";
 import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
 import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
 import type { SessionRuntime } from "./session-runtime.js";
+import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
+import type { PreviewListener } from "./tmux-preview-listener.js";
 import {
   type InteractionTransport,
   InteractionTransportError,
@@ -46,13 +50,30 @@ type InteractionSessionReader = Pick<SessionReader, "getInteractionSession">;
 export class SessionInteractionService {
   runtime?: SessionRuntime;
   readonly #busy = new Set<string>();
+  readonly #previews: TerminalPreviewService;
+  readonly #unsubscribe: () => void;
+  readonly #bindingIds = new WeakMap<InteractionBindingAttempt, string>();
+
+  close(): void {
+    this.#unsubscribe();
+    this.#previews.close();
+  }
 
   constructor(
     private readonly sessions: InteractionSessionReader,
     private readonly enabled: boolean,
     private readonly tmux: InteractionTransport,
     private readonly bindings: PaneBindingManager = paneBindings,
-  ) {}
+    listener?: PreviewListener,
+  ) {
+    this.#previews = new TerminalPreviewService(
+      (binding, assertOwner) =>
+        this.#perform(() => this.tmux.captureTerminal(binding, assertOwner)),
+      listener,
+      (binding) => this.tmux.resolveTarget({ valid: true, ordinal: 0, ...binding }),
+    );
+    this.#unsubscribe = bindings.subscribe(() => this.#previews.invalidate());
+  }
 
   setBusy(sessionId: string, busy: boolean) {
     if (busy) this.#busy.add(sessionId);
@@ -199,15 +220,33 @@ export class SessionInteractionService {
     );
   }
 
-  async preview(sessionId: string): Promise<TerminalPreviewResponse> {
-    const { binding } = await this.#resolve(sessionId);
-    const result = await this.#perform(() =>
-      this.tmux.captureTerminal(binding, () => this.#assertOwner(sessionId, binding)),
+  async preview(
+    sessionId: string,
+    after?: string,
+    signal?: AbortSignal,
+  ): Promise<TerminalPreviewResult | null> {
+    const { binding, attempt } = await this.#resolve(sessionId);
+    let identity = this.#bindingIds.get(attempt);
+    if (!identity) {
+      identity = randomUUID();
+      this.#bindingIds.set(attempt, identity);
+    }
+    return this.#perform(() =>
+      this.#previews.preview(
+        `${sessionId}:${identity}`,
+        binding,
+        () => {
+          this.#assertOwner(sessionId, binding);
+          if (this.bindings.latest(sessionId) !== attempt)
+            throw new SessionInteractionError(
+              "interaction_not_connected",
+              "The pane binding changed",
+            );
+        },
+        after,
+        signal,
+      ),
     );
-    return {
-      ...result,
-      capturedAt: new Date().toISOString(),
-    };
   }
 
   async #resolve(sessionId: string): Promise<ResolvedBinding> {

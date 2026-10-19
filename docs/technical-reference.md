@@ -96,7 +96,7 @@ use separate constants and revisions. Session diagnostics stay in server logs.
 | `POST /api/v1/sessions/:id/messages`             | `{ message }`; success returns `204`                                                                                                             |
 | `POST /api/v1/sessions/:id/keys`                 | `{ keys }`; success returns `204`                                                                                                                |
 | `POST /api/v1/sessions/:id/handoff-pane-binding` | Empty object `{}`; returns `204` after sending the binding command to the connected pane; handoff is recognized from a subsequent binding record |
-| `GET /api/v1/sessions/:id/terminal-preview`      | `{ content, truncated, capturedAt }`                                                                                                             |
+| `GET /api/v1/sessions/:id/terminal-preview`      | `{ content, truncated, capturedAt, revision }` or `{ baseRevision, revision, patches, truncated, capturedAt }`                                   |
 
 Supported keys and message limits are defined in `src/shared/interaction.ts`.
 Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
@@ -140,10 +140,58 @@ not cached. Input and preview revalidate inside the pane queue. Socket/pane reus
 targets the current pane without comparing process identity. Uncertain input is
 not automatically resent.
 
-Expanded, connected terminal previews refresh one second after each request
-completes, while the page is visible. Collapse, hiding, disconnection, and unmount
-cancel requests and waits. Temporary errors back off; nonretryable errors stop the
-loop until a new expand, visibility, or connection transition.
+Expanded, connected terminal previews use event-driven long polling while the page
+is visible. `GET /api/v1/sessions/:id/terminal-preview` returns the current snapshot.
+Pass its opaque `revision` unchanged as optional `after`: a different revision returns
+`200` immediately; an unchanged revision waits up to 25 seconds and returns `204`
+without a body. `after` must be 43 base64url characters; well-formed stale revisions
+return the current snapshot when their patch history is unavailable. `HEAD` ignores the wait condition and responds immediately.
+All responses use `Cache-Control: no-store`. At most 100 requests globally and 10 per
+session may wait; excess waits receive `429` with `Retry-After: 2`.
+
+Each socket/session shares a tmux control client that preserves terminal
+size and session environment. It uses `ignore-size` without `read-only`, because
+tmux may select it as the context for separate message and key commands; a
+read-only context rejects those commands. Each pane shares its snapshot and capture operation.
+Output events use a fixed one-second merge window; events during capture schedule
+another window. Only content or truncation changes publish a snapshot. Revisions
+also distinguish server processes and binding records.
+
+Line deltas use `text.split("\n")` / `lines.join("\n")`, preserving empty text,
+blank lines, and trailing newlines. A delta has `baseRevision`, final `revision`,
+`patches: [{ operations: [{ startLine, deleteCount, lines }] }]`, and final
+`truncated` / `capturedAt`. Patches run in chronological order; operations within
+each patch use original line indices and run in descending `startLine` order.
+Truncation-only changes produce an empty operations array.
+
+A bounded Myers search compares whole lines, with at most 256 edits and 1,000,000
+combined state expansions and line comparisons. Each binding identity caches up
+to five consecutive patches, at most 32 KiB of serialized UTF-8 entries (base and
+target revisions plus operations), without historical full texts. When generated,
+each individual patch, serialized as a complete delta response,
+must be at most 8 KiB and smaller than its full snapshot; exceeding either bound
+or the search budget clears history and establishes a full-snapshot baseline.
+Oldest entries are evicted for count/total size limits. Requests receive an ordered
+chain when available, otherwise full text. The 8 KiB generation limit does not
+apply to combined chains. A chain as large as full text falls
+back to full text without clearing history. Repeated revisions match the current
+snapshot first, then the most recent compatible history. Binding changes discard
+snapshots and history. Frontend and backend must deploy together.
+
+The browser validates the base revision and integer, in-range, descending,
+nonoverlapping operations before committing the reconstructed snapshot atomically.
+Invalid deltas preserve the current display and omit `after` on the next request
+to recover full text.
+
+The browser reconnects immediately after `200` or `204`. Collapse, hiding, switching
+sessions, disconnection, and unmount cancel requests. Idle subscriptions remain
+active for 10 seconds, continuing to capture output
+and update snapshots and history through the same one-second merge windows.
+Reconnecting during that period preserves pending windows. Expiry and shutdown
+release resources. Binding changes, cross-session pane moves, and listener failures
+invalidate subscriptions and fail pending requests. Retryable failures back off and
+rebuild listening; nonretryable errors stop until a new expand, visibility, or
+connection transition.
 
 ## Asynchronous management
 

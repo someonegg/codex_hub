@@ -88,6 +88,7 @@ describe("session automatic updates", () => {
     vi.spyOn(api, "terminalPreview").mockResolvedValue({
       content: "pane",
       truncated: false,
+      revision: "r".repeat(43),
       capturedAt: "2026-10-17T00:00:00Z",
     });
     render(<SessionPage sessionId={SESSION_ID} />);
@@ -120,7 +121,12 @@ describe("session automatic updates", () => {
     vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
     const capture = vi
       .spyOn(api, "terminalPreview")
-      .mockResolvedValue({ content: "pane", truncated: false, capturedAt: "2026-10-17T00:00:00Z" });
+      .mockResolvedValue({
+        content: "pane",
+        truncated: false,
+        revision: "r".repeat(43),
+        capturedAt: "2026-10-17T00:00:00Z",
+      });
     render(<SessionPage sessionId={SESSION_ID} />);
     await flush();
     expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(

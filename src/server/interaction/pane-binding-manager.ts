@@ -13,13 +13,32 @@ export class PaneBindingManager {
   readonly #sessions = new Map<string, PaneBindEvent>();
   readonly #panes = new Map<string, PaneBindEvent>();
 
+  readonly #listeners = new Set<() => void>();
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => {
+      this.#listeners.delete(listener);
+    };
+  }
+
   submit(event: PaneBindEvent): void {
     const latest = this.#sessions.get(event.sessionId);
-    if (!latest || compare(event, latest) > 0) this.#sessions.set(event.sessionId, event);
-    if (!event.attempt.valid) return;
+    let changed = false;
+    if (!latest || compare(event, latest) > 0) {
+      this.#sessions.set(event.sessionId, event);
+      changed = true;
+    }
+    if (!event.attempt.valid) {
+      if (changed) for (const listener of this.#listeners) listener();
+      return;
+    }
     const key = paneKey(event.attempt);
     const owner = this.#panes.get(key);
-    if (!owner || compare(event, owner) > 0) this.#panes.set(key, event);
+    if (!owner || compare(event, owner) > 0) {
+      this.#panes.set(key, event);
+      changed = true;
+    }
+    if (changed) for (const listener of this.#listeners) listener();
   }
 
   latest(sessionId: string): InteractionBindingAttempt | null {

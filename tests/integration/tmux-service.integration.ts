@@ -151,3 +151,208 @@ it("forces only the transferred pane closed when its outer shell ignores interru
     spawnSync("tmux", ["-S", socketPath, "kill-server"]);
   }
 });
+
+it("shares control listeners without changing sizes and rebuilds after session exit", async () => {
+  const { createTmuxPreviewListener } = await import(
+    "../../src/server/interaction/tmux-preview-listener.js"
+  );
+  const { TerminalPreviewService } = await import(
+    "../../src/server/interaction/terminal-preview-service.js"
+  );
+  const directory = await createTempDirectory("codex-control-tmux-");
+  const socketPath = join(directory, "server.sock");
+  const run = (...args: string[]) =>
+    execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
+  run("new-session", "-d", "-x", "101", "-y", "31", "-s", "preview", "sleep 60");
+  const transport = new TmuxInteractionService();
+  const binding = await transport.connect({
+    valid: true,
+    ordinal: 0,
+    socketPath,
+    paneId: run("display-message", "-p", "-t", "preview", "#{pane_id}"),
+  });
+  const capture = vi.fn((target: TmuxBinding) => transport.captureTerminal(target));
+  const listener = createTmuxPreviewListener();
+  const service = new TerminalPreviewService(capture, listener);
+  const other = listener(
+    binding,
+    () => {},
+    () => {},
+  );
+  try {
+    await other.ready;
+    const [first, second] = await Promise.all([
+      service.preview("session", binding, () => {}),
+      service.preview("session", binding, () => {}),
+    ]);
+    expect(first).toEqual(second);
+    expect(capture).toHaveBeenCalledTimes(1);
+    expect(run("list-clients", "-F", "#{client_control_mode}")).toBe("1");
+    expect(run("display-message", "-p", "-t", binding.paneId, "#{pane_width}x#{pane_height}")).toBe(
+      "101x31",
+    );
+    const waiting = service.preview("session", binding, () => {}, first!.revision);
+    run("respawn-pane", "-k", "-t", binding.paneId, "printf 'CONTROL-OUTPUT'; sleep 60");
+    expect((await waiting)!.content).toContain("CONTROL-OUTPUT");
+    const pending = service.preview(
+      "session",
+      binding,
+      () => {},
+      (await service.preview("session", binding, () => {}))!.revision,
+    );
+    const rejected = expect(pending).rejects.toThrow();
+    run("kill-session", "-t", "preview");
+    await rejected;
+    run("new-session", "-d", "-s", "rebuilt", "sleep 60");
+    const rebound = await transport.connect({
+      valid: true,
+      ordinal: 1,
+      socketPath,
+      paneId: run("display-message", "-p", "-t", "rebuilt", "#{pane_id}"),
+    });
+    expect(await service.preview("session", rebound, () => {})).toBeTruthy();
+  } finally {
+    service.close();
+    other.close();
+    spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+  }
+}, 15000);
+
+it.each(["move-window", "join-pane"])(
+  "rebuilds preview listening after cross-session %s",
+  async (operation) => {
+    const { TerminalPreviewService } = await import(
+      "../../src/server/interaction/terminal-preview-service.js"
+    );
+    const directory = await createTempDirectory("codex-moved-preview-");
+    const socketPath = join(directory, "server.sock");
+    const run = (...args: string[]) =>
+      execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
+    const transport = new TmuxInteractionService();
+    const service = new TerminalPreviewService(
+      (binding, guard) => transport.captureTerminal(binding, guard),
+      undefined,
+      (binding) => transport.resolveTarget({ valid: true, ordinal: 0, ...binding }),
+    );
+    try {
+      run("new-session", "-d", "-s", "source", "sleep 60");
+      run("new-window", "-d", "-t", "source", "-n", "keep", "sleep 60");
+      run("new-session", "-d", "-s", "destination", "sleep 60");
+      const paneId = run("display-message", "-p", "-t", "source:0", "#{pane_id}");
+      const attempt = { valid: true as const, ordinal: 0, socketPath, paneId };
+      const binding = await transport.connect(attempt);
+      const first = await service.preview("session", binding, () => {});
+      const pending = service.preview("session", binding, () => {}, first!.revision);
+      const rejected = expect(pending).rejects.toThrow("tmux session changed");
+      if (operation === "move-window") run(operation, "-s", "source:0", "-t", "destination:1");
+      else run(operation, "-s", paneId, "-t", "destination:0");
+      await rejected;
+      const moved = await transport.connect(attempt);
+      expect(moved.paneId).toBe(paneId);
+      expect(moved.sessionName).toBe("destination");
+      const next = await service.preview("session", moved, () => {});
+      const waiting = service.preview("session", moved, () => {}, next!.revision);
+      run("respawn-pane", "-k", "-t", paneId, "printf 'MOVED-OUTPUT'; sleep 60");
+      expect((await waiting)!.content).toContain("MOVED-OUTPUT");
+    } finally {
+      service.close();
+      spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+    }
+  },
+  10000,
+);
+
+it("sends chat messages while terminal preview is waiting", async () => {
+  const { TerminalPreviewService } = await import(
+    "../../src/server/interaction/terminal-preview-service.js"
+  );
+  const directory = await createTempDirectory("codex-send-preview-");
+  const socketPath = join(directory, "server.sock");
+  const run = (...args: string[]) =>
+    execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
+  const transport = new TmuxInteractionService();
+  const service = new TerminalPreviewService(
+    (target, guard) => transport.captureTerminal(target, guard),
+    undefined,
+    (target) => transport.resolveTarget({ valid: true, ordinal: 0, ...target }),
+  );
+  try {
+    run("new-session", "-d", "-s", "chat", "bash --noprofile --norc -i");
+    const binding = await transport.connect({
+      valid: true,
+      ordinal: 0,
+      socketPath,
+      paneId: run("display-message", "-p", "-t", "chat", "#{pane_id}"),
+    });
+    await vi.waitFor(() =>
+      expect(run("capture-pane", "-p", "-t", binding.paneId)).toContain("bash"),
+    );
+    const first = (await service.preview("session", binding, () => {}))!;
+    const waiting = service.preview("session", binding, () => {}, first.revision);
+    void waiting.catch(() => {});
+    await transport.sendMessage(binding, "printf 'CHAT-%s\\n' SENT");
+    const next = await waiting;
+    expect(next).toBeTruthy();
+    expect((await service.preview("session", binding, () => {}))!.content).toContain("CHAT-SENT");
+  } finally {
+    service.close();
+    spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+  }
+}, 15000);
+
+it("transports real tmux output as a shared line delta", async () => {
+  const { TerminalPreviewService } = await import(
+    "../../src/server/interaction/terminal-preview-service.js"
+  );
+  const { applyPreview } = await import("../../src/client/state/terminal-preview-patch.js");
+  const directory = await createTempDirectory("codex-delta-tmux-");
+  const socketPath = join(directory, "server.sock");
+  const run = (...args: string[]) =>
+    execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
+  run(
+    "new-session",
+    "-d",
+    "-x",
+    "100",
+    "-y",
+    "30",
+    "-s",
+    "delta",
+    "i=0; while [ \"$i\" -lt 20 ]; do printf 'stable terminal line %03d with padding for delta transport\\n' \"$i\"; i=$((i + 1)); done; read line; printf 'DELTA-世界😀\\n'; sleep 60",
+  );
+  const transport = new TmuxInteractionService();
+  const binding = await transport.connect({
+    valid: true,
+    ordinal: 0,
+    socketPath,
+    paneId: run("display-message", "-p", "-t", "delta", "#{pane_id}"),
+  });
+  const service = new TerminalPreviewService((target, guard) =>
+    transport.captureTerminal(target, guard),
+  );
+  try {
+    await vi.waitFor(() =>
+      expect(run("capture-pane", "-p", "-t", binding.paneId)).toContain("stable terminal line 019"),
+    );
+    const first = (await service.preview("session", binding, () => {}))!;
+    if (typeof first.content !== "string") throw new Error("Expected initial full snapshot");
+    const a = service.preview("session", binding, () => {}, first.revision);
+    const b = service.preview("session", binding, () => {}, first.revision);
+    run(
+      "respawn-pane",
+      "-k",
+      "-t",
+      binding.paneId,
+      "i=0; while [ \"$i\" -lt 20 ]; do printf 'stable terminal line %03d with padding for delta transport\\n' \"$i\"; i=$((i + 1)); done; printf 'DELTA-世界😀\\n'; sleep 60",
+    );
+    const [next, shared] = await Promise.all([a, b]);
+    expect(next).toEqual(shared);
+    expect(next).toHaveProperty("patches");
+    const restored = applyPreview(first, next!);
+    expect(restored!.content).toContain("DELTA-世界😀");
+    expect(restored!.content).toBe((await service.preview("session", binding, () => {}))!.content);
+  } finally {
+    service.close();
+    spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+  }
+}, 15000);

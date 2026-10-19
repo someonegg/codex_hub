@@ -17,7 +17,7 @@ beforeEach(() => {
 
 class TestSessionInteractionService extends SessionInteractionService {
   constructor(reader: SessionReader, enabled: boolean, tmux: TmuxInteractionService) {
-    super(reader, enabled, tmux, bindings);
+    super(reader, enabled, tmux, bindings, () => ({ ready: Promise.resolve(), close() {} }));
   }
 }
 
@@ -112,6 +112,7 @@ describe("session interaction policy", () => {
     };
     const tmux = {
       connect: vi.fn().mockResolvedValue(binding),
+      resolveTarget: vi.fn().mockResolvedValue(binding),
       sendMessage: vi.fn().mockResolvedValue(undefined),
       sendKeys: vi.fn().mockResolvedValue(undefined),
       captureTerminal: vi.fn().mockResolvedValue({
@@ -142,6 +143,7 @@ describe("session interaction policy", () => {
       content: "recent output",
       truncated: false,
       capturedAt: expect.any(String),
+      revision: expect.any(String),
     });
     expect(tmux.sendMessage).toHaveBeenCalledWith(binding, "hello", expect.any(Function));
     expect(tmux.sendMessage).toHaveBeenCalledWith(binding, "! bind", expect.any(Function));
@@ -253,6 +255,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
       });
     const tmux = {
       connect: vi.fn().mockResolvedValue(target),
+      resolveTarget: vi.fn().mockResolvedValue(target),
       sendMessage: vi.fn((_target, _message, check) => queue(check)),
       sendKeys: vi.fn((_target, _keys, check) => queue(check)),
       killPane: vi.fn((_target, check) => queue(check)),

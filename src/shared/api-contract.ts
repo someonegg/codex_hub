@@ -109,10 +109,28 @@ export type InteractionResponse =
     };
 
 export interface TerminalPreviewResponse {
+  revision: string;
   content: string;
   truncated: boolean;
   capturedAt: string;
 }
+
+export interface LineOperation {
+  startLine: number;
+  deleteCount: number;
+  lines: string[];
+}
+
+export interface TerminalPreviewDelta {
+  content?: never;
+  baseRevision: string;
+  revision: string;
+  patches: { operations: LineOperation[] }[];
+  truncated: boolean;
+  capturedAt: string;
+}
+
+export type TerminalPreviewResult = TerminalPreviewResponse | TerminalPreviewDelta;
 
 export interface HubOperation {
   mode?: "new" | "resume";

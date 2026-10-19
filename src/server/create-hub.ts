@@ -68,7 +68,7 @@ export async function createCodexHub(
   const runtime = new SessionRuntime(transport, managers, paneBindings);
   sessions.runtime = runtime;
   interaction.runtime = runtime;
-  const cleanup: (() => void)[] = [];
+  const cleanup: (() => void)[] = [() => interaction.close()];
   let closed = false;
   const close = () => {
     if (closed) return;
