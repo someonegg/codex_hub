@@ -59,7 +59,7 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 Send prompts, preview terminal output, and use terminal controls from the session
 page.
 
-![Session interaction: terminal preview, controls, message input, and Handoff](docs/images/codex-hub-session-interaction.png)
+<img src="docs/images/codex-hub-session-interaction.png" alt="Session interaction: terminal preview, controls, message input, and Handoff" width="600">
 
 ### Continue with Handoff
 

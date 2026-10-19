@@ -13,7 +13,6 @@ import type {
   SessionListResponse,
   SessionUpdatesQuery,
   SessionUpdatesResponse,
-  TerminalPreviewResult,
   ToolDetailQuery,
   ToolDetailResponse,
 } from "../../shared/api-contract";
@@ -147,9 +146,4 @@ export const api = {
     ),
   sendKeys: (sessionId: string, keys: readonly InteractionKey[], signal?: AbortSignal) =>
     postJson<void>(`/api/v1/sessions/${encodeURIComponent(sessionId)}/keys`, { keys }, signal),
-  terminalPreview: (sessionId: string, signal?: AbortSignal, after?: string) =>
-    request<TerminalPreviewResult | undefined>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/terminal-preview${queryString({ after })}`,
-      signal,
-    ),
 };

@@ -108,7 +108,7 @@ export type InteractionResponse =
       attachCommand: string | null;
     };
 
-export interface TerminalPreviewResponse {
+export interface TerminalPreviewSnapshot {
   revision: string;
   content: string;
   truncated: boolean;
@@ -121,16 +121,25 @@ export interface LineOperation {
   lines: string[];
 }
 
-export interface TerminalPreviewDelta {
-  content?: never;
-  baseRevision: string;
-  revision: string;
-  patches: { operations: LineOperation[] }[];
-  truncated: boolean;
-  capturedAt: string;
+export type TerminalPreviewFrame =
+  | ({ type: "snapshot" } & TerminalPreviewSnapshot)
+  | {
+      type: "delta";
+      baseRevision: string;
+      revision: string;
+      operations: LineOperation[];
+      truncated: boolean;
+      capturedAt: string;
+    };
+
+export interface TerminalPreviewError {
+  type: "error";
+  code: string;
+  message: string;
+  retryable: boolean;
 }
 
-export type TerminalPreviewResult = TerminalPreviewResponse | TerminalPreviewDelta;
+export type TerminalPreviewMessage = TerminalPreviewFrame | TerminalPreviewError;
 
 export interface HubOperation {
   mode?: "new" | "resume";

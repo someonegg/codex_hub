@@ -2,6 +2,7 @@ import { commandLineHelp, loadConfig } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
 import { createApiRouter } from "./http/api-router.js";
 import { startServer } from "./http/create-server.js";
+import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
 
 async function main(): Promise<void> {
   const command = loadConfig();
@@ -12,7 +13,12 @@ async function main(): Promise<void> {
 
   const { config } = command;
   const hub = await createCodexHub(config.homes, config.tmuxSocket, config.interactionEnabled);
-  const server = await startServer(config, createApiRouter(hub), hub.close);
+  const server = await startServer(
+    config,
+    createApiRouter(hub),
+    hub.close,
+    createTerminalPreviewWebSocket(hub.interaction),
+  );
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : config.port;
   const host = config.host.includes(":") ? `[${config.host}]` : config.host;

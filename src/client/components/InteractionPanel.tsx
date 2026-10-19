@@ -4,7 +4,7 @@ import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState
 import type {
   InteractionKey,
   InteractionResponse,
-  TerminalPreviewResponse,
+  TerminalPreviewSnapshot,
 } from "../../shared/api-contract";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
@@ -26,7 +26,7 @@ interface InteractionPanelProps {
   onExpandPreview: () => void;
   onSendMessage: (message: string) => Promise<void>;
   onSendKeys: (keys: readonly InteractionKey[]) => Promise<void>;
-  preview: TerminalPreviewResponse | null;
+  preview: TerminalPreviewSnapshot | null;
   previewBusy: boolean;
   previewError: string | null;
   onDismissPreviewError: () => void;

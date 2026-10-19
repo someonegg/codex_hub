@@ -12,6 +12,7 @@ import type { TimelineItem } from "../../src/shared/domain";
 import { api } from "../../src/client/api/client";
 import { SessionPage } from "../../src/client/SessionPage";
 import { installIntersectionObserver, intersectLatest } from "./intersection-observer";
+import { installMockWebSocket, MockWebSocket } from "./mock-websocket";
 import {
   baseSession,
   json,
@@ -28,6 +29,7 @@ const OTHER_UPDATE_REVISION = "opaque.updates.other" as UpdateRevision;
 const TAIL_CURSOR = "opaque.timeline.tail" as TimelineCursor;
 
 beforeEach(() => {
+  installMockWebSocket();
   window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
 });
 
@@ -85,15 +87,9 @@ describe("session automatic updates", () => {
     };
     vi.spyOn(api, "items").mockResolvedValue({ ...page(tail), interaction: connected });
     vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
-    vi.spyOn(api, "terminalPreview").mockResolvedValue({
-      content: "pane",
-      truncated: false,
-      revision: "r".repeat(43),
-      capturedAt: "2026-10-17T00:00:00Z",
-    });
     render(<SessionPage sessionId={SESSION_ID} />);
     await flush();
-    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Terminal preview/ })).toHaveAttribute(
       "aria-expanded",
       String(expands),
     );
@@ -119,19 +115,13 @@ describe("session automatic updates", () => {
       interaction: connected,
     });
     vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
-    const capture = vi.spyOn(api, "terminalPreview").mockResolvedValue({
-      content: "pane",
-      truncated: false,
-      revision: "r".repeat(43),
-      capturedAt: "2026-10-17T00:00:00Z",
-    });
     render(<SessionPage sessionId={SESSION_ID} />);
     await flush();
-    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Terminal preview/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
-    expect(capture).not.toHaveBeenCalled();
+    expect(MockWebSocket.instances).toHaveLength(0);
   });
 
   it("keeps the draft and in-flight send across connection loss, then hides on archival", async () => {
@@ -187,15 +177,11 @@ describe("session automatic updates", () => {
     });
     await flush();
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeEnabled();
-    let previewSignal: AbortSignal | undefined;
-    const capture = vi.spyOn(api, "terminalPreview").mockImplementation((_id, signal) => {
-      previewSignal = signal;
-      return new Promise(() => {});
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Terminal preview/ }));
     await flush();
-    expect(capture).toHaveBeenCalledTimes(1);
-    expect(previewSignal?.aborted).toBe(false);
+    expect(MockWebSocket.instances).toHaveLength(1);
+    const previewSocket = MockWebSocket.instances[0]!;
+    expect(previewSocket.close).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "tmux access" }));
     expect(screen.getByRole("dialog", { name: "tmux access" })).toBeVisible();
     await act(async () => {
@@ -206,7 +192,7 @@ describe("session automatic updates", () => {
     await flush();
     expect(screen.queryByRole("region", { name: "Session interaction" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Message to agent" })).not.toBeInTheDocument();
-    expect(previewSignal?.aborted).toBe(true);
+    expect(previewSocket.close).toHaveBeenCalledOnce();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
   it("starts automatic updates by default, keeps one request, and cancels on unmount", async () => {

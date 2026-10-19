@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type {
   InteractionKey,
   InteractionResponse,
-  TerminalPreviewResult,
+  TerminalPreviewFrame,
 } from "../../shared/api-contract.js";
 import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
 import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
@@ -220,32 +220,33 @@ export class SessionInteractionService {
     );
   }
 
-  async preview(
+  async subscribePreview(
     sessionId: string,
-    after?: string,
-    signal?: AbortSignal,
-  ): Promise<TerminalPreviewResult | null> {
+    frame: (value: TerminalPreviewFrame) => void,
+    fail: (error: unknown) => void,
+    signal: AbortSignal,
+  ): Promise<() => void> {
     const { binding, attempt } = await this.#resolve(sessionId);
+    if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     let identity = this.#bindingIds.get(attempt);
     if (!identity) {
       identity = randomUUID();
       this.#bindingIds.set(attempt, identity);
     }
-    return this.#perform(() =>
-      this.#previews.preview(
-        `${sessionId}:${identity}`,
-        binding,
-        () => {
-          this.#assertOwner(sessionId, binding);
-          if (this.bindings.latest(sessionId) !== attempt)
-            throw new SessionInteractionError(
-              "interaction_not_connected",
-              "The pane binding changed",
-            );
-        },
-        after,
-        signal,
-      ),
+    return this.#previews.subscribe(
+      `${sessionId}:${identity}`,
+      binding,
+      () => {
+        this.#assertOwner(sessionId, binding);
+        if (this.bindings.latest(sessionId) !== attempt)
+          throw new SessionInteractionError(
+            "interaction_not_connected",
+            "The pane binding changed",
+          );
+      },
+      frame,
+      fail,
+      signal,
     );
   }
 

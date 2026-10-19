@@ -84,7 +84,13 @@ it.each([false, true])(
     for (const action of [
       () => service.sendMessage(a, "hello"),
       () => service.sendKeys(a, ["enter"]),
-      () => service.preview(a),
+      () =>
+        service.subscribePreview(
+          a,
+          () => {},
+          () => {},
+          new AbortController().signal,
+        ),
       () => service.handoffPaneBinding(a),
     ]) {
       await expect(action()).rejects.toMatchObject({ code: "interaction_not_connected" });

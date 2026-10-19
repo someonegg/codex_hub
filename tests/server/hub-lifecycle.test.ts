@@ -66,25 +66,31 @@ it("closes the composed services once before waiting for HTTP connections", asyn
 it("releases services if server construction or listening fails", async () => {
   const settings = await config();
   const constructionCleanup = vi.fn();
+  const constructionUpgrades = { handle: vi.fn(), close: vi.fn() };
   await expect(
     startServer(
       { ...settings, clientDirectory: join(settings.clientDirectory, "missing") },
       emptyApiRouter,
       constructionCleanup,
+      constructionUpgrades,
     ),
   ).rejects.toThrow();
   expect(constructionCleanup).toHaveBeenCalledOnce();
+  expect(constructionUpgrades.close).toHaveBeenCalledOnce();
   const occupied = await startServer(settings, emptyApiRouter, () => {});
   const listenCleanup = vi.fn();
+  const listenUpgrades = { handle: vi.fn(), close: vi.fn() };
   try {
     await expect(
       startServer(
         { ...settings, port: (occupied.address() as AddressInfo).port },
         emptyApiRouter,
         listenCleanup,
+        listenUpgrades,
       ),
     ).rejects.toMatchObject({ code: "EADDRINUSE" });
     expect(listenCleanup).toHaveBeenCalledOnce();
+    expect(listenUpgrades.close).toHaveBeenCalledOnce();
   } finally {
     await new Promise<void>((resolve) => occupied.close(() => resolve()));
   }

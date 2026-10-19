@@ -5,25 +5,31 @@ import type { LineOperation } from "../../src/shared/api-contract";
 import { applyPreview } from "../../src/client/state/terminal-preview-patch";
 const current = { content: "a\nb\n", revision: "one", truncated: false, capturedAt: "before" };
 const delta = {
+  type: "delta" as const,
   baseRevision: "one",
-  revision: "three",
+  revision: "two",
   truncated: true,
   capturedAt: "after",
-  patches: [
-    { operations: [{ startLine: 1, deleteCount: 1, lines: ["你好😀", "inserted"] }] },
-    { operations: [] },
-    {
-      operations: [
-        { startLine: 3, deleteCount: 0, lines: ["tail"] },
-        { startLine: 0, deleteCount: 1, lines: ["A"] },
-      ],
-    },
+  operations: [
+    { startLine: 1, deleteCount: 1, lines: ["你好😀", "inserted"] },
+    { startLine: 0, deleteCount: 1, lines: ["A"] },
   ],
 };
-it("applies ordered patches with final metadata", () => {
+it("applies descending operations with final metadata", () => {
   expect(applyPreview(current, delta)).toEqual({
-    content: "A\n你好😀\ninserted\ntail\n",
-    revision: "three",
+    content: "A\n你好😀\ninserted\n",
+    revision: "two",
+    truncated: true,
+    capturedAt: "after",
+  });
+});
+it("accepts a full frame without keeping its wire discriminator", () => {
+  expect(applyPreview(null, { ...current, type: "snapshot" })).toEqual(current);
+});
+it("keeps trailing newlines and commits truncation-only updates", () => {
+  expect(applyPreview(current, { ...delta, operations: [] })).toEqual({
+    ...current,
+    revision: "two",
     truncated: true,
     capturedAt: "after",
   });
@@ -50,7 +56,7 @@ it("rejects missing bases and invalid operations without mutating the snapshot",
     expect(
       applyPreview(current, {
         ...delta,
-        patches: [{ operations }],
+        operations,
       }),
     ).toBeNull();
   }

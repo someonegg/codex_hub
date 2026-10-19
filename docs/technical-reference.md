@@ -87,7 +87,7 @@ are independent of catalog revisions and include `updatedAt`. Session diagnostic
 | `POST /api/v1/sessions/:id/messages`             | `{ message }`; success returns `204`                                                                                                             |
 | `POST /api/v1/sessions/:id/keys`                 | `{ keys }`; success returns `204`                                                                                                                |
 | `POST /api/v1/sessions/:id/handoff-pane-binding` | Empty object `{}`; returns `204` after sending the binding command to the connected pane; handoff is recognized from a subsequent binding record |
-| `GET /api/v1/sessions/:id/terminal-preview`      | `{ content, truncated, capturedAt, revision }` or `{ baseRevision, revision, patches, truncated, capturedAt }`                                   |
+| `WS /api/v1/sessions/:id/terminal-preview`       | JSON `snapshot`, `delta`, and `error` messages (see below)                                                                                       |
 
 Supported keys and message limits are defined in `src/shared/interaction.ts`.
 Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
@@ -123,46 +123,42 @@ Preview captures the current pane screen as plain text, not scrollback or a term
 emulator stream. Captures retain the last 256,000 UTF-8 bytes without splitting a
 character and report `truncated` when the beginning was removed.
 
-Expanded, connected terminal previews use event-driven long polling while the page
-is visible. `GET /api/v1/sessions/:id/terminal-preview` returns the current snapshot.
-Pass its opaque `revision` unchanged as optional `after`: a different revision returns
-`200` immediately; an unchanged revision waits up to 25 seconds and returns `204`
-without a body. `after` must be 43 base64url characters; well-formed stale revisions
-return the current snapshot when their patch history is unavailable. `HEAD` ignores the wait condition and responds immediately.
-All responses use `Cache-Control: no-store`. At most 100 requests globally and 10 per
-session may wait; excess waits receive `429` with `Retry-After: 2`.
+Terminal previews use `/api/v1/sessions/:id/terminal-preview` over `ws` or `wss`,
+inheriting the server's TLS and optional client certificate requirements. Upgrade
+requests accept no query parameters and reject cross-origin browser requests.
+Ordinary HTTP requests receive `426 Upgrade Required`. Clients send no application
+messages.
 
-Viewers share tmux listeners and pane captures without changing terminal size or
-session environment. Output events use a one-second merge window; only content or
-truncation changes publish a snapshot. Revisions distinguish server processes and
-binding records.
+The server sends JSON text messages with a `type` discriminator:
 
-Line deltas use `text.split("\n")` / `lines.join("\n")`, preserving empty text,
-blank lines, and trailing newlines. A delta has `baseRevision`, final `revision`,
-`patches: [{ operations: [{ startLine, deleteCount, lines }] }]`, and final
-`truncated` / `capturedAt`. Patches run in chronological order; operations within
-each patch use original line indices and run in descending `startLine` order.
-Truncation-only changes produce an empty operations array.
+- `snapshot`: `revision`, `content`, `truncated`, and `capturedAt`.
+- `delta`: `baseRevision`, `revision`, `operations`, `truncated`, and `capturedAt`.
+- `error`: `code`, `message`, and `retryable`, followed by connection closure
+  (`1013` for retryable errors, `1008` otherwise).
 
-Diff computation and patch history have bounded work and memory. The server returns
-a patch chain only when history is available and the response is smaller than a
-full snapshot; otherwise it returns full text. Clients must support both forms and
-must not assume a minimum history length. Binding changes discard cached state.
-Implementation budgets live in
-[the preview service](../src/server/interaction/terminal-preview-service.ts) and
-[line diff](../src/server/interaction/terminal-preview-diff.ts).
+Every connection starts with a full snapshot. Each delta applies to the preceding
+frame: operations contain `startLine`, `deleteCount`, and `lines`, refer to the
+original line indices, and run in strictly descending, nonoverlapping order.
+Splitting and joining on `"\n"` preserves blank lines and trailing newlines;
+truncation-only changes may use an empty operations array.
 
-The browser validates the base revision and integer, in-range, descending,
-nonoverlapping operations before committing the reconstructed snapshot atomically.
-Invalid deltas preserve the current display and omit `after` on the next request
-to recover full text.
+If diff computation exceeds its budget or a delta is too large or no smaller than
+full text, the server sends a snapshot instead. Subsequent deltas use that snapshot
+as their base. Clients validate frames before committing them; invalid updates
+preserve the display and require reconnection for a full snapshot. There is no
+cross-connection resume state.
 
-The browser reconnects immediately after `200` or `204`. Collapse, hiding, switching
-sessions, disconnection, and unmount cancel requests. Idle subscriptions are retained
-briefly, then released. Binding changes, cross-session pane moves, and listener failures
-invalidate subscriptions and fail pending requests. Retryable failures back off and
-rebuild listening; nonretryable errors stop until a new expand, visibility, or
-connection transition.
+Viewers share tmux listeners and captures without changing terminal size or session
+environment. Output events merge over 350 milliseconds; only content or truncation changes
+publish a frame. The server allows 100 connections globally and 10 per session,
+including initialization; excess connections receive retryable `preview_capacity_exceeded`.
+Binding changes and listener failures invalidate affected subscriptions.
+
+The browser connects only while the preview is expanded, connected, and visible.
+It backs off retryable failures and stops on terminal errors until expansion,
+visibility, or connection changes. See [preview service](../src/server/interaction/terminal-preview-service.ts)
+and [WebSocket transport](../src/server/http/terminal-preview-websocket.ts) for resource
+limits and connection cleanup.
 
 ## Asynchronous management
 

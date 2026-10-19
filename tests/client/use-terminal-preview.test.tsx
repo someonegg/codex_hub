@@ -1,128 +1,181 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
-import type { TerminalPreviewResponse } from "../../src/shared/api-contract";
-
-import { api, ApiClientError } from "../../src/client/api/client";
 import { SessionInteraction } from "../../src/client/components/SessionInteraction";
 import { useTerminalPreview } from "../../src/client/state/use-terminal-preview";
+import { installMockWebSocket, MockWebSocket } from "./mock-websocket";
 
 const frame = {
+  type: "snapshot" as const,
   content: "output",
   truncated: false,
-  revision: "r".repeat(43),
+  revision: "first",
   capturedAt: "2026-08-08T12:00:00Z",
 };
+const display = {
+  content: frame.content,
+  truncated: frame.truncated,
+  revision: frame.revision,
+  capturedAt: frame.capturedAt,
+};
+const latest = () => MockWebSocket.instances.at(-1)!;
+beforeEach(installMockWebSocket);
 
-it("starts folded, continues without overlap, and commits snapshot metadata while advancing revision", async () => {
-  vi.useFakeTimers();
-  let resolve!: (value: TerminalPreviewResponse) => void;
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockImplementationOnce(
-      () =>
-        new Promise((done) => {
-          resolve = done;
-        }),
-    )
-    .mockResolvedValueOnce({
-      ...frame,
-      revision: "s".repeat(43),
-      capturedAt: "2026-08-08T12:00:01Z",
-    })
-    .mockImplementation(() => new Promise(() => {}));
+it("starts folded, waits only for the first frame, and applies consecutive updates on one socket", () => {
   const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
-  expect(capture).not.toHaveBeenCalled();
+  expect(MockWebSocket.instances).toHaveLength(0);
   act(() => result.current.onTogglePreview());
-  await act(async () => vi.advanceTimersByTimeAsync(5000));
-  expect(capture).toHaveBeenCalledTimes(1);
-  await act(async () => resolve(frame));
-  await act(async () => vi.advanceTimersByTimeAsync(0));
-  expect(capture.mock.calls[1]?.[2]).toBe(frame.revision);
-  expect(capture).toHaveBeenCalledTimes(2);
+  expect(String(latest().url)).toBe("ws://localhost:3000/api/v1/sessions/a/terminal-preview");
+  expect(result.current.previewBusy).toBe(true);
+  act(() => latest().message(frame));
+  expect(result.current.preview).toEqual(display);
+  expect(result.current.previewBusy).toBe(false);
+  act(() =>
+    latest().message({
+      type: "delta",
+      baseRevision: "first",
+      revision: "second",
+      operations: [{ startLine: 0, deleteCount: 1, lines: ["changed"] }],
+      truncated: true,
+      capturedAt: "next",
+    }),
+  );
   expect(result.current.preview).toEqual({
-    ...frame,
-    revision: "s".repeat(43),
-    capturedAt: "2026-08-08T12:00:01Z",
+    content: "changed",
+    revision: "second",
+    truncated: true,
+    capturedAt: "next",
   });
-  await act(async () => vi.advanceTimersByTimeAsync(1));
-  expect(capture).toHaveBeenCalledTimes(3);
-  expect(capture.mock.calls[2]?.[2]).toBe("s".repeat(43));
+  expect(MockWebSocket.instances).toHaveLength(1);
   unmount();
-  expect(vi.getTimerCount()).toBe(0);
+  expect(latest().close).toHaveBeenCalledOnce();
 });
 
-it("cancels on hide and collapse, resumes immediately, and isolates sessions", async () => {
+it("closes on hiding and collapse, preserves the last frame, and isolates old sockets and sessions", () => {
   let visible: DocumentVisibilityState = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
-  let resolve!: (value: TerminalPreviewResponse) => void;
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockImplementationOnce(
-      () =>
-        new Promise((done) => {
-          resolve = done;
-        }),
-    )
-    .mockResolvedValue(frame);
   const { result, rerender, unmount } = renderHook(
     ({ id, connected }) => useTerminalPreview(id, connected),
     { initialProps: { id: "a", connected: true } },
   );
-  await act(async () => result.current.onTogglePreview());
+  act(() => result.current.onTogglePreview());
+  const first = latest();
+  act(() => first.message(frame));
   visible = "hidden";
   act(() => document.dispatchEvent(new Event("visibilitychange")));
-  expect(result.current.preview).toEqual(frame);
+  expect(first.close).toHaveBeenCalledOnce();
+  expect(result.current.preview).toEqual(display);
   visible = "visible";
   act(() => document.dispatchEvent(new Event("visibilitychange")));
-  const signal = capture.mock.calls[1]![1];
+  expect(MockWebSocket.instances).toHaveLength(2);
+  act(() => first.message({ ...frame, content: "stale" }));
+  expect(result.current.preview).toEqual(display);
   act(() => result.current.onTogglePreview());
-  expect(signal?.aborted).toBe(true);
-  await act(async () => resolve({ ...frame, content: "stale" }));
-  expect(result.current.preview).toEqual(frame);
-  await act(async () => result.current.onTogglePreview());
-  rerender({ id: "a", connected: false });
-  expect(result.current.preview).toBeNull();
-  await act(async () => rerender({ id: "a", connected: true }));
-  expect(result.current.preview).toBeNull();
-  expect(result.current.previewExpanded).toBe(false);
+  expect(latest().close).toHaveBeenCalledOnce();
+  act(() => result.current.onTogglePreview());
   rerender({ id: "b", connected: true });
   expect(result.current.previewExpanded).toBe(false);
   expect(result.current.preview).toBeNull();
+  act(() => latest().message(frame));
+  expect(result.current.preview).toBeNull();
+  act(() => result.current.onTogglePreview());
+  act(() => latest().message(frame));
+  rerender({ id: "b", connected: false });
+  expect(latest().close).toHaveBeenCalledOnce();
+  expect(result.current.preview).toBeNull();
+  expect(result.current.previewExpanded).toBe(false);
   unmount();
 });
 
-it("backs off transient errors, retains the frame, and restarts stopped reads on expansion", async () => {
+it("backs off failures, resets after a valid first frame, stops terminal errors, and cancels retry timers", async () => {
   vi.useFakeTimers();
   vi.spyOn(Math, "random").mockReturnValue(0.5);
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockRejectedValueOnce(new Error("offline"))
-    .mockRejectedValueOnce(new ApiClientError(400, "bad_request", "bad request"))
-    .mockResolvedValue(frame);
   const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
-  await act(async () => result.current.onTogglePreview());
-  await act(async () => vi.advanceTimersByTimeAsync(0));
-  expect(result.current.previewError).toBe("offline");
-  expect(result.current.preview).toEqual(frame);
-  await act(async () => vi.advanceTimersByTimeAsync(1000));
-  expect(capture).toHaveBeenCalledTimes(3);
-  await act(async () => vi.advanceTimersByTimeAsync(30000));
-  expect(capture).toHaveBeenCalledTimes(3);
   act(() => result.current.onTogglePreview());
-  await act(async () => result.current.onTogglePreview());
-  expect(capture).toHaveBeenCalledTimes(4);
+  act(() => latest().disconnect());
+  expect(result.current.previewBusy).toBe(false);
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(MockWebSocket.instances).toHaveLength(2);
+  act(() => latest().disconnect());
+  await act(async () => vi.advanceTimersByTimeAsync(1999));
+  expect(MockWebSocket.instances).toHaveLength(2);
+  await act(async () => vi.advanceTimersByTimeAsync(1));
+  act(() => latest().message(frame));
+  act(() => latest().message({ type: "error", code: "busy", message: "Busy", retryable: true }));
+  expect(result.current.previewError).toBe("Busy");
+  expect(result.current.preview).toEqual(display);
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  expect(MockWebSocket.instances).toHaveLength(4);
+  act(() =>
+    latest().message({
+      type: "error",
+      code: "session_not_found",
+      message: "Missing",
+      retryable: false,
+    }),
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(60_000));
+  expect(MockWebSocket.instances).toHaveLength(4);
+  expect(result.current.previewError).toBe("Missing");
+  act(() => result.current.onTogglePreview());
+  act(() => result.current.onTogglePreview());
+  expect(MockWebSocket.instances).toHaveLength(5);
+  act(() => latest().disconnect());
+  unmount();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it.each([
+  {
+    type: "delta",
+    baseRevision: "wrong",
+    revision: "bad",
+    operations: [],
+    truncated: false,
+    capturedAt: "bad",
+  },
+  { ...frame, content: 42 },
+  { type: "unknown" },
+])("keeps the display and recovers a full baseline after malformed updates: %j", async (bad) => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
+  act(() => result.current.onTogglePreview());
+  act(() => latest().message(frame));
+  act(() => latest().message(bad));
+  expect(result.current.preview).toEqual(display);
+  expect(latest().close).toHaveBeenCalledOnce();
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  act(() => latest().message({ ...frame, content: "recovered", revision: "new" }));
+  expect(result.current.preview?.content).toBe("recovered");
   unmount();
 });
 
-it("connects the panel toggle to the preview lifecycle", async () => {
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockImplementation(() => new Promise(() => {}));
+it("rejects an initial delta even if the previous connection left a matching display", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
+  act(() => result.current.onTogglePreview());
+  act(() => latest().message(frame));
+  act(() => latest().disconnect());
+  await act(async () => vi.advanceTimersByTimeAsync(1000));
+  act(() =>
+    latest().message({
+      type: "delta",
+      baseRevision: frame.revision,
+      revision: "bad",
+      operations: [],
+      truncated: false,
+      capturedAt: "bad",
+    }),
+  );
+  expect(latest().close).toHaveBeenCalledOnce();
+  expect(result.current.preview).toEqual(display);
+  unmount();
+});
+
+it("connects the panel toggle to the socket lifecycle", () => {
   const { unmount } = render(
     <SessionInteraction
       sessionId="a"
@@ -136,200 +189,30 @@ it("connects the panel toggle to the preview lifecycle", async () => {
       updatedAt={null}
     />,
   );
-  expect(capture).not.toHaveBeenCalled();
-  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Terminal preview" })));
-  expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
-  expect(capture.mock.calls[0]?.[0]).toBe("a");
+  expect(MockWebSocket.instances).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
-  expect(screen.queryByLabelText("Terminal preview content")).toBeNull();
+  act(() => latest().message(frame));
+  expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
+  fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+  expect(latest().close).toHaveBeenCalledOnce();
   unmount();
 });
 
-it("auto-expands once per latest message, waits for connection, and resets across sessions", async () => {
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockImplementation(() => new Promise(() => {}));
-  const { result, rerender } = renderHook(
+it("auto-expands once per key, waits for connection, and resets across sessions", () => {
+  const { result, rerender, unmount } = renderHook(
     ({ id, connected, key }) => useTerminalPreview(id, connected, key),
-    { initialProps: { id: "a", connected: false, key: "request-a" as string | null } },
+    { initialProps: { id: "a", connected: false, key: "one" } },
   );
   expect(result.current.previewExpanded).toBe(false);
-  expect(capture).not.toHaveBeenCalled();
-  await act(async () => rerender({ id: "a", connected: true, key: "request-a" }));
+  rerender({ id: "a", connected: true, key: "one" });
   expect(result.current.previewExpanded).toBe(true);
   act(() => result.current.onTogglePreview());
-  rerender({ id: "a", connected: true, key: "request-a" });
+  rerender({ id: "a", connected: true, key: "one" });
   expect(result.current.previewExpanded).toBe(false);
-  rerender({ id: "a", connected: false, key: "request-a" });
-  rerender({ id: "a", connected: true, key: "request-a" });
-  expect(result.current.previewExpanded).toBe(false);
-  await act(async () => rerender({ id: "a", connected: true, key: "plan-b" }));
+  rerender({ id: "a", connected: true, key: "two" });
   expect(result.current.previewExpanded).toBe(true);
-  rerender({ id: "b", connected: true, key: null });
-  expect(result.current.previewExpanded).toBe(false);
-  await act(async () => rerender({ id: "b", connected: true, key: "plan-b" }));
-  expect(result.current.previewExpanded).toBe(true);
-});
-
-it("cancels pending previews when interaction state becomes superseded", async () => {
-  vi.useFakeTimers();
-  let complete!: (value: TerminalPreviewResponse) => void;
-  const capture = vi.spyOn(api, "terminalPreview").mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        complete = resolve;
-      }),
-  );
-  const properties = { sessionId: "old", itemCount: 1, updatedAt: null };
-  const view = render(
-    <SessionInteraction
-      {...properties}
-      interaction={{
-        supported: true,
-        state: "connected",
-        supersededBySessionId: null,
-        attachCommand: null,
-      }}
-    />,
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
-  expect(capture).toHaveBeenCalledOnce();
-  const signal = capture.mock.calls[0]![1];
-  view.rerender(
-    <SessionInteraction
-      {...properties}
-      interaction={{
-        supported: true,
-        state: "superseded",
-        supersededBySessionId: "new",
-        attachCommand: null,
-      }}
-    />,
-  );
-  expect(signal?.aborted).toBe(true);
-  await act(async () => {
-    complete(frame);
-    await vi.advanceTimersByTimeAsync(5000);
-  });
-  expect(capture).toHaveBeenCalledOnce();
-  expect(screen.queryByText("output")).not.toBeInTheDocument();
-});
-
-it("rejects delayed expansion callbacks while disconnected and stops pending captures", async () => {
-  vi.useFakeTimers();
-  let complete!: (value: TerminalPreviewResponse) => void;
-  const capture = vi.spyOn(api, "terminalPreview").mockImplementation(
-    () =>
-      new Promise((resolve) => {
-        complete = resolve;
-      }),
-  );
-  const { result, rerender } = renderHook(({ connected }) => useTerminalPreview("a", connected), {
-    initialProps: { connected: true },
-  });
-  const delayedExpand = result.current.onExpandPreview;
-  act(() => result.current.onExpandPreview());
-  const signal = capture.mock.calls[0]![1];
-  rerender({ connected: false });
-  expect(signal?.aborted).toBe(true);
-  expect(result.current.previewExpanded).toBe(false);
-  act(() => delayedExpand());
-  expect(result.current.previewExpanded).toBe(false);
-  await act(async () => {
-    complete(frame);
-    await vi.advanceTimersByTimeAsync(5000);
-  });
-  expect(result.current.preview).toBeNull();
-  expect(result.current.previewBusy).toBe(false);
-  rerender({ connected: true });
-  expect(result.current.previewExpanded).toBe(false);
-  expect(capture).toHaveBeenCalledOnce();
-});
-
-it.each(["command", "handoff"])(
-  "keeps preview folded when a delayed %s completes after disconnect",
-  async (action) => {
-    let complete!: () => void;
-    const pending = new Promise<void>((resolve) => {
-      complete = resolve;
-    });
-    vi.spyOn(api, "terminalPreview").mockResolvedValue(frame);
-    const operation =
-      action === "command" ? vi.spyOn(api, "sendMessage") : vi.spyOn(api, "handoffPaneBinding");
-    operation.mockReturnValue(pending);
-    const properties = { sessionId: "a", itemCount: 0, updatedAt: null };
-    const connected = {
-      supported: true as const,
-      state: "connected" as const,
-      supersededBySessionId: null,
-      attachCommand: null,
-    };
-    const view = render(<SessionInteraction {...properties} interaction={connected} />);
-    if (action === "command") {
-      fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
-      fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    } else fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
-    expect(operation).toHaveBeenCalledOnce();
-    view.rerender(
-      <SessionInteraction {...properties} interaction={{ ...connected, state: "disconnected" }} />,
-    );
-    await act(async () => complete());
-    expect(screen.queryByRole("button", { name: "Terminal preview" })).not.toBeInTheDocument();
-    view.rerender(<SessionInteraction {...properties} interaction={connected} />);
-    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-  },
-);
-
-it("immediately reconnects after 204 with the last revision unchanged", async () => {
-  vi.useFakeTimers();
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockResolvedValueOnce(undefined)
-    .mockImplementation(() => new Promise(() => {}));
-  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
-  await act(async () => result.current.onTogglePreview());
-  await act(async () => vi.advanceTimersByTimeAsync(1));
-  expect(capture).toHaveBeenCalledTimes(3);
-  expect(capture.mock.calls[1]?.[2]).toBe(frame.revision);
-  expect(capture.mock.calls[2]?.[2]).toBe(frame.revision);
-  expect(result.current.preview).toEqual(frame);
-  unmount();
-});
-
-it("keeps the last frame on invalid deltas and requests a fresh full snapshot", async () => {
-  vi.useFakeTimers();
-  const capture = vi
-    .spyOn(api, "terminalPreview")
-    .mockResolvedValueOnce(frame)
-    .mockResolvedValueOnce({
-      baseRevision: frame.revision,
-      revision: "s".repeat(43),
-      truncated: true,
-      capturedAt: "next",
-      patches: [{ operations: [{ startLine: 0, deleteCount: 1, lines: ["changed"] }] }],
-    })
-    .mockResolvedValueOnce({
-      baseRevision: "wrong",
-      revision: "t".repeat(43),
-      truncated: false,
-      capturedAt: "bad",
-      patches: [],
-    })
-    .mockImplementation(() => new Promise(() => {}));
-  const { result, unmount } = renderHook(() => useTerminalPreview("a", true));
-  await act(async () => result.current.onTogglePreview());
-  await act(async () => vi.advanceTimersByTimeAsync(5));
-  expect(result.current.preview).toMatchObject({
-    content: "changed",
-    revision: "s".repeat(43),
-    truncated: true,
-  });
-  expect(capture.mock.calls[2]?.[2]).toBe("s".repeat(43));
-  expect(capture.mock.calls[3]?.[2]).toBeUndefined();
+  rerender({ id: "b", connected: true, key: "two" });
+  expect(MockWebSocket.instances).toHaveLength(3);
+  expect(latest().close).not.toHaveBeenCalled();
   unmount();
 });

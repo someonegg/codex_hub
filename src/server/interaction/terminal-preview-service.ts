@@ -1,43 +1,39 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import type {
-  LineOperation,
-  TerminalPreviewResponse,
-  TerminalPreviewResult,
-} from "../../shared/api-contract.js";
+import type { TerminalPreviewFrame, TerminalPreviewSnapshot } from "../../shared/api-contract.js";
 import { diffLines } from "./terminal-preview-diff.js";
 import {
   createTmuxPreviewListener,
   type PreviewListener,
   type PreviewSubscription,
 } from "./tmux-preview-listener.js";
-import type { TmuxBinding } from "./transport.js";
-import { InteractionTransportError } from "./transport.js";
+import { InteractionTransportError, type TmuxBinding } from "./transport.js";
 
-export class PreviewCapacityError extends Error {}
+interface Viewer {
+  assertOwner(): void;
+  frame(value: TerminalPreviewFrame): void;
+  fail(error: unknown): void;
+  close(): void;
+  initialized: boolean;
+}
 interface State {
+  key: string;
   binding: TmuxBinding;
-  session: string;
-  history: { baseRevision: string; revision: string; operations: LineOperation[] }[];
-  guards: Map<string, () => void>;
-  subscription: PreviewSubscription;
-  snapshot?: TerminalPreviewResponse;
+  viewers: Set<Viewer>;
+  subscription?: PreviewSubscription;
+  snapshot?: TerminalPreviewSnapshot;
   dirty: boolean;
   listening: boolean;
-  lifecycle: AbortController;
-  active: number;
+  disposed: boolean;
   task?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
-  idle?: ReturnType<typeof setTimeout>;
-  error?: Error;
-  listeners: Set<() => void>;
 }
+
 export class TerminalPreviewService {
   readonly #states = new Map<string, State>();
   readonly #identity = randomUUID();
-  readonly #counts = new Map<string, number>();
-  #waiters = 0;
   #closed = false;
+
   constructor(
     private readonly capture: (
       binding: TmuxBinding,
@@ -47,263 +43,161 @@ export class TerminalPreviewService {
     private readonly resolveTarget?: (binding: TmuxBinding) => Promise<TmuxBinding | null>,
   ) {}
 
-  async preview(
+  subscribe(
     session: string,
     binding: TmuxBinding,
     assertOwner: () => void,
-    after?: string,
-    signal?: AbortSignal,
-  ): Promise<TerminalPreviewResult | null> {
-    const key = JSON.stringify([binding.socketPath, binding.paneId]);
-    const stateKey = JSON.stringify([session, key]);
-    if (this.#closed || signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    let state = this.#states.get(stateKey);
+    frame: (value: TerminalPreviewFrame) => void,
+    fail: (error: unknown) => void,
+    signal: AbortSignal,
+  ): () => void {
+    if (this.#closed || signal.aborted) throw new DOMException("Aborted", "AbortError");
+    const key = JSON.stringify([session, binding.socketPath, binding.paneId]);
+    let state = this.#states.get(key);
     if (state && state.binding.sessionName !== binding.sessionName) {
       this.#fail(
-        stateKey,
         state,
-        new InteractionTransportError("command_failed", "The pane's tmux session changed"),
+        new InteractionTransportError("disconnected", "The pane's tmux session changed"),
       );
       state = undefined;
     }
+    const fresh = !state;
     if (!state) {
-      state = {
-        binding,
-        session,
-        history: [],
-        guards: new Map(),
-        subscription: undefined!,
-        dirty: true,
-        listening: false,
-        lifecycle: new AbortController(),
-        active: 0,
-        listeners: new Set(),
-      };
-      this.#states.set(stateKey, state);
-      const current = state;
-      state.subscription = this.listen(
-        binding,
-        (pane) => {
-          if (!pane || pane === binding.paneId) {
-            current.dirty = true;
-            this.#schedule(current);
-          }
-        },
-        (error) =>
-          this.#fail(
-            stateKey,
-            current,
-            new InteractionTransportError("command_failed", error.message),
-          ),
-      );
+      state = { key, binding, viewers: new Set(), dirty: true, listening: false, disposed: false };
+      this.#states.set(key, state);
     }
-    state.guards.set(session, assertOwner);
-    clearTimeout(state.idle);
-    state.active++;
-    const requestSignal = signal
-      ? AbortSignal.any([signal, state.lifecycle.signal])
-      : state.lifecycle.signal;
+    const current = state;
+    const close = () => {
+      signal.removeEventListener("abort", close);
+      current.viewers.delete(viewer);
+      if (!current.viewers.size) this.#dispose(current);
+    };
+    const viewer: Viewer = { assertOwner, frame, fail, close, initialized: false };
+    current.viewers.add(viewer);
+    signal.addEventListener("abort", close, { once: true });
     try {
-      await abortable(state.subscription.ready, requestSignal).catch((error: unknown) => {
-        this.#check(state!, signal);
-        throw error;
-      });
-      this.#check(state, signal);
-      state.listening = true;
       assertOwner();
-      if (!state.snapshot)
-        await abortable(this.#capture(state), requestSignal).catch((error: unknown) => {
-          this.#check(state!, signal);
-          throw error;
-        });
-      this.#check(state, signal);
-      assertOwner();
-      const snapshot = () => {
-        assertOwner();
-        return this.#response(state!, after);
-      };
-      if (state.snapshot!.revision !== after) return snapshot();
-      const count = this.#counts.get(session) ?? 0;
-      if (this.#waiters >= 100 || count >= 10)
-        throw new PreviewCapacityError("Too many terminal preview requests are waiting");
-      this.#waiters++;
-      this.#counts.set(session, count + 1);
-      try {
-        return await new Promise<TerminalPreviewResult | null>((resolve, reject) => {
-          const finish = (error?: unknown, value: TerminalPreviewResult | null = null) => {
-            clearTimeout(timer);
-            signal?.removeEventListener("abort", aborted);
-            state!.listeners.delete(changed);
-            if (error) reject(error);
-            else resolve(value);
-          };
-          const changed = () => {
-            try {
-              this.#check(state!, signal);
-              const value = snapshot();
-              if (value.revision !== after) finish(undefined, value);
-            } catch (error) {
-              finish(error);
+      if (fresh) {
+        current.subscription = this.listen(
+          binding,
+          (pane) => {
+            if (!pane || pane === binding.paneId) {
+              current.dirty = true;
+              this.#schedule(current);
             }
-          };
-          const aborted = () => finish(new DOMException("Aborted", "AbortError"));
-          const timer = setTimeout(() => {
-            try {
-              assertOwner();
-              finish();
-            } catch (error) {
-              finish(error);
-            }
-          }, 25000);
-          state!.listeners.add(changed);
-          signal?.addEventListener("abort", aborted, { once: true });
-          changed();
-        });
-      } finally {
-        this.#waiters--;
-        const remaining = (this.#counts.get(session) ?? 1) - 1;
-        if (remaining) this.#counts.set(session, remaining);
-        else this.#counts.delete(session);
+          },
+          (error) => this.#fail(current, error),
+        );
+        // A listener may fail synchronously during setup.
+        if (current.disposed) current.subscription.close();
       }
-    } finally {
-      state.active--;
-      if (!state.active && !state.error) {
-        state.idle = setTimeout(() => this.#dispose(stateKey, state!), 10000);
-        state.idle.unref?.();
-      }
+      void current
+        .subscription!.ready.then(async () => {
+          if (current.disposed || !current.viewers.has(viewer)) return;
+          current.listening = true;
+          if (!current.snapshot) await this.#capture(current);
+          if (current.disposed || !current.viewers.has(viewer)) return;
+          assertOwner();
+          if (!viewer.initialized) {
+            viewer.initialized = true;
+            frame({ type: "snapshot", ...current.snapshot! });
+          }
+        })
+        .catch((error: unknown) => this.#fail(current, error));
+    } catch (error) {
+      this.#fail(current, error);
     }
+    return close;
   }
+
   invalidate(): void {
-    for (const [key, state] of this.#states) {
+    for (const state of this.#states.values()) {
       try {
-        for (const guard of state.guards.values()) guard();
+        this.#assertOwner(state);
       } catch (error) {
-        this.#fail(key, state, error as Error);
+        this.#fail(state, error);
       }
     }
   }
+
   close(): void {
     this.#closed = true;
-    for (const [key, state] of this.#states)
-      this.#fail(key, state, new DOMException("Aborted", "AbortError"));
+    for (const state of this.#states.values())
+      this.#fail(state, new DOMException("Aborted", "AbortError"));
   }
-  #response(state: State, after?: string): TerminalPreviewResult {
-    const snapshot = state.snapshot!;
-    if (!after || after === snapshot.revision) return snapshot;
-    // Search backwards so repeated revisions use the nearest contiguous suffix.
-    for (let i = state.history.length - 1; i >= 0; i--) {
-      if (state.history[i]!.baseRevision !== after) continue;
-      const chain = state.history.slice(i);
-      let revision = after;
-      for (const entry of chain) {
-        if (entry.baseRevision !== revision) return snapshot;
-        revision = entry.revision;
-      }
-      if (revision !== snapshot.revision) return snapshot;
-      const delta = {
-        baseRevision: after,
-        revision,
-        patches: chain.map(({ operations }) => ({ operations })),
-        truncated: snapshot.truncated,
-        capturedAt: snapshot.capturedAt,
-      };
-      return bytes(delta) < bytes(snapshot) ? delta : snapshot;
-    }
-    return snapshot;
+
+  #assertOwner(state: State): void {
+    if (state.disposed) throw new DOMException("Aborted", "AbortError");
+    for (const viewer of state.viewers) viewer.assertOwner();
   }
-  #check(state: State, signal?: AbortSignal) {
-    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    if (state.error) throw state.error;
-  }
-  #schedule(state: State) {
-    if (!state.listening || state.task || state.timer || state.error) return;
+
+  #schedule(state: State): void {
+    if (!state.listening || state.disposed || state.task || state.timer) return;
     state.timer = setTimeout(() => {
       state.timer = undefined;
       void this.#capture(state).catch(() => {});
-    }, 1000);
+    }, 350);
   }
+
   #capture(state: State): Promise<void> {
     if (state.task) return state.task;
     clearTimeout(state.timer);
     state.timer = undefined;
     state.dirty = false;
-    const assertOwner = () => {
-      for (const guard of state.guards.values()) guard();
-    };
     state.task = (async () => {
       if (this.resolveTarget) {
         const current = await this.resolveTarget(state.binding);
-        if (!current)
-          throw new InteractionTransportError("disconnected", "The pane no longer exists");
-        if (current.sessionName !== state.binding.sessionName)
-          throw new InteractionTransportError("command_failed", "The pane's tmux session changed");
+        if (!current || current.sessionName !== state.binding.sessionName)
+          throw new InteractionTransportError(
+            "disconnected",
+            "The pane no longer exists in its tmux session",
+          );
       }
-      assertOwner();
-      if (state.error) throw state.error;
-      return this.capture(state.binding, assertOwner);
-    })()
-      .then((result) => {
-        assertOwner();
-        if (state.error) return;
-        if (
-          !state.snapshot ||
-          result.content !== state.snapshot.content ||
-          result.truncated !== state.snapshot.truncated
-        ) {
-          const previous = state.snapshot;
-          const key = JSON.stringify([state.binding.socketPath, state.binding.paneId]);
-          state.snapshot = {
-            ...result,
-            capturedAt: new Date().toISOString(),
-            revision: createHash("sha256")
-              .update(
-                JSON.stringify([
-                  this.#identity,
-                  state.session,
-                  key,
-                  result.content,
-                  result.truncated,
-                ]),
-              )
-              .digest("base64url"),
+      this.#assertOwner(state);
+      const result = await this.capture(state.binding, () => this.#assertOwner(state));
+      this.#assertOwner(state);
+      const previous = state.snapshot;
+      if (
+        previous &&
+        previous.content === result.content &&
+        previous.truncated === result.truncated
+      )
+        return;
+      const snapshot: TerminalPreviewSnapshot = {
+        ...result,
+        capturedAt: new Date().toISOString(),
+        revision: createHash("sha256")
+          .update(JSON.stringify([this.#identity, state.key, result.content, result.truncated]))
+          .digest("base64url"),
+      };
+      state.snapshot = snapshot;
+      const full: TerminalPreviewFrame = { type: "snapshot", ...snapshot };
+      let update: TerminalPreviewFrame = full;
+      if (previous) {
+        const operations = diffLines(previous.content, snapshot.content);
+        if (operations !== null) {
+          const delta: TerminalPreviewFrame = {
+            type: "delta",
+            baseRevision: previous.revision,
+            revision: snapshot.revision,
+            operations,
+            truncated: snapshot.truncated,
+            capturedAt: snapshot.capturedAt,
           };
-          if (previous) {
-            const operations = diffLines(previous.content, result.content);
-            const entry = {
-              baseRevision: previous.revision,
-              revision: state.snapshot.revision,
-              operations: operations ?? [],
-            };
-            const wire = {
-              baseRevision: entry.baseRevision,
-              revision: entry.revision,
-              patches: [{ operations: entry.operations }],
-              truncated: result.truncated,
-              capturedAt: state.snapshot.capturedAt,
-            };
-            if (operations === null || bytes(wire) > 8192 || bytes(wire) >= bytes(state.snapshot))
-              state.history = [];
-            else {
-              state.history.push(entry);
-              while (
-                state.history.length > 5 ||
-                state.history.reduce((sum, item) => sum + bytes(item), 0) > 32768
-              )
-                state.history.shift();
-            }
-          }
-          for (const listener of [...state.listeners]) listener();
+          const size = bytes(delta);
+          if (size <= 8192 && size < bytes(full)) update = delta;
         }
-      })
-      .catch((error: Error) => {
-        this.#fail(
-          JSON.stringify([
-            state.session,
-            JSON.stringify([state.binding.socketPath, state.binding.paneId]),
-          ]),
-          state,
-          error,
-        );
+      }
+      for (const viewer of [...state.viewers]) {
+        if (!state.viewers.has(viewer)) continue;
+        viewer.assertOwner();
+        const message = viewer.initialized ? update : full;
+        viewer.initialized = true;
+        viewer.frame(message);
+      }
+    })()
+      .catch((error: unknown) => {
+        this.#fail(state, error);
         throw error;
       })
       .finally(() => {
@@ -312,43 +206,24 @@ export class TerminalPreviewService {
       });
     return state.task;
   }
-  #fail(key: string, state: State, error: Error) {
-    state.error = error;
-    state.lifecycle.abort();
-    for (const listener of [...state.listeners]) listener();
-    this.#dispose(key, state);
-  }
-  #dispose(key: string, state: State) {
-    state.listening = false;
-    clearTimeout(state.timer);
-    clearTimeout(state.idle);
-    state.subscription.close();
-    if (this.#states.get(key) === state) this.#states.delete(key);
-  }
-}
 
-/** Cancelling one viewer must not cancel another viewer's shared capture. */
-function abortable<T>(operation: Promise<T>, signal?: AbortSignal): Promise<T> {
-  if (!signal) return operation;
-  return new Promise<T>((resolve, reject) => {
-    const abort = () => {
-      cleanup();
-      reject(new DOMException("Aborted", "AbortError"));
-    };
-    const cleanup = () => signal.removeEventListener("abort", abort);
-    signal.addEventListener("abort", abort, { once: true });
-    if (signal.aborted) abort();
-    void operation.then(
-      (value) => {
-        cleanup();
-        resolve(value);
-      },
-      (error: unknown) => {
-        cleanup();
-        reject(error);
-      },
-    );
-  });
+  #fail(state: State, error: unknown): void {
+    if (state.disposed) return;
+    const viewers = [...state.viewers];
+    this.#dispose(state);
+    for (const viewer of viewers) {
+      viewer.close();
+      viewer.fail(error);
+    }
+  }
+
+  #dispose(state: State): void {
+    if (state.disposed) return;
+    state.disposed = true;
+    clearTimeout(state.timer);
+    state.subscription?.close();
+    if (this.#states.get(state.key) === state) this.#states.delete(state.key);
+  }
 }
 
 function bytes(value: unknown): number {

@@ -142,7 +142,12 @@ describe("session interaction policy", () => {
       "interrupt",
       "plan",
     ]);
-    await expect(service.preview("session")).resolves.toEqual({
+    const frame = vi.fn();
+    const failure = vi.fn();
+    await service.subscribePreview("session", frame, failure, new AbortController().signal);
+    await vi.waitFor(() => expect(frame).toHaveBeenCalled());
+    expect(frame).toHaveBeenCalledWith({
+      type: "snapshot",
       content: "recent output",
       truncated: false,
       capturedAt: expect.any(String),
@@ -273,7 +278,16 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
         : action === "keys"
           ? service.sendKeys("session", ["enter"])
           : action === "preview"
-            ? service.preview("session")
+            ? new Promise<void>((resolve, reject) => {
+                void service
+                  .subscribePreview(
+                    "session",
+                    () => resolve(),
+                    reject,
+                    new AbortController().signal,
+                  )
+                  .catch(reject);
+              })
             : action === "handoffPaneBinding"
               ? service.handoffPaneBinding("session")
               : action === "kill"

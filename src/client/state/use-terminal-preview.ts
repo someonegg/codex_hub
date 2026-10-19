@@ -1,16 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { TerminalPreviewResponse } from "../../shared/api-contract";
+import type { TerminalPreviewSnapshot } from "../../shared/api-contract";
 
-import { api } from "../api/client";
-import { createRequestChannel } from "./request-channel";
-import { messageFor } from "./request-errors";
-import {
-  INITIAL_RETRY_MS,
-  isRetryableRequestError,
-  nextRetryMs,
-  retryDelayMs,
-} from "./retry-policy";
+import { connectTerminalPreview } from "../api/terminal-preview";
+import { INITIAL_RETRY_MS, nextRetryMs, retryDelayMs } from "./retry-policy";
 import { applyPreview } from "./terminal-preview-patch";
 
 export function useTerminalPreview(
@@ -22,7 +15,7 @@ export function useTerminalPreview(
   connection.current = connected;
   const autoExpanded = useRef<{ sessionId: string; key: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
-  const [preview, setPreview] = useState<TerminalPreviewResponse | null>(null);
+  const [preview, setPreview] = useState<TerminalPreviewSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(() => document.visibilityState !== "hidden");
@@ -55,45 +48,51 @@ export function useTerminalPreview(
       setError(null);
     }
     if (!connected || !expanded || !visible) return;
-    const channel = createRequestChannel();
     let disposed = false;
+    let generation = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let close: (() => void) | undefined;
     let retry = INITIAL_RETRY_MS;
-    let revision: string | undefined;
-    let confirmed: TerminalPreviewResponse | null = null;
-    const capture = async () => {
-      const request = channel.begin();
+    const connect = () => {
+      if (disposed) return;
+      const current = ++generation;
+      let confirmed: TerminalPreviewSnapshot | null = null;
       setBusy(true);
       setError(null);
-      let delay: number | null = 0;
+      const failed = (message: string, retryable: boolean) => {
+        if (disposed || generation !== current) return;
+        ++generation;
+        setBusy(false);
+        setError(message);
+        if (retryable) {
+          timer = setTimeout(connect, retryDelayMs(retry));
+          retry = nextRetryMs(retry);
+        }
+      };
       try {
-        const next = await api.terminalPreview(sessionId, request.signal, revision);
-        if (!request.isCurrent()) return;
-        if (next) {
-          const applied = applyPreview(confirmed, next);
-          if (applied) {
+        close = connectTerminalPreview(sessionId, {
+          frame(next) {
+            if (disposed || generation !== current) return true;
+            const applied = applyPreview(confirmed, next);
+            if (!applied) return false;
             confirmed = applied;
-            revision = applied.revision;
             setPreview(applied);
-          } else revision = undefined;
-        }
-        retry = INITIAL_RETRY_MS;
-      } catch (reason) {
-        if (!request.isCurrent()) return;
-        setError(messageFor(reason));
-        delay = isRetryableRequestError(reason) ? retryDelayMs(retry) : null;
-        retry = nextRetryMs(retry);
-      } finally {
-        if (!disposed && request.isCurrent()) {
-          setBusy(false);
-          if (delay !== null) timer = setTimeout(() => void capture(), delay);
-        }
+            setBusy(false);
+            setError(null);
+            retry = INITIAL_RETRY_MS;
+            return true;
+          },
+          failed,
+        });
+      } catch {
+        failed("Terminal preview connection failed", true);
       }
     };
-    void capture();
+    connect();
     return () => {
       disposed = true;
-      channel.cancel();
+      ++generation;
+      close?.();
       clearTimeout(timer);
       setBusy(false);
     };

@@ -9,7 +9,6 @@ import { SessionCatalogService } from "../../src/server/catalog/session-catalog-
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
-import { PreviewCapacityError } from "../../src/server/interaction/terminal-preview-service.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { SessionDetail } from "../../src/shared/domain.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -75,12 +74,6 @@ async function start() {
     handoffPaneBinding: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendKeys: vi.fn().mockResolvedValue(undefined),
-    preview: vi.fn().mockResolvedValue({
-      content: "terminal output",
-      truncated: false,
-      capturedAt: "2026-08-08T12:00:00.000Z",
-      revision: "a".repeat(43),
-    }),
   };
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
@@ -188,70 +181,16 @@ describe("interaction HTTP API", () => {
     expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, boundaryKeys);
   });
 
-  it("returns a no-store terminal snapshot and rejects unsupported query parameters", async () => {
-    const { base, interaction } = await start();
-    const response = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview`);
-    expect(response.status).toBe(200);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toEqual({
-      content: "terminal output",
-      truncated: false,
-      capturedAt: "2026-08-08T12:00:00.000Z",
-      revision: "a".repeat(43),
+  it.each(["GET", "HEAD"])("requires WebSocket for terminal preview (%s)", async (method) => {
+    const { base } = await start();
+    const response = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview`, {
+      method,
     });
-    expect(interaction.preview).toHaveBeenCalledWith(
-      SESSION_ID,
-      undefined,
-      expect.any(AbortSignal),
-    );
-
-    expect(
-      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?lines=all`)).status,
-    ).toBe(400);
-  });
-
-  it("accepts opaque after, returns 204, and makes HEAD immediate", async () => {
-    const { base, interaction } = await start();
-    const revision = "a".repeat(43);
-    interaction.preview.mockResolvedValueOnce(null);
-    const response = await fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?after=${revision}`,
-    );
-    expect(response.status).toBe(204);
+    expect(response.status).toBe(426);
+    expect(response.headers.get("upgrade")).toBe("websocket");
     expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.text()).toBe("");
-    expect(interaction.preview).toHaveBeenLastCalledWith(
-      SESSION_ID,
-      revision,
-      expect.any(AbortSignal),
-    );
-    const head = await fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?after=${revision}`,
-      { method: "HEAD" },
-    );
-    expect(head.status).toBe(200);
-    expect(await head.text()).toBe("");
-    expect(interaction.preview).toHaveBeenLastCalledWith(
-      SESSION_ID,
-      undefined,
-      expect.any(AbortSignal),
-    );
-    for (const query of ["after=bad", `after=${revision}&after=${revision}`, "unexpected=1"]) {
-      expect(
-        (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?${query}`)).status,
-      ).toBe(400);
-    }
-  });
-
-  it("returns retry hints for preview wait capacity", async () => {
-    const { base, interaction } = await start();
-    interaction.preview.mockRejectedValueOnce(new PreviewCapacityError("Too many requests"));
-    const response = await fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/terminal-preview?after=${"a".repeat(43)}`,
-    );
-    expect(response.status).toBe(429);
-    expect(response.headers.get("retry-after")).toBe("2");
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    if (method === "HEAD") expect(await response.text()).toBe("");
+    else expect(await response.json()).toMatchObject({ error: { code: "websocket_required" } });
   });
 
   it("allows POST only on the declared interaction routes", async () => {

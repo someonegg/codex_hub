@@ -12,6 +12,7 @@ import { extname, resolve, sep } from "node:path";
 import type { ServerConfig } from "../config.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
 import { applySecurityHeaders } from "./security.js";
+import type { ServerUpgradeHandler } from "./terminal-preview-websocket.js";
 
 const CONTENT_TYPES: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
@@ -64,11 +65,12 @@ export function createServer(
   config: ServerConfig,
   apiRouter: ApiRouter = emptyApiRouter,
   closeServices: () => void = () => {},
+  upgrades?: ServerUpgradeHandler,
 ) {
   const clientRoot = realpathSync(config.clientDirectory);
   const clientRootPrefix = `${clientRoot}${sep}`;
   const requestListener: RequestListener = async (request, response) => {
-    applySecurityHeaders(response);
+    applySecurityHeaders(response, request);
     const headOnly = request.method === "HEAD";
 
     try {
@@ -113,7 +115,7 @@ export function createServer(
 
   if (!config.tls.enabled) {
     const server = createHttpServer(requestListener);
-    return closeServicesWith(server, closeServices);
+    return attachLifecycle(server, closeServices, upgrades);
   }
 
   const requireClientCertificate = config.tls.certificateAuthorityPath !== undefined;
@@ -130,7 +132,7 @@ export function createServer(
     },
     requestListener,
   );
-  return closeServicesWith(server, closeServices);
+  return attachLifecycle(server, closeServices, upgrades);
 }
 
 /** Own startup cleanup as well as the server's pre-drain shutdown hook. */
@@ -138,12 +140,14 @@ export async function startServer(
   config: ServerConfig,
   apiRouter: ApiRouter,
   closeServices: () => void,
+  upgrades?: ServerUpgradeHandler,
 ) {
   try {
-    const server = createServer(config, apiRouter, closeServices);
+    const server = createServer(config, apiRouter, closeServices, upgrades);
     await listenServer(server, config.port, config.host);
     return server;
   } catch (error) {
+    upgrades?.close();
     closeServices();
     throw error;
   }
@@ -169,15 +173,21 @@ export function listenServer(server: NetServer, port: number, host: string): Pro
   });
 }
 
-function closeServicesWith<T extends ReturnType<typeof createHttpServer>>(
+function attachLifecycle<T extends ReturnType<typeof createHttpServer>>(
   server: T,
   closeServices: () => void,
+  upgrades?: ServerUpgradeHandler,
 ): T {
+  server.on("upgrade", (request, socket, head) => {
+    if (upgrades) upgrades.handle(request, socket, head);
+    else socket.destroy();
+  });
   const close = server.close.bind(server);
   const mutable = server as unknown as {
     close(callback?: (error?: Error) => void): T;
   };
   mutable.close = (callback?: (error?: Error) => void) => {
+    upgrades?.close();
     closeServices();
     close(callback);
     return server;
