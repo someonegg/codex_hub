@@ -1,4 +1,7 @@
 :root {
+  --code-surface: #f6f8fa;
+  --code-ink: #1f2328;
+  --code-border: #d0d7de80;
   --terminal-surface: #213138;
   --terminal-output-surface: #18262c;
   --terminal-ink: #dce8e8;
@@ -15,6 +18,7 @@
   --warning-border: #dbc49d;
   --scrollbar-thumb: #8fa6ab;
 
+  --text-status: 0.75rem;
   --text-small: 0.8125rem;
   --text-control: 0.875rem;
   --control-height: 36px;
@@ -28,9 +32,9 @@
   --radius-panel: 8px;
   --hover-surface: #e3eded;
   --notice-border: #bdcccf;
-  --archive-ink: #9a6700;
+  --archive-ink: var(--ink-soft);
   --archive-surface: transparent;
-  --archive-border: #9a6700;
+  --archive-border: var(--mist);
   --unavailable-ink: #704727;
   --unavailable-surface: #f4e5d4;
   --unavailable-border: #d6b995;

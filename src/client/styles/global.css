@@ -3,6 +3,9 @@
 }
 html {
   background: var(--paper);
+  /* Keep mobile Safari from inflating individual Markdown blocks and table cells. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 body {
   margin: 0;
@@ -29,6 +32,10 @@ p {
 .muted {
   color: var(--ink-soft);
 }
+.error-state > strong,
+.continuity-notice strong {
+  font-weight: 600;
+}
 .eyebrow {
   font-family: var(--body-font);
   font-size: var(--text-small);
@@ -51,17 +58,13 @@ p {
   display: inline-block;
   flex-shrink: 0;
   white-space: nowrap;
-  padding: 0.08rem 0.3rem;
   color: var(--archive-ink);
-  background: var(--archive-surface);
-  border: 1px solid var(--archive-border);
   font-family: var(--body-font);
-  font-size: var(--text-small);
-  font-weight: 650;
+  font-size: var(--text-status);
+  font-weight: 600;
   letter-spacing: normal;
   line-height: 1.2;
   text-transform: none;
-  border-radius: 999px;
 }
 .detail-summary {
   display: flex;

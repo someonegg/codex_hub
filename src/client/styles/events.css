@@ -118,8 +118,8 @@
   background-clip: padding-box;
 }
 .markdown-scroll-code {
-  background: var(--terminal-surface);
-  border-left: 3px solid var(--current);
+  background: var(--code-surface);
+  border-color: var(--code-border);
 }
 .markdown-scroll-code pre {
   width: max-content;
@@ -128,7 +128,7 @@
   margin: 0;
   overflow: visible;
   padding: 1rem;
-  color: var(--terminal-ink);
+  color: var(--code-ink);
   background: transparent;
   white-space: pre;
 }
@@ -161,9 +161,9 @@
   max-width: 100%;
   overflow: auto;
   padding: 1rem;
-  color: var(--terminal-ink);
-  background: var(--terminal-surface);
-  border-left: 3px solid var(--current);
+  color: var(--code-ink);
+  background: var(--code-surface);
+  border: 1px solid var(--code-border);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -171,15 +171,23 @@
   max-width: 100%;
   overflow: auto;
   padding: 1rem;
-  color: var(--terminal-ink);
-  background: var(--terminal-surface);
-  border-left: 3px solid var(--current);
+  color: var(--code-ink);
+  background: var(--code-surface);
+  border: 1px solid var(--code-border);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .message-body code {
   font-family: var(--mono-font);
   font-size: 0.86em;
+}
+.markdown-scroll-code pre,
+.event-detail pre,
+.directive-block {
+  font-size: 0.86rem;
+}
+.message-body pre code {
+  font-size: inherit;
 }
 .message-body a {
   color: #075f70;
@@ -243,6 +251,11 @@
 .event-detail {
   margin-top: 0.8rem;
 }
+.detail-summary strong,
+.internal-event-body > p > strong,
+.user-input-options strong {
+  font-weight: 600;
+}
 .character-count {
   display: inline-flex;
   flex: 0 0 auto;
@@ -286,8 +299,9 @@
   background: var(--paper);
   border: 1px solid var(--mist);
   font-family: var(--body-font);
-  font-size: var(--text-small);
-  letter-spacing: 0.04em;
+  font-size: var(--text-status);
+  font-weight: 600;
+  letter-spacing: normal;
   text-transform: none;
 }
 .user-input-status.answered {
@@ -311,6 +325,7 @@
 .user-input-question h3 {
   margin: 0.25rem 0 0.75rem;
   font-size: 1rem;
+  font-weight: 600;
   line-height: 1.45;
 }
 .user-input-header {
@@ -344,7 +359,7 @@
 .user-input-options p {
   margin: 0.25rem 0 0;
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: var(--text-small);
   line-height: 1.45;
 }
 .selected-marker {
@@ -372,11 +387,12 @@
 }
 .user-input-unavailable {
   color: var(--ink-soft);
-  font-size: 0.82rem;
+  font-size: var(--text-small);
 }
 .event-detail h4 {
   font-family: var(--body-font);
   font-size: var(--text-small);
+  font-weight: 600;
   text-transform: none;
   margin: 1rem 0 0.35rem;
 }

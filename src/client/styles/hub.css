@@ -27,7 +27,7 @@
 }
 .hub-brand a {
   text-decoration: none;
-  font-weight: 650;
+  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -238,6 +238,9 @@
 }
 .creation-notice button {
   margin-left: auto;
+}
+.creation-notice strong {
+  font-weight: 600;
 }
 .creation-notice {
   display: flex;

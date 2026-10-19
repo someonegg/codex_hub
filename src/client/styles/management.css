@@ -6,6 +6,7 @@
 }
 .create-session h2 {
   font-size: 1rem;
+  font-weight: 600;
   margin-top: 0;
   min-height: 36px;
   padding-right: 44px;
@@ -49,6 +50,10 @@
 }
 .operation-status small {
   display: block;
+  font-size: var(--text-small);
+}
+.operation-status strong {
+  font-weight: 600;
 }
 .attach-command pre {
   white-space: pre-wrap;
@@ -133,7 +138,7 @@ dialog::backdrop {
   min-height: 44px;
   display: flex;
   align-items: center;
-  font-weight: 650;
+  font-weight: 600;
 }
 .dialog-close {
   position: absolute;
