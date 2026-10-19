@@ -6,13 +6,13 @@ import type {
   SessionReader,
 } from "../../src/server/application/session-reader.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
-import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
 
-let bindings: LivePaneBindingManager;
+let bindings: PaneBindingManager;
 beforeEach(() => {
-  bindings = new LivePaneBindingManager();
+  bindings = new PaneBindingManager();
 });
 
 class TestSessionInteractionService extends SessionInteractionService {
@@ -26,7 +26,7 @@ function repository(snapshot: InteractionSessionSnapshot | null): SessionReader 
     list: vi.fn(),
     getSession: vi.fn(),
     getItems: vi.fn(),
-    getLiveSession: vi.fn(),
+    getSessionUpdates: vi.fn(),
     getToolDetail: vi.fn(),
     getDirectiveDetail: vi.fn(),
     getInternalDetail: vi.fn(),
@@ -167,7 +167,7 @@ it("refreshes connection status after each completed query", async () => {
   expect(tmux.connect).toHaveBeenCalledTimes(2);
 });
 
-it("bypasses stale connection checks for archive and rejects input while busy", async () => {
+it("freshly resolves management targets and rejects input while busy", async () => {
   const reader = repository(boundSession());
   const binding = {
     socketPath: "/tmp/codex-hub.sock",
@@ -176,7 +176,7 @@ it("bypasses stale connection checks for archive and rejects input while busy", 
   };
   const tmux = {
     connect: vi.fn().mockResolvedValue(binding),
-    archiveTarget: vi.fn().mockResolvedValue(null),
+    resolveTarget: vi.fn().mockResolvedValue(null),
     sendMessage: vi.fn(),
     sendKeys: vi.fn(),
   } as unknown as TmuxInteractionService;
@@ -185,8 +185,8 @@ it("bypasses stale connection checks for archive and rejects input while busy", 
     state: "connected",
     attachCommand: "tmux -S '/tmp/codex-hub.sock' attach-session -t 'codex-hub-test'",
   });
-  expect(await service.archiveTarget("session")).toBeNull();
-  expect(tmux.archiveTarget).toHaveBeenCalledOnce();
+  expect(await service.resolveTarget("session")).toBeNull();
+  expect(tmux.resolveTarget).toHaveBeenCalledOnce();
   expect(reader.getInteractionSession).toHaveBeenCalledTimes(2);
   expect(tmux.connect).toHaveBeenCalledOnce();
   service.setBusy("session", true);
@@ -234,7 +234,7 @@ it("rejects handoffPaneBinding for missing sessions and while management is busy
   expect(tmux.sendMessage).not.toHaveBeenCalled();
 });
 
-it.each(["message", "keys", "preview", "handoffPaneBinding", "archive"] as const)(
+it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as const)(
   "rechecks ownership immediately before queued %s executes",
   async (action) => {
     const reader = repository(boundSession());
@@ -255,7 +255,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "archive"] as const
       connect: vi.fn().mockResolvedValue(target),
       sendMessage: vi.fn((_target, _message, check) => queue(check)),
       sendKeys: vi.fn((_target, _keys, check) => queue(check)),
-      exitTarget: vi.fn((_target, check) => queue(check)),
+      killPane: vi.fn((_target, check) => queue(check)),
       captureTerminal: vi.fn((_target, check) =>
         queue(check).then(() => ({ content: "pane", truncated: false })),
       ),
@@ -270,7 +270,9 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "archive"] as const
             ? service.preview("session")
             : action === "handoffPaneBinding"
               ? service.handoffPaneBinding("session")
-              : service.exitTarget(target, "session");
+              : action === "kill"
+                ? service.killTarget(target, "session", () => {})
+                : service.sendExitKeys(target, "session", ["C-c"], () => {});
     const rejected = expect(operation).rejects.toMatchObject({ code: "interaction_not_connected" });
     await vi.waitFor(() => expect(execute).toBeTypeOf("function"));
     bindings.submit({
@@ -285,11 +287,11 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "archive"] as const
   },
 );
 
-it("rechecks archive ownership after target validation", async () => {
+it("rechecks management target ownership after validation", async () => {
   const reader = repository(boundSession());
   const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
   const tmux = {
-    archiveTarget: vi.fn(async () => {
+    resolveTarget: vi.fn(async () => {
       bindings.submit({
         sessionId: "replacement",
         time: 1,
@@ -301,7 +303,7 @@ it("rechecks archive ownership after target validation", async () => {
     }),
   } as unknown as TmuxInteractionService;
   expect(
-    await new TestSessionInteractionService(reader, true, tmux).archiveTarget("session"),
+    await new TestSessionInteractionService(reader, true, tmux).resolveTarget("session"),
   ).toBeNull();
 });
 
@@ -406,3 +408,29 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
       });
   },
 );
+
+it("rejects an exit observation when ownership changes while querying pane liveness", async () => {
+  const reader = repository(boundSession());
+  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  let resolve!: (state: "exited") => void;
+  const tmux = {
+    inspect: vi.fn(
+      () =>
+        new Promise<"exited">((done) => {
+          resolve = done;
+        }),
+    ),
+  } as unknown as TmuxInteractionService;
+  const service = new TestSessionInteractionService(reader, true, tmux);
+  const observation = service.inspectTarget(target, "session");
+  const rejected = expect(observation).rejects.toMatchObject({ code: "interaction_not_connected" });
+  bindings.submit({
+    sessionId: "replacement",
+    time: 1,
+    ordinal: 1,
+    position: 0,
+    attempt: { valid: true, ordinal: 1, ...target },
+  });
+  resolve("exited");
+  await rejected;
+});

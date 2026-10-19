@@ -1,6 +1,10 @@
 import { useEffect, useRef } from "react";
 
-import type { LiveRevision, SessionLiveResponse, TimelineCursor } from "../../shared/api-contract";
+import type {
+  SessionUpdatesResponse,
+  TimelineCursor,
+  UpdateRevision,
+} from "../../shared/api-contract";
 
 import { api } from "../api/client";
 import { createRequestChannel } from "./request-channel";
@@ -12,25 +16,25 @@ import {
   waitForRetry,
 } from "./retry-policy";
 
-export interface LiveSnapshot {
+export interface UpdatesSnapshot {
   readonly cursor: TimelineCursor;
-  readonly liveRevision: LiveRevision;
+  readonly updateRevision: UpdateRevision;
 }
 
-interface SessionLiveOptions {
+interface SessionUpdatesOptions {
   readonly sessionId: string;
   readonly enabled: boolean;
-  readonly snapshot: LiveSnapshot | null;
+  readonly snapshot: UpdatesSnapshot | null;
   readonly onUpdate: (
-    response: SessionLiveResponse,
-    expected: LiveSnapshot,
+    response: SessionUpdatesResponse,
+    expected: UpdatesSnapshot,
   ) => Promise<void> | void;
   readonly onTimelineConflict: () => void;
   readonly onError: (reason: unknown, terminal: boolean) => void;
   readonly onSuccess?: () => void;
 }
 
-export function useSessionLive({
+export function useSessionUpdates({
   sessionId,
   enabled,
   snapshot,
@@ -38,14 +42,14 @@ export function useSessionLive({
   onTimelineConflict,
   onError,
   onSuccess,
-}: SessionLiveOptions): void {
+}: SessionUpdatesOptions): void {
   const callbacks = useRef({ onUpdate, onTimelineConflict, onError, onSuccess });
   callbacks.current = { onUpdate, onTimelineConflict, onError, onSuccess };
 
   const cursor = snapshot?.cursor;
-  const liveRevision = snapshot?.liveRevision;
+  const updateRevision = snapshot?.updateRevision;
   useEffect(() => {
-    if (!enabled || cursor === undefined || liveRevision === undefined) return;
+    if (!enabled || cursor === undefined || updateRevision === undefined) return;
     let disposed = false;
     const channel = createRequestChannel();
     let controller: AbortController | null = null;
@@ -67,15 +71,15 @@ export function useSessionLive({
           wakeVisible = null;
           if (disposed) return;
         }
-        const expected = { cursor, liveRevision };
+        const expected = { cursor, updateRevision };
         const request = channel.begin();
         controller = request.controller;
         try {
-          const response = await api.live(
+          const response = await api.updates(
             sessionId,
             {
               cursor: expected.cursor,
-              after: expected.liveRevision,
+              after: expected.updateRevision,
             },
             controller.signal,
           );
@@ -116,5 +120,5 @@ export function useSessionLive({
       wakeVisible?.();
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [enabled, sessionId, cursor, liveRevision]);
+  }, [enabled, sessionId, cursor, updateRevision]);
 }

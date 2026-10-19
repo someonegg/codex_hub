@@ -1,17 +1,27 @@
-import type { DomainSession } from "../domain/session-domain.js";
+import type { DomainSession, TmuxKey } from "../domain/session-domain.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 
 export interface ManagementSnapshot {
   readonly sessions: readonly DomainSession[];
 }
 
-export interface SessionManager {
+export interface SessionExitStep {
+  readonly keys: readonly TmuxKey[];
+  readonly delayMs: number;
+}
+
+export interface SessionExitCapability {
+  exitSteps(): readonly SessionExitStep[];
+}
+
+export interface SessionManager extends SessionExitCapability {
   resolveDirectory(directory: string): Promise<{ directory: string; project: string }>;
   launch(
     operationId: string,
     directory: string,
     worktree: boolean,
     yolo: boolean,
+    resumeNativeId?: string,
   ): Promise<TmuxBinding>;
   archive(nativeId: string): Promise<void>;
   delete(nativeId: string): Promise<void>;

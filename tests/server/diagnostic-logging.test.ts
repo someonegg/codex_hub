@@ -2,8 +2,7 @@ import { expect, it, vi } from "vitest";
 
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import type { DomainDiagnostic } from "../../src/server/domain/session-domain.js";
-import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import { RefreshDiagnosticLogger } from "../../src/server/repository/diagnostic-logger.js";
 import { opaqueIdForParts } from "../../src/server/security/opaque-id.js";
@@ -11,6 +10,7 @@ import type {
   SessionSourceSnapshot,
   SourceSessionEntry,
 } from "../../src/server/source/session-source.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { normalizeRecords } from "./session-normalizer.fixtures.js";
 
 const warning: DomainDiagnostic = {
@@ -176,7 +176,7 @@ it("isolates logger failures from reading and management snapshots", async () =>
   expect((await reader.managementSnapshot()).sessions).toHaveLength(1);
 });
 
-it("does not wake Live when session or source diagnostics change", async () => {
+it("does not wake automatic updates when session or source diagnostics change", async () => {
   let snapshot: SessionSourceSnapshot = { signature: "1", sessions: [entry()], diagnostics: [] };
   const reader = new SessionReadService(
     [
@@ -191,15 +191,20 @@ it("does not wake Live when session or source diagnostics change", async () => {
     undefined,
     { diagnosticLogger: { log() {} } },
   );
-  const live = new SessionLiveService(reader, { probeIntervalMs: 1, waitTimeoutMs: 8 });
+  const updates = new SessionUpdatesService(reader, { probeIntervalMs: 1, waitTimeoutMs: 8 });
   try {
     const page = await reader.getItems(id, {});
-    const initial = await live.wait(id, { cursor: page!.cursor, after: "a".repeat(43) as never });
+    const initial = await updates.wait(id, {
+      cursor: page!.cursor,
+      after: "a".repeat(43) as never,
+    });
     snapshot = { signature: "2", sessions: [entry([warning])], diagnostics: [warning] };
     await reader.refresh();
-    expect(await live.wait(id, { cursor: page!.cursor, after: initial!.liveRevision })).toBeNull();
+    expect(
+      await updates.wait(id, { cursor: page!.cursor, after: initial!.updateRevision }),
+    ).toBeNull();
   } finally {
-    live.close();
+    updates.close();
   }
 });
 
@@ -231,7 +236,7 @@ it.each(["instanceKey", "sourceInstanceId"] as const)(
 it.each(["create", "archive", "delete"] as const)(
   "confirms %s despite source and session diagnostics",
   async (kind) => {
-    const bindings = new LivePaneBindingManager();
+    const bindings = new PaneBindingManager();
     const { OperationService } = await import("../../src/server/management/operation-service.js");
     const { SessionManagerRegistry } = await import(
       "../../src/server/management/session-manager.js"
@@ -290,6 +295,7 @@ it.each(["create", "archive", "delete"] as const)(
         generation++;
         return target;
       }),
+      exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
       archive: vi.fn(async () => {
         entries = [
           {
@@ -309,8 +315,9 @@ it.each(["create", "archive", "delete"] as const)(
     };
     const interaction = {
       setBusy: vi.fn(),
-      archiveTarget: vi.fn(async () => null),
-      exitTarget: vi.fn(async () => {}),
+      resolveTarget: vi.fn(async () => null),
+      killTarget: vi.fn(async () => undefined),
+      sendExitKeys: vi.fn(async () => {}),
       inspectTarget: vi.fn(async () => "exited" as const),
       matchesTarget: vi.fn(async () => true),
       describe: vi.fn(async () => ({

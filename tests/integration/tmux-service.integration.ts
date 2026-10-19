@@ -1,12 +1,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import {
   MAX_TERMINAL_PREVIEW_BYTES,
   TmuxInteractionService,
 } from "../../src/server/interaction/tmux-service.js";
 import { type TmuxBinding } from "../../src/server/interaction/transport.js";
+import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 beforeAll(() => {
@@ -84,3 +86,68 @@ async function waitForPreview(
   } while (Date.now() < deadline);
   throw new Error(`Timed out waiting for terminal marker: ${marker}`);
 }
+
+it("forces only the transferred pane closed when its outer shell ignores interrupts and EOF", async () => {
+  const directory = await createTempDirectory("tmux-exit-");
+  const socketPath = join(directory, "server.sock");
+  const output = execFileSync(
+    "tmux",
+    [
+      "-S",
+      socketPath,
+      "new-session",
+      "-d",
+      "-P",
+      "-F",
+      "#{pane_id}",
+      "-s",
+      "transferred",
+      "bash --noprofile --norc -i",
+    ],
+    { encoding: "utf8" },
+  );
+  const target = { socketPath, paneId: output.trim() };
+  const transport = new TmuxInteractionService();
+  try {
+    execFileSync("tmux", ["-S", socketPath, "new-session", "-d", "-s", "untouched", "sleep 30"]);
+    execFileSync("tmux", [
+      "-S",
+      socketPath,
+      "send-keys",
+      "-t",
+      target.paneId,
+      "set -o ignoreeof; trap '' INT; printf '%s%s\\n' EXIT- READY",
+      "Enter",
+    ]);
+    await waitForPreview(transport, target, "EXIT-READY");
+    const killTarget = vi.fn(async (pane: TmuxBinding, _id: string, check: () => void) =>
+      transport.killPane(pane, check),
+    );
+    let now = 0;
+    const exit = new SessionExitService(
+      {
+        inspectTarget: (pane) => transport.inspect(pane),
+        sendExitKeys: (pane, _id, keys, check) => transport.sendKeys(pane, keys, check),
+        killTarget,
+      },
+      () => now,
+    );
+    const task = exit.start("manual", target, new CodexSessionManager("/unused"), () => {});
+    for (const value of [0, 1_000, 2_000, 6_000]) {
+      now = value;
+      expect(await task.advance()).toBe(false);
+    }
+    expect(killTarget).not.toHaveBeenCalled();
+    now = 15_000;
+    expect(await task.advance()).toBe(false);
+    expect(killTarget).toHaveBeenCalledOnce();
+    expect(await task.advance()).toBe(true);
+    expect(
+      execFileSync("tmux", ["-S", socketPath, "list-sessions", "-F", "#{session_name}"], {
+        encoding: "utf8",
+      }).trim(),
+    ).toBe("untouched");
+  } finally {
+    spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+  }
+});

@@ -9,7 +9,7 @@ import { CodexSessionManager } from "../../src/server/adapters/codex/session-man
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { createCodexHub } from "../../src/server/create-hub.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
-import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
@@ -52,7 +52,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const bindings = new LivePaneBindingManager();
+  const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(home, bindings);
   const reader = new SessionReadService([source]);
   const sourceId = source.descriptor.sourceInstanceId;
@@ -90,7 +90,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
       return value?.status === "succeeded";
     });
     const manualId = (await operations.get(third.operationId))!.sessionId!;
-    const manualTarget = (await interaction.archiveTarget(manualId))!;
+    const manualTarget = (await interaction.resolveTarget(manualId))!;
     execFileSync("tmux", [
       "-S",
       socket,
@@ -164,6 +164,19 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
               item.type === "event_msg" &&
               ["task_started", "token_count"].includes(item.payload?.type),
           );
+      if (index === 2) {
+        const exit = operations.manage("exit", record.id);
+        await until(async () => (await operations.get(exit.operationId))?.status !== "pending");
+        expect(await operations.get(exit.operationId)).toMatchObject({
+          type: "exit",
+          status: "succeeded",
+        });
+        const afterExit = (await reader.managementSnapshot()).sessions.find(
+          (session) => session.id === record.id,
+        );
+        expect(afterExit?.archived).toBe(false);
+        expect(await interaction.resolveTarget(record.id)).toBeNull();
+      }
       const archive = operations.manage("archive", record.id);
       await until(async () => {
         const value = await operations.get(archive.operationId);
@@ -230,7 +243,7 @@ it("reports the native refusal for a running unbound session and archives it aft
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const bindings = new LivePaneBindingManager();
+  const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(home, bindings);
   const reader = new SessionReadService([source]);
   const sourceId = source.descriptor.sourceInstanceId;
@@ -339,6 +352,44 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
     ).toBe(sourceInstanceId);
     expect(await readdir(emptyHome)).toEqual([]);
     expect(await hub.interaction.describe(result.sessionId!)).toMatchObject({ state: "connected" });
+    const originalId = result.sessionId!;
+    const original = (await hub.sessions.getSession(originalId))!.session;
+    expect(original.status).toBe("live");
+    const liveCatalog = await hub.sessions.list();
+    expect(liveCatalog.sessions.find((item) => item.id === originalId)?.status).toBe("live");
+    const oldTarget = (await hub.interaction.resolveTarget(originalId))!;
+    const exit = hub.operations.manage("exit", originalId);
+    await until(async () => {
+      const state = await hub.operations.get(exit.operationId);
+      if (state?.status === "failed" || state?.status === "unknown") throw new Error(state.error!);
+      return state?.status === "succeeded";
+    });
+    const exited = (await hub.sessions.getSession(originalId))!.session;
+    expect(exited.status).toBe("normal");
+    expect(exited.resume).toEqual({ allowed: true, reason: null });
+    expect((await hub.sessions.list()).revision).not.toBe(liveCatalog.revision);
+    const resumed = hub.operations.create({
+      resumeSessionId: originalId,
+      requestId: "hub-resume-original",
+    });
+    await until(async () => {
+      const state = await hub.operations.get(resumed.operationId);
+      if (state?.status === "failed" || state?.status === "unknown") throw new Error(state.error!);
+      return state?.status === "succeeded";
+    });
+    expect(await hub.operations.get(resumed.operationId)).toMatchObject({
+      mode: "resume",
+      sessionId: originalId,
+    });
+    const restored = (await hub.sessions.getSession(originalId))!.session;
+    expect(restored).toMatchObject({
+      status: "live",
+      sourceId: original.sourceId,
+      workingDirectory: original.workingDirectory,
+    });
+    const newTarget = (await hub.interaction.resolveTarget(originalId))!;
+    expect(newTarget).not.toEqual(oldTarget);
+    expect((await hub.sessions.list()).sessions).toHaveLength(1);
     const archive = hub.operations.manage("archive", result.sessionId!);
     await until(async () => {
       const result = await hub.operations.get(archive.operationId);

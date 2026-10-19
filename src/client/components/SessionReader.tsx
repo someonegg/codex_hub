@@ -17,6 +17,10 @@ import { SessionInteraction } from "./SessionInteraction";
 import { Timeline } from "./Timeline";
 
 interface SessionReaderProps {
+  homeNickname?: string;
+  operationActions?: ReactNode;
+  operationStatus?: ReactNode;
+  managementBusy?: boolean;
   management?: ReactNode;
   onNavigate?: (sessionId: string) => void;
   related?: ReactNode;
@@ -37,6 +41,10 @@ interface SessionReaderProps {
 }
 
 export function SessionReader({
+  homeNickname,
+  operationActions,
+  operationStatus,
+  managementBusy,
   management,
   onNavigate,
   related,
@@ -81,6 +89,7 @@ export function SessionReader({
   return (
     <section className="reader" aria-labelledby="session-title">
       <SessionHeader
+        homeNickname={homeNickname}
         management={management}
         session={context.session}
         visibility={visibility}
@@ -107,9 +116,12 @@ export function SessionReader({
           onTimelineConflict={onTimelineConflict}
         />
       ) : null}
-      {!context.session.archived ? (
+      {context.session.status !== "archived" ? (
         <SessionInteraction
           key={context.session.id}
+          operationActions={operationActions}
+          operationStatus={operationStatus}
+          managementBusy={managementBusy}
           interaction={interaction}
           onNavigate={onNavigate}
           sessionId={context.session.id}

@@ -34,7 +34,7 @@ export function catalogGroups(
     updatedAt: -Infinity,
   });
   for (const session of list.sessions) {
-    if (session.isChild || (!includeArchived && session.archived)) continue;
+    if (session.isChild || (!includeArchived && session.status === "archived")) continue;
     const group = groups.get(session.projectId) ?? groups.get(null)!;
     group.sessions.push(session);
   }

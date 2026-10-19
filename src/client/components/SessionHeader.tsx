@@ -4,8 +4,10 @@ import type { SessionDetail } from "../../shared/domain";
 
 import { sessionDisplayTitle } from "../session-title";
 import type { TimelineVisibility, TimelineVisibilityKey } from "../state/timeline-visibility";
+import { StatusBadge } from "./StatusBadge";
 
 interface SessionHeaderProps {
+  homeNickname?: string;
   management?: ReactNode;
   session: SessionDetail;
   visibility: TimelineVisibility;
@@ -18,6 +20,7 @@ const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
 });
 
 export function SessionHeader({
+  homeNickname,
   management,
   session,
   visibility,
@@ -35,8 +38,14 @@ export function SessionHeader({
           {management}
         </div>
         <div className="session-metadata">
-          {session.archived ? <span className="archive-label">Archived</span> : null}
+          <StatusBadge status={session.status} />
           <span>{session.origin.agentName}</span>
+          {homeNickname !== undefined ? (
+            <>
+              <span>·</span>
+              <span>Home: {homeNickname}</span>
+            </>
+          ) : null}
           <span>·</span>
           <span>{updatedAt}</span>
           <span>·</span>

@@ -2,7 +2,11 @@ import { StrictMode } from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ItemPageResponse, LiveRevision, TimelineCursor } from "../../src/shared/api-contract";
+import type {
+  ItemPageResponse,
+  TimelineCursor,
+  UpdateRevision,
+} from "../../src/shared/api-contract";
 import type { TimelineItem } from "../../src/shared/domain";
 
 import { DirectiveItem } from "../../src/client/components/DirectiveItem";
@@ -431,11 +435,16 @@ function page(
   hasMore = false,
 ): ItemPageResponse {
   return {
-    session: { ...baseSession, archived: true, sourceId: "reader", itemCount: items.length },
+    session: {
+      ...baseSession,
+      status: "archived" as const,
+      sourceId: "reader",
+      itemCount: items.length,
+    },
     items,
     cursor,
     hasMore,
     interaction: { supported: false, attachCommand: null },
-    liveRevision: "opaque.live.revision" as LiveRevision,
+    updateRevision: "opaque.updates.revision" as UpdateRevision,
   };
 }

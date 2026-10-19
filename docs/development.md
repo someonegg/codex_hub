@@ -116,125 +116,25 @@ Close the dedicated browser session and stop the demo server after capture.
 The generator refuses an existing destination to avoid overwriting other data.
 It uses only fabricated project paths and conversations, never the user's Codex home.
 
-### Live pane screenshot
+### Session interaction screenshot
 
-The Live pane uses the real client with fabricated API responses, independently
-of the rollout demo above. Start the client with
-`npm run dev -- --port 4187 --strictPort`. Save the following function to
-`/tmp/codex-hub-live-pane.js`:
-
-<!-- prettier-ignore -->
-```js
-async (page) => {
-  const context = await page
-    .context()
-    .browser()
-    .newContext({
-      viewport: { width: 1440, height: 1000 },
-      locale: "en-US",
-      timezoneId: "UTC",
-      deviceScaleFactor: 1,
-      colorScheme: "light",
-    });
-  const demo = await context.newPage();
-  const timestamp = "2026-10-16T14:00:00.000Z";
-  const session = {
-    id: "docs-demo-session-00000001",
-    title: "Design the project dashboard",
-    origin: {
-      sourceType: "codex",
-      sourceInstanceId: "docs-demo",
-      agentName: "Codex",
-      agentVersion: null,
-      formatVersion: null,
-    },
-    nickname: null,
-    workingDirectory: "/projects/atlas-dashboard",
-    projectDirectory: "/projects/atlas-dashboard",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    archived: false,
-    parentId: null,
-    childIds: [],
-    agent: null,
-    messageCount: 0,
-    toolCount: 0,
-    sourceId: null,
-    itemCount: 0,
-  };
-  const snapshot = {
-    session,
-    interaction: {
-      supported: true,
-      state: "connected",
-      supersededBySessionId: null,
-      attachCommand: "tmux attach -t docs-demo",
-    },
-    cursor: "demo-cursor",
-    liveRevision: "demo-revision",
-    hasMore: false,
-  };
-  await context.route("**/api/v1/**", async (route) => {
-    const url = new URL(route.request().url());
-    const path = url.pathname;
-    if (route.request().method() !== "GET") return route.abort();
-    if (path.endsWith("/live") || url.searchParams.has("after")) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      return route.fulfill({ status: 204 });
-    }
-    if (path === "/api/v1/sessions") {
-      return route.fulfill({
-        json: {
-          revision: "demo-catalog",
-          homes: [{ sourceInstanceId: "docs-demo", nickname: "default" }],
-          projects: [{ id: "atlas", directory: session.projectDirectory }],
-          sessions: [{ ...session, sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false }],
-        },
-      });
-    }
-    if (path.endsWith("/terminal-preview")) {
-      return route.fulfill({
-        json: {
-          content: "Codex ready\n\n› Design the project dashboard.\n\nWaiting for input…",
-          truncated: false,
-          capturedAt: timestamp,
-        },
-      });
-    }
-    if (path.endsWith("/items")) {
-      return route.fulfill({ json: { ...snapshot, items: [] } });
-    }
-    if (path === "/api/v1/sessions/docs-demo-session-00000001") {
-      return route.fulfill({ json: snapshot });
-    }
-    return route.abort();
-  });
-  try {
-    await demo.goto("http://127.0.0.1:4187/sessions/docs-demo-session-00000001");
-    await demo.getByRole("button", { name: "Terminal preview", exact: true }).click();
-    await demo.getByLabel("Terminal preview content", { exact: true }).waitFor();
-    await demo.getByRole("textbox", { name: "Message to agent" }).fill("Suggest the next step.");
-    await demo.evaluate(() => document.fonts.ready);
-    await demo.locator(".interaction-panel").screenshot({
-      path: "docs/images/codex-hub-live-pane.png",
-      animations: "disabled",
-    });
-  } finally {
-    await context.close();
-  }
-}
-```
-
-Run it from the repository root in a dedicated browser session:
+Requirements: `playwright-cli` with its browser installed, and a running client:
 
 ```sh
-playwright-cli -s=docs-live open about:blank
-playwright-cli -s=docs-live run-code --filename /tmp/codex-hub-live-pane.js
-playwright-cli -s=docs-live close
+npm run dev -- --port 4187 --strictPort
+node scripts/capture-docs-interaction.mjs
 ```
 
-All API requests are intercepted; the fixture does not start Codex, connect to tmux,
-or access user sessions. Inspect the image for clipping and confirm terminal output,
-terminal controls, the message input, and Handoff are visible. Use a temporary output
-path in the function when validating without replacing the maintained image.
-Stop the client server after capture.
+Both capture scripts accept optional URL and output path arguments:
+
+```sh
+node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/codex-hub-interaction.png
+node scripts/record-docs-intro.mjs http://127.0.0.1:4187 /tmp/codex-hub-intro.gif
+```
+
+The interaction capture defaults to `docs/images/codex-hub-session-interaction.png`.
+Both scripts intercept API requests with shared fabricated fixtures. Inspect for page
+errors, clipping and horizontal overflow; confirm terminal output, terminal controls,
+the message input and Handoff are visible. Inspect the animation at README display
+width and keep it under 5 MiB. Use temporary output paths for verification and stop
+the client server afterward.

@@ -94,7 +94,7 @@ export class SessionQueries {
     };
   }
 
-  live(snapshot: CatalogSnapshot, id: string, cursor: string): TimelinePageContext | null {
+  updates(snapshot: CatalogSnapshot, id: string, cursor: string): TimelinePageContext | null {
     const versioned = snapshot.sessions.get(id);
     if (versioned === undefined) return null;
     const boundary = this.#resolveReadBoundary(id, versioned, cursor);

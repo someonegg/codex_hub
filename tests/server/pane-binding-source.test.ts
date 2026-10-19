@@ -7,15 +7,15 @@ import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import {
-  LivePaneBindingManager,
-  livePaneBindings,
-} from "../../src/server/interaction/live-pane-binding-manager.js";
+  PaneBindingManager,
+  paneBindings,
+} from "../../src/server/interaction/pane-binding-manager.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
-let bindings: LivePaneBindingManager;
+let bindings: PaneBindingManager;
 beforeEach(() => {
-  bindings = new LivePaneBindingManager();
+  bindings = new PaneBindingManager();
 });
 
 function line(value: object): string {
@@ -54,17 +54,17 @@ it.each([false, true])(
     const sessions = new SessionReadService(reverse ? [...sources].reverse() : sources);
     const transport = {
       connect: vi.fn(async (attempt) => attempt),
-      archiveTarget: vi.fn(async (attempt) => attempt),
+      resolveTarget: vi.fn(async (attempt) => attempt),
       sendMessage: vi.fn(),
       sendKeys: vi.fn(),
       captureTerminal: vi.fn(),
       inspect: vi.fn(),
-      exitTarget: vi.fn(),
+      killPane: vi.fn(),
     } satisfies InteractionTransport;
     const service = new SessionInteractionService(sessions, true, transport, bindings);
     const catalog = (await sessions.list()).sessions;
     expect(catalog).toHaveLength(2);
-    for (const item of catalog) expect(livePaneBindings.latest(item.id)).toBeNull();
+    for (const item of catalog) expect(paneBindings.latest(item.id)).toBeNull();
     const idFor = async (pane: string) => {
       for (const item of catalog) {
         const attempt = bindings.latest(item.id);
@@ -79,8 +79,8 @@ it.each([false, true])(
       state: "superseded",
       supersededBySessionId: c,
     });
-    expect(await service.archiveTarget(a)).toBeNull();
-    expect(transport.archiveTarget).not.toHaveBeenCalled();
+    expect(await service.resolveTarget(a)).toBeNull();
+    expect(transport.resolveTarget).not.toHaveBeenCalled();
     for (const action of [
       () => service.sendMessage(a, "hello"),
       () => service.sendKeys(a, ["enter"]),

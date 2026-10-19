@@ -1,18 +1,25 @@
 import type { ServerResponse } from "node:http";
 
-import type { LiveRevision, SessionLiveQuery, TimelineCursor } from "../../shared/api-contract.js";
-import { SessionLiveError, type SessionLiveService } from "../live/session-live-service.js";
+import type {
+  SessionUpdatesQuery,
+  TimelineCursor,
+  UpdateRevision,
+} from "../../shared/api-contract.js";
 import { RepositoryQueryError } from "../repository/session-queries.js";
+import {
+  SessionUpdatesError,
+  type SessionUpdatesService,
+} from "../updates/session-updates-service.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { invalid, only, optional } from "./query-params.js";
 import { sendJson } from "./router.js";
 import { SESSION_ID_PATTERN, SESSION_ROOT, sessionPath } from "./session-path.js";
 
-const LIVE_PATH = new RegExp(`^${SESSION_ROOT}/${SESSION_ID_PATTERN}/live$`);
+const UPDATES_PATH = new RegExp(`^${SESSION_ROOT}/${SESSION_ID_PATTERN}/updates$`);
 
-export function createSessionLiveRoutes(live: SessionLiveService): ApiRouteHandler {
+export function createSessionUpdatesRoutes(updates: SessionUpdatesService): ApiRouteHandler {
   return {
-    matches: (url) => LIVE_PATH.test(url.pathname),
+    matches: (url) => UPDATES_PATH.test(url.pathname),
     async handle(request, response, url) {
       const headOnly = request.method === "HEAD";
       if (request.method !== "GET" && !headOnly) return false;
@@ -25,7 +32,7 @@ export function createSessionLiveRoutes(live: SessionLiveService): ApiRouteHandl
       request.once("aborted", onDisconnect);
       response.once("close", onDisconnect);
       try {
-        const result = await live.wait(id, parseLiveQuery(url.searchParams), abort.signal);
+        const result = await updates.wait(id, parseUpdatesQuery(url.searchParams), abort.signal);
         if (abort.signal.aborted || response.destroyed) return true;
         if (result === null) return noContent(response);
         sendJson(response, 200, result, headOnly);
@@ -49,7 +56,7 @@ export function createSessionLiveRoutes(live: SessionLiveService): ApiRouteHandl
         );
         return true;
       }
-      if (error instanceof SessionLiveError) {
+      if (error instanceof SessionUpdatesError) {
         const status = error.code === "session_not_found" ? 404 : 429;
         if (status === 429) response.setHeader("Retry-After", "2");
         sendJson(
@@ -71,16 +78,16 @@ export function createSessionLiveRoutes(live: SessionLiveService): ApiRouteHandl
   };
 }
 
-function parseLiveQuery(params: URLSearchParams): SessionLiveQuery {
+function parseUpdatesQuery(params: URLSearchParams): SessionUpdatesQuery {
   only(params, ["cursor", "after"]);
   const cursor = optional(params, "cursor");
   const after = optional(params, "after");
-  if (cursor === undefined) invalid("cursor is required for Live updates");
-  if (after === undefined) invalid("after is required for Live updates");
+  if (cursor === undefined) invalid("cursor is required for automatic updates");
+  if (after === undefined) invalid("after is required for automatic updates");
   if (!/^[A-Za-z0-9_-]{43}$/.test(after)) invalid("after is malformed");
   return {
     cursor: cursor as TimelineCursor,
-    after: after as LiveRevision,
+    after: after as UpdateRevision,
   };
 }
 

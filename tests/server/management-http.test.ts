@@ -10,9 +10,9 @@ import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
@@ -29,6 +29,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   const manager = {
     resolveDirectory: vi.fn(async () => ({ directory: home, project: home })),
     launch: vi.fn(async () => ({ socketPath: "/tmp/test", paneId: "%1" })),
+    exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
   };
@@ -40,20 +41,20 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     () => now,
   );
   const catalogService = new SessionCatalogService(sessions);
-  const live = new SessionLiveService(sessions, { interaction });
+  const updates = new SessionUpdatesService(sessions, { interaction });
   const server = createServer(
     {
       host: "127.0.0.1",
       port: 0,
-      codexHome: home,
+      homes: [{ nickname: "default", path: home }],
       clientDirectory: join(home, "client"),
       tls: { enabled: false },
       interactionEnabled: true,
     },
-    createApiRouter({ sessions, catalog: catalogService, interaction, operations, live }),
+    createApiRouter({ sessions, catalog: catalogService, interaction, operations, updates }),
     () => {
       catalogService.close();
-      live.close();
+      updates.close();
       operations.close();
     },
   );
@@ -86,8 +87,14 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     },
     { body: JSON.stringify({ message: "x".repeat(500_000) }), status: 413, code: "body_too_large" },
   ];
-  for (const path of ["/sessions", "/sessions/abcdefghijklmnopqrstuvwxyz/messages"]) {
+  for (const path of [
+    "/sessions",
+    "/sessions/abcdefghijklmnopqrstuvwxyz/messages",
+    "/sessions/abcdefghijklmnopqrstuvwxyz/exit",
+  ]) {
     for (const value of invalidBodies) {
+      if (path.endsWith("/exit") && value.body === "{}" && value.contentType === undefined)
+        continue;
       const response = await post(
         path,
         {},
@@ -99,6 +106,52 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   }
   const nonempty = await post("/sessions/abcdefghijklmnopqrstuvwxyz/archive", { extra: true });
   expect(await nonempty.json()).toMatchObject({ error: { code: "invalid_json" } });
+  const exitPath = "/sessions/abcdefghijklmnopqrstuvwxyz/exit";
+  expect((await post(exitPath, { extra: true })).status).toBe(400);
+  expect(
+    (
+      await post(
+        exitPath,
+        {},
+        { headers: { Origin: "https://other.invalid", "Content-Type": "application/json" } },
+      )
+    ).status,
+  ).toBe(403);
+  const exitResponse = await post(exitPath, {});
+  expect(exitResponse.status).toBe(202);
+  const exitOperation = await exitResponse.json();
+  expect(exitOperation).toMatchObject({ type: "exit", sessionId: "abcdefghijklmnopqrstuvwxyz" });
+  await vi.waitFor(async () => {
+    expect(
+      await (await fetch(`${base}/operations/${exitOperation.operationId}`)).json(),
+    ).toMatchObject({ type: "exit", status: "failed", error: "Session not found" });
+  });
+  const resumeBody = {
+    resumeSessionId: "abcdefghijklmnopqrstuvwxyz",
+    requestId: "resume-http-request",
+    yolo: false,
+  };
+  for (const extra of [
+    { directory: home },
+    { sourceInstanceId: "test" },
+    { worktree: false },
+    { yolo: "true" },
+    { resumeSessionId: "" },
+  ]) {
+    expect((await post("/sessions", { ...resumeBody, ...extra })).status).toBe(400);
+  }
+  const resumeResponse = await post("/sessions", resumeBody);
+  expect(resumeResponse.status).toBe(202);
+  const resumeOp = await resumeResponse.json();
+  expect(resumeOp).toMatchObject({
+    type: "create",
+    mode: "resume",
+    sessionId: resumeBody.resumeSessionId,
+  });
+  expect(await (await post("/sessions", resumeBody)).json()).toMatchObject({
+    operationId: resumeOp.operationId,
+  });
+  expect((await post("/sessions", { ...resumeBody, yolo: true })).status).toBe(409);
   const created = await post("/sessions", body);
   expect(created.status).toBe(202);
   const operation = await created.json();

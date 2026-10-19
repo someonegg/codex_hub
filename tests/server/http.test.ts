@@ -11,7 +11,7 @@ import { SessionCatalogService } from "../../src/server/catalog/session-catalog-
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer, listenServer } from "../../src/server/http/create-server.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import {
   TEST_CA,
@@ -39,7 +39,7 @@ async function start() {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    codexHome: "/unused",
+    homes: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
@@ -62,17 +62,17 @@ async function startWithRepository(
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    codexHome: "/unused",
+    homes: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
   };
-  const live = new SessionLiveService(repository);
+  const updates = new SessionUpdatesService(repository);
   const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
     createApiRouter(
-      { sessions: repository, catalog, live },
+      { sessions: repository, catalog, updates },
       {
         logger,
         requestId: () => "request-fixture",
@@ -80,7 +80,7 @@ async function startWithRepository(
     ),
     () => {
       catalog.close();
-      live.close();
+      updates.close();
     },
   );
   servers.push(server);
@@ -147,7 +147,7 @@ async function startSecure(requireClientCertificate: boolean): Promise<string> {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    codexHome: "/unused",
+    homes: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: {
       enabled: true,
@@ -170,7 +170,7 @@ describe("secure HTTP foundation", () => {
     const config: ServerConfig = {
       host: LOOPBACK_HOST,
       port: 0,
-      codexHome: "/unused",
+      homes: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,
@@ -211,7 +211,7 @@ describe("secure HTTP foundation", () => {
     const server = createServer({
       host: LOOPBACK_HOST,
       port: 0,
-      codexHome: "/unused",
+      homes: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,
@@ -239,7 +239,7 @@ describe("secure HTTP foundation", () => {
     const baseConfig = {
       host: LOOPBACK_HOST,
       port: 0,
-      codexHome: "/unused",
+      homes: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
     };
 
@@ -318,7 +318,7 @@ describe("secure HTTP foundation", () => {
       list: fail,
       getSession: fail,
       getItems: fail,
-      getLiveSession: fail,
+      getSessionUpdates: fail,
       getToolDetail: fail,
       getDirectiveDetail: fail,
       getInternalDetail: fail,

@@ -45,7 +45,7 @@ The repository publishes the catalog, opaque session-ID registry, and normalized
 - Generation changes can make clients restart timeline pagination and refetch items.
 - Serialized refresh and snapshot publication add more machinery than direct request-time parsing.
 - Process restart discards all caches and requires rebuilding normalized state.
-- The design does not provide sub-second live updates or optimal behavior for very large corpora.
+- The design does not provide sub-second automatic updates or optimal behavior for very large corpora.
 
 ## Pros and Cons of the Options
 
@@ -60,7 +60,7 @@ The repository publishes the catalog, opaque session-ID registry, and normalized
 ### Incremental tail parsing
 
 - Good: Avoids reparsing unchanged prefixes of active sessions.
-- Good: Scales naturally toward frequent live refresh and much larger corpora.
+- Good: Scales naturally toward frequent automatic refresh and much larger corpora.
 - Bad: Must correctly handle truncation, replacement, inode reuse, archive moves, partial tails, decoder-version changes, and atomic publication.
 - Bad: A state error may silently skip or duplicate events, making the cost of being wrong high.
 - Bad: The observed corpus and append behavior do not yet justify watcher, offset, ETag, and client-cache complexity.

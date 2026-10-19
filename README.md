@@ -50,16 +50,16 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 
 - Navigate projects, main sessions, and child conversations.
 - Read Markdown, code, tables, and math with optional technical events.
-- Follow live conversations while browsing their history.
+- Follow conversation updates while browsing their history.
 - Create sessions with optional worktrees, send input, and preview their terminals.
-- Archive sessions and permanently delete archived sessions.
+- See live sessions, safely resume exited sessions, exit without archiving, and manage archives.
 
-## Live pane
+## Session interaction
 
 Send prompts, preview terminal output, and use terminal controls from the session
 page.
 
-![Live pane: terminal preview, controls, message input, and Handoff](docs/images/codex-hub-live-pane.png)
+![Session interaction: terminal preview, controls, message input, and Handoff](docs/images/codex-hub-session-interaction.png)
 
 ### Continue with Handoff
 

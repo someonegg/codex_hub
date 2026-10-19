@@ -1,35 +1,36 @@
 import type {
   InteractionResponse,
-  SessionLiveQuery,
-  SessionLiveResponse,
+  SessionUpdatesQuery,
+  SessionUpdatesResponse,
 } from "../../shared/api-contract.js";
 import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
+import { reconcileSessionState } from "../interaction/reconcile-session-state.js";
 import {
-  createProcessLiveRevisionFactory,
-  type LiveRevisionFactory,
-  type LiveRevisionSession,
-  withLiveRevision,
-} from "./live-revision.js";
+  createProcessUpdateRevisionFactory,
+  type UpdateRevisionFactory,
+  type UpdateRevisionSession,
+  withUpdateRevision,
+} from "./update-revision.js";
 
-export const LIVE_PROBE_INTERVAL_MS = 1_500;
-export const LIVE_WAIT_TIMEOUT_MS = 25_000;
-export const MAX_LIVE_WAITERS = 100;
-export const MAX_LIVE_WAITERS_PER_SESSION = 10;
+export const UPDATES_PROBE_INTERVAL_MS = 1_500;
+export const UPDATES_WAIT_TIMEOUT_MS = 25_000;
+export const MAX_UPDATES_WAITERS = 100;
+export const MAX_UPDATES_WAITERS_PER_SESSION = 10;
 
-export class SessionLiveError extends Error {
+export class SessionUpdatesError extends Error {
   constructor(
-    readonly code: "session_not_found" | "live_capacity_exceeded",
+    readonly code: "session_not_found" | "updates_capacity_exceeded",
     message: string,
   ) {
     super(message);
-    this.name = "SessionLiveError";
+    this.name = "SessionUpdatesError";
   }
 }
 
-export interface SessionLiveServiceOptions {
+export interface SessionUpdatesServiceOptions {
   readonly interaction?: Pick<SessionInteractionService, "describeSnapshot">;
-  readonly createRevision?: LiveRevisionFactory;
+  readonly createRevision?: UpdateRevisionFactory;
   readonly probeIntervalMs?: number;
   readonly waitTimeoutMs?: number;
   readonly maxWaiters?: number;
@@ -43,10 +44,10 @@ interface WaiterEntry {
   readonly externalAbort: () => void;
 }
 
-type LiveSessionReader = Pick<SessionReader, "getLiveSession">;
+type SessionUpdatesReader = Pick<SessionReader, "getSessionUpdates">;
 
-export class SessionLiveService {
-  readonly #createRevision: LiveRevisionFactory;
+export class SessionUpdatesService {
+  readonly #createRevision: UpdateRevisionFactory;
   readonly #probeIntervalMs: number;
   readonly #waitTimeoutMs: number;
   readonly #maxWaiters: number;
@@ -57,30 +58,30 @@ export class SessionLiveService {
   #closed = false;
 
   constructor(
-    private readonly sessions: LiveSessionReader,
-    private readonly options: SessionLiveServiceOptions = {},
+    private readonly sessions: SessionUpdatesReader,
+    private readonly options: SessionUpdatesServiceOptions = {},
   ) {
-    this.#createRevision = options.createRevision ?? createProcessLiveRevisionFactory();
-    this.#probeIntervalMs = options.probeIntervalMs ?? LIVE_PROBE_INTERVAL_MS;
-    this.#waitTimeoutMs = options.waitTimeoutMs ?? LIVE_WAIT_TIMEOUT_MS;
-    this.#maxWaiters = options.maxWaiters ?? MAX_LIVE_WAITERS;
-    this.#maxWaitersPerSession = options.maxWaitersPerSession ?? MAX_LIVE_WAITERS_PER_SESSION;
+    this.#createRevision = options.createRevision ?? createProcessUpdateRevisionFactory();
+    this.#probeIntervalMs = options.probeIntervalMs ?? UPDATES_PROBE_INTERVAL_MS;
+    this.#waitTimeoutMs = options.waitTimeoutMs ?? UPDATES_WAIT_TIMEOUT_MS;
+    this.#maxWaiters = options.maxWaiters ?? MAX_UPDATES_WAITERS;
+    this.#maxWaitersPerSession = options.maxWaitersPerSession ?? MAX_UPDATES_WAITERS_PER_SESSION;
     this.#now = options.now ?? Date.now;
   }
 
-  revision(session: LiveRevisionSession, interaction: InteractionResponse) {
+  revision(session: UpdateRevisionSession, interaction: InteractionResponse) {
     return this.#createRevision(session, interaction);
   }
 
   async wait(
     sessionId: string,
-    query: SessionLiveQuery,
+    query: SessionUpdatesQuery,
     signal?: AbortSignal,
-  ): Promise<SessionLiveResponse | null> {
+  ): Promise<SessionUpdatesResponse | null> {
     this.#throwIfAborted(signal);
     const initial = await this.#probe(sessionId, query);
-    if (initial.liveRevision !== query.after || initial.hasMore) return initial;
-    if (initial.session.archived) return null;
+    if (initial.updateRevision !== query.after || initial.hasMore) return initial;
+    if (initial.session.status === "archived") return null;
     const waiter = this.#acquire(sessionId, signal);
     const deadline = this.#now() + this.#waitTimeoutMs;
     try {
@@ -89,7 +90,7 @@ export class SessionLiveService {
         if (remaining <= 0) return null;
         await delay(Math.min(this.#probeIntervalMs, remaining), waiter.signal);
         const current = await this.#probe(sessionId, query);
-        if (current.liveRevision !== query.after || current.hasMore) return current;
+        if (current.updateRevision !== query.after || current.hasMore) return current;
       }
     } finally {
       this.#release(waiter);
@@ -102,20 +103,20 @@ export class SessionLiveService {
     for (const waiter of this.#waiters.keys()) waiter.abort();
   }
 
-  async #probe(sessionId: string, query: SessionLiveQuery): Promise<SessionLiveResponse> {
+  async #probe(sessionId: string, query: SessionUpdatesQuery): Promise<SessionUpdatesResponse> {
     this.#throwIfAborted();
-    const snapshot = await this.sessions.getLiveSession(sessionId, query.cursor);
+    const snapshot = await this.sessions.getSessionUpdates(sessionId, query.cursor);
     if (snapshot === null) {
-      throw new SessionLiveError("session_not_found", "Session not found");
+      throw new SessionUpdatesError("session_not_found", "Session not found");
     }
     const interaction = await this.#describeInteraction(sessionId, snapshot.interactionSession);
-    return withLiveRevision(
-      {
+    return withUpdateRevision(
+      reconcileSessionState({
         session: snapshot.session,
         cursor: snapshot.cursor,
         hasMore: snapshot.hasMore,
         interaction,
-      },
+      }),
       this.#createRevision,
     );
   }
@@ -133,9 +134,9 @@ export class SessionLiveService {
     this.#throwIfAborted(signal);
     const sessionCount = this.#waitersBySession.get(sessionId) ?? 0;
     if (this.#waiters.size >= this.#maxWaiters || sessionCount >= this.#maxWaitersPerSession) {
-      throw new SessionLiveError(
-        "live_capacity_exceeded",
-        "Too many Live update requests are already waiting",
+      throw new SessionUpdatesError(
+        "updates_capacity_exceeded",
+        "Too many automatic update requests are already waiting",
       );
     }
     const controller = new AbortController();

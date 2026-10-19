@@ -9,7 +9,7 @@ import { SessionCatalogService } from "../../src/server/catalog/session-catalog-
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { SessionDetail } from "../../src/shared/domain.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -29,7 +29,8 @@ const SESSION: SessionDetail = {
   projectDirectory: null,
   createdAt: null,
   updatedAt: null,
-  archived: false,
+  status: "normal",
+  resume: { allowed: false, reason: "Unavailable" },
   parentId: null,
   childIds: [],
   agent: null,
@@ -56,7 +57,7 @@ async function start() {
     list: vi.fn(),
     getSession: vi.fn().mockResolvedValue({ session: SESSION }),
     getItems: unavailable,
-    getLiveSession: unavailable,
+    getSessionUpdates: unavailable,
     getToolDetail: unavailable,
     getDirectiveDetail: unavailable,
     getInternalDetail: unavailable,
@@ -82,19 +83,19 @@ async function start() {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    codexHome: "/unused",
+    homes: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: true,
   };
-  const live = new SessionLiveService(repository);
+  const updates = new SessionUpdatesService(repository);
   const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, catalog, live, interaction }),
+    createApiRouter({ sessions: repository, catalog, updates, interaction }),
     () => {
       catalog.close();
-      live.close();
+      updates.close();
     },
   );
   servers.push(server);

@@ -13,13 +13,13 @@ function newRequestId(): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-type OperationController = ReturnType<typeof useHubOperation>;
-function OperationStatus({ controller }: { controller: OperationController }) {
+export type OperationController = ReturnType<typeof useHubOperation>;
+export function OperationStatus({ controller }: { controller: OperationController }) {
   const op = controller.operation;
   const [dismissed, setDismissed] = useState<HubOperation | null>(null);
   useEffect(() => {
     if (op?.status !== "succeeded") return;
-    const timer = setTimeout(() => setDismissed(op), 5_000);
+    const timer = setTimeout(() => setDismissed(op), 2_000);
     return () => clearTimeout(timer);
   }, [op]);
   return (
@@ -27,7 +27,7 @@ function OperationStatus({ controller }: { controller: OperationController }) {
       {op && op !== dismissed ? (
         <aside className="operation-status" role="status">
           <strong>
-            {op.type} · {op.status}
+            {op.mode === "resume" ? "resume" : op.type} · {op.status}
           </strong>
           {op.status === "pending" && op.type === "create" ? (
             <p>
@@ -69,7 +69,7 @@ function OperationStatus({ controller }: { controller: OperationController }) {
               Retry status check
             </button>
           ) : controller.errorPhase === "submit" ? (
-            <p>Use the original create, archive, or delete button to submit again.</p>
+            <p>Use the original action button to try again.</p>
           ) : null}
         </div>
       ) : null}
@@ -220,6 +220,7 @@ export function CreateSession({
           />
           Enable --yolo
         </label>
+        <OperationStatus controller={controller} />
         <button
           type="submit"
           disabled={
@@ -231,7 +232,6 @@ export function CreateSession({
           {controller.busy ? "Creating…" : "Create session"}
         </button>
       </form>
-      <OperationStatus controller={controller} />
     </dialog>
   );
 }
@@ -239,9 +239,49 @@ interface ManageSessionProps {
   session: SessionDetail;
   onChanged: () => void;
   onDeleted?: () => void;
+  controller?: OperationController;
+  showStatus?: boolean;
+  onStart?: () => void;
 }
 
-export function ManageSession({ session, onChanged, onDeleted }: ManageSessionProps) {
+export function ManageSession(props: ManageSessionProps) {
+  return props.controller ? (
+    <ManageSessionControls
+      session={props.session}
+      controller={props.controller}
+      onStart={props.onStart}
+      showStatus={
+        props.showStatus ??
+        (props.controller.operation?.type === "archive" ||
+          props.controller.operation?.type === "delete")
+      }
+    />
+  ) : (
+    <StandaloneManageSession {...props} />
+  );
+}
+
+function StandaloneManageSession({ session, onChanged, onDeleted }: ManageSessionProps) {
+  const controller = useHubOperation(session.id, (operation) => {
+    if (operation.type === "delete") {
+      if (onDeleted) onDeleted();
+      else window.location.assign("/");
+    } else onChanged();
+  });
+  return <ManageSessionControls session={session} controller={controller} showStatus />;
+}
+
+function ManageSessionControls({
+  session,
+  controller,
+  showStatus,
+  onStart,
+}: {
+  session: SessionDetail;
+  controller: OperationController;
+  showStatus: boolean;
+  onStart?: () => void;
+}) {
   const [menuOpen, setMenuOpen] = useState(false);
   const menu = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -258,12 +298,6 @@ export function ManageSession({ session, onChanged, onDeleted }: ManageSessionPr
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [menuOpen]);
-  const controller = useHubOperation(session.id, (operation) => {
-    if (operation.type === "delete") {
-      if (onDeleted) onDeleted();
-      else window.location.assign("/");
-    } else onChanged();
-  });
   return (
     <div
       className="session-management"
@@ -287,7 +321,7 @@ export function ManageSession({ session, onChanged, onDeleted }: ManageSessionPr
       </button>
       {menuOpen ? (
         <div className="session-action-menu" id={menuId}>
-          {session.archived ? (
+          {session.status === "archived" ? (
             <button
               type="button"
               disabled={controller.busy}
@@ -295,8 +329,10 @@ export function ManageSession({ session, onChanged, onDeleted }: ManageSessionPr
                 closeMenu();
                 if (
                   window.confirm("Permanently delete this archived session? This cannot be undone.")
-                )
+                ) {
+                  onStart?.();
                   void controller.start(() => api.deleteSession(session.id));
+                }
               }}
             >
               Delete session
@@ -307,6 +343,7 @@ export function ManageSession({ session, onChanged, onDeleted }: ManageSessionPr
               disabled={controller.busy}
               onClick={() => {
                 closeMenu();
+                onStart?.();
                 void controller.start(() => api.archiveSession(session.id));
               }}
             >
@@ -315,9 +352,93 @@ export function ManageSession({ session, onChanged, onDeleted }: ManageSessionPr
           )}
         </div>
       ) : null}
-      <div className="session-operation-details">
-        <OperationStatus controller={controller} />
-      </div>
+      {showStatus ? (
+        <div className="session-operation-details">
+          <OperationStatus controller={controller} />
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+export function ResumeSession({
+  session,
+  controller,
+  onStart,
+}: {
+  session: SessionDetail;
+  controller: OperationController;
+  onStart?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [yolo, setYolo] = useState(false);
+  const request = useRef<{ yolo: boolean; id: string } | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (open) dialog.current?.showModal?.();
+    else dialog.current?.close?.();
+  }, [open]);
+  useEffect(() => {
+    if (controller.operation && controller.operation.status !== "pending") request.current = null;
+    if (controller.operation?.status === "succeeded") setOpen(false);
+  }, [controller.operation]);
+  return (
+    <>
+      {session.resume.allowed ? (
+        <button
+          type="button"
+          className="interaction-management-trigger"
+          disabled={controller.busy}
+          onClick={() => {
+            setYolo(false);
+            setOpen(true);
+          }}
+        >
+          Resume
+        </button>
+      ) : (
+        <span className="resume-reason">{session.resume.reason}</span>
+      )}
+      <dialog
+        ref={dialog}
+        className="create-session"
+        aria-label="Resume session"
+        onCancel={() => setOpen(false)}
+      >
+        <h2>Resume session</h2>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!request.current || request.current.yolo !== yolo)
+              request.current = { yolo, id: newRequestId() };
+            onStart?.();
+            void controller.start(() =>
+              api.createSession({
+                resumeSessionId: session.id,
+                yolo,
+                requestId: request.current!.id,
+              }),
+            );
+            setOpen(false);
+          }}
+        >
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={yolo}
+              disabled={controller.busy}
+              onChange={(event) => setYolo(event.target.checked)}
+            />
+            Enable --yolo
+          </label>
+          <button type="submit" disabled={controller.busy || !session.resume.allowed}>
+            Resume session
+          </button>
+          <button type="button" onClick={() => setOpen(false)}>
+            Cancel
+          </button>
+        </form>
+      </dialog>
+    </>
   );
 }

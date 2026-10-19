@@ -119,7 +119,7 @@ describe("server architecture boundaries", () => {
       sourceInstanceId: session.origin.sourceInstanceId,
       title: session.title,
       projectId: expect.any(String),
-      archived: false,
+      status: "normal",
       parentId: null,
       isChild: false,
       updatedAt: session.updatedAt,

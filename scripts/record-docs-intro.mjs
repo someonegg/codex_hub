@@ -1,3 +1,4 @@
+import { connectedInteraction, docsSession, docsTimestamp } from "./docs-fixtures.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -5,11 +6,11 @@ import { join, resolve } from "node:path";
 
 // Requires a running client server, playwright-cli, and Python with Pillow.
 const origin = process.argv[2] ?? "http://127.0.0.1:4187";
-const output = resolve("docs/images/codex-hub-intro.gif");
+const output = resolve(process.argv[3] ?? "docs/images/codex-hub-intro.gif");
 const frames = await mkdtemp(join(tmpdir(), "codex-hub-intro-"));
 const browserSession = `intro-${Date.now()}`;
 
-async function record(page, frames, origin) {
+async function record(page, frames, origin, docsSession, connectedInteraction, timestamp) {
   const context = await page
     .context()
     .browser()
@@ -24,42 +25,19 @@ async function record(page, frames, origin) {
   demo.setDefaultTimeout(10000);
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
-  const timestamp = "2026-10-16T14:00:00.000Z";
   const prompt = "Suggest three improvements for this project dashboard.";
   const reply =
     "### Three focused improvements\n\n1. **Show project health.** Put status and open tasks at the top.\n2. **Highlight recent activity.** Surface the latest changes and decisions.\n3. **Keep navigation clear.** Group sessions by project for quick access.";
   let created = false;
   let stage = 0;
   const session = () => ({
+    ...docsSession,
     id: "demo-session",
     title: "Improve the project dashboard",
-    origin: {
-      sourceType: "codex",
-      sourceInstanceId: "docs-demo",
-      agentName: "Codex",
-      agentVersion: null,
-      formatVersion: null,
-    },
-    nickname: null,
-    workingDirectory: "/projects/atlas-dashboard",
-    projectDirectory: "/projects/atlas-dashboard",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-    archived: false,
-    parentId: null,
-    childIds: [],
-    agent: null,
     messageCount: stage,
-    toolCount: 0,
-    sourceId: null,
     itemCount: stage,
   });
-  const interaction = {
-    supported: true,
-    state: "connected",
-    supersededBySessionId: null,
-    attachCommand: "tmux attach -t atlas-dashboard",
-  };
+  const interaction = connectedInteraction;
   const items = () =>
     [
       {
@@ -87,7 +65,7 @@ async function record(page, frames, origin) {
     session: session(),
     interaction,
     cursor: "demo-cursor",
-    liveRevision: String(stage),
+    updateRevision: String(stage),
     hasMore: false,
   });
   await context.route("**/api/v1/**", async (route) => {
@@ -131,7 +109,7 @@ async function record(page, frames, origin) {
       });
     }
     if (path.endsWith("/items")) return json({ ...snapshot(), items: items() });
-    if (path.endsWith("/live")) {
+    if (path.endsWith("/updates")) {
       await new Promise((resolve) => setTimeout(resolve, 200));
       if (url.searchParams.get("after") === String(stage)) {
         return route.fulfill({ status: 204 });
@@ -204,7 +182,7 @@ async function record(page, frames, origin) {
 const recording = join(frames, "record.js");
 await writeFile(
   recording,
-  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)})`,
+  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)})`,
 );
 const cli = (...args) =>
   execFileSync("playwright-cli", [`-s=${browserSession}`, ...args], { stdio: "inherit" });

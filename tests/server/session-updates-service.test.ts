@@ -2,31 +2,32 @@ import { describe, expect, it, vi } from "vitest";
 
 import { CODEX_INTERACTION_KEY_BINDINGS } from "../../src/server/adapters/codex/interaction-parser.js";
 import type {
-  LiveSessionSnapshot,
   SessionReader,
+  SessionUpdatesSnapshot,
 } from "../../src/server/application/session-reader.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
-import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import { reconcileSessionState } from "../../src/server/interaction/reconcile-session-state.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import {
-  createProcessLiveRevisionFactory,
-  withLiveRevision,
-} from "../../src/server/live/live-revision.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
-import type { LiveRevision, TimelineCursor } from "../../src/shared/api-contract.js";
+  createProcessUpdateRevisionFactory,
+  withUpdateRevision,
+} from "../../src/server/updates/update-revision.js";
+import type { TimelineCursor, UpdateRevision } from "../../src/shared/api-contract.js";
 import type { SessionDetail } from "../../src/shared/domain.js";
 
 const CURSOR = "opaque.timeline.cursor" as TimelineCursor;
-const REVISION = "a".repeat(43) as LiveRevision;
-const OTHER_REVISION = "b".repeat(43) as LiveRevision;
+const REVISION = "a".repeat(43) as UpdateRevision;
+const OTHER_REVISION = "b".repeat(43) as UpdateRevision;
 
-describe("SessionLiveService", () => {
+describe("SessionUpdatesService", () => {
   it("creates stable revisions that cover public session and effective interaction state", () => {
-    const createRevision = createProcessLiveRevisionFactory(Buffer.alloc(32, 7));
+    const createRevision = createProcessUpdateRevisionFactory(Buffer.alloc(32, 7));
     const revision = (
       session: SessionDetail,
-      interaction: Parameters<typeof withLiveRevision>[0]["interaction"],
-    ) => withLiveRevision({ session, interaction }, createRevision).liveRevision;
+      interaction: Parameters<typeof withUpdateRevision>[0]["interaction"],
+    ) => withUpdateRevision({ session, interaction }, createRevision).updateRevision;
     const first = revision(SESSION, { supported: false, attachCommand: null });
     expect(revision({ ...SESSION }, { supported: false, attachCommand: null })).toBe(first);
     expect(
@@ -49,28 +50,28 @@ describe("SessionLiveService", () => {
   });
 
   it("returns immediately for a changed revision or timeline backlog", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false));
-    const service = createService(getLiveSession);
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
+    const service = createService(getSessionUpdates);
     await expect(
       service.wait("session", { cursor: CURSOR, after: OTHER_REVISION }),
-    ).resolves.toMatchObject({ cursor: CURSOR, liveRevision: REVISION });
+    ).resolves.toMatchObject({ cursor: CURSOR, updateRevision: REVISION });
 
-    getLiveSession.mockResolvedValue(snapshot(true));
+    getSessionUpdates.mockResolvedValue(snapshot(true));
     await expect(
       service.wait("session", { cursor: CURSOR, after: REVISION }),
     ).resolves.toMatchObject({ hasMore: true });
   });
 
   it("repeats empty probes and returns null at the bounded timeout", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false));
-    const service = createService(getLiveSession, { probeIntervalMs: 3, waitTimeoutMs: 12 });
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
+    const service = createService(getSessionUpdates, { probeIntervalMs: 3, waitTimeoutMs: 12 });
     await expect(service.wait("session", { cursor: CURSOR, after: REVISION })).resolves.toBeNull();
-    expect(getLiveSession.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(getSessionUpdates.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
 
   it("enforces the process-wide waiter limit across sessions", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false));
-    const service = createService(getLiveSession, {
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
+    const service = createService(getSessionUpdates, {
       probeIntervalMs: 1_000,
       waitTimeoutMs: 5_000,
       maxWaiters: 1,
@@ -78,17 +79,17 @@ describe("SessionLiveService", () => {
     });
     const abort = new AbortController();
     const first = service.wait("session-one", { cursor: CURSOR, after: REVISION }, abort.signal);
-    await vi.waitFor(() => expect(getLiveSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(1));
     await expect(
       service.wait("session-two", { cursor: CURSOR, after: REVISION }),
-    ).rejects.toMatchObject({ code: "live_capacity_exceeded" });
+    ).rejects.toMatchObject({ code: "updates_capacity_exceeded" });
     abort.abort();
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("enforces the per-session waiter limit below process capacity", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false));
-    const service = createService(getLiveSession, {
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
+    const service = createService(getSessionUpdates, {
       probeIntervalMs: 1_000,
       waitTimeoutMs: 5_000,
       maxWaiters: 2,
@@ -96,31 +97,34 @@ describe("SessionLiveService", () => {
     });
     const abort = new AbortController();
     const first = service.wait("session", { cursor: CURSOR, after: REVISION }, abort.signal);
-    await vi.waitFor(() => expect(getLiveSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(1));
     await expect(
       service.wait("session", { cursor: CURSOR, after: REVISION }),
-    ).rejects.toMatchObject({ code: "live_capacity_exceeded" });
+    ).rejects.toMatchObject({ code: "updates_capacity_exceeded" });
     abort.abort();
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
   });
 
   it("releases waiters on external cancellation and service close", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false));
-    const service = createService(getLiveSession, { probeIntervalMs: 1_000, waitTimeoutMs: 5_000 });
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
+    const service = createService(getSessionUpdates, {
+      probeIntervalMs: 1_000,
+      waitTimeoutMs: 5_000,
+    });
     const firstAbort = new AbortController();
     const first = service.wait("one", { cursor: CURSOR, after: REVISION }, firstAbort.signal);
-    await vi.waitFor(() => expect(getLiveSession).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(1));
     firstAbort.abort();
     await expect(first).rejects.toMatchObject({ name: "AbortError" });
 
     const second = service.wait("two", { cursor: CURSOR, after: REVISION });
-    await vi.waitFor(() => expect(getLiveSession).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(2));
     service.close();
     await expect(second).rejects.toMatchObject({ name: "AbortError" });
   });
 
-  it("delegates every observation to the binding cache without retaining stale state", async () => {
-    const getLiveSession = vi.fn().mockResolvedValue(snapshot(false, true));
+  it("delegates every observation to the interaction service without retaining stale state", async () => {
+    const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false, true));
     const resolvers: Array<(value: { supported: false; attachCommand: null }) => void> = [];
     const describeSnapshot = vi.fn(
       () =>
@@ -128,7 +132,7 @@ describe("SessionLiveService", () => {
           resolvers.push(resolve);
         }),
     );
-    const service = createService(getLiveSession, {
+    const service = createService(getSessionUpdates, {
       interaction: { describeSnapshot },
       probeIntervalMs: 1_000,
       waitTimeoutMs: 5_000,
@@ -137,7 +141,7 @@ describe("SessionLiveService", () => {
     const rightAbort = new AbortController();
     const left = service.wait("session", { cursor: CURSOR, after: REVISION }, leftAbort.signal);
     const right = service.wait("session", { cursor: CURSOR, after: REVISION }, rightAbort.signal);
-    await vi.waitFor(() => expect(getLiveSession).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(2));
     expect(describeSnapshot).toHaveBeenCalledTimes(2);
     resolvers.forEach((resolve) => resolve({ supported: false, attachCommand: null }));
     await Promise.resolve();
@@ -149,20 +153,20 @@ describe("SessionLiveService", () => {
 });
 
 function createService(
-  getLiveSession: ReturnType<typeof vi.fn>,
-  options: ConstructorParameters<typeof SessionLiveService>[1] = {},
+  getSessionUpdates: ReturnType<typeof vi.fn>,
+  options: ConstructorParameters<typeof SessionUpdatesService>[1] = {},
 ) {
   const repository = {
-    getLiveSession,
+    getSessionUpdates,
     getInteractionSession: vi.fn().mockResolvedValue(null),
   } as unknown as SessionReader;
-  return new SessionLiveService(repository, {
+  return new SessionUpdatesService(repository, {
     createRevision: () => REVISION,
     ...options,
   });
 }
 
-function snapshot(hasMore: boolean, interaction = false): LiveSessionSnapshot {
+function snapshot(hasMore: boolean, interaction = false): SessionUpdatesSnapshot {
   return {
     session: SESSION,
     cursor: CURSOR,
@@ -181,16 +185,16 @@ function snapshot(hasMore: boolean, interaction = false): LiveSessionSnapshot {
 }
 
 describe("nickname revision isolation", () => {
-  it("does not return a Live update for a nickname-only change", async () => {
-    const canonical = { ...SESSION, title: "Canonical title", archived: true };
+  it("does not return an automatic update for a nickname-only change", async () => {
+    const canonical = { ...SESSION, title: "Canonical title", status: "archived" as const };
     const display = { ...canonical, nickname: "Nickname" };
-    const getLiveSession = vi.fn().mockResolvedValue({
+    const getSessionUpdates = vi.fn().mockResolvedValue({
       session: display,
       cursor: CURSOR,
       hasMore: false,
       interactionSession: { archived: true, interaction: null },
-    } satisfies LiveSessionSnapshot);
-    const service = createService(getLiveSession, {
+    } satisfies SessionUpdatesSnapshot);
+    const service = createService(getSessionUpdates, {
       createRevision: (session) =>
         session.title === "Canonical title" ? REVISION : OTHER_REVISION,
     });
@@ -219,7 +223,8 @@ const SESSION: SessionDetail = {
   projectDirectory: null,
   createdAt: null,
   updatedAt: null,
-  archived: false,
+  status: "normal",
+  resume: { allowed: false, reason: "Unavailable" },
   parentId: null,
   childIds: [],
   agent: null,
@@ -229,9 +234,9 @@ const SESSION: SessionDetail = {
   itemCount: 0,
 };
 
-it("updates Live revisions on takeover and replacement deletion without changing the old session", async () => {
-  const bindings = new LivePaneBindingManager();
-  const pane = { socketPath: "/tmp/live.sock", paneId: "%1" };
+it("updates update revisions on takeover and replacement deletion without changing the old session", async () => {
+  const bindings = new PaneBindingManager();
+  const pane = { socketPath: "/tmp/updates.sock", paneId: "%1" };
   bindings.submit({
     sessionId: "session",
     time: 1,
@@ -251,12 +256,12 @@ it("updates Live revisions on takeover and replacement deletion without changing
     { connect: vi.fn(async () => pane) } as unknown as InteractionTransport,
     bindings,
   );
-  const live = new SessionLiveService(
-    { getLiveSession: vi.fn(async () => current) },
+  const updates = new SessionUpdatesService(
+    { getSessionUpdates: vi.fn(async () => current) },
     { interaction },
   );
   try {
-    const connected = (await live.wait("session", { cursor: CURSOR, after: OTHER_REVISION }))!;
+    const connected = (await updates.wait("session", { cursor: CURSOR, after: OTHER_REVISION }))!;
     expect(connected.interaction).toMatchObject({ state: "connected" });
     bindings.submit({
       sessionId: "replacement",
@@ -265,24 +270,75 @@ it("updates Live revisions on takeover and replacement deletion without changing
       position: 0,
       attempt: { valid: true, ordinal: 1, ...pane },
     });
-    const superseded = (await live.wait("session", {
+    const superseded = (await updates.wait("session", {
       cursor: CURSOR,
-      after: connected.liveRevision,
+      after: connected.updateRevision,
     }))!;
-    expect(superseded.session).toEqual(connected.session);
-    expect(superseded.liveRevision).not.toBe(connected.liveRevision);
+    expect(connected.session.status).toBe("live");
+    expect(superseded.session.status).toBe("normal");
+    expect(superseded.updateRevision).not.toBe(connected.updateRevision);
     expect(superseded.interaction).toMatchObject({
       state: "superseded",
       supersededBySessionId: "replacement",
     });
     replacementExists = false;
-    const missing = (await live.wait("session", {
+    const missing = (await updates.wait("session", {
       cursor: CURSOR,
-      after: superseded.liveRevision,
+      after: superseded.updateRevision,
     }))!;
-    expect(missing.liveRevision).not.toBe(superseded.liveRevision);
+    expect(missing.updateRevision).not.toBe(superseded.updateRevision);
     expect(missing.interaction).toMatchObject({ state: "superseded", supersededBySessionId: null });
   } finally {
-    live.close();
+    updates.close();
   }
+});
+
+it.each(["connected", "unknown", "disconnected", "superseded"] as const)(
+  "reconciles a later %s observation before calculating revision without mutating input",
+  (state) => {
+    const session = {
+      ...SESSION,
+      status: "live" as const,
+      resume: { allowed: true as const, reason: null },
+    };
+    const value = {
+      session,
+      interaction: {
+        supported: true as const,
+        state,
+        supersededBySessionId: null,
+        attachCommand: null,
+      },
+    };
+    const before = structuredClone(value);
+    const coordinated = reconcileSessionState(value);
+    expect(coordinated.session.status).toBe(state === "connected" ? "live" : "normal");
+    expect(coordinated.session.resume.allowed).toBe(!["connected", "unknown"].includes(state));
+    const createRevision = vi.fn(() => REVISION);
+    const response = withUpdateRevision(coordinated, createRevision);
+    const { nickname: _nickname, ...expected } = coordinated.session;
+    expect(createRevision).toHaveBeenCalledWith(expected, value.interaction);
+    expect(response.session).toBe(coordinated.session);
+    expect(value).toEqual(before);
+    // Revision attachment alone must not coordinate state.
+    expect(withUpdateRevision(value, createRevision).session).toBe(session);
+  },
+);
+
+it("preserves archived and unsupported results during coordination", () => {
+  const archived = {
+    session: { ...SESSION, status: "archived" as const },
+    interaction: {
+      supported: true as const,
+      state: "connected" as const,
+      supersededBySessionId: null,
+      attachCommand: null,
+    },
+  };
+  expect(reconcileSessionState(archived)).toBe(archived);
+  const unsupported = {
+    session: { ...SESSION, status: "live" as const },
+    interaction: { supported: false as const, attachCommand: null },
+  };
+  expect(reconcileSessionState(unsupported)).toBe(unsupported);
 });

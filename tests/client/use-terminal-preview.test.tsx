@@ -152,7 +152,7 @@ it("auto-expands once per latest message, waits for connection, and resets acros
   expect(result.current.previewExpanded).toBe(true);
 });
 
-it("cancels preview polling when a live update marks the session superseded", async () => {
+it("cancels preview polling when a updates update marks the session superseded", async () => {
   vi.useFakeTimers();
   let complete!: (value: TerminalPreviewResponse) => void;
   const capture = vi.spyOn(api, "terminalPreview").mockImplementation(
@@ -255,10 +255,7 @@ it.each(["command", "handoff"])(
       <SessionInteraction {...properties} interaction={{ ...connected, state: "disconnected" }} />,
     );
     await act(async () => complete());
-    expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
+    expect(screen.queryByRole("button", { name: "Terminal preview" })).not.toBeInTheDocument();
     view.rerender(<SessionInteraction {...properties} interaction={connected} />);
     expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
       "aria-expanded",

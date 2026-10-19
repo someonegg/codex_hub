@@ -2,12 +2,11 @@ import { randomUUID } from "node:crypto";
 
 import type { CreateSessionRequest, HubOperation } from "../../shared/api-contract.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import {
-  type LivePaneBindingManager,
-  livePaneBindings,
-} from "../interaction/live-pane-binding-manager.js";
+import { type PaneBindingManager, paneBindings } from "../interaction/pane-binding-manager.js";
+import type { SessionRuntime } from "../interaction/session-runtime.js";
 import { attachCommand } from "../interaction/tmux-launcher.js";
 import type { TmuxBinding } from "../interaction/transport.js";
+import { SessionExitService, type SessionExitTask } from "./session-exit-service.js";
 import type { SessionManagerRegistry } from "./session-manager.js";
 import { type ManagementSnapshot, SessionLaunchError } from "./session-manager.js";
 
@@ -17,17 +16,13 @@ type Context =
   | { kind: "manage"; phase: "resolving" }
   | { kind: "delete"; phase: "deleting" | "confirming"; nativeId: string }
   | { kind: "archive"; phase: "resolving_target" | "archiving" | "confirming"; nativeId: string }
-  | {
-      kind: "archive";
-      phase: "sending_exit" | "waiting_exit";
-      nativeId: string;
-      target: TmuxBinding;
-    };
+  | { kind: "exiting"; task: SessionExitTask; nativeId: string | null };
 type Stage = Context & { deadline: number | null };
 interface Entry {
   readonly metadata: Omit<HubOperation, "status" | "error" | "phase">;
   result?: Readonly<HubOperation>;
   sourceInstanceId: string;
+  resumeNativeId?: string;
   stage: Stage | null;
   checking?: Promise<void>;
 }
@@ -52,18 +47,32 @@ export class OperationService {
   readonly #results = new Map<string, HubOperation>();
   readonly #timer: ReturnType<typeof setInterval>;
   #closed = false;
+  readonly #exit: SessionExitService;
 
   constructor(
     private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
     private readonly interaction: Pick<
       SessionInteractionService,
-      "describe" | "matchesTarget" | "archiveTarget" | "exitTarget" | "inspectTarget" | "setBusy"
+      | "describe"
+      | "matchesTarget"
+      | "resolveTarget"
+      | "sendExitKeys"
+      | "killTarget"
+      | "inspectTarget"
+      | "setBusy"
     >,
     private readonly managers: SessionManagerRegistry,
     private readonly now = Date.now,
-    private readonly waitMs = { create: 300_000, archive: 30_000, delete: 30_000 },
-    private readonly bindings: LivePaneBindingManager = livePaneBindings,
+    private readonly waitMs: { create: number; exit?: number; archive: number; delete: number } = {
+      create: 300_000,
+      exit: 30_000,
+      archive: 30_000,
+      delete: 30_000,
+    },
+    private readonly bindings: PaneBindingManager = paneBindings,
+    private readonly runtime?: SessionRuntime,
   ) {
+    this.#exit = new SessionExitService(interaction, now);
     this.#timer = setInterval(() => {
       void this.poll();
     }, 1_000);
@@ -71,6 +80,7 @@ export class OperationService {
   }
 
   create(input: CreateSessionRequest): HubOperation {
+    if (input.resumeSessionId !== undefined) return this.#resume(input);
     let sourceInstanceId: string;
     try {
       sourceInstanceId = this.managers.resolveCreateSource(input.sourceInstanceId);
@@ -87,6 +97,7 @@ export class OperationService {
     const duplicate = this.#duplicate(input.requestId, fingerprint);
     if (duplicate) return { ...duplicate };
     const entry = this.#new("create", null);
+    entry.metadata.mode = "new";
     entry.sourceInstanceId = sourceInstanceId;
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
     void (async () => {
@@ -120,7 +131,77 @@ export class OperationService {
     return this.#project(entry);
   }
 
-  manage(type: "archive" | "delete", sessionId: string): HubOperation {
+  #resume(input: Extract<CreateSessionRequest, { resumeSessionId: string }>): HubOperation {
+    if (
+      Object.keys(input).some((key) => !["resumeSessionId", "yolo", "requestId"].includes(key)) ||
+      !input.resumeSessionId.trim()
+    )
+      throw new ManagementError(400, "Resume accepts only resumeSessionId, yolo and requestId");
+    const sessionId = input.resumeSessionId;
+    const fingerprint = JSON.stringify(["resume", sessionId, input.yolo ?? false]);
+    const duplicate = this.#duplicate(input.requestId, fingerprint);
+    if (duplicate) return { ...duplicate };
+    if (this.#active.has(sessionId))
+      throw new ManagementError(409, "Another management operation is running for this session");
+    const entry = this.#new("create", sessionId);
+    entry.metadata.mode = "resume";
+    this.#active.set(sessionId, entry);
+    this.interaction.setBusy(sessionId, true);
+    this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
+    void (async () => {
+      try {
+        if (!this.runtime) throw new Error("Resume is unavailable");
+        let snapshot = await this.sessions.managementSnapshot();
+        let session = snapshot.sessions.find((item) => item.id === sessionId);
+        if (!session) throw new Error("Session not found");
+        let capability = await this.runtime.evaluate(session, snapshot.sessions);
+        if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
+        entry.sourceInstanceId = session.origin.sourceInstanceId;
+        entry.resumeNativeId = session.sourceId ?? undefined;
+        const manager = this.managers.get(entry.sourceInstanceId);
+        const resolved = await manager.resolveDirectory(session.workingDirectory!);
+        // Refresh the source after asynchronous checks, then revalidate immediately before launch.
+        snapshot = await this.sessions.managementSnapshot();
+        const latest = snapshot.sessions.find((item) => item.id === sessionId);
+        if (
+          !latest ||
+          latest.sourceId !== session.sourceId ||
+          latest.origin.sourceInstanceId !== entry.sourceInstanceId ||
+          latest.workingDirectory !== session.workingDirectory
+        )
+          throw new Error("Session identity or directory changed during validation");
+        session = latest;
+        capability = await this.runtime.evaluate(session, snapshot.sessions);
+        if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
+        if (!this.#pending(entry)) return;
+        this.#transition(entry, { kind: "create", phase: "launching" });
+        const target = await manager.launch(
+          entry.metadata.operationId,
+          resolved.directory,
+          false,
+          input.yolo ?? false,
+          session.sourceId!,
+        );
+        if (!this.#pending(entry)) return;
+        this.#transition(
+          entry,
+          {
+            kind: "create",
+            phase: "observing",
+            target,
+            project: resolved.project,
+            startedAt: this.now(),
+          },
+          this.now() + this.waitMs.create,
+        );
+      } catch (error) {
+        this.#error(entry, error);
+      }
+    })();
+    return this.#project(entry);
+  }
+
+  manage(type: "exit" | "archive" | "delete", sessionId: string): HubOperation {
     const active = this.#active.get(sessionId);
     if (active) {
       if (active.metadata.type !== type)
@@ -130,7 +211,12 @@ export class OperationService {
     const entry = this.#new(type, sessionId);
     this.#active.set(sessionId, entry);
     this.interaction.setBusy(sessionId, true);
-    this.#transition(entry, { kind: "manage", phase: "resolving" }, this.now() + this.waitMs[type]);
+    this.#transition(
+      entry,
+      { kind: "manage", phase: "resolving" },
+      this.now() +
+        (type === "exit" ? (this.waitMs.exit ?? this.waitMs.archive) : this.waitMs[type]),
+    );
     void (async () => {
       try {
         const snapshot = await this.sessions.managementSnapshot();
@@ -149,6 +235,10 @@ export class OperationService {
           this.#finish(entry, "succeeded", null);
           return;
         }
+        if (type === "exit") {
+          await this.#startExit(entry, sessionId, null);
+          return;
+        }
         const nativeId = session.sourceId;
         if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
         if (this.#matches(snapshot, entry, nativeId).length !== 1)
@@ -161,29 +251,7 @@ export class OperationService {
           this.#transition(entry, { kind: "delete", phase: "confirming", nativeId });
         } else {
           this.#transition(entry, { kind: "archive", phase: "resolving_target", nativeId });
-          const target = await this.interaction.archiveTarget(sessionId);
-          if (!this.#pending(entry)) return;
-          if (target) {
-            this.#transition(entry, { kind: "archive", phase: "sending_exit", nativeId, target });
-            try {
-              await this.interaction.exitTarget(target, sessionId);
-            } catch (error) {
-              this.#finish(
-                entry,
-                "unknown",
-                error instanceof Error ? error.message : String(error),
-              );
-              return;
-            }
-            if (!this.#pending(entry)) return;
-            this.#transition(
-              entry,
-              { kind: "archive", phase: "waiting_exit", nativeId, target },
-              this.now() + this.waitMs.archive,
-            );
-          } else {
-            await this.#archive(entry, nativeId);
-          }
+          await this.#startExit(entry, sessionId, nativeId);
         }
         if (this.#pending(entry)) await this.#observe(entry);
       } catch (error) {
@@ -219,8 +287,8 @@ export class OperationService {
       }
       if (
         (context.kind === "create" && context.phase === "observing") ||
-        (context.kind === "archive" &&
-          (context.phase === "waiting_exit" || context.phase === "confirming")) ||
+        context.kind === "exiting" ||
+        (context.kind === "archive" && context.phase === "confirming") ||
         (context.kind === "delete" && context.phase === "confirming")
       ) {
         checks.push(this.#observe(entry));
@@ -248,15 +316,28 @@ export class OperationService {
     if (!this.#pending(entry)) return;
     try {
       let context = entry.stage;
-      if (context.kind === "archive" && context.phase === "waiting_exit") {
-        const state = await this.interaction.inspectTarget(context.target);
-        if (!this.#pending(entry)) return;
-        if (state !== "exited") {
-          this.#timeout(entry);
+      if (context.kind === "exiting") {
+        try {
+          // Refresh adapter bindings before observing or acting on the fixed target.
+          await this.sessions.managementSnapshot();
+          if (!this.#pending(entry)) return;
+          const phase = context.task.phase;
+          const exited = await context.task.advance();
+          if (!this.#pending(entry)) return;
+          if (phase !== context.task.phase)
+            entry.metadata.updatedAt = new Date(this.now()).toISOString();
+          if (!exited) return;
+          if (context.nativeId === null) {
+            this.#finish(entry, "succeeded", null);
+            return;
+          }
+          await this.#archive(entry, context.nativeId);
+          if (!this.#pending(entry)) return;
+        } catch (error) {
+          if (this.#pending(entry))
+            this.#finish(entry, "unknown", error instanceof Error ? error.message : String(error));
           return;
         }
-        await this.#archive(entry, context.nativeId);
-        if (!this.#pending(entry)) return;
       }
       const snapshot = await this.sessions.managementSnapshot();
       if (!this.#pending(entry)) return;
@@ -274,6 +355,15 @@ export class OperationService {
           throw new AssociationError("Multiple sessions claimed this operation ID");
         const match = matches[0];
         if (match) {
+          if (
+            entry.metadata.mode === "resume" &&
+            (match.id !== entry.metadata.sessionId ||
+              match.archived ||
+              match.sourceId !== entry.resumeNativeId ||
+              !match.sourceId ||
+              this.#matches(snapshot, entry, match.sourceId).length !== 1)
+          )
+            throw new AssociationError("Resume did not bind the original unique session");
           const attempt = this.bindings.latest(match.id);
           if (
             !attempt?.valid ||
@@ -313,6 +403,31 @@ export class OperationService {
     this.#timeout(entry);
   }
 
+  async #startExit(entry: Entry, sessionId: string, nativeId: string | null) {
+    const target = await this.interaction.resolveTarget(sessionId);
+    if (!this.#pending(entry)) return;
+    if (!target) {
+      if (nativeId === null) this.#finish(entry, "succeeded", null);
+      else await this.#archive(entry, nativeId);
+      return;
+    }
+    const task = this.#exit.start(
+      sessionId,
+      target,
+      this.managers.get(entry.sourceInstanceId),
+      () => {
+        this.#timeout(entry);
+        if (!this.#pending(entry)) throw new Error("Exit operation is no longer active");
+      },
+    );
+    this.#transition(
+      entry,
+      { kind: "exiting", task, nativeId },
+      this.now() + (this.waitMs.exit ?? this.waitMs.archive),
+    );
+    await this.#observe(entry);
+  }
+
   async #archive(entry: Entry, nativeId: string) {
     if (!this.#pending(entry)) return;
     this.#transition(entry, { kind: "archive", phase: "archiving", nativeId }, this.now() + 25_000);
@@ -334,6 +449,8 @@ export class OperationService {
     if (!this.#pending(entry)) return;
     const previous = this.#project(entry).phase;
     entry.stage = { ...context, deadline };
+    if (context.kind === "create" && context.phase === "observing")
+      entry.metadata.target = context.target;
     if (previous !== this.#project(entry).phase)
       entry.metadata.updatedAt = new Date(this.now()).toISOString();
   }
@@ -346,13 +463,15 @@ export class OperationService {
     const context = entry.stage;
     if (!context) throw new Error("Pending operation has no execution stage");
     const phase: HubOperation["phase"] =
-      context.kind === "archive"
-        ? context.phase === "confirming"
-          ? "confirming_archive"
-          : context.phase === "resolving_target"
-            ? null
-            : context.phase
-        : null;
+      context.kind === "exiting"
+        ? context.task.phase
+        : context.kind === "archive"
+          ? context.phase === "confirming"
+            ? "confirming_archive"
+            : context.phase === "resolving_target"
+              ? null
+              : context.phase
+          : null;
     return { ...entry.metadata, phase, status: "pending", error: null };
   }
   #attach(entry: Entry, command: string | null) {
@@ -388,6 +507,7 @@ export class OperationService {
   #error(entry: Entry, error: unknown) {
     if (error instanceof SessionLaunchError) {
       this.#attach(entry, error.attachCommand);
+      if (error.target) entry.metadata.target = error.target;
       this.#finish(entry, error.outcome === "unknown" ? "unknown" : "failed", error.message);
       return;
     }

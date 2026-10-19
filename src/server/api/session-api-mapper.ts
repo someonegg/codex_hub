@@ -41,7 +41,7 @@ export class SessionApiMapper {
           sourceInstanceId: session.origin.sourceInstanceId,
           title: this.resolveNickname(session) ?? session.title,
           projectId,
-          archived: session.archived,
+          status: session.archived ? ("archived" as const) : ("normal" as const),
           parentId: session.parentId,
           isChild: session.isChild ?? session.parentId !== null,
           updatedAt: session.updatedAt,
@@ -61,11 +61,11 @@ export class SessionApiMapper {
     };
   }
 
-  detail(result: DomainSession): Omit<SessionDetailResponse, "interaction" | "liveRevision"> {
+  detail(result: DomainSession): Omit<SessionDetailResponse, "interaction" | "updateRevision"> {
     return { session: this.sessionDetail(result) };
   }
 
-  itemPage(result: ItemPageResult): Omit<ItemPageResponse, "interaction" | "liveRevision"> {
+  itemPage(result: ItemPageResult): Omit<ItemPageResponse, "interaction" | "updateRevision"> {
     return {
       session: this.sessionDetail(result.context.session),
       cursor: result.context.cursor as TimelineCursor,
@@ -98,6 +98,7 @@ export class SessionApiMapper {
 
   sessionDetail(session: DomainSession): SessionDetail {
     return {
+      resume: { allowed: false, reason: "Runtime validation unavailable" },
       id: session.id,
       origin: { ...session.origin },
       title: session.title,
@@ -106,7 +107,7 @@ export class SessionApiMapper {
       projectDirectory: session.projectDirectory,
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
-      archived: session.archived,
+      status: session.archived ? ("archived" as const) : ("normal" as const),
       parentId: session.parentId,
       childIds: [...session.childIds],
       agent: session.agent === null ? null : { ...session.agent },

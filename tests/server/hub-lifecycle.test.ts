@@ -20,7 +20,7 @@ async function config(): Promise<ServerConfig> {
   return {
     host: "127.0.0.1",
     port: 0,
-    codexHome: home,
+    homes: [{ nickname: "default", path: home }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
@@ -29,9 +29,9 @@ async function config(): Promise<ServerConfig> {
 
 it("closes the composed services once before waiting for HTTP connections", async () => {
   const settings = await config();
-  const hub = await createCodexHub(settings.codexHome, undefined, false);
+  const hub = await createCodexHub(settings.homes, undefined, false);
   const catalogClose = vi.spyOn(hub.catalog, "close");
-  const liveClose = vi.spyOn(hub.live, "close");
+  const updatesClose = vi.spyOn(hub.updates, "close");
   const operationsClose = vi.spyOn(hub.operations, "close");
   let server: ReturnType<typeof createServer>;
   const close = vi.fn(() => {
@@ -52,7 +52,7 @@ it("closes the composed services once before waiting for HTTP connections", asyn
     hub.close();
     expect(close).toHaveBeenCalledOnce();
     expect(catalogClose).toHaveBeenCalledOnce();
-    expect(liveClose).toHaveBeenCalledOnce();
+    expect(updatesClose).toHaveBeenCalledOnce();
     expect(operationsClose).toHaveBeenCalledOnce();
     await expect(hub.catalog.wait()).rejects.toMatchObject({ name: "AbortError" });
   } finally {

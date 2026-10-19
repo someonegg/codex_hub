@@ -11,8 +11,8 @@ import type {
   ItemPageResponse,
   SessionListQuery,
   SessionListResponse,
-  SessionLiveQuery,
-  SessionLiveResponse,
+  SessionUpdatesQuery,
+  SessionUpdatesResponse,
   TerminalPreviewResponse,
   ToolDetailQuery,
   ToolDetailResponse,
@@ -80,6 +80,8 @@ function queryString(values: Record<string, string | number | boolean | undefine
 
 export const api = {
   createSession: (input: CreateSessionRequest) => postJson<HubOperation>("/api/v1/sessions", input),
+  exitSession: (id: string) =>
+    postJson<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}/exit`, {}),
   archiveSession: (id: string) =>
     postJson<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}/archive`, {}),
   deleteSession: (id: string) =>
@@ -103,9 +105,9 @@ export const api = {
       })}`,
       signal,
     ),
-  live: (id: string, query: SessionLiveQuery, signal?: AbortSignal) =>
-    request<SessionLiveResponse | null>(
-      `/api/v1/sessions/${encodeURIComponent(id)}/live${queryString({
+  updates: (id: string, query: SessionUpdatesQuery, signal?: AbortSignal) =>
+    request<SessionUpdatesResponse | null>(
+      `/api/v1/sessions/${encodeURIComponent(id)}/updates${queryString({
         cursor: query.cursor,
         after: query.after,
       })}`,

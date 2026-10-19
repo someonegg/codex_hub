@@ -1,13 +1,16 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { SessionHome } from "../shared/api-contract";
 import type { SessionSummary } from "../shared/domain";
 
+import { api } from "./api/client";
 import { ErrorState } from "./components/ErrorState";
-import { ManageSession } from "./components/HubManagement";
+import { ManageSession, OperationStatus, ResumeSession } from "./components/HubManagement";
 import { InternalLink } from "./components/InternalLink";
 import { SessionReader } from "./components/SessionReader";
+import { StatusBadge } from "./components/StatusBadge";
 import { sessionDisplayTitle } from "./session-title";
+import { useHubOperation } from "./state/use-hub-operation";
 import { useSessionReader } from "./state/use-session-reader";
 import { useTimelineVisibility } from "./state/use-timeline-visibility";
 
@@ -31,11 +34,21 @@ export function SessionPage({
   onUpdatedAt,
 }: SessionPageProps) {
   const children = sessions.filter(
-    (session) => session.parentId === sessionId && (includeArchived || !session.archived),
+    (session) =>
+      session.parentId === sessionId && (includeArchived || session.status !== "archived"),
   );
   const focused = useRef(false);
   const timelineVisibility = useTimelineVisibility();
   const reader = useSessionReader(sessionId);
+  const [managementOperation, setManagementOperation] = useState(false);
+  const operation = useHubOperation(sessionId, (op) => {
+    onCatalogChanged?.();
+    if (op.type === "delete") onNavigate?.(null);
+    else void reader.refreshLatest();
+  });
+  const showManagementStatus = operation.operation
+    ? operation.operation.type === "archive" || operation.operation.type === "delete"
+    : managementOperation;
   const sessionTitle = reader.context === null ? null : sessionDisplayTitle(reader.context.session);
 
   const parentId = reader.context?.session.parentId ?? null;
@@ -61,8 +74,45 @@ export function SessionPage({
     <div className="reader-page">
       {reader.context ? (
         <SessionReader
+          homeNickname={
+            homes.length > 1
+              ? homes.find(
+                  (home) =>
+                    home.sourceInstanceId === reader.context!.session.origin.sourceInstanceId,
+                )?.nickname
+              : undefined
+          }
+          managementBusy={operation.busy}
+          operationStatus={
+            !showManagementStatus ? <OperationStatus controller={operation} /> : null
+          }
+          operationActions={
+            reader.interaction?.supported && reader.interaction.state === "connected" ? (
+              <button
+                type="button"
+                className="interaction-management-trigger"
+                disabled={operation.busy}
+                onClick={() => {
+                  setManagementOperation(false);
+                  void operation.start(() => api.exitSession(sessionId));
+                }}
+              >
+                Exit
+              </button>
+            ) : (
+              <ResumeSession
+                key={sessionId}
+                session={reader.context.session}
+                controller={operation}
+                onStart={() => setManagementOperation(false)}
+              />
+            )
+          }
           management={
             <ManageSession
+              controller={operation}
+              showStatus={showManagementStatus}
+              onStart={() => setManagementOperation(true)}
               session={reader.context.session}
               onDeleted={() => {
                 onCatalogChanged?.();
@@ -76,17 +126,6 @@ export function SessionPage({
           }
           related={
             <>
-              {homes.length > 1 ? (
-                <p className="session-home">
-                  Home:{" "}
-                  {
-                    homes.find(
-                      (home) =>
-                        home.sourceInstanceId === reader.context!.session.origin.sourceInstanceId,
-                    )?.nickname
-                  }
-                </p>
-              ) : null}
               {parentId !== null ? (
                 <nav className="parent-session child-sessions" aria-label="Parent session">
                   <InternalLink
@@ -94,7 +133,12 @@ export function SessionPage({
                     onNavigate={onNavigate ? () => onNavigate(parentId) : undefined}
                   >
                     ← Parent session
-                    {parent ? ` · ${parent.title}${parent.archived ? " · Archived" : ""}` : ""}
+                    {parent ? (
+                      <>
+                        {" "}
+                        · {parent.title} <StatusBadge status={parent.status} />
+                      </>
+                    ) : null}
                   </InternalLink>
                 </nav>
               ) : null}
@@ -109,7 +153,7 @@ export function SessionPage({
                         onNavigate={onNavigate ? () => onNavigate(session.id) : undefined}
                       >
                         {session.title}
-                        {session.archived ? " · Archived" : ""}
+                        <StatusBadge status={session.status} />
                       </InternalLink>
                     ))}
                   </nav>

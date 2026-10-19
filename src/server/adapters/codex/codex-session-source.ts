@@ -10,10 +10,10 @@ import type {
   NormalizedSession,
 } from "../../domain/session-domain.js";
 import {
-  type LivePaneBindEvent,
-  type LivePaneBindingManager,
-  livePaneBindings,
-} from "../../interaction/live-pane-binding-manager.js";
+  type PaneBindEvent,
+  type PaneBindingManager,
+  paneBindings,
+} from "../../interaction/pane-binding-manager.js";
 import { opaqueIdForParts } from "../../security/opaque-id.js";
 import type {
   SessionSource,
@@ -93,7 +93,7 @@ export class CodexSessionSource implements SessionSource {
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
     private readonly projectDirectories = new ProjectDirectoryResolver(),
-    private readonly bindings: LivePaneBindingManager = livePaneBindings,
+    private readonly bindings: PaneBindingManager = paneBindings,
   ) {
     this.descriptor = {
       sourceType: "codex-jsonl",
@@ -128,7 +128,7 @@ export class CodexSessionSource implements SessionSource {
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
     });
     const nextCache = new Map<string, CodexCacheEntry>();
-    const binds = new Map<string, LivePaneBindEvent[]>();
+    const binds = new Map<string, PaneBindEvent[]>();
     const telemetry = mutableTelemetry();
     const unavailableRollouts: string[] = [];
     const loadDiagnostics: DomainDiagnostic[] = [];
@@ -242,7 +242,7 @@ export class CodexSessionSource implements SessionSource {
     fingerprint: FileFingerprint,
     cached: CodexCacheEntry | undefined,
     telemetry: MutableCodexRefreshTelemetry,
-    binds: Map<string, LivePaneBindEvent[]>,
+    binds: Map<string, PaneBindEvent[]>,
   ): Promise<CodexCacheEntry | null> {
     try {
       const appendCheckpoint =
@@ -326,7 +326,7 @@ export class CodexSessionSource implements SessionSource {
 
 export async function createCodexSessionSource(
   codexHome: string,
-  bindings: LivePaneBindingManager = livePaneBindings,
+  bindings: PaneBindingManager = paneBindings,
 ): Promise<CodexSessionSource> {
   const configured = resolve(codexHome);
   return new CodexSessionSource(

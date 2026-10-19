@@ -14,7 +14,12 @@ const catalog: SessionListResponse = {
   ...listBody,
   sessions: [
     ...listBody.sessions,
-    { ...listBody.sessions[0]!, id: archiveId, title: "Archived trace", archived: true },
+    {
+      ...listBody.sessions[0]!,
+      id: archiveId,
+      title: "Archived trace",
+      status: "archived" as const,
+    },
     {
       ...listBody.sessions[0]!,
       id: CHILD_ID,
@@ -30,6 +35,10 @@ const flush = async () => {
   });
 };
 beforeEach(() => {
+  sessionStorage.setItem(
+    "codex-hub.navigation",
+    JSON.stringify({ includeArchived: false, expanded: ["project-reader"], scroll: 0 }),
+  );
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
   vi.spyOn(api, "sessions")
@@ -42,7 +51,7 @@ beforeEach(() => {
       ...baseSession,
       id,
       parentId: id === CHILD_ID ? SESSION_ID : null,
-      archived: true,
+      status: "archived" as const,
       title:
         id === CHILD_ID ? "Child trace" : id === archiveId ? "Archived trace" : baseSession.title,
     },
@@ -180,11 +189,8 @@ describe("unified hub", () => {
     await flush();
     expect(nav.scrollTop).toBe(240);
   });
-  it("direct child access opens its project without adding child navigation entries", async () => {
-    sessionStorage.setItem(
-      "codex-hub.navigation",
-      JSON.stringify({ includeArchived: false, collapsed: ["project-reader"], scroll: 0 }),
-    );
+  it("keeps projects collapsed by default when opening a direct child link", async () => {
+    sessionStorage.removeItem("codex-hub.navigation");
     window.history.replaceState(null, "", `/sessions/${CHILD_ID}`);
     render(<App />);
     await flush();
@@ -192,8 +198,10 @@ describe("unified hub", () => {
     const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
     expect(within(nav).getByRole("button", { name: /^reader.*1/ })).toHaveAttribute(
       "aria-expanded",
-      "true",
+      "false",
     );
+    expect(within(nav).queryAllByRole("link")).toHaveLength(0);
+    fireEvent.click(within(nav).getByRole("button", { name: /^reader.*1/ }));
     expect(within(nav).getAllByRole("link")).toHaveLength(1);
     expect(within(nav).queryByRole("link", { name: /Child trace/ })).not.toBeInTheDocument();
   });
@@ -257,9 +265,7 @@ describe("unified hub", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Close new session" }));
     fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
     expect(screen.queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
-    expect(JSON.parse(sessionStorage.getItem("codex-hub.navigation")!).collapsed).toEqual([
-      "project-reader",
-    ]);
+    expect(JSON.parse(sessionStorage.getItem("codex-hub.navigation")!).expanded).toEqual([]);
   });
 });
 
@@ -276,16 +282,16 @@ it("keeps archived content open while removing navigation, then returns to the p
             ...catalog,
             revision: "b".repeat(43),
             sessions: catalog.sessions.map((item) =>
-              item.id === SESSION_ID ? { ...item, archived } : item,
+              item.id === SESSION_ID ? { ...item, status: archived ? "archived" : "normal" } : item,
             ),
           }),
     );
   vi.spyOn(api, "items").mockImplementation(async () => ({
     ...firstPage,
     hasMore: false,
-    session: { ...baseSession, archived },
+    session: { ...baseSession, status: archived ? "archived" : "normal" },
   }));
-  vi.spyOn(api, "live").mockImplementation(() => new Promise(() => {}));
+  vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
   const operation = {
     phase: null,
     attachCommand: null,

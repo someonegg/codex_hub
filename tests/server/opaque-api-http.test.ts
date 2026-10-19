@@ -14,7 +14,7 @@ import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { createServer } from "../../src/server/http/create-server.js";
-import { SessionLiveService } from "../../src/server/live/session-live-service.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { normalizeFixture } from "./session-normalizer.fixtures.js";
 
@@ -37,22 +37,22 @@ async function startApi(existingHome?: string, override?: SessionReadService) {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    codexHome: home,
+    homes: [{ nickname: "default", path: home }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
   };
-  const live = new SessionLiveService(repository, {
+  const updates = new SessionUpdatesService(repository, {
     probeIntervalMs: 5,
     waitTimeoutMs: 15,
   });
   const catalog = new SessionCatalogService(repository);
   const server = createServer(
     config,
-    createApiRouter({ sessions: repository, catalog, live }),
+    createApiRouter({ sessions: repository, catalog, updates }),
     () => {
       catalog.close();
-      live.close();
+      updates.close();
     },
   );
   servers.push(server);
@@ -162,12 +162,12 @@ describe("opaque cursor API", () => {
     expect(first.sessions).toHaveLength(4);
     expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
     expect(Object.keys(first.sessions[0]).sort()).toEqual([
-      "archived",
       "id",
       "isChild",
       "parentId",
       "projectId",
       "sourceInstanceId",
+      "status",
       "title",
       "updatedAt",
     ]);
@@ -263,7 +263,7 @@ describe("opaque cursor API", () => {
         items: expect.any(Array),
         cursor: expect.any(String),
         hasMore: true,
-        liveRevision: expect.any(String),
+        updateRevision: expect.any(String),
       }),
     );
     expect(first).not.toHaveProperty("revisionSession");
@@ -304,9 +304,9 @@ describe("opaque cursor API", () => {
     const page = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=300`).then(
       (response) => response.json(),
     );
-    const query = `cursor=${encodeURIComponent(page.cursor)}&after=${encodeURIComponent(page.liveRevision)}`;
+    const query = `cursor=${encodeURIComponent(page.cursor)}&after=${encodeURIComponent(page.updateRevision)}`;
 
-    const unchanged = await fetch(`${base}/api/v1/sessions/${sessionId}/live?${query}`);
+    const unchanged = await fetch(`${base}/api/v1/sessions/${sessionId}/updates?${query}`);
     expect(unchanged.status).toBe(204);
     expect(unchanged.headers.get("cache-control")).toBe("no-store");
 
@@ -316,27 +316,30 @@ describe("opaque cursor API", () => {
     );
     await writeFile(
       rollout,
-      `${await readFile(rollout, "utf8")}{"timestamp":"2026-08-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"live append"}]}}\n`,
+      `${await readFile(rollout, "utf8")}{"timestamp":"2026-08-01T00:00:00Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"updates append"}]}}\n`,
     );
     await repository.refresh();
-    const changed = await fetch(`${base}/api/v1/sessions/${sessionId}/live?${query}`);
+    const changed = await fetch(`${base}/api/v1/sessions/${sessionId}/updates?${query}`);
     expect(changed.status).toBe(200);
     expect(await changed.json()).toEqual(
       expect.objectContaining({
         cursor: page.cursor,
         hasMore: true,
-        liveRevision: expect.not.stringMatching(page.liveRevision),
+        updateRevision: expect.not.stringMatching(page.updateRevision),
       }),
     );
 
     expect(
-      (await fetch(`${base}/api/v1/sessions/${sessionId}/live?cursor=bad&after=${"a".repeat(43)}`))
-        .status,
+      (
+        await fetch(
+          `${base}/api/v1/sessions/${sessionId}/updates?cursor=bad&after=${"a".repeat(43)}`,
+        )
+      ).status,
     ).toBe(400);
     expect(
       (
         await fetch(
-          `${base}/api/v1/sessions/${sessionId}/live?cursor=${encodeURIComponent(page.cursor)}&after=bad`,
+          `${base}/api/v1/sessions/${sessionId}/updates?cursor=${encodeURIComponent(page.cursor)}&after=bad`,
         )
       ).status,
     ).toBe(400);
@@ -381,11 +384,11 @@ describe("opaque cursor API", () => {
     );
     expect(changed.status).toBe(409);
     expect(await changed.json()).toMatchObject({ error: { code: "timeline_changed" } });
-    const liveChanged = await fetch(
-      `${base}/api/v1/sessions/${sessionId}/live?cursor=${encodeURIComponent(page.cursor)}&after=${encodeURIComponent(page.liveRevision)}`,
+    const updatesChanged = await fetch(
+      `${base}/api/v1/sessions/${sessionId}/updates?cursor=${encodeURIComponent(page.cursor)}&after=${encodeURIComponent(page.updateRevision)}`,
     );
-    expect(liveChanged.status).toBe(409);
-    expect(await liveChanged.json()).toMatchObject({ error: { code: "timeline_changed" } });
+    expect(updatesChanged.status).toBe(409);
+    expect(await updatesChanged.json()).toMatchObject({ error: { code: "timeline_changed" } });
   });
 });
 

@@ -2,37 +2,40 @@ import { createHmac, randomBytes } from "node:crypto";
 
 import type {
   InteractionResponse,
-  LiveRevision,
-  SessionLiveResponse,
+  SessionUpdatesResponse,
+  UpdateRevision,
 } from "../../shared/api-contract.js";
 import type { SessionDetail } from "../../shared/domain.js";
 
-export type LiveRevisionFactory = (
-  session: LiveRevisionSession,
+export type UpdateRevisionFactory = (
+  session: UpdateRevisionSession,
   interaction: InteractionResponse,
-) => LiveRevision;
+) => UpdateRevision;
 
-export type LiveRevisionSession = Omit<SessionDetail, "nickname">;
+export type UpdateRevisionSession = Omit<SessionDetail, "nickname">;
 
-export function createProcessLiveRevisionFactory(
+export function createProcessUpdateRevisionFactory(
   secret: Uint8Array = randomBytes(32),
-): LiveRevisionFactory {
+): UpdateRevisionFactory {
   return (session, interaction) =>
     createHmac("sha256", secret)
       .update(canonicalJson({ session, interaction }))
-      .digest("base64url") as LiveRevision;
+      .digest("base64url") as UpdateRevision;
 }
 
-export function withLiveRevision<
+export function withUpdateRevision<
   T extends {
     readonly session: SessionDetail;
     readonly interaction: InteractionResponse;
   },
->(value: T, createRevision: LiveRevisionFactory): T & Pick<SessionLiveResponse, "liveRevision"> {
+>(
+  value: T,
+  createRevision: UpdateRevisionFactory,
+): T & Pick<SessionUpdatesResponse, "updateRevision"> {
   const { nickname: _nickname, ...revisionSession } = value.session;
   return {
     ...value,
-    liveRevision: createRevision(revisionSession, value.interaction),
+    updateRevision: createRevision(revisionSession, value.interaction),
   };
 }
 

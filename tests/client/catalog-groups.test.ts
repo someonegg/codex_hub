@@ -9,7 +9,7 @@ const session = (id: string, projectId: string | null, extra = {}) => ({
   sourceInstanceId: "source-instance",
   projectId,
   title: id,
-  archived: false,
+  status: "normal" as const,
   parentId: null,
   isChild: false,
   updatedAt: null,
@@ -26,7 +26,7 @@ const list: SessionListResponse = {
   sessions: [
     session("a", "p1"),
     session("b", "p1"),
-    session("c", "p2", { archived: true }),
+    session("c", "p2", { status: "archived" as const }),
     session("orphan", "p2", { isChild: true }),
     session("unknown", null),
     session("child", "p1", { isChild: true, parentId: "a" }),

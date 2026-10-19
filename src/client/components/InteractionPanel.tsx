@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import type {
@@ -11,6 +12,9 @@ import { InternalLink } from "./InternalLink";
 import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
 interface InteractionPanelProps {
+  operationActions?: ReactNode;
+  operationStatus?: ReactNode;
+
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
   itemCount: number;
@@ -31,6 +35,8 @@ interface InteractionPanelProps {
 }
 
 export function InteractionPanel({
+  operationActions,
+  operationStatus,
   interaction,
   onNavigate,
   itemCount,
@@ -61,18 +67,36 @@ export function InteractionPanel({
   useEffect(() => {
     if (!attachCommand) setAccessOpen(false);
   }, [attachCommand]);
-  const [hasShown, setHasShown] = useState(false);
   const [message, setMessage] = useState("");
+  const panel = useRef<HTMLElement | null>(null);
+  const wasPreviewExpanded = useRef(false);
+  const hadPreviewContent = useRef(false);
   const previewContentId = useId();
+  const previewBody = useRef<HTMLDivElement | null>(null);
+  const previewToggle = useRef<HTMLButtonElement | null>(null);
   const previewContent = useRef<HTMLPreElement | null>(null);
   const scrollOnExpand = useRef(true);
   const messageBytes = new TextEncoder().encode(message.replace(/\r\n?/g, "\n")).byteLength;
   const messageTooLarge = messageBytes > MAX_INTERACTION_MESSAGE_BYTES;
   const messageIsBlank = message.trim().length === 0;
   const previewConnected = interaction?.supported === true && interaction.state === "connected";
-  useEffect(() => {
-    if (previewConnected) setHasShown(true);
-  }, [previewConnected]);
+  const previewHasContent = (preview?.content.length ?? 0) > 0;
+  useLayoutEffect(() => {
+    if (previewExpanded && previewConnected) previewBody.current?.focus({ preventScroll: true });
+  }, [previewExpanded, previewConnected]);
+  useLayoutEffect(() => {
+    const expanded = previewExpanded && previewConnected;
+    const firstContent = expanded && previewHasContent && !hadPreviewContent.current;
+    if (expanded !== wasPreviewExpanded.current || firstContent) {
+      const element = panel.current;
+      element?.scrollIntoView?.({
+        block: element.getBoundingClientRect().height > window.innerHeight ? "end" : "nearest",
+        behavior: "instant",
+      });
+    }
+    wasPreviewExpanded.current = expanded;
+    hadPreviewContent.current = expanded && (hadPreviewContent.current || previewHasContent);
+  }, [previewExpanded, previewConnected, previewHasContent]);
   useLayoutEffect(() => {
     if (!previewExpanded) {
       scrollOnExpand.current = true;
@@ -86,13 +110,6 @@ export function InteractionPanel({
       scrollOnExpand.current = false;
     }
   }, [preview, previewExpanded]);
-  if (
-    !hasShown &&
-    !previewConnected &&
-    !(interaction?.supported && interaction.state === "superseded")
-  )
-    return null;
-
   const send = async () => {
     if (!previewConnected || interactionBusy || messageIsBlank || messageTooLarge) return;
     const isCommand = /^\/[A-Za-z]+$/.test(message.trim());
@@ -135,6 +152,14 @@ export function InteractionPanel({
       event.nativeEvent.isComposing
     )
       return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      if (!interactionBusy) {
+        onTogglePreview();
+        previewToggle.current?.focus({ preventScroll: true });
+      }
+      return;
+    }
     const key = PREVIEW_KEYS[event.key];
     if (!key) return;
     event.preventDefault();
@@ -151,11 +176,18 @@ export function InteractionPanel({
   };
 
   return (
-    <section className="interaction-panel" aria-label="Session interaction">
+    <section ref={panel} className="interaction-panel" aria-label="Session interaction">
       <div className="interaction-heading">
-        <span className={`interaction-status interaction-status-${status.kind}`}>
-          {status.label}
-        </span>
+        {attachCommand ? (
+          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
+            tmux access
+          </button>
+        ) : null}
+        {status.kind !== "connected" ? (
+          <span className={`interaction-status interaction-status-${status.kind}`}>
+            {status.label}
+          </span>
+        ) : null}
         {interaction?.supported && interaction.state === "superseded" ? (
           interaction.supersededBySessionId ? (
             <InternalLink
@@ -170,11 +202,7 @@ export function InteractionPanel({
             <span>Replacement session unavailable</span>
           )
         ) : null}
-        {attachCommand ? (
-          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
-            tmux access
-          </button>
-        ) : null}
+        <div className="interaction-management-actions">{operationActions}</div>
       </div>
       {accessOpen && attachCommand ? (
         <TmuxAccessDialog command={attachCommand} onClose={() => setAccessOpen(false)} />
@@ -188,7 +216,8 @@ export function InteractionPanel({
             </button>
           </div>
         ) : null}
-        {renderConnectedInteraction()}
+        {operationStatus}
+        {previewConnected ? renderConnectedInteraction() : null}
         <p className="interaction-summary">{sessionSummary(itemCount, updatedAt)}</p>
       </div>
     </section>
@@ -202,6 +231,7 @@ export function InteractionPanel({
             <button
               type="button"
               className="terminal-preview-toggle"
+              ref={previewToggle}
               aria-expanded={previewExpanded}
               aria-controls={previewContentId}
               onClick={togglePreview}
@@ -231,6 +261,7 @@ export function InteractionPanel({
           {previewExpanded ? (
             <div
               id={previewContentId}
+              ref={previewBody}
               className="terminal-preview-body"
               tabIndex={0}
               onKeyDown={onPreviewKeyDown}

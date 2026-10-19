@@ -23,17 +23,33 @@ export class CodexSessionManager implements SessionManager {
     if (!(await stat(directory)).isDirectory()) throw new Error("Path is not a directory");
     return { directory, project: (await this.#projects.resolve(directory))! };
   }
-  launch(operationId: string, directory: string, worktree: boolean, yolo = false) {
+  launch(
+    operationId: string,
+    directory: string,
+    worktree: boolean,
+    yolo = false,
+    resumeNativeId?: string,
+  ) {
+    if (resumeNativeId && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(resumeNativeId))
+      throw new Error("Invalid resume identity");
     return this.tmux.launch(operationId, directory, [
       "env",
       `CODEX_HOME=${this.home}`,
       "codex",
+      ...(resumeNativeId ? ["resume", resumeNativeId] : []),
       "--no-daemon",
       "--no-alt-screen",
       ...(worktree ? ["--worktree"] : []),
       ...(yolo ? ["--yolo"] : []),
       codexBindingCommand(operationId),
     ]);
+  }
+  exitSteps() {
+    return [
+      { keys: ["C-c"] as const, delayMs: 0 },
+      { keys: ["C-c"] as const, delayMs: 1_000 },
+      { keys: ["C-c"] as const, delayMs: 1_000 },
+    ];
   }
   async archive(nativeId: string) {
     await this.#command(["archive", nativeId]);

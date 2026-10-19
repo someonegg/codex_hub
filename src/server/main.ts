@@ -11,11 +11,7 @@ async function main(): Promise<void> {
   }
 
   const { config } = command;
-  const hub = await createCodexHub(
-    config.homes ?? config.codexHome,
-    config.tmuxSocket,
-    config.interactionEnabled,
-  );
+  const hub = await createCodexHub(config.homes, config.tmuxSocket, config.interactionEnabled);
   const server = await startServer(config, createApiRouter(hub), hub.close);
   const address = server.address();
   const port = typeof address === "object" && address ? address.port : config.port;

@@ -41,6 +41,7 @@
   cursor: pointer;
 }
 .operation-status {
+  font-size: 1rem;
   padding: 1rem;
   margin-top: 0.8rem;
   border-left: 3px solid currentColor;
@@ -96,7 +97,7 @@
 }
 .session-operation-details {
   position: relative;
-  font-size: var(--text-small);
+  font-size: 1rem;
   overflow-wrap: anywhere;
 }
 .session-title-row:has(.session-operation-details :is(.operation-status, [role="alert"])) {

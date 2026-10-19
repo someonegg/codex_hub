@@ -7,18 +7,18 @@ import { projectForSession } from "./catalog-groups";
 const NAVIGATION_KEY = "codex-hub.navigation";
 interface NavigationState {
   includeArchived: boolean;
-  collapsed: string[];
+  expanded: string[];
   scroll: number;
 }
 function readNavigation(): NavigationState {
   try {
     const value = JSON.parse(sessionStorage.getItem(NAVIGATION_KEY) ?? "null");
-    if (value && typeof value.includeArchived === "boolean" && Array.isArray(value.collapsed))
+    if (value && typeof value.includeArchived === "boolean" && Array.isArray(value.expanded))
       return value;
   } catch {
     /* Optional storage. */
   }
-  return { includeArchived: false, collapsed: [], scroll: 0 };
+  return { includeArchived: false, expanded: [], scroll: 0 };
 }
 function saveNavigation(navigation: NavigationState) {
   try {
@@ -29,7 +29,6 @@ function saveNavigation(navigation: NavigationState) {
 }
 export function useHubNavigation(list: SessionListResponse | null) {
   const [sessionId, setSessionId] = useState(() => sessionIdFromPath(window.location.pathname));
-  const initialSession = useRef(sessionId);
   const [navigation, setNavigation] = useState(readNavigation);
   const navigationRef = useRef(navigation);
   navigationRef.current = { ...navigation, scroll: navigationRef.current.scroll };
@@ -64,32 +63,15 @@ export function useHubNavigation(list: SessionListResponse | null) {
     if (sessionId === null) document.title = "Codex Hub";
   }, [sessionId]);
   const selectedProject = projectForSession(list, sessionId);
-  useEffect(() => {
-    if (
-      selectedProject === undefined ||
-      initialSession.current === null ||
-      initialSession.current !== sessionId
-    )
-      return;
-    initialSession.current = null;
-    const key = selectedProject ?? "unknown";
-    setNavigation((current) => ({
-      ...current,
-      collapsed: current.collapsed.filter((id) => id !== key),
-    }));
-    sidebar.current
-      ?.querySelector(`[data-project="${key}"] .project-heading`)
-      ?.scrollIntoView?.({ block: "nearest" });
-  }, [selectedProject, sessionId]);
   const setIncludeArchived = (includeArchived: boolean) => {
     setNavigation((current) => ({ ...current, includeArchived }));
   };
   const toggleProject = (key: string) => {
     setNavigation((current) => ({
       ...current,
-      collapsed: current.collapsed.includes(key)
-        ? current.collapsed.filter((id) => id !== key)
-        : [...current.collapsed, key],
+      expanded: current.expanded.includes(key)
+        ? current.expanded.filter((id) => id !== key)
+        : [...current.expanded, key],
     }));
   };
   const persistScroll = (element: HTMLElement) => {

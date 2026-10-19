@@ -8,8 +8,8 @@ export interface TmuxBinding {
 
 export interface InteractionTransport {
   connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding>;
-  archiveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;
-  exitTarget(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
+  resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;
+  killPane(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
   inspect(target: TmuxBinding): Promise<"alive" | "exited">;
   sendMessage(target: TmuxBinding, message: string, assertAvailable?: () => void): Promise<void>;
   sendKeys(

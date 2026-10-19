@@ -1,6 +1,6 @@
 import type { InteractionBindingAttempt } from "../domain/session-domain.js";
 
-export interface LivePaneBindEvent {
+export interface PaneBindEvent {
   readonly sessionId: string;
   readonly time: number;
   readonly ordinal: number;
@@ -9,11 +9,11 @@ export interface LivePaneBindEvent {
 }
 
 /** Retains only the latest session event and latest claim on each pane. */
-export class LivePaneBindingManager {
-  readonly #sessions = new Map<string, LivePaneBindEvent>();
-  readonly #panes = new Map<string, LivePaneBindEvent>();
+export class PaneBindingManager {
+  readonly #sessions = new Map<string, PaneBindEvent>();
+  readonly #panes = new Map<string, PaneBindEvent>();
 
-  submit(event: LivePaneBindEvent): void {
+  submit(event: PaneBindEvent): void {
     const latest = this.#sessions.get(event.sessionId);
     if (!latest || compare(event, latest) > 0) this.#sessions.set(event.sessionId, event);
     if (!event.attempt.valid) return;
@@ -45,7 +45,7 @@ function paneKey(pane: { socketPath: string; paneId: string }): string {
   return JSON.stringify([pane.socketPath, pane.paneId]);
 }
 
-function compare(left: LivePaneBindEvent, right: LivePaneBindEvent): number {
+function compare(left: PaneBindEvent, right: PaneBindEvent): number {
   return (
     left.time - right.time ||
     (left.sessionId < right.sessionId ? -1 : left.sessionId > right.sessionId ? 1 : 0) ||
@@ -54,4 +54,4 @@ function compare(left: LivePaneBindEvent, right: LivePaneBindEvent): number {
   );
 }
 
-export const livePaneBindings = new LivePaneBindingManager();
+export const paneBindings = new PaneBindingManager();

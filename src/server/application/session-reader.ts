@@ -18,7 +18,7 @@ export interface SessionReader {
   list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionReadDetailResponse | null>;
   getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null>;
-  getLiveSession(id: SessionId, cursor: TimelineCursor): Promise<LiveSessionSnapshot | null>;
+  getSessionUpdates(id: SessionId, cursor: TimelineCursor): Promise<SessionUpdatesSnapshot | null>;
   getToolDetail(
     id: SessionId,
     itemId: string,
@@ -38,11 +38,14 @@ export interface SessionReader {
   getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
 }
 
-export type SessionReadDetailResponse = Omit<SessionDetailResponse, "interaction" | "liveRevision">;
+export type SessionReadDetailResponse = Omit<
+  SessionDetailResponse,
+  "interaction" | "updateRevision"
+>;
 
-export type SessionItemPageResponse = Omit<ItemPageResponse, "interaction" | "liveRevision">;
+export type SessionItemPageResponse = Omit<ItemPageResponse, "interaction" | "updateRevision">;
 
-export interface LiveSessionSnapshot {
+export interface SessionUpdatesSnapshot {
   readonly session: SessionDetailResponse["session"];
   readonly cursor: TimelineCursor;
   readonly hasMore: boolean;

@@ -3,7 +3,10 @@ status: accepted
 date: 2026-10-16
 ---
 
-# Use V3 bindings and live pane validation
+# Use V3 bindings and current pane validation
+
+The exit sequence and no-forced-kill policy below are historical; see
+[ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
 
 ## Context and Problem Statement
 
@@ -19,7 +22,7 @@ declaration does not fall back. Created tmux sessions use `codex-hub-<operationI
 manual bindings have no name restriction. Creation confirms the unique operation
 ID, project, and socket/pane pair.
 
-The process-wide live pane binding manager is the sole binding source. Adapters
+The process-wide pane binding manager is the sole binding source. Adapters
 submit all binding attempts from accepted decoded records, including incremental
 appends; normalized interaction values contain only transport capabilities.
 Order events by timestamp (invalid timestamps use zero), global session ID,
@@ -53,7 +56,7 @@ module re-exported by the API contract; domain types do not depend on the API.
 Application services inject transport and share message normalization/validation
 with it. HTTP does not depend on tmux implementation. Only tmux is provided.
 
-All entry points share live checks of current-user Unix socket ownership and pane
+All entry points share current pane validation of current-user Unix socket ownership and pane
 liveness. Coalesce concurrent checks for the same target without caching completed
 results. Missing sockets, confirmed stopped servers, and missing/dead panes are
 unavailable; permission errors, timeouts, and malformed responses are query errors.

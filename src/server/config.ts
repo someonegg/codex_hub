@@ -20,10 +20,9 @@ export interface CodexHomeConfig {
 }
 
 export interface ServerConfig {
-  homes?: CodexHomeConfig[];
+  homes: CodexHomeConfig[];
   host: string;
   port: number;
-  codexHome: string;
   clientDirectory: string;
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
@@ -103,7 +102,6 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     config: {
       host,
       port: parsePort(values.port),
-      codexHome: homes[0]!.path,
       homes,
       clientDirectory: resolve(process.cwd(), "dist/client"),
       tls,

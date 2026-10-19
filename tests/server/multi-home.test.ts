@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 
 import { createCodexHub } from "../../src/server/create-hub.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
-import type { LiveRevision } from "../../src/shared/api-contract.js";
+import type { UpdateRevision } from "../../src/shared/api-contract.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 it("isolates native identities, names and relationships while merging projects and retaining empty homes", async () => {
@@ -61,8 +61,8 @@ it("isolates native identities, names and relationships while merging projects a
   }
 });
 
-it("keeps Live reads isolated and resolves tmux takeover across homes", async () => {
-  const root = await createTempDirectory("multi-home-live-");
+it("keeps automatic updates reads isolated and resolves tmux takeover across homes", async () => {
+  const root = await createTempDirectory("multi-home-updates-");
   const homes = ["personal", "work"].map((nickname) => ({ nickname, path: join(root, nickname) }));
   const rollout = (index: number) =>
     join(homes[index]!.path, "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl");
@@ -86,7 +86,9 @@ it("keeps Live reads isolated and resolves tmux takeover across homes", async ()
     await cp(resolve("tests/fixtures/codex-home"), homes[index]!.path, { recursive: true });
     await appendFile(rollout(index), bind(`2026-07-28T12:00:0${index}.000Z`));
   }
-  const connect = vi.spyOn(TmuxInteractionService.prototype, "connect").mockResolvedValue(target);
+  const connect = vi
+    .spyOn(TmuxInteractionService.prototype, "resolveTarget")
+    .mockResolvedValue(target);
   const hub = await createCodexHub(homes);
   try {
     const list = await hub.sessions.list();
@@ -120,15 +122,15 @@ it("keeps Live reads isolated and resolves tmux takeover across homes", async ()
       }) + "\n",
     );
     await hub.sessions.refresh();
-    const live = await hub.live.wait(personal!.id, {
+    const updates = await hub.updates.wait(personal!.id, {
       cursor: personalPage.cursor,
-      after: "unseen" as LiveRevision,
+      after: "unseen" as UpdateRevision,
     });
-    expect(live!.hasMore).toBe(true);
-    expect(live!.session.origin.sourceInstanceId).toBe(personal!.sourceInstanceId);
-    const other = await hub.live.wait(work!.id, {
+    expect(updates!.hasMore).toBe(true);
+    expect(updates!.session.origin.sourceInstanceId).toBe(personal!.sourceInstanceId);
+    const other = await hub.updates.wait(work!.id, {
       cursor: workPage.cursor,
-      after: "unseen" as LiveRevision,
+      after: "unseen" as UpdateRevision,
     });
     expect(other!.hasMore).toBe(false);
   } finally {

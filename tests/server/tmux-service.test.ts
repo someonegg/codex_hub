@@ -1,9 +1,11 @@
+import { writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { normalizeMessage } from "../../src/server/interaction/message.js";
+import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import {
   MAX_TERMINAL_PREVIEW_BYTES,
   type TmuxCommandOptions,
@@ -11,6 +13,7 @@ import {
   TmuxInteractionService,
 } from "../../src/server/interaction/tmux-service.js";
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
+import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -305,17 +308,17 @@ it("freshly resolves disconnected and dead targets and observes the original ide
   const runner = new FakeRunner();
   const service = new TmuxInteractionService(runner);
   const attempt = { valid: true as const, ordinal: 1, socketPath, paneId: "%3" };
-  const binding = (await service.archiveTarget(attempt))!;
+  const binding = (await service.resolveTarget(attempt))!;
   expect(binding.sessionName).toBe("arbitrary-session");
   expect(await service.inspect(binding)).toBe("alive");
   runner.paneDead = "1";
   expect(await service.inspect(binding)).toBe("exited");
-  expect(await service.archiveTarget(attempt)).toBeNull();
+  expect(await service.resolveTarget(attempt)).toBeNull();
   runner.paneDead = "0";
   expect(await service.inspect(binding)).toBe("alive");
   runner.present = false;
   expect(await service.inspect(binding)).toBe("exited");
-  expect(await service.archiveTarget(attempt)).toBeNull();
+  expect(await service.resolveTarget(attempt)).toBeNull();
   runner.present = true;
   expect(await service.inspect(binding)).toBe("alive");
 });
@@ -330,7 +333,7 @@ it.each(["timeout", "command_failed"] as const)(
     runner.failure = () => new InteractionTransportError(code, "query failed");
     await expect(service.inspect(binding)).rejects.toMatchObject({ code });
     await expect(
-      service.archiveTarget({ valid: true, ordinal: 1, socketPath, paneId: "%3" }),
+      service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId: "%3" }),
     ).rejects.toMatchObject({ code });
   },
 );
@@ -345,7 +348,7 @@ it.each(["%3", "%4"])("accepts linked-window observations when targeting %s", as
   const binding = await service.connect(attempt);
   expect(binding.paneId).toBe(paneId);
   await expect(service.inspect(binding)).resolves.toBe("alive");
-  await expect(service.archiveTarget(attempt)).resolves.toEqual(binding);
+  await expect(service.resolveTarget(attempt)).resolves.toEqual(binding);
   await service.sendMessage(binding, "hello");
   await expect(service.captureTerminal(binding)).resolves.toMatchObject({
     content: runner.terminalOutput,
@@ -395,30 +398,119 @@ it("coalesces only concurrent queries and recovers without rebinding", async () 
   const service = new TmuxInteractionService(runner);
   const attempt = { valid: true as const, ordinal: 1, socketPath, paneId: "%3" };
   const results = await Promise.all(
-    Array.from({ length: 10 }, () => service.archiveTarget(attempt)),
+    Array.from({ length: 10 }, () => service.resolveTarget(attempt)),
   );
   expect(results.every((binding) => binding?.paneId === "%3")).toBe(true);
   expect(runner.calls).toHaveLength(1);
   runner.present = false;
-  expect(await service.archiveTarget(attempt)).toBeNull();
+  expect(await service.resolveTarget(attempt)).toBeNull();
   runner.present = true;
-  expect(await service.archiveTarget(attempt)).toMatchObject({ paneId: "%3" });
+  expect(await service.resolveTarget(attempt)).toMatchObject({ paneId: "%3" });
   expect(runner.calls).toHaveLength(3);
 });
 
-it("exits with only interrupt and EOF and checks queued input availability", async () => {
+it("shares one socket enumeration across more than eight runtime pane probes", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  runner.paneOutput = Array.from(
+    { length: 20 },
+    (_, i) => `%${i}|${i === 1 ? 1 : 0}|session-${i}`,
+  ).join("\n");
+  // Preserve the first association for linked panes.
+  runner.paneOutput += "\n%0|0|linked-session\n";
+  const service = new TmuxInteractionService(runner);
+  const runtime = new SessionRuntime(service, new SessionManagerRegistry("test"));
+  const results = await Promise.all(
+    Array.from({ length: 21 }, (_, i) =>
+      runtime.probe({ valid: true, ordinal: 1, socketPath, paneId: `%${i}` }),
+    ),
+  );
+  expect(runner.calls).toHaveLength(1);
+  expect(runner.calls[0]?.args).toEqual([
+    "list-panes",
+    "-a",
+    "-F",
+    "#{pane_id}|#{pane_dead}|#{session_name}",
+  ]);
+  expect(results[0]).toEqual({ socketPath, paneId: "%0", sessionName: "session-0" });
+  expect(results[1]).toBeNull();
+  expect(results[20]).toBeNull();
+  expect(results[19]).toMatchObject({ paneId: "%19" });
+
+  runner.paneOutput = "";
+  expect(await runtime.probe({ valid: true, ordinal: 1, socketPath, paneId: "%0" })).toBeNull();
+  expect(runner.calls).toHaveLength(2);
+});
+
+it("keeps concurrent socket enumerations independent", async () => {
+  const firstSocket = await unixSocket();
+  const secondSocket = await unixSocket();
+  const runner = new FakeRunner();
+  const service = new TmuxInteractionService(runner);
+  const results = await Promise.all(
+    [firstSocket, secondSocket].flatMap((socketPath) =>
+      ["%3", "%4"].map((paneId) =>
+        service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId }),
+      ),
+    ),
+  );
+  expect(runner.calls).toHaveLength(2);
+  expect(new Set(runner.calls.map((call) => call.socketPath))).toEqual(
+    new Set([firstSocket, secondSocket]),
+  );
+  expect(results).toEqual([
+    { socketPath: firstSocket, paneId: "%3", sessionName: "arbitrary-session" },
+    null,
+    { socketPath: secondSocket, paneId: "%3", sessionName: "arbitrary-session" },
+    null,
+  ]);
+});
+
+it("shares observation failures across panes and retries on the next query", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  runner.failure = () => new InteractionTransportError("timeout", "query timed out");
+  const service = new TmuxInteractionService(runner);
+  const results = await Promise.allSettled(
+    ["%3", "%4"].map((paneId) =>
+      service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId }),
+    ),
+  );
+  expect(runner.calls).toHaveLength(1);
+  for (const result of results)
+    expect(result).toMatchObject({ status: "rejected", reason: { code: "timeout" } });
+  runner.failure = null;
+  expect(
+    await service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId: "%3" }),
+  ).toMatchObject({ paneId: "%3" });
+  expect(runner.calls).toHaveLength(2);
+});
+
+it("kills only the selected pane and checks queued input availability", async () => {
   const socketPath = await unixSocket();
   const runner = new FakeRunner();
   const service = new TmuxInteractionService(runner);
   const binding = await service.connect({ valid: true, ordinal: 0, socketPath, paneId: "%3" });
-  await service.exitTarget(binding);
+  await service.killPane(binding);
   expect(
-    runner.calls.filter((call) => call.args[0] === "send-keys").map((call) => call.args),
-  ).toEqual([["send-keys", "-t", "%3", "C-c", "C-d"]]);
+    runner.calls.filter((call) => call.args[0] === "kill-pane").map((call) => call.args),
+  ).toEqual([["kill-pane", "-t", "%3"]]);
   await expect(
     service.sendMessage(binding, "draft", () => {
       throw new Error("session busy");
     }),
   ).rejects.toThrow("session busy");
   expect(runner.calls.some((call) => call.args[0] === "load-buffer")).toBe(false);
+});
+
+it("does not treat a non-socket binding path as confirmed pane death", async () => {
+  const directory = await createTempDirectory("unsafe-binding-");
+  const socketPath = join(directory, "ordinary-file");
+  await writeFile(socketPath, "not a socket");
+  const runner = new FakeRunner();
+  const service = new TmuxInteractionService(runner);
+  await expect(
+    service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId: "%3" }),
+  ).rejects.toMatchObject({ code: "command_failed" });
+  expect(runner.calls).toEqual([]);
 });

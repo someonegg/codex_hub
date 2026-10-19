@@ -15,18 +15,25 @@ export interface SessionOrigin {
   formatVersion: string | null;
 }
 
+export type SessionStatus = "normal" | "live" | "archived";
+export interface ResumeCapability {
+  allowed: boolean;
+  reason: string | null;
+}
+
 export interface SessionSummary {
   sourceInstanceId: string;
   id: SessionId;
   title: string;
   projectId: string | null;
-  archived: boolean;
+  status: SessionStatus;
   parentId: SessionId | null;
   isChild: boolean;
   updatedAt: string | null;
 }
 
 export interface SessionDetail {
+  resume: ResumeCapability;
   id: SessionId;
   origin: SessionOrigin;
   title: string;
@@ -35,7 +42,7 @@ export interface SessionDetail {
   projectDirectory: string | null;
   createdAt: string | null;
   updatedAt: string | null;
-  archived: boolean;
+  status: SessionStatus;
   parentId: SessionId | null;
   childIds: SessionId[];
   agent: AgentIdentity | null;

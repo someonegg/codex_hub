@@ -20,7 +20,7 @@ and revisions are opaque; clients must use returned values.
 
 - Homes: `{ sourceInstanceId, nickname }`, including empty homes; home paths are private.
 - Projects: `{ id, directory }`.
-- Sessions: `{ id, sourceInstanceId, title, projectId, archived, parentId, isChild, updatedAt }`.
+- Sessions: `{ id, sourceInstanceId, title, projectId, status, parentId, isChild, updatedAt }`.
 - Titles are resolved display names. Missing directories produce `projectId: null`.
   `isChild` preserves a declared parent relationship even if `parentId` cannot resolve.
 
@@ -31,7 +31,7 @@ probe that stops when idle. Capacity is 100 waiters; excess requests receive `42
 with `Retry-After`. Disconnects and server shutdown release waiters. Legacy
 pagination, filtering, and `fresh` parameters return `400`.
 
-Revisions hash the minimal structure sorted by ID. Home metadata, title, project, archive, and
+Revisions hash the minimal structure sorted by ID. Home metadata, title, project, status, and
 parent changes affect them; timestamps, content, statistics, and diagnostics do not.
 Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 
@@ -51,30 +51,42 @@ requests still time out with `204`.
 The browser uses these timestamps to sort main sessions descending and projects by
 their latest visible main session. Equal times use the corresponding ID; missing
 or invalid times sort last. Displayed reader metadata (initial pages, pagination,
-refreshes, and Live responses) feeds timestamps back into the local list without
+refreshes, and automatic updates responses) feeds timestamps back into the local list without
 extra requests. Both list replacement and reader feedback retain the newer valid
 time for each existing ID; removed sessions are discarded. Feedback for unknown IDs
 or before the list loads is ignored. Times are not persisted. Catalog requests pause
-while hidden and reconnect when visible. Reader Live revisions retain their own
+while hidden and reconnect when visible. Reader update revisions retain their own
 semantics, including `updatedAt`.
 
-## Reader and Live updates
+Session status is `normal | live | archived`. Archive takes precedence; Live requires
+an observed living pane currently owned by the session. Normal has no additional
+badge and does not imply that resume is safe. Adapter snapshots retain archive facts.
+Concurrent pane observations on the same socket share one `list-panes` enumeration
+and a pane lookup map. Runtime observations are bounded to eight sockets at a time;
+all panes on an active socket can join its in-flight query. Probe errors revoke
+Live and resume permission.
 
-| Endpoint                                           | Purpose                                                |
-| -------------------------------------------------- | ------------------------------------------------------ |
-| `GET /api/v1/sessions/:id`                         | Session metadata, interaction state, and Live revision |
-| `GET /api/v1/sessions/:id/items`                   | Timeline page; optional `limit` and `cursor`           |
-| `GET /api/v1/sessions/:id/items/:itemId/directive` | Lazy directive text; requires `cursor`                 |
-| `GET /api/v1/sessions/:id/items/:itemId/tool`      | Lazy tool input/output; requires `cursor`              |
-| `GET /api/v1/sessions/:id/items/:itemId/internal`  | Lazy internal JSON; requires `cursor`                  |
-| `GET /api/v1/sessions/:id/live`                    | Long poll; requires `cursor` and `after` Live revision |
+## Reader and automatic updates
+
+| Endpoint                                           | Purpose                                                  |
+| -------------------------------------------------- | -------------------------------------------------------- |
+| `GET /api/v1/sessions/:id`                         | Session metadata, interaction state, and update revision |
+| `GET /api/v1/sessions/:id/items`                   | Timeline page; optional `limit` and `cursor`             |
+| `GET /api/v1/sessions/:id/items/:itemId/directive` | Lazy directive text; requires `cursor`                   |
+| `GET /api/v1/sessions/:id/items/:itemId/tool`      | Lazy tool input/output; requires `cursor`                |
+| `GET /api/v1/sessions/:id/items/:itemId/internal`  | Lazy internal JSON; requires `cursor`                    |
+| `GET /api/v1/sessions/:id/updates`                 | Long poll; requires `cursor` and `after` update revision |
 
 Timeline pages include session metadata, items, a cursor, `hasMore`, interaction
-state, and a Live revision. Cursors validate timeline prefix continuity; incompatible
-changes return `409 timeline_changed`. Live timeout returns `204`.
+state, and an update revision. Cursors validate timeline prefix continuity; incompatible
+changes return `409 timeline_changed`. Automatic updates timeout returns `204`.
 
-Only the opened, unarchived session subscribes to Live. History paging and Live
-updates coexist while preserving the reading position. Catalog and reader polling
+Session metadata includes `status` and `resume: { allowed, reason }`. Resume is a
+detail capability; `reason` is null when allowed. Status, resume capability and
+interaction changes affect the detail update revision even without JSONL changes.
+
+Only the opened, unarchived session subscribes to automatic updates. History paging
+and automatic updates coexist while preserving the reading position. Catalog and reader polling
 use separate constants and revisions. Session diagnostics stay in server logs.
 
 ## Tmux interaction
@@ -94,7 +106,7 @@ declaration in user-message `<user_shell_command>` output. Its following lines
 contain a nonempty absolute socket path, a `%`-prefixed numeric pane ID, and an
 optional operation UUID. An invalid latest declaration does not fall back to an older one.
 
-The process-wide live pane binding manager is the sole binding source. Adapters
+The process-wide pane binding manager is the sole binding source. Adapters
 submit all binding attempts from accepted decoded records, including incremental
 appends; normalized interaction values contain only transport capabilities.
 Order events by timestamp (invalid timestamps use zero), global session ID,
@@ -122,8 +134,8 @@ an await. Return the currently determinable state, using `unknown` for a new
 binding that has not been validated, and wait for the next refresh. Operations
 still validate ownership after resolution and immediately before queued effects.
 
-All interaction paths share live checks of socket ownership and pane liveness.
-Only concurrent checks for the same target are coalesced; completed results are
+All interaction paths share current pane validation of socket ownership and pane liveness.
+Only concurrent checks for the same socket are coalesced; completed results are
 not cached. Input and preview revalidate inside the pane queue. Socket/pane reuse
 targets the current pane without comparing process identity. Uncertain input is
 not automatically resent.
@@ -135,24 +147,30 @@ loop until a new expand, visibility, or connection transition.
 
 ## Asynchronous management
 
-| Endpoint                              | Body                                                           | Result            |
-| ------------------------------------- | -------------------------------------------------------------- | ----------------- |
-| `POST /api/v1/sessions`               | `{ sourceInstanceId?, directory, worktree, yolo?, requestId }` | `202` operation   |
-| `POST /api/v1/sessions/:id/archive`   | `{}`                                                           | `202` operation   |
-| `DELETE /api/v1/sessions/:id`         | `{}`                                                           | `202` operation   |
-| `GET /api/v1/operations/:operationId` | —                                                              | Current operation |
+| Endpoint                              | Body                                                                                                      | Result            |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------- |
+| `POST /api/v1/sessions`               | `{ sourceInstanceId?, directory, worktree, yolo?, requestId }` or `{ resumeSessionId, yolo?, requestId }` | `202` operation   |
+| `POST /api/v1/sessions/:id/exit`      | `{}`                                                                                                      | `202` operation   |
+| `POST /api/v1/sessions/:id/archive`   | `{}`                                                                                                      | `202` operation   |
+| `DELETE /api/v1/sessions/:id`         | `{}`                                                                                                      | `202` operation   |
+| `GET /api/v1/operations/:operationId` | —                                                                                                         | Current operation |
 
 Operations contain `operationId`, `type`, `status`, nullable `sessionId`,
 `createdAt`, `updatedAt`, nullable `error`, `phase`, and `attachCommand`.
-Statuses are `pending`, `succeeded`, `failed`, and `unknown`. Archive phases are
+Operation types are `create`, `exit`, `archive`, and `delete`. Create operations add
+`mode: "new" | "resume"`; known launch targets are retained as `target: { socketPath, paneId }`.
+Statuses are `pending`, `succeeded`, `failed`, and `unknown`. Exit uses
+`sending_exit` and `waiting_exit`; archive phases are
 `sending_exit`, `waiting_exit`, `archiving`, and `confirming_archive`.
 Interaction responses also include nullable `attachCommand`.
 
 Create request IDs contain 8–128 letters, digits, underscores, or hyphens. Identical
 IDs and arguments coalesce through execution and the 30-minute terminal retention
 period; changed arguments return `409`. Different IDs may create concurrently in
-the same project. Archive/delete coalesce identical operations on a session;
-conflicting operations return `409` without queuing.
+the same project. Exit/archive/delete coalesce identical operations on a session;
+conflicting operations return `409` without queuing. Resume uses the same session
+occupancy as exit/archive/delete. Resume requests with different request IDs cannot
+launch concurrently for one session; identical request IDs retain create idempotency.
 
 ### Execution and confirmation
 
@@ -162,13 +180,39 @@ conflicting operations return `409` without queuing.
   the initial CLI argument rather than pasting it. Confirm the operation marker,
   launch target, project, and valid binding. Wait up to 300 seconds after launch;
   show an attach command after 30 seconds and retain it on timeout.
-- **Archive:** reread the source snapshot and latest binding. Already archived
-  sessions succeed immediately. An absent or confirmed unavailable target proceeds
-  to native archive. A live target receives `Ctrl+C`, then `Ctrl+D`, once, without
-  Enter. Observe that fixed socket/pane until gone or dead, then archive once.
-  Waiting for exit and confirming archive each allow 30 seconds; the native command
-  allows 25 seconds. Query errors do not prove exit. While occupied, message, key,
-  and handoff requests return `409 session_busy`; no process is forcibly killed.
+- **Resume:** use the owning source, native UUID and working directory from the
+  original session. Only `resumeSessionId`, optional `yolo` (default false), and
+  `requestId` are accepted; directory, source and worktree overrides are rejected.
+  Require an unarchived, unique valid identity, an available directory, and a valid
+  latest binding whose pane is confirmed dead/missing or explicitly transferred.
+  Missing/invalid bindings, timeouts and errors never authorize resume. Refresh the
+  adapter snapshot and repeat checks before launching `codex resume <UUID>` in a
+  new pane with the original `CODEX_HOME` and this operation's binding instruction.
+  Confirmation requires the original session/native identity, operation marker,
+  launched pane, matching project and a live owned binding. An unknown outcome
+  retains target/attach information and releases session occupancy. As with Create,
+  the same requestId returns the original operation; a new requestId may launch
+  again after the normal resume safety checks. No separate unknown-launch
+  reservation is retained. Inspect tmux before submitting another request because
+  the previous launch may still be running. Request records remain in memory for
+  30 minutes and are lost on server restart.
+- **Exit:** resolve the source and latest binding; no native UUID is required.
+  Binding transfers control of the whole pane, including manually bound panes.
+  Codex sends `Ctrl+C` three times, one second apart; the shared exit service waits
+  four more seconds, sends `Ctrl+D`, then waits nine seconds before one targeted
+  `kill-pane` if needed. Success requires a missing or dead pane within a
+  30-second total deadline. Binding ownership and operation activity are checked
+  before effects; query errors or changed ownership end tracking as `unknown`.
+  Uncertain effects are not retried. An unbound session succeeds without effects;
+  a missing session fails. Archived sessions use the same checks. Exit preserves
+  session data. See [ADR-0022](adr/0022-separate-session-exit-from-archive.md)
+  for the whole-pane shutdown rationale and tradeoffs.
+- **Archive:** reread the source snapshot. Already archived sessions succeed
+  immediately. Validate the unique native identity, then reuse the independent
+  exit service. Only successful exit proceeds to native archive, once. The native
+  command allows 25 seconds; archive confirmation allows 30 seconds. While exit,
+  archive, or delete occupies the session, ordinary input and handoff requests
+  return `409 session_busy`. Archive retains occupancy through confirmation.
 - **Delete:** require an archived session, run the native command, and confirm its
   same-source native identity is absent, within 30 seconds. A session already absent
   from a successful initial snapshot succeeds immediately.
@@ -207,5 +251,5 @@ remain scoped to their home; configuration errors prevent startup.
 Creation requires `sourceInstanceId` with multiple homes; omission with a single home
 selects that home. Unknown IDs and ambiguous omission return `400`. The source is part
 of the idempotency fingerprint, so reuse of a request ID for another home returns
-`409`. Launch environment, association, archive, deletion, and confirmation use the
+`409`. Launch environment, association, exit, archive, deletion, and confirmation use the
 selected or owning home.

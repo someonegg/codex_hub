@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import type { InteractionResponse } from "../../shared/api-contract";
 
 import { useSessionInteraction } from "../state/use-session-interaction";
@@ -5,6 +7,9 @@ import { useTerminalPreview } from "../state/use-terminal-preview";
 import { InteractionPanel } from "./InteractionPanel";
 
 interface SessionInteractionProps {
+  operationActions?: ReactNode;
+  operationStatus?: ReactNode;
+  managementBusy?: boolean;
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
   sessionId: string;
@@ -14,6 +19,9 @@ interface SessionInteractionProps {
 }
 
 export function SessionInteraction({
+  operationActions,
+  operationStatus,
+  managementBusy,
   interaction,
   onNavigate,
   sessionId,
@@ -28,11 +36,13 @@ export function SessionInteraction({
 
   return (
     <InteractionPanel
+      operationActions={operationActions}
+      operationStatus={operationStatus}
       interaction={interaction}
       onNavigate={onNavigate}
       itemCount={itemCount}
       updatedAt={updatedAt}
-      interactionBusy={controller.interactionBusy}
+      interactionBusy={controller.interactionBusy || !!managementBusy}
       error={controller.error}
       onDismissError={controller.clearError}
       onSendMessage={controller.sendMessage}

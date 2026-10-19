@@ -3,7 +3,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import type {
   InteractionResponse,
   ItemPageResponse,
-  SessionLiveResponse,
+  SessionUpdatesResponse,
 } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
 
@@ -17,7 +17,7 @@ import {
   waitForRetry,
 } from "./retry-policy";
 import type { ReaderContext } from "./session-reader-state";
-import { type LiveSnapshot, useSessionLive } from "./use-session-live";
+import { type UpdatesSnapshot, useSessionUpdates } from "./use-session-updates";
 
 const TIMELINE_PAGE_SIZE = 300;
 
@@ -37,8 +37,8 @@ interface ReaderState {
 type ReaderAction =
   | { type: "start"; operation: Exclude<ReaderOperation, null>; preserve: boolean }
   | { type: "success"; page: ItemPageResponse; replace: boolean }
-  | { type: "live-success"; response: SessionLiveResponse }
-  | { type: "live-error"; error: string }
+  | { type: "updates-success"; response: SessionUpdatesResponse }
+  | { type: "updates-error"; error: string }
   | { type: "page-retry"; error: string }
   | { type: "failure"; error: string; missing: boolean }
   | { type: "timeline-conflict" }
@@ -193,14 +193,14 @@ export function useSessionReader(sessionId: string) {
     });
   }, [requestPage]);
 
-  const onLiveUpdate = useCallback(
-    async (response: SessionLiveResponse, expected: LiveSnapshot) => {
+  const onSessionUpdates = useCallback(
+    async (response: SessionUpdatesResponse, expected: UpdatesSnapshot) => {
       const current = stateRef.current;
       if (
         current.context === null ||
         current.timelineConflict ||
         current.context.cursor !== expected.cursor ||
-        current.context.liveRevision !== expected.liveRevision ||
+        current.context.updateRevision !== expected.updateRevision ||
         response.cursor !== expected.cursor
       )
         return;
@@ -215,31 +215,31 @@ export function useSessionReader(sessionId: string) {
           setAutoRefreshEnabled(false);
         return;
       }
-      dispatch({ type: "live-success", response });
+      dispatch({ type: "updates-success", response });
     },
     [requestPage],
   );
 
-  useSessionLive({
+  useSessionUpdates({
     sessionId,
     enabled:
       autoRefreshEnabled &&
       state.operation === null &&
       state.context !== null &&
       state.context.session.id === sessionId &&
-      !state.context.session.archived &&
+      state.context.session.status !== "archived" &&
       !state.timelineConflict,
     snapshot:
       state.context === null
         ? null
         : {
             cursor: state.context.cursor,
-            liveRevision: state.context.liveRevision,
+            updateRevision: state.context.updateRevision,
           },
-    onUpdate: onLiveUpdate,
+    onUpdate: onSessionUpdates,
     onTimelineConflict: markTimelineConflict,
     onError: (reason, terminal) => {
-      dispatch({ type: "live-error", error: messageFor(reason) });
+      dispatch({ type: "updates-error", error: messageFor(reason) });
       if (terminal) setAutoRefreshEnabled(false);
     },
     onSuccess: () => dispatch({ type: "clear-error" }),
@@ -279,7 +279,7 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
         session: action.page.session,
         cursor: action.page.cursor,
         hasMore: action.page.hasMore,
-        liveRevision: action.page.liveRevision,
+        updateRevision: action.page.updateRevision,
       };
       return {
         ...state,
@@ -296,7 +296,7 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
             : state.timelineRenderGeneration,
       };
     }
-    case "live-success":
+    case "updates-success":
       if (state.context === null || action.response.cursor !== state.context.cursor) return state;
       return {
         ...state,
@@ -304,13 +304,13 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
           session: action.response.session,
           cursor: action.response.cursor,
           hasMore: action.response.hasMore,
-          liveRevision: action.response.liveRevision,
+          updateRevision: action.response.updateRevision,
         },
         interaction: action.response.interaction,
         error: null,
         missing: false,
       };
-    case "live-error":
+    case "updates-error":
       return { ...state, error: action.error };
     case "page-retry":
       return { ...state, error: action.error };

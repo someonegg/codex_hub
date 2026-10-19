@@ -4,8 +4,8 @@ export * from "./interaction.js";
 
 declare const timelineCursorBrand: unique symbol;
 export type TimelineCursor = string & { readonly [timelineCursorBrand]: true };
-declare const liveRevisionBrand: unique symbol;
-export type LiveRevision = string & { readonly [liveRevisionBrand]: true };
+declare const updateRevisionBrand: unique symbol;
+export type UpdateRevision = string & { readonly [updateRevisionBrand]: true };
 
 export interface ApiError {
   error: {
@@ -39,7 +39,7 @@ export interface SessionListResponse {
 export interface SessionDetailResponse {
   session: SessionDetail;
   interaction: InteractionResponse;
-  liveRevision: LiveRevision;
+  updateRevision: UpdateRevision;
 }
 
 export interface ItemPageQuery {
@@ -53,20 +53,20 @@ export interface ItemPageResponse {
   hasMore: boolean;
   items: TimelineItem[];
   interaction: InteractionResponse;
-  liveRevision: LiveRevision;
+  updateRevision: UpdateRevision;
 }
 
-export interface SessionLiveQuery {
+export interface SessionUpdatesQuery {
   cursor: TimelineCursor;
-  after: LiveRevision;
+  after: UpdateRevision;
 }
 
-export interface SessionLiveResponse {
+export interface SessionUpdatesResponse {
   session: SessionDetail;
   cursor: TimelineCursor;
   hasMore: boolean;
   interaction: InteractionResponse;
-  liveRevision: LiveRevision;
+  updateRevision: UpdateRevision;
 }
 
 export interface ToolDetailResponse {
@@ -115,20 +115,32 @@ export interface TerminalPreviewResponse {
 }
 
 export interface HubOperation {
+  mode?: "new" | "resume";
+  target?: { socketPath: string; paneId: string };
   phase: "sending_exit" | "waiting_exit" | "archiving" | "confirming_archive" | null;
   attachCommand: string | null;
   operationId: string;
-  type: "create" | "archive" | "delete";
+  type: "create" | "exit" | "archive" | "delete";
   status: "pending" | "succeeded" | "failed" | "unknown";
   sessionId: string | null;
   createdAt: string;
   updatedAt: string;
   error: string | null;
 }
-export interface CreateSessionRequest {
-  sourceInstanceId?: string;
-  directory: string;
-  worktree: boolean;
-  yolo?: boolean;
-  requestId: string;
-}
+export type CreateSessionRequest =
+  | {
+      resumeSessionId: string;
+      sourceInstanceId?: never;
+      directory?: never;
+      worktree?: never;
+      yolo?: boolean;
+      requestId: string;
+    }
+  | {
+      resumeSessionId?: never;
+      sourceInstanceId?: string;
+      directory: string;
+      worktree: boolean;
+      yolo?: boolean;
+      requestId: string;
+    };

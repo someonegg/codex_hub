@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
@@ -10,8 +12,9 @@ import type {
   ToolDetailQuery,
   ToolDetailResponse,
 } from "../../shared/api-contract.js";
-import type { SessionId } from "../../shared/domain.js";
+import type { SessionDetail, SessionId } from "../../shared/domain.js";
 import { SessionApiMapper, type SessionNicknameResolver } from "../api/session-api-mapper.js";
+import type { SessionRuntime } from "../interaction/session-runtime.js";
 import {
   CatalogSnapshotStore,
   type CatalogSnapshotStoreDependencies,
@@ -21,10 +24,10 @@ import { SessionQueries } from "../repository/session-queries.js";
 import type { SessionSource } from "../source/session-source.js";
 import type {
   InteractionSessionSnapshot,
-  LiveSessionSnapshot,
   SessionItemPageResponse,
   SessionReadDetailResponse,
   SessionReader,
+  SessionUpdatesSnapshot,
 } from "./session-reader.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
@@ -33,6 +36,7 @@ export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDepe
 }
 
 export class SessionReadService implements SessionReader {
+  runtime?: SessionRuntime;
   readonly #store: CatalogSnapshotStore;
   readonly #queries: SessionQueries;
   readonly #mapper: SessionApiMapper;
@@ -62,30 +66,54 @@ export class SessionReadService implements SessionReader {
 
   async list(): Promise<SessionListResponse> {
     const snapshot = await this.#store.current();
-    return this.#mapper.list(
-      [...snapshot.sessions.values()].map(({ normalized }) => normalized.session),
+    const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
+    const result = this.#mapper.list(sessions);
+    if (!this.runtime) return result;
+    const states = await Promise.all(
+      sessions.map((session) => this.runtime!.evaluate(session, sessions, false)),
     );
+    const byId = new Map(sessions.map((session, index) => [session.id, states[index]!.status]));
+    result.sessions.forEach((session) => {
+      session.status = byId.get(session.id)!;
+    });
+    result.revision = createHash("sha256")
+      .update(
+        JSON.stringify([result.revision, result.sessions.map(({ id, status }) => [id, status])]),
+      )
+      .digest("base64url");
+    return result;
   }
 
   async getSession(id: SessionId): Promise<SessionReadDetailResponse | null> {
     const snapshot = await this.#store.current();
     const result = this.#queries.session(snapshot, id);
-    return result === null ? null : this.#mapper.detail(result);
+    if (result === null) return null;
+    const response = this.#mapper.detail(result);
+    await this.#runtimeDetail(response.session, snapshot);
+    return response;
   }
 
   async getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null> {
     const snapshot = await this.#store.current();
     const result = this.#queries.items(snapshot, id, query);
-    return result === null ? null : this.#mapper.itemPage(result);
+    if (result === null) return null;
+    const response = this.#mapper.itemPage(result);
+    await this.#runtimeDetail(response.session, snapshot);
+    return response;
   }
 
-  async getLiveSession(id: SessionId, cursor: TimelineCursor): Promise<LiveSessionSnapshot | null> {
+  async getSessionUpdates(
+    id: SessionId,
+    cursor: TimelineCursor,
+  ): Promise<SessionUpdatesSnapshot | null> {
     const snapshot = await this.#store.current();
-    const context = this.#queries.live(snapshot, id, cursor);
+    const context = this.#queries.updates(snapshot, id, cursor);
     if (context === null) return null;
     const normalized = snapshot.sessions.get(id)!.normalized;
+    const session = this.#mapper.sessionDetail(context.session);
+    await this.#runtimeDetail(session, snapshot);
     return {
-      session: this.#mapper.sessionDetail(context.session),
+      session,
       cursor: context.cursor as TimelineCursor,
       hasMore: context.hasMore,
       interactionSession: {
@@ -123,6 +151,18 @@ export class SessionReadService implements SessionReader {
     const snapshot = await this.#store.current();
     const result = this.#queries.internalDetail(snapshot, id, itemId, query);
     return result === null ? null : this.#mapper.internalDetail(result);
+  }
+
+  async #runtimeDetail(
+    detail: SessionDetail,
+    snapshot: Awaited<ReturnType<CatalogSnapshotStore["current"]>>,
+  ) {
+    if (!this.runtime) return;
+    const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
+    Object.assign(
+      detail,
+      await this.runtime.evaluate(snapshot.sessions.get(detail.id)!.normalized.session, sessions),
+    );
   }
 
   async getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null> {

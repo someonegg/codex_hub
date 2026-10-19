@@ -40,13 +40,13 @@ a body. Disconnect, timeout, and shutdown release resources.
 
 The browser replaces structure atomically and preserves the newer valid timestamp
 for each retained ID. Reader metadata feeds displayed session timestamps back into
-the local list, including page loads, refreshes, and Live responses. Feedback is
+the local list, including page loads, refreshes, and automatic updates responses. Feedback is
 best effort: unknown IDs and unloaded lists are ignored, duplicate or older times
 are no-ops, and removed IDs are not retained. There is no timestamp request, timer,
 or persistent cache. Hidden pages pause list requests and reconnect when visible.
 
 Timestamps determine browser ordering without affecting structural revisions.
-Reader Live retains separate constants and semantics, including timestamps in its
+Reader automatic updates retains separate constants and semantics, including timestamps in its
 revision. Catalog diagnostics are server-only and deduplicated by content.
 
 ### Positive Consequences

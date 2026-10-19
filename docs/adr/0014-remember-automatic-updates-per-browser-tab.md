@@ -3,19 +3,19 @@ status: superseded by ADR-0019
 date: 2026-08-20
 ---
 
-Superseded by [ADR-0019](0019-enable-live-for-unarchived-sessions.md).
+Superseded by [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md).
 
-# Remember Live updates per browser tab
+# Remember automatic updates per browser tab
 
 ## Context and Problem Statement
 
-The Live updates switch previously reset whenever the reader remounted or navigated to another session. This made page refreshes unexpectedly disable a user-selected polling behavior, while permanent cross-browser persistence could unexpectedly resume polling much later.
+The automatic updates switch previously reset whenever the reader remounted or navigated to another session. This made page refreshes unexpectedly disable a user-selected polling behavior, while permanent cross-browser persistence could unexpectedly resume polling much later.
 
 ## Decision Drivers
 
 - Refreshing or navigating within one tab should preserve the user's choice.
-- Closing the tab should restore the safe default of disabled Live updates.
-- Archived sessions must never start Live polling.
+- Closing the tab should restore the safe default of disabled automatic updates.
+- Archived sessions must never start automatic updates polling.
 
 ## Considered Options
 
@@ -27,17 +27,17 @@ The Live updates switch previously reset whenever the reader remounted or naviga
 
 Chosen option: "Store one tab-scoped preference in `sessionStorage`", because it survives the expected short-term reader lifecycle without turning polling into a durable or session-by-session policy.
 
-The preference defaults to disabled, is shared by active sessions opened sequentially in the same tab, and is updated for both user changes and terminal failures that disable Live updates. A stored enabled preference has no effect for archived sessions; their switch remains hidden and no scheduler starts. Missing, malformed, or unavailable storage falls back to disabled behavior.
+The preference defaults to disabled, is shared by active sessions opened sequentially in the same tab, and is updated for both user changes and terminal failures that disable automatic updates. A stored enabled preference has no effect for archived sessions; their switch remains hidden and no scheduler starts. Missing, malformed, or unavailable storage falls back to disabled behavior.
 
 ### Positive Consequences
 
-- Page refresh and same-tab session navigation preserve an intentional Live setting.
+- Page refresh and same-tab session navigation preserve an intentional automatic updates setting.
 - Closing the tab clears the preference and restores disabled-by-default behavior.
 - The implementation needs no server-side preference store or per-session cleanup.
 
 ### Negative Consequences
 
-- Enabling Live for one active session enables it for the next active session opened in that tab.
+- Enabling automatic updates for one active session enables it for the next active session opened in that tab.
 - Different tabs can have different preferences.
 - Storage restrictions silently reduce the behavior to in-memory state.
 

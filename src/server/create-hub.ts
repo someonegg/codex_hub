@@ -7,12 +7,13 @@ import {
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
 import type { CodexHomeConfig } from "./config.js";
 import { SessionInteractionService } from "./interaction/interaction-service.js";
-import { livePaneBindings } from "./interaction/live-pane-binding-manager.js";
+import { paneBindings } from "./interaction/pane-binding-manager.js";
+import { SessionRuntime } from "./interaction/session-runtime.js";
 import { TmuxInteractionService } from "./interaction/tmux-service.js";
-import { SessionLiveService } from "./live/session-live-service.js";
 import { OperationService } from "./management/operation-service.js";
 import { SessionManagerRegistry } from "./management/session-manager.js";
 import type { SessionSource } from "./source/session-source.js";
+import { SessionUpdatesService } from "./updates/session-updates-service.js";
 
 function createSessionReadService(
   sources: readonly SessionSource[],
@@ -24,7 +25,7 @@ function createSessionReadService(
 export async function createCodexSessionReadService(
   codexHome: string,
 ): Promise<SessionReadService> {
-  const source = await createCodexSessionSource(codexHome, livePaneBindings);
+  const source = await createCodexSessionSource(codexHome, paneBindings);
   return createSessionReadService([source], {
     resolveNickname: (session) => source.nicknameFor(session),
     homes: [{ sourceInstanceId: source.descriptor.sourceInstanceId, nickname: "default" }],
@@ -33,14 +34,12 @@ export async function createCodexSessionReadService(
 
 /** Compose reading and management using the adapter's published source identity. */
 export async function createCodexHub(
-  codexHome: string | readonly CodexHomeConfig[],
+  homes: readonly CodexHomeConfig[],
   socket?: string,
   interactionEnabled = true,
 ) {
-  const homes =
-    typeof codexHome === "string" ? [{ nickname: "default", path: codexHome }] : codexHome;
   const sources = await Promise.all(
-    homes.map((home) => createCodexSessionSource(home.path, livePaneBindings)),
+    homes.map((home) => createCodexSessionSource(home.path, paneBindings)),
   );
   const sessions = createSessionReadService(sources, {
     resolveNickname: (session) =>
@@ -64,8 +63,11 @@ export async function createCodexHub(
     sessions,
     interactionEnabled,
     transport,
-    livePaneBindings,
+    paneBindings,
   );
+  const runtime = new SessionRuntime(transport, managers, paneBindings);
+  sessions.runtime = runtime;
+  interaction.runtime = runtime;
   const cleanup: (() => void)[] = [];
   let closed = false;
   const close = () => {
@@ -76,18 +78,19 @@ export async function createCodexHub(
   try {
     const catalog = new SessionCatalogService(sessions);
     cleanup.push(() => catalog.close());
-    const live = new SessionLiveService(sessions, { interaction });
-    cleanup.push(() => live.close());
+    const updates = new SessionUpdatesService(sessions, { interaction });
+    cleanup.push(() => updates.close());
     const operations = new OperationService(
       sessions,
       interaction,
       managers,
       undefined,
       undefined,
-      livePaneBindings,
+      paneBindings,
+      runtime,
     );
     cleanup.push(() => operations.close());
-    return { sessions, managers, interaction, catalog, live, operations, close };
+    return { sessions, managers, interaction, catalog, updates, operations, close };
   } catch (error) {
     close();
     throw error;

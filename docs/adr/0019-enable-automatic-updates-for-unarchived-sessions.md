@@ -3,7 +3,7 @@ status: accepted
 date: 2026-10-16
 ---
 
-# Enable Live by default for unarchived sessions
+# Enable automatic updates by default for unarchived sessions
 
 ## Context and Problem Statement
 
@@ -13,18 +13,18 @@ preferences add steps and can block history paging.
 ## Decision Drivers
 
 - Receive conversation updates without requiring a toggle or stored preference.
-- Allow history paging and Live updates to coexist without losing reading position.
+- Allow history paging and automatic updates to coexist without losing reading position.
 
 ## Considered Options
 
-- Enable Live by default for unarchived sessions.
-- Retain a tab-scoped Live preference.
+- Enable automatic updates by default for unarchived sessions.
+- Retain a tab-scoped automatic updates preference.
 
 ## Decision Outcome
 
-Enable Live for unarchived sessions, remove its toggle and stored preference,
+Enable automatic updates for unarchived sessions, remove its toggle and stored preference,
 and stop subscriptions on archive. History paging does not depend on disabling
-Live; appends preserve reading position. At this decision's introduction, the
+automatic updates; appends preserve reading position. At this decision's introduction, the
 visible catalog refreshed summaries every three seconds and paused while hidden;
 only the opened session subscribed to conversation updates.
 
@@ -35,16 +35,16 @@ only the opened session subscribed to conversation updates.
 ### Negative Consequences
 
 - Open unarchived sessions keep long polls active. Catalog reads add periodic
-  work; snapshot checks and cancellation must handle paging/Live races.
+  work; snapshot checks and cancellation must handle paging/automatic updates races.
 
 ## Pros and Cons of the Options
 
-### Default Live for unarchived sessions
+### Default automatic updates for unarchived sessions
 
 - Good: Automatic updates coexist with history loading.
 - Bad: Requires ongoing polling and careful request coordination.
 
-### Tab-scoped Live preference
+### Tab-scoped automatic updates preference
 
 - Good: Preserves existing behavior with fewer changes.
 - Bad: Adds manual steps and can obstruct history paging.
@@ -55,4 +55,4 @@ only the opened session subscribed to conversation updates.
 behavior: server-resolved display titles participate in structural long polling;
 pagination and three-second summary refreshes become structural long polling and
 best-effort timestamps included in list snapshots. Details retain separate title/nickname fields;
-reader Live and timeline cursor semantics are unchanged.
+reader automatic updates and timeline cursor semantics are unchanged.

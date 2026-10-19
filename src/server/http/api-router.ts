@@ -3,15 +3,15 @@ import { randomUUID } from "node:crypto";
 import type { SessionReader } from "../application/session-reader.js";
 import type { SessionCatalogService } from "../catalog/session-catalog-service.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import type { SessionLiveService } from "../live/session-live-service.js";
 import type { OperationService } from "../management/operation-service.js";
+import type { SessionUpdatesService } from "../updates/session-updates-service.js";
 import { HttpQueryError } from "./query-params.js";
 import { RequestBodyError } from "./request-body.js";
 import { type ApiRouter, sendJson } from "./router.js";
 import { createSessionInteractionRoutes } from "./session-interaction-routes.js";
-import { createSessionLiveRoutes } from "./session-live-routes.js";
 import { createSessionManagementRoutes } from "./session-management-routes.js";
 import { createSessionReadRoutes } from "./session-read-routes.js";
+import { createSessionUpdatesRoutes } from "./session-updates-routes.js";
 
 export interface ApiErrorLogger {
   error(message: string, context: { readonly requestId: string; readonly error: unknown }): void;
@@ -25,7 +25,7 @@ type InteractionApi = Pick<
 export interface ApiRouterDependencies {
   readonly sessions: SessionReader;
   readonly catalog: SessionCatalogService;
-  readonly live: SessionLiveService;
+  readonly updates: SessionUpdatesService;
   readonly interaction?: InteractionApi;
   readonly operations?: OperationService;
 }
@@ -49,7 +49,7 @@ export function createApiRouter(
   const requestIdFactory = options.requestId ?? randomUUID;
   const handlers = [
     createSessionManagementRoutes(dependencies.operations),
-    createSessionLiveRoutes(dependencies.live),
+    createSessionUpdatesRoutes(dependencies.updates),
     createSessionInteractionRoutes(dependencies.interaction),
     createSessionReadRoutes(dependencies),
   ];

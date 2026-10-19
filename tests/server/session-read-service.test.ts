@@ -1,16 +1,24 @@
 import { appendFile, cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { codexInteraction } from "../../src/server/adapters/codex/interaction-parser.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
+import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import type {
   DomainTimelineRecord,
   NormalizedSession,
 } from "../../src/server/domain/session-domain.js";
+import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
+import type { InteractionTransport } from "../../src/server/interaction/transport.js";
+import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { MAX_ITEM_PAGE_BYTES } from "../../src/server/repository/session-queries.js";
 import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
+import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { TimelineCursor } from "../../src/shared/api-contract.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -106,8 +114,8 @@ describe("SessionReadService", () => {
       title: "Synthetic trace",
       nickname: "Current nickname",
     });
-    const live = await repository.getLiveSession(basic.id, firstItems!.cursor);
-    expect(live?.session).toMatchObject({
+    const updates = await repository.getSessionUpdates(basic.id, firstItems!.cursor);
+    expect(updates?.session).toMatchObject({
       title: "Synthetic trace",
       nickname: "Current nickname",
     });
@@ -602,7 +610,9 @@ describe("SessionReadService", () => {
 
     const sessions = await repository.list();
     expect(sessions.sessions).toHaveLength(2);
-    expect(sessions.sessions.find(({ archived }) => archived)?.title).toBe("Late archive");
+    expect(sessions.sessions.find(({ status }) => status === "archived")?.title).toBe(
+      "Late archive",
+    );
   });
 
   it("keeps a native Codex session identity stable when its rollout moves", async () => {
@@ -621,7 +631,7 @@ describe("SessionReadService", () => {
     const after = await repository.list();
     const moved = after.sessions.find((session) => session.title === "Synthetic trace")!;
     expect(moved.id).toBe(session.id);
-    expect(moved.archived).toBe(true);
+    expect(moved.status).toBe("archived");
   });
 
   it("returns every catalog record without truncation", async () => {
@@ -829,4 +839,81 @@ describe("catalog structure and updatedAt isolation", () => {
     });
     expect(ambiguous.projects).toHaveLength(1);
   });
+});
+
+it("pushes runtime status and resume changes without a source revision or JSONL change", async () => {
+  const nativeId = "00000000-0000-4000-8000-000000000001";
+  const source = staticSource("runtime-source", [
+    sourceEntry(nativeId, {
+      ...normalizedSession(nativeId, "Runtime", "/project", []),
+      interaction: codexInteraction(),
+    }),
+  ]);
+  const reader = new SessionReadService([source]);
+  const initial = (await reader.list()).sessions[0]!;
+  const domain = (await reader.managementSnapshot()).sessions[0]!;
+  const bindings = new PaneBindingManager();
+  const pane = { socketPath: "/tmp/runtime.sock", paneId: "%1", sessionName: "runtime" };
+  bindings.submit({
+    sessionId: initial.id,
+    time: 1,
+    ordinal: 1,
+    position: 0,
+    attempt: { valid: true, ordinal: 1, ...pane },
+  });
+  const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
+  const transport = { resolveTarget } as unknown as InteractionTransport;
+  const resolveDirectory = vi.fn(async () => ({ directory: "/project", project: "/project" }));
+  const registry = new SessionManagerRegistry(domain.origin.sourceInstanceId).register(
+    domain.origin.sourceInstanceId,
+    {
+      resolveDirectory,
+      launch: vi.fn(),
+      archive: vi.fn(),
+      delete: vi.fn(),
+      exitSteps: () => [],
+    },
+  );
+  const runtime = new SessionRuntime(transport, registry, bindings);
+  reader.runtime = runtime;
+  const interaction = new SessionInteractionService(reader, true, transport, bindings);
+  interaction.runtime = runtime;
+  const catalog = new SessionCatalogService(reader);
+  const updates = new SessionUpdatesService(reader, { interaction, probeIntervalMs: 2 });
+  try {
+    const live = await reader.list();
+    const page = (await reader.getItems(initial.id, {}))!;
+    expect(live.sessions[0]!.status).toBe("live");
+    expect(page.session.status).toBe("live");
+    const baseline = (await updates.wait(initial.id, {
+      cursor: page.cursor,
+      after: "different" as never,
+    }))!;
+    const changedCatalog = catalog.wait(live.revision);
+    const changedDetail = updates.wait(initial.id, {
+      cursor: page.cursor,
+      after: baseline.updateRevision,
+    });
+    resolveTarget.mockResolvedValue(null);
+    const normal = (await changedDetail)!;
+    expect(normal.session).toMatchObject({
+      status: "normal",
+      resume: { allowed: true, reason: null },
+    });
+    expect((await changedCatalog)!.sessions[0]!.status).toBe("normal");
+    expect((await reader.getSession(initial.id))!.session.status).toBe("normal");
+    resolveTarget.mockRejectedValue(new Error("timeout"));
+    const failed = (await updates.wait(initial.id, {
+      cursor: page.cursor,
+      after: normal.updateRevision,
+    }))!;
+    expect(failed.interaction).toMatchObject({ state: "unknown" });
+    expect(failed.session).toMatchObject({ status: "normal", resume: { allowed: false } });
+    resolveTarget.mockResolvedValue(null);
+    resolveDirectory.mockRejectedValue(new Error("directory disappeared"));
+    expect((await reader.getSession(initial.id))!.session.resume.allowed).toBe(false);
+  } finally {
+    updates.close();
+    catalog.close();
+  }
 });

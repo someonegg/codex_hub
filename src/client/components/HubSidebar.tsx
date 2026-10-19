@@ -5,6 +5,7 @@ import type { useHubNavigation } from "../state/use-hub-navigation";
 import type { useSessionList } from "../state/use-session-list";
 import { ErrorState } from "./ErrorState";
 import { InternalLink } from "./InternalLink";
+import { StatusBadge } from "./StatusBadge";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
@@ -92,21 +93,13 @@ export function HubSidebar({
         aria-label="Projects and main sessions"
         onScroll={(event) => persistScroll(event.currentTarget)}
       >
-        {catalog.listError ? (
-          <ErrorState
-            title="Could not update session list"
-            message={catalog.listError}
-            onDismiss={catalog.clearListError}
-            onRetry={catalog.retryList}
-          />
-        ) : null}
         {catalog.listLoading ? <p role="status">Loading sessions…</p> : null}
         {catalog.list && groups.length === 0 ? (
           <p className="hub-empty">No main sessions yet</p>
         ) : null}
         {groups.map((group) => {
           const key = group.id ?? "unknown";
-          const expanded = !navigation.collapsed.includes(key);
+          const expanded = navigation.expanded.includes(key);
           return (
             <section className="hub-project" key={key} data-project={key}>
               <div className="project-heading">
@@ -160,9 +153,7 @@ export function HubSidebar({
                               <time dateTime={session.updatedAt!}>{updatedAtLabel}</time>
                             ) : null}
                           </span>
-                          {session.archived ? (
-                            <small className="archive-label">Archived</small>
-                          ) : null}
+                          <StatusBadge status={session.status} />
                         </InternalLink>
                       </li>
                     );
@@ -172,6 +163,14 @@ export function HubSidebar({
             </section>
           );
         })}
+        {catalog.listError ? (
+          <ErrorState
+            title="Could not update session list"
+            message={catalog.listError}
+            onDismiss={catalog.clearListError}
+            onRetry={catalog.retryList}
+          />
+        ) : null}
       </nav>
       <footer className="hub-sidebar-footer">
         <span className="status-dot" />

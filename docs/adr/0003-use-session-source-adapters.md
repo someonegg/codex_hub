@@ -49,7 +49,7 @@ rejects control characters, slashes, backslashes, and standalone `.` or `..`.
 Queries still validate kind, session ownership, cursor signatures, and read bounds.
 
 Diagnostics belong only in server logs, not public `SessionDetail`, the UI,
-management decisions, or Live revisions. Refresh reports source, session, and
+management decisions, or update revisions. Refresh reports source, session, and
 aggregate diagnostics through an injectable port defaulting to stderr. Deduplicate
 by source, session, and content; cleared diagnostics may recur, and vanished
 objects release state. Reuse unchanged snapshots and diagnostic references;

@@ -1,4 +1,8 @@
-import type { ItemPageResponse, LiveRevision, TimelineCursor } from "../../src/shared/api-contract";
+import type {
+  ItemPageResponse,
+  TimelineCursor,
+  UpdateRevision,
+} from "../../src/shared/api-contract";
 import type {
   DirectiveItem as Directive,
   SessionDetail,
@@ -9,7 +13,7 @@ export const SESSION_ID = "abcdefghijklmnopqrstuvwx";
 export const CHILD_ID = "zyxwvutsrqponmlkjihgfedc";
 export const TIMELINE_CURSOR = "opaque.timeline.cursor" as TimelineCursor;
 export const NEXT_TIMELINE_CURSOR = "opaque.timeline.next" as TimelineCursor;
-export const LIVE_REVISION = "opaque.live.revision" as LiveRevision;
+export const UPDATE_REVISION = "opaque.updates.revision" as UpdateRevision;
 
 export const baseSession: SessionDetail = {
   sourceId: "original-session-id",
@@ -28,7 +32,8 @@ export const baseSession: SessionDetail = {
   },
   createdAt: "2026-07-28T10:00:00Z",
   updatedAt: "2026-07-28T11:00:00Z",
-  archived: false,
+  status: "normal" as const,
+  resume: { allowed: false, reason: "No pane binding has been recorded" },
   parentId: null,
   childIds: [],
   agent: null,
@@ -45,7 +50,7 @@ export const listBody = {
       id: SESSION_ID,
       title: baseSession.title,
       projectId: "project-reader",
-      archived: false,
+      status: "normal" as const,
       parentId: null,
       isChild: false,
       updatedAt: baseSession.updatedAt,
@@ -59,7 +64,7 @@ export function readContext(cursor: TimelineCursor = TIMELINE_CURSOR, hasMore = 
     cursor,
     session: baseSession,
     hasMore,
-    liveRevision: LIVE_REVISION,
+    updateRevision: UPDATE_REVISION,
   };
 }
 
@@ -90,7 +95,7 @@ export const directiveItem: Directive = {
 export const firstPage: ItemPageResponse = {
   ...readContext(),
   interaction: { supported: false, attachCommand: null },
-  liveRevision: LIVE_REVISION,
+  updateRevision: UPDATE_REVISION,
   items: [
     {
       kind: "message",

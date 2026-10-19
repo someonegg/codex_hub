@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
   ItemPageResponse,
-  LiveRevision,
-  SessionLiveResponse,
+  SessionUpdatesResponse,
   TimelineCursor,
+  UpdateRevision,
 } from "../../src/shared/api-contract";
 import type { TimelineItem } from "../../src/shared/domain";
 
@@ -15,23 +15,23 @@ import { installIntersectionObserver, intersectLatest } from "./intersection-obs
 import {
   baseSession,
   json,
-  LIVE_REVISION,
   NEXT_TIMELINE_CURSOR,
   SESSION_ID,
   TIMELINE_CURSOR,
+  UPDATE_REVISION,
 } from "./session.fixtures";
 
 // @vitest-environment jsdom
 
-const NEXT_REVISION = "opaque.live.next" as LiveRevision;
-const OTHER_LIVE_REVISION = "opaque.live.other" as LiveRevision;
+const NEXT_REVISION = "opaque.updates.next" as UpdateRevision;
+const OTHER_UPDATE_REVISION = "opaque.updates.other" as UpdateRevision;
 const TAIL_CURSOR = "opaque.timeline.tail" as TimelineCursor;
 
 beforeEach(() => {
   window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
 });
 
-describe("session Live updates", () => {
+describe("session automatic updates", () => {
   it.each([
     ["user input request", "request", true],
     ["user input response", "response", true],
@@ -84,7 +84,7 @@ describe("session Live updates", () => {
       attachCommand: null,
     };
     vi.spyOn(api, "items").mockResolvedValue({ ...page(tail), interaction: connected });
-    vi.spyOn(api, "live").mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
     vi.spyOn(api, "terminalPreview").mockResolvedValue({
       content: "pane",
       truncated: false,
@@ -117,7 +117,7 @@ describe("session Live updates", () => {
       ...page([plan], TIMELINE_CURSOR, true),
       interaction: connected,
     });
-    vi.spyOn(api, "live").mockImplementation(() => new Promise(() => {}));
+    vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
     const capture = vi
       .spyOn(api, "terminalPreview")
       .mockResolvedValue({ content: "pane", truncated: false, capturedAt: "2026-10-17T00:00:00Z" });
@@ -138,11 +138,11 @@ describe("session Live updates", () => {
       attachCommand: "tmux attach-session -t test",
     };
     vi.spyOn(api, "items").mockResolvedValue({ ...page([]), interaction: connected });
-    let resolveLive!: (response: SessionLiveResponse) => void;
-    vi.spyOn(api, "live").mockImplementation(
+    let resolveUpdates!: (response: SessionUpdatesResponse) => void;
+    vi.spyOn(api, "updates").mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveLive = resolve;
+          resolveUpdates = resolve;
         }),
     );
     let rejectSend!: (reason: Error) => void;
@@ -159,8 +159,8 @@ describe("session Live updates", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await act(async () => {
-      resolveLive(
-        live(false, NEXT_REVISION, {
+      resolveUpdates(
+        updates(false, NEXT_REVISION, {
           supported: true,
           supersededBySessionId: null,
           state: "unknown",
@@ -169,10 +169,10 @@ describe("session Live updates", () => {
       );
     });
     await flush();
-    expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
+    expect(screen.queryByRole("textbox", { name: "Message to agent" })).not.toBeInTheDocument();
     expect(screen.getByText("Connection unknown")).toBeInTheDocument();
     await act(async () => {
-      resolveLive(live(false, OTHER_LIVE_REVISION, connected));
+      resolveUpdates(updates(false, OTHER_UPDATE_REVISION, connected));
     });
     await flush();
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeDisabled();
@@ -195,9 +195,9 @@ describe("session Live updates", () => {
     fireEvent.click(screen.getByRole("button", { name: "tmux access" }));
     expect(screen.getByRole("dialog", { name: "tmux access" })).toBeVisible();
     await act(async () => {
-      const archived = live(false, NEXT_REVISION);
-      archived.session.archived = true;
-      resolveLive(archived);
+      const archived = updates(false, NEXT_REVISION);
+      archived.session.status = "archived";
+      resolveUpdates(archived);
     });
     await flush();
     expect(screen.queryByRole("region", { name: "Session interaction" })).not.toBeInTheDocument();
@@ -205,10 +205,10 @@ describe("session Live updates", () => {
     expect(previewSignal?.aborted).toBe(true);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
-  it("starts Live by default, keeps one request, and cancels on unmount", async () => {
+  it("starts automatic updates by default, keeps one request, and cancels on unmount", async () => {
     let pendingSignal: AbortSignal | undefined;
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (String(input).includes("/live?")) {
+      if (String(input).includes("/updates?")) {
         pendingSignal = init?.signal as AbortSignal;
         return new Promise<Response>(() => {});
       }
@@ -223,7 +223,7 @@ describe("session Live updates", () => {
     expect(pendingSignal?.aborted).toBe(true);
   });
 
-  it("never opens Live for archived sessions", async () => {
+  it("never opens automatic updates for archived sessions", async () => {
     installIntersectionObserver();
     const archivedPage = page([], TIMELINE_CURSOR, true, true);
     archivedPage.interaction = {
@@ -241,17 +241,17 @@ describe("session Live updates", () => {
     expect(screen.queryByRole("region", { name: "Session interaction" })).not.toBeInTheDocument();
   });
 
-  it("loads ordinary items pages until a multi-page Live backlog is caught up", async () => {
+  it("loads ordinary items pages until a multi-page automatic updates backlog is caught up", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(json(page([message("One")], TIMELINE_CURSOR)))
-      .mockResolvedValueOnce(json(live(true, LIVE_REVISION)))
+      .mockResolvedValueOnce(json(updates(true, UPDATE_REVISION)))
       .mockResolvedValueOnce(
         json(page([message("Two", 2)], NEXT_TIMELINE_CURSOR, true, false, NEXT_REVISION)),
       )
       .mockResolvedValueOnce(
         json(
-          live(
+          updates(
             true,
             NEXT_REVISION,
             { supported: false, attachCommand: null },
@@ -271,16 +271,16 @@ describe("session Live updates", () => {
     expect(screen.getByText("One")).toBeInTheDocument();
     expect(screen.getByText("Two")).toBeInTheDocument();
     expect(screen.getByText("Three")).toBeInTheDocument();
-    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/live?");
+    expect(String(fetchMock.mock.calls[1]?.[0])).toContain("/updates?");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("/items?");
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("cursor=opaque.timeline.cursor");
-    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("after=opaque.live.next");
+    expect(String(fetchMock.mock.calls[3]?.[0])).toContain("after=opaque.updates.next");
     expect(String(fetchMock.mock.calls[3]?.[0])).toContain("cursor=opaque.timeline.next");
     expect(String(fetchMock.mock.calls[4]?.[0])).toContain("/items?");
     expect(String(fetchMock.mock.calls[5]?.[0])).toContain("cursor=opaque.timeline.tail");
   });
 
-  it("discards an old Live response after manual pagination advances the snapshot", async () => {
+  it("discards an old automatic updates response after manual pagination advances the snapshot", async () => {
     installIntersectionObserver();
     let resolveOld!: (response: Response) => void;
     const fetchMock = vi
@@ -304,7 +304,7 @@ describe("session Live updates", () => {
     await flush(8);
     expect(screen.getByText("Two")).toBeInTheDocument();
 
-    const obsolete = live(false, OTHER_LIVE_REVISION);
+    const obsolete = updates(false, OTHER_UPDATE_REVISION);
     resolveOld(
       json({
         ...obsolete,
@@ -316,8 +316,8 @@ describe("session Live updates", () => {
     expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
   });
 
-  it("adopts interaction and metadata-only Live changes without advancing cursor", async () => {
-    const changed = live(false, NEXT_REVISION, {
+  it("adopts interaction and metadata-only automatic updates changes without advancing cursor", async () => {
+    const changed = updates(false, NEXT_REVISION, {
       supported: true,
       supersededBySessionId: null,
       attachCommand: null,
@@ -350,7 +350,7 @@ describe("session Live updates", () => {
     expect(String(fetchMock.mock.calls[2]?.[0])).toContain("cursor=opaque.timeline.cursor");
   });
 
-  it("freezes the reader on a Live timeline conflict", async () => {
+  it("freezes the reader on an automatic updates timeline conflict", async () => {
     vi.stubGlobal(
       "fetch",
       vi
@@ -418,7 +418,7 @@ describe("session Live updates", () => {
   it("aborts while hidden and resumes immediately when visible", async () => {
     const signals: AbortSignal[] = [];
     const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (!String(input).includes("/live?")) return Promise.resolve(json(page([])));
+      if (!String(input).includes("/updates?")) return Promise.resolve(json(page([])));
       signals.push(init?.signal as AbortSignal);
       return abortable(init?.signal as AbortSignal);
     });
@@ -471,29 +471,34 @@ function page(
   cursor: TimelineCursor = TIMELINE_CURSOR,
   hasMore = false,
   archived = false,
-  liveRevision: LiveRevision = LIVE_REVISION,
+  updateRevision: UpdateRevision = UPDATE_REVISION,
 ): ItemPageResponse {
   return {
-    session: { ...baseSession, archived, sourceId: "reader", itemCount: items.length },
+    session: {
+      ...baseSession,
+      status: archived ? "archived" : "normal",
+      sourceId: "reader",
+      itemCount: items.length,
+    },
     items,
     cursor,
     hasMore,
     interaction: { supported: false, attachCommand: null },
-    liveRevision,
+    updateRevision,
   };
 }
 
-function live(
+function updates(
   hasMore: boolean,
-  liveRevision: LiveRevision,
-  interaction: SessionLiveResponse["interaction"] = { supported: false, attachCommand: null },
+  updateRevision: UpdateRevision,
+  interaction: SessionUpdatesResponse["interaction"] = { supported: false, attachCommand: null },
   cursor: TimelineCursor = TIMELINE_CURSOR,
-): SessionLiveResponse {
+): SessionUpdatesResponse {
   return {
     session: { ...baseSession, sourceId: "reader", itemCount: hasMore ? 2 : 0 },
     cursor,
     hasMore,
     interaction,
-    liveRevision,
+    updateRevision,
   };
 }

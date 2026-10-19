@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-07
 ---
 
-# Use repository-probed bounded long polling for Live updates
+# Use repository-probed bounded long polling for automatic updates
 
 ## Context and Problem Statement
 
@@ -11,10 +11,10 @@ The session reader needs to observe timeline appends, public session metadata, a
 
 ## Decision Drivers
 
-- Live updates must preserve the existing timeline-prefix conflict guarantees.
+- automatic updates must preserve the existing timeline-prefix conflict guarantees.
 - One response must describe session and interaction state derived from one repository probe.
 - Waiting requests and external interaction checks must have explicit resource bounds.
-- The browser must be able to cancel work when Live is disabled, hidden, switched, conflicted, or unmounted.
+- The browser must be able to cancel work when automatic updates is disabled, hidden, switched, conflicted, or unmounted.
 - The design should reuse repository freshness and refresh coalescing rather than add another source-observation path.
 
 ## Considered Options
@@ -29,7 +29,7 @@ The session reader needs to observe timeline appends, public session metadata, a
 
 Chosen option: "Repository-probed bounded HTTP long polling", because it removes client refresh intervals while reusing immutable repository snapshots, ordinary HTTP cancellation, and the existing opaque timeline cursor validation.
 
-`GET /api/v1/sessions/:id/live` validates a cursor but never returns timeline items or advances it. A process-private HMAC revision covers the complete public session state and effective interaction response. The service probes immediately, then every 1.5 seconds for at most 25 seconds; it returns `200` when the revision changes or items exist after the cursor, and `204` when the wait expires unchanged. The browser loads reported backlog through the ordinary items endpoint.
+`GET /api/v1/sessions/:id/updates` validates a cursor but never returns timeline items or advances it. A process-private HMAC revision covers the complete public session state and effective interaction response. The service probes immediately, then every 1.5 seconds for at most 25 seconds; it returns `200` when the revision changes or items exist after the cursor, and `204` when the wait expires unchanged. The browser loads reported backlog through the ordinary items endpoint.
 
 Waiting requests are limited to 100 per process and 10 per session. Interaction connection descriptions use a 1.5-second cache that coalesces concurrent promises, while mutation operations retain their real-time validation. Client disconnect, server shutdown, and abort signals release waiters immediately.
 
@@ -37,14 +37,14 @@ The connection-description cache policy above is superseded by
 [ADR-0018](0018-cache-validation-per-binding-record.md). Current validation only
 coalesces concurrent checks for the same target; completed results are not cached.
 
-Composition creates shared tmux transport, catalog polling, Live, and operation
+Composition creates shared tmux transport, catalog polling, automatic updates, and operation
 tracking services; interaction explicitly receives transport. The API router
 receives business services without creating or closing them. Composition exposes
 idempotent `close()`, called by the HTTP server before it stops accepting and
 waits for existing connections, releasing long polls and operation tracking.
 Construction/listen failures also release resources. Entry points share the same
 services; polling intervals, capacity, and tmux protocol remain unchanged.
-Diagnostics stay in server logs, outside public session state and Live revisions.
+Diagnostics stay in server logs, outside public session state and update revisions.
 
 ### Positive Consequences
 

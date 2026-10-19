@@ -12,12 +12,11 @@ const read = (...homes: string[]) => loadConfig(homes.flatMap((home) => ["--code
 it("uses the default home only when no homes are supplied", () => {
   expect(loadConfig([])).toMatchObject({
     config: {
-      codexHome: join(homedir(), ".codex"),
       homes: [{ nickname: "default", path: join(homedir(), ".codex") }],
     },
   });
   expect(read("work=./work")).toMatchObject({
-    config: { codexHome: resolve("work"), homes: [{ nickname: "work", path: resolve("work") }] },
+    config: { homes: [{ nickname: "work", path: resolve("work") }] },
   });
 });
 
@@ -25,7 +24,6 @@ it("preserves order, internal spaces, and equals in paths while trimming both fi
   expect(read(" Personal home = ./one home=a=b  ", "Personal=~/codex-work")).toMatchObject({
     kind: "run",
     config: {
-      codexHome: resolve("one home=a=b"),
       homes: [
         { nickname: "Personal home", path: resolve("one home=a=b") },
         { nickname: "Personal", path: join(homedir(), "codex-work") },
@@ -58,7 +56,7 @@ it("rejects symlink aliases without replacing the configured source path", async
   await symlink(target, alias);
   expect(() => read(`a=${target}`, `b=${alias}`)).toThrow("Duplicate home path");
   expect(read(`b=${alias}`)).toMatchObject({
-    config: { codexHome: alias, homes: [{ nickname: "b", path: alias }] },
+    config: { homes: [{ nickname: "b", path: alias }] },
   });
 });
 

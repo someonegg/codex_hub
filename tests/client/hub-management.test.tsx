@@ -128,7 +128,9 @@ describe("hub management", () => {
     expect(onChanged).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Archive session" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Session management" })).toHaveFocus();
-    view.rerender(<ManageSession session={{ ...session, archived: true }} onChanged={onChanged} />);
+    view.rerender(
+      <ManageSession session={{ ...session, status: "archived" as const }} onChanged={onChanged} />,
+    );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000);
     });
@@ -143,14 +145,24 @@ describe("hub management", () => {
       status: "succeeded",
     });
     const onChanged = vi.fn();
-    const session = { ...baseSession, sourceId: "native", itemCount: 0, archived: true };
+    const session = {
+      ...baseSession,
+      sourceId: "native",
+      itemCount: 0,
+      status: "archived" as const,
+    };
     render(<ManageSession session={session} onChanged={onChanged} />);
     await flush();
     expect(onChanged).toHaveBeenCalledOnce();
     expect(sessionStorage.getItem(`codex-hub.operation.${SESSION_ID}`)).toBeNull();
   });
   it("requires confirmation before deleting an archived session", async () => {
-    const session = { ...baseSession, sourceId: "native", itemCount: 0, archived: true };
+    const session = {
+      ...baseSession,
+      sourceId: "native",
+      itemCount: 0,
+      status: "archived" as const,
+    };
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const deletion = vi
       .spyOn(api, "deleteSession")
@@ -170,7 +182,7 @@ describe("hub management", () => {
     expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
   });
   it.each(["succeeded", "failed", "unknown"] as const)(
-    "dismisses only successful status after five seconds (%s)",
+    "dismisses only successful status after two seconds (%s)",
     async (status) => {
       vi.useFakeTimers();
       vi.spyOn(api, "archiveSession").mockResolvedValue({
@@ -187,7 +199,7 @@ describe("hub management", () => {
       expect(screen.getByRole("status")).toHaveTextContent(status);
       expect(screen.queryByText("Confirming archive")).not.toBeInTheDocument();
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(4999);
+        await vi.advanceTimersByTimeAsync(1999);
       });
       expect(screen.getByRole("status")).toBeInTheDocument();
       await act(async () => {
@@ -429,7 +441,9 @@ it("shows resubmission guidance without an ineffective status query button", asy
   render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
-  expect(screen.getByRole("alert")).toHaveTextContent("submit again");
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "Use the original action button to try again.",
+  );
   expect(screen.queryByRole("button", { name: "Retry status check" })).toBeNull();
 });
 
@@ -538,3 +552,60 @@ it.each([403, 503])(
     unmount();
   },
 );
+
+it("offers a yolo-only resume dialog and shares operation occupancy with the management menu", async () => {
+  const { ResumeSession, OperationStatus } = await import(
+    "../../src/client/components/HubManagement"
+  );
+  const create = vi
+    .spyOn(api, "createSession")
+    .mockResolvedValue({ ...pending, mode: "resume", sessionId: SESSION_ID });
+  const session = { ...baseSession, resume: { allowed: true, reason: null } };
+  function Harness() {
+    const controller = useHubOperation(session.id, vi.fn());
+    return (
+      <>
+        <ResumeSession session={session} controller={controller} />
+        <ManageSession session={session} onChanged={vi.fn()} controller={controller} />
+        <OperationStatus controller={controller} />
+      </>
+    );
+  }
+  render(<Harness />);
+  fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+  expect(screen.getByRole("dialog", { name: "Resume session" })).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: "Enable --yolo" })).not.toBeChecked();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+  expect(screen.queryByRole("checkbox", { name: "Create Codex worktree" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable --yolo" }));
+  fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
+  await flush();
+  expect(create).toHaveBeenCalledWith({
+    resumeSessionId: session.id,
+    yolo: true,
+    requestId: expect.any(String),
+  });
+  expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+  expect(screen.getByRole("button", { name: "Archive session" })).toBeDisabled();
+  expect(screen.getByText("resume · pending")).toBeInTheDocument();
+});
+
+it("explains why resume is unavailable", async () => {
+  const { ResumeSession } = await import("../../src/client/components/HubManagement");
+  function Harness() {
+    const controller = useHubOperation(SESSION_ID, vi.fn());
+    return (
+      <ResumeSession
+        session={{
+          ...baseSession,
+          resume: { allowed: false, reason: "Binding validation failed" },
+        }}
+        controller={controller}
+      />
+    );
+  }
+  render(<Harness />);
+  expect(screen.getByText("Binding validation failed")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
+});

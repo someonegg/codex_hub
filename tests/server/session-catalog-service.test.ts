@@ -71,7 +71,7 @@ describe("session catalog long polling", () => {
           id: "one",
           title: "One",
           projectId: null,
-          archived: false,
+          status: "normal",
           parentId: null,
           isChild: false,
           updatedAt: "2026-01-01T00:00:00Z",

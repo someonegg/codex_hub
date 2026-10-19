@@ -14,9 +14,10 @@ import {
   type SessionCatalogService,
 } from "../catalog/session-catalog-service.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import { withLiveRevision } from "../live/live-revision.js";
-import type { SessionLiveService } from "../live/session-live-service.js";
+import { reconcileSessionState } from "../interaction/reconcile-session-state.js";
 import { RepositoryQueryError } from "../repository/session-queries.js";
+import type { SessionUpdatesService } from "../updates/session-updates-service.js";
+import { withUpdateRevision } from "../updates/update-revision.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { invalid, only, optional } from "./query-params.js";
 import { sendJson } from "./router.js";
@@ -26,7 +27,7 @@ type InteractionReader = Pick<SessionInteractionService, "describe">;
 
 export function createSessionReadRoutes(dependencies: {
   readonly sessions: SessionReader;
-  readonly live: SessionLiveService;
+  readonly updates: SessionUpdatesService;
   readonly catalog: SessionCatalogService;
   readonly interaction?: InteractionReader;
 }): ApiRouteHandler {
@@ -82,12 +83,12 @@ export function createSessionReadRoutes(dependencies: {
         sendJson(
           response,
           200,
-          withLiveRevision(
-            {
+          withUpdateRevision(
+            reconcileSessionState({
               ...result,
               interaction,
-            },
-            dependencies.live.revision.bind(dependencies.live),
+            }),
+            dependencies.updates.revision.bind(dependencies.updates),
           ),
           headOnly,
         );
@@ -102,12 +103,12 @@ export function createSessionReadRoutes(dependencies: {
         sendJson(
           response,
           200,
-          withLiveRevision(
-            {
+          withUpdateRevision(
+            reconcileSessionState({
               ...result,
               interaction,
-            },
-            dependencies.live.revision.bind(dependencies.live),
+            }),
+            dependencies.updates.revision.bind(dependencies.updates),
           ),
           headOnly,
         );

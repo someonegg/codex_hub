@@ -5,8 +5,8 @@ import { expect, it, vi } from "vitest";
 import { api } from "../../src/client/api/client";
 import { createRequestChannel } from "../../src/client/state/request-channel";
 import { useLazyDetail } from "../../src/client/state/use-lazy-detail";
-import { useSessionLive } from "../../src/client/state/use-session-live";
-import { LIVE_REVISION, TIMELINE_CURSOR } from "./session.fixtures";
+import { useSessionUpdates } from "../../src/client/state/use-session-updates";
+import { TIMELINE_CURSOR, UPDATE_REVISION } from "./session.fixtures";
 
 it("invalidates old tickets even when the transport ignores cancellation", () => {
   const channel = createRequestChannel();
@@ -60,22 +60,22 @@ it("offers manual lazy retries and ignores an old detail after its scope changes
 });
 
 it.each(["unmount", "switch", "hide"])(
-  "cancels Live backoff on %s without stale requests or errors",
+  "cancels automatic updates backoff on %s without stale requests or errors",
   async (action) => {
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0.5);
     Object.defineProperty(document, "hidden", { configurable: true, value: false });
-    const live = vi
-      .spyOn(api, "live")
+    const updates = vi
+      .spyOn(api, "updates")
       .mockRejectedValueOnce(new Error("offline"))
       .mockImplementation(() => new Promise(() => {}));
     const onError = vi.fn();
     const { rerender, unmount } = renderHook(
       ({ sessionId }) =>
-        useSessionLive({
+        useSessionUpdates({
           sessionId,
           enabled: true,
-          snapshot: { cursor: TIMELINE_CURSOR, liveRevision: LIVE_REVISION },
+          snapshot: { cursor: TIMELINE_CURSOR, updateRevision: UPDATE_REVISION },
           onUpdate: vi.fn(),
           onTimelineConflict: vi.fn(),
           onError,
@@ -98,14 +98,14 @@ it.each(["unmount", "switch", "hide"])(
     });
     expect(vi.getTimerCount()).toBe(0);
     await act(async () => vi.advanceTimersByTimeAsync(30_000));
-    expect(live).toHaveBeenCalledTimes(action === "switch" ? 2 : 1);
+    expect(updates).toHaveBeenCalledTimes(action === "switch" ? 2 : 1);
     if (action === "hide") {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
       act(() => document.dispatchEvent(new Event("visibilitychange")));
       await act(async () => {
         await Promise.resolve();
       });
-      expect(live).toHaveBeenCalledTimes(2);
+      expect(updates).toHaveBeenCalledTimes(2);
     }
     expect(onError).toHaveBeenCalledTimes(1);
     unmount();

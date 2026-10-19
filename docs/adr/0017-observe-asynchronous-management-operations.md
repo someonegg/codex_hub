@@ -5,6 +5,9 @@ date: 2026-10-16
 
 # Observe asynchronous management operations on the server
 
+The exit sequence and no-forced-kill policy below are historical; see
+[ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
+
 ## Context and Problem Statement
 
 CLI completion does not guarantee visible session data. Creation begins without
@@ -102,4 +105,4 @@ Session discovery is independent of operation tracking; restarts do not recover 
 - Bad: Command completion does not establish visible results, and page lifetime
   remains coupled to execution.
 
-See [ADR-0018](0018-cache-validation-per-binding-record.md) for V3 binding and live checks.
+See [ADR-0018](0018-cache-validation-per-binding-record.md) for V3 binding and current pane validation.

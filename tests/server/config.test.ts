@@ -16,7 +16,7 @@ describe("server command line", () => {
     expect(runnable([])).toMatchObject({
       host: "127.0.0.1",
       port: 4173,
-      codexHome: resolve(homedir(), ".codex"),
+      homes: [{ nickname: "default", path: resolve(homedir(), ".codex") }],
       tls: { enabled: false },
       interactionEnabled: true,
     });
@@ -47,7 +47,7 @@ describe("server command line", () => {
     ).toMatchObject({
       host: "0.0.0.0",
       port: 0,
-      codexHome: resolve("fixtures/codex"),
+      homes: [{ nickname: "personal", path: resolve("fixtures/codex") }],
       tls: {
         enabled: true,
         certificatePath: resolve("certs/server.pem"),

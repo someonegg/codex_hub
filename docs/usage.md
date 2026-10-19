@@ -71,10 +71,10 @@ Wide screens show navigation and the conversation together. Below 768px, the
 hub switches between them. Session URLs support direct access, refresh,
 and browser back/forward navigation; the home page does not select a session automatically.
 
-Unarchived conversations receive Live updates automatically. Archived conversations
+Unarchived conversations receive automatic updates automatically. Archived conversations
 remain readable. Restart the server to see external edits to cached archive content;
 archive, deletion, and restoration are detected normally.
-History can load while Live is active without losing the reading position.
+History can load while automatic updates is active without losing the reading position.
 Technical event filters are optional; see [JSONL filtering](session-jsonl-filtering.md).
 
 Use the project **+** to prefill its directory, or the global **+** to choose an
@@ -92,8 +92,19 @@ but server restarts lose operation records. An `unknown` result ends tracking; i
 does not cancel an external command. After an uncertain create, attach to tmux or
 refresh the catalog before submitting again, since another request may create another session.
 
-The hub does not restore archived sessions, manage worktree cleanup, or
-report process activity.
+Sessions show a green **Live** badge when their owned tmux pane is alive, and
+**Archived** for archives. Other sessions have no badge. The interaction panel is
+visible immediately for unarchived sessions. When connected it shows messaging,
+terminal preview, Handoff, **tmux access** on the left and **Exit** on the right.
+Exit stops the pane without archiving the conversation.
+
+Disconnected panels hide input and terminal controls while preserving unsent drafts.
+They show **Resume** when the server can establish safe recovery, or explain why it
+is unavailable. Resume opens a dialog with only a `--yolo` switch, off by default;
+it uses the original home and working directory and preserves session identity.
+No binding, invalid bindings, uncertain checks and archived sessions cannot resume.
+After an unknown launch result, inspect the attach target before trying again.
+The hub does not restore archived sessions or manage worktree cleanup.
 
 ## Binding an existing tmux session
 
@@ -104,7 +115,7 @@ In Codex running inside tmux, execute:
 ```
 
 Session names are unrestricted for manual bindings. A valid, connected binding
-reveals the interaction panel. The terminal preview starts collapsed unless an
+enables the full interaction panel. The terminal preview starts collapsed unless an
 automatic expansion rule below applies, and refreshes while expanded and visible.
 Collapsing or hiding it preserves its last frame;
 disconnection clears it. Switching sessions resets the preview.

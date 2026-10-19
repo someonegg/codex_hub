@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DomainSession } from "../../src/server/domain/session-domain.js";
-import { LivePaneBindingManager } from "../../src/server/interaction/live-pane-binding-manager.js";
+import type { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
+import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
 import type { ManagementSnapshot } from "../../src/server/management/session-manager.js";
 import {
@@ -11,7 +14,7 @@ import {
 
 const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
 const services: OperationService[] = [];
-let bindings = new LivePaneBindingManager();
+let bindings = new PaneBindingManager();
 afterEach(() => services.splice(0).forEach((service) => service.close()));
 const flush = async () => {
   for (let i = 0; i < 30; i++) await Promise.resolve();
@@ -51,15 +54,16 @@ function session(id = "session", operationId?: string): DomainSession {
     },
   };
 }
-function setup() {
-  bindings = new LivePaneBindingManager();
+function setup(managementWaitMs = 30) {
+  bindings = new PaneBindingManager();
   let snapshot: ManagementSnapshot = { sessions: [] };
   let now = 0;
   const reader = { managementSnapshot: vi.fn(async () => snapshot) };
   const interaction = {
     setBusy: vi.fn(),
-    archiveTarget: vi.fn(async () => null as typeof target | null),
-    exitTarget: vi.fn(async () => undefined),
+    resolveTarget: vi.fn(async () => null as typeof target | null),
+    killTarget: vi.fn(async () => undefined),
+    sendExitKeys: vi.fn<SessionInteractionService["sendExitKeys"]>(async () => undefined),
     inspectTarget: vi.fn(async () => "exited" as "exited" | "alive"),
     matchesTarget: vi.fn(async () => true),
     describe: vi.fn(async () => ({
@@ -72,10 +76,13 @@ function setup() {
   const manager = {
     resolveDirectory: vi.fn(async () => ({ directory: "/project", project: "/project" })),
     launch: vi.fn(async () => target),
+    exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),
   };
   const registry = new SessionManagerRegistry("test").register("test", manager);
+  const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
+  const runtime = new SessionRuntime({ resolveTarget }, registry, bindings);
   const service = new OperationService(
     reader,
     interaction,
@@ -83,16 +90,19 @@ function setup() {
     () => now,
     {
       create: 300_000,
-      archive: 30,
-      delete: 30,
+      archive: managementWaitMs,
+      delete: managementWaitMs,
     },
     bindings,
+    runtime,
   );
   services.push(service);
   return {
     service,
     manager,
     registry,
+    runtime,
+    probe: resolveTarget,
     reader,
     interaction,
     set: (next: ManagementSnapshot) => {
@@ -313,13 +323,18 @@ describe("archive exit workflow", () => {
   it("revalidates the target, submits exit once, and waits for its disappearance before archive", async () => {
     const { service, manager, interaction, set } = setup();
     set({ sessions: [session()] });
-    interaction.archiveTarget.mockResolvedValue(target);
+    interaction.resolveTarget.mockResolvedValue(target);
     interaction.inspectTarget.mockResolvedValue("alive");
     const op = service.manage("archive", "session");
     expect(service.manage("archive", "session").operationId).toBe(op.operationId);
     await flush();
-    expect(interaction.archiveTarget).toHaveBeenCalledWith("session");
-    expect(interaction.exitTarget).toHaveBeenCalledExactlyOnceWith(target, "session");
+    expect(interaction.resolveTarget).toHaveBeenCalledWith("session");
+    expect(interaction.sendExitKeys).toHaveBeenCalledExactlyOnceWith(
+      target,
+      "session",
+      ["C-c"],
+      expect.any(Function),
+    );
     expect(manager.archive).not.toHaveBeenCalled();
     expect(await service.get(op.operationId)).toMatchObject({
       phase: "waiting_exit",
@@ -337,14 +352,14 @@ describe("archive exit workflow", () => {
     await service.poll();
     await flush();
     expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded" });
-    expect(interaction.exitTarget).toHaveBeenCalledOnce();
+    expect(interaction.sendExitKeys).toHaveBeenCalledOnce();
     expect(interaction.setBusy).toHaveBeenLastCalledWith("session", false);
   });
 
   it("ends tracking on exit timeout and permits a fresh request", async () => {
     const { service, manager, interaction, set, time } = setup();
     set({ sessions: [session()] });
-    interaction.archiveTarget.mockResolvedValue(target);
+    interaction.resolveTarget.mockResolvedValue(target);
     interaction.inspectTarget.mockResolvedValue("alive");
     const op = service.manage("archive", "session");
     await flush();
@@ -373,8 +388,8 @@ describe("archive exit workflow", () => {
   it("does not resend exit when submission has an uncertain result", async () => {
     const { service, interaction, manager, set } = setup();
     set({ sessions: [session()] });
-    interaction.archiveTarget.mockResolvedValue(target);
-    interaction.exitTarget.mockRejectedValue(new Error("submission outcome unknown"));
+    interaction.resolveTarget.mockResolvedValue(target);
+    interaction.sendExitKeys.mockRejectedValue(new Error("submission outcome unknown"));
     interaction.inspectTarget.mockResolvedValue("alive");
     const op = service.manage("archive", "session");
     await flush();
@@ -383,13 +398,13 @@ describe("archive exit workflow", () => {
     interaction.inspectTarget.mockResolvedValue("exited");
     await Promise.all([service.get(op.operationId), service.get(op.operationId)]);
     expect(manager.archive).not.toHaveBeenCalled();
-    expect(interaction.exitTarget).toHaveBeenCalledOnce();
+    expect(interaction.sendExitKeys).toHaveBeenCalledOnce();
   });
 
   it("does not archive on query errors", async () => {
     const { service, interaction, manager, set, time } = setup();
     set({ sessions: [session()] });
-    interaction.archiveTarget.mockResolvedValue(target);
+    interaction.resolveTarget.mockResolvedValue(target);
     interaction.inspectTarget.mockRejectedValue(new Error("permission denied"));
     const op = service.manage("archive", "session");
     await flush();
@@ -398,7 +413,8 @@ describe("archive exit workflow", () => {
     await service.poll();
     expect((await service.get(op.operationId))?.status).toBe("unknown");
     expect(manager.archive).not.toHaveBeenCalled();
-    expect(interaction.exitTarget).toHaveBeenCalledOnce();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
+    expect(interaction.killTarget).not.toHaveBeenCalled();
   });
 
   it.each(["failure", "timeout"])("never repeats archive after command %s", async (scenario) => {
@@ -420,7 +436,7 @@ describe("archive exit workflow", () => {
       scenario === "timeout" ? "unknown" : "failed",
     );
     expect(manager.archive).toHaveBeenCalledOnce();
-    expect(interaction.exitTarget).not.toHaveBeenCalled();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
   });
 
   it("accepts non-UUID native identities through generic managers", async () => {
@@ -430,7 +446,7 @@ describe("archive exit workflow", () => {
     await flush();
     expect(await service.get(op.operationId)).toMatchObject({ status: "pending" });
     expect(manager.archive).toHaveBeenCalledWith("invalid");
-    expect(interaction.exitTarget).not.toHaveBeenCalled();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
   });
 });
 
@@ -488,7 +504,7 @@ it("reports explicit tmux failures immediately and retains the request ID", asyn
 it("expires a hung observation and prevents its late return from advancing or releasing a new operation", async () => {
   const { service, interaction, manager, set, time } = setup();
   set({ sessions: [session()] });
-  interaction.archiveTarget.mockResolvedValue(target);
+  interaction.resolveTarget.mockResolvedValue(target);
   let resolve!: (state: "exited") => void;
   interaction.inspectTarget.mockImplementationOnce(
     () =>
@@ -533,13 +549,13 @@ it.each(["timeout", "command_failed"])(
   async (code) => {
     const { service, interaction, manager, set } = setup();
     set({ sessions: [session()] });
-    interaction.archiveTarget.mockRejectedValue(Object.assign(new Error("query error"), { code }));
+    interaction.resolveTarget.mockRejectedValue(Object.assign(new Error("query error"), { code }));
     const op = service.manage("archive", "session");
     await flush();
     expect(await service.get(op.operationId)).toMatchObject({
       status: code === "timeout" ? "unknown" : "failed",
     });
-    expect(interaction.exitTarget).not.toHaveBeenCalled();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
     expect(manager.archive).not.toHaveBeenCalled();
   },
 );
@@ -549,7 +565,7 @@ it("rejects ambiguous native UUIDs before exit", async () => {
   const op = service.manage("archive", "session");
   await flush();
   expect(await service.get(op.operationId)).toMatchObject({ status: "failed" });
-  expect(interaction.exitTarget).not.toHaveBeenCalled();
+  expect(interaction.sendExitKeys).not.toHaveBeenCalled();
   expect(manager.archive).not.toHaveBeenCalled();
 });
 
@@ -624,7 +640,7 @@ it("never falls back to a default manager for an unregistered source", async () 
     error: expect.stringContaining("no management capability"),
   });
   expect(manager.archive).not.toHaveBeenCalled();
-  expect(interaction.archiveTarget).not.toHaveBeenCalled();
+  expect(interaction.resolveTarget).not.toHaveBeenCalled();
 });
 
 it("allows session diagnostics when issuing and confirming a command", async () => {
@@ -662,10 +678,10 @@ it("ignores creation markers from another source", async () => {
 it("updates public phase timestamps only on changes and freezes terminal results", async () => {
   const { service, manager, interaction, set, time } = setup();
   set({ sessions: [session()] });
-  interaction.archiveTarget.mockResolvedValue(target);
+  interaction.resolveTarget.mockResolvedValue(target);
   interaction.inspectTarget.mockResolvedValue("alive");
   let exit!: (value?: undefined) => void;
-  interaction.exitTarget.mockImplementation(
+  interaction.sendExitKeys.mockImplementation(
     () =>
       new Promise<undefined>((resolve) => {
         exit = resolve;
@@ -794,4 +810,274 @@ it("routes archive and delete confirmation to the owning home for identical nati
   set({ sessions: [a] });
   await service.poll();
   expect((await service.get(deletion.operationId))!.status).toBe("succeeded");
+});
+
+describe("standalone exit operations", () => {
+  it.each([false, true])(
+    "exits without archiving an archived=%s session and coalesces requests",
+    async (archived) => {
+      const { service, interaction, manager, set } = setup();
+      set({ sessions: [{ ...session(), archived }] });
+      interaction.resolveTarget.mockResolvedValue(target);
+      interaction.inspectTarget.mockResolvedValue("alive");
+      const op = service.manage("exit", "session");
+      expect(service.manage("exit", "session").operationId).toBe(op.operationId);
+      expect(() => service.manage("archive", "session")).toThrow("Another management operation");
+      expect(() => service.manage("delete", "session")).toThrow("Another management operation");
+      await flush();
+      expect(await service.get(op.operationId)).toMatchObject({ type: "exit", status: "pending" });
+      expect(interaction.sendExitKeys).toHaveBeenCalledOnce();
+      interaction.inspectTarget.mockResolvedValue("exited");
+      await service.poll();
+      expect(await service.get(op.operationId)).toMatchObject({
+        type: "exit",
+        status: "succeeded",
+      });
+      expect(manager.archive).not.toHaveBeenCalled();
+      expect(manager.delete).not.toHaveBeenCalled();
+      expect(interaction.setBusy).toHaveBeenLastCalledWith("session", false);
+    },
+  );
+
+  it("does not require a native UUID to exit an unbound session", async () => {
+    const { service, set, manager } = setup();
+    set({ sessions: [{ ...session(), sourceId: null }] });
+    const op = service.manage("exit", "session");
+    await flush();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded" });
+    expect(manager.archive).not.toHaveBeenCalled();
+  });
+
+  it("fails for a missing session", async () => {
+    const { service } = setup();
+    const op = service.manage("exit", "missing");
+    await flush();
+    expect(await service.get(op.operationId)).toMatchObject({
+      status: "failed",
+      error: "Session not found",
+    });
+  });
+
+  it("stops queued effects when closed", async () => {
+    const { service, interaction, set } = setup();
+    set({ sessions: [session()] });
+    interaction.resolveTarget.mockResolvedValue(target);
+    interaction.inspectTarget.mockResolvedValue("alive");
+    let execute!: () => void;
+    interaction.sendExitKeys.mockImplementation(async (_target, _session, _keys, check) => {
+      await new Promise<void>((resolve) => {
+        execute = resolve;
+      });
+      check();
+      return undefined;
+    });
+    const op = service.manage("exit", "session");
+    await flush();
+    service.close();
+    execute();
+    await flush();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "unknown" });
+    expect(interaction.killTarget).not.toHaveBeenCalled();
+  });
+});
+
+it.each(["exit", "archive"] as const)(
+  "confirms forced pane shutdown before completing %s",
+  async (type) => {
+    const { service, manager, interaction, set, time } = setup(30_000);
+    set({ sessions: [session()] });
+    interaction.resolveTarget.mockResolvedValue(target);
+    interaction.inspectTarget.mockResolvedValue("alive");
+    manager.exitSteps = () => [
+      { keys: ["C-c"] as const, delayMs: 0 },
+      { keys: ["C-c"] as const, delayMs: 1_000 },
+      { keys: ["C-c"] as const, delayMs: 1_000 },
+    ];
+    const op = service.manage(type, "session");
+    await flush();
+    time(1_000);
+    await Promise.all([service.poll(), service.poll()]);
+    time(2_000);
+    await service.poll();
+    time(6_000);
+    await service.poll();
+    expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([
+      ["C-c"],
+      ["C-c"],
+      ["C-c"],
+      ["C-d"],
+    ]);
+    time(15_000);
+    await Promise.all([service.poll(), service.poll()]);
+    expect(interaction.killTarget).toHaveBeenCalledOnce();
+    expect(manager.archive).not.toHaveBeenCalled();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "pending" });
+    interaction.inspectTarget.mockResolvedValue("exited");
+    await service.poll();
+    if (type === "archive") {
+      expect(manager.archive).toHaveBeenCalledOnce();
+      set({ sessions: [{ ...session(), archived: true }] });
+      await service.poll();
+    } else expect(manager.archive).not.toHaveBeenCalled();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded" });
+  },
+);
+
+it("does not kill after binding refresh fails at the force deadline", async () => {
+  const { service, interaction, reader, set, time } = setup(30_000);
+  set({ sessions: [session()] });
+  interaction.resolveTarget.mockResolvedValue(target);
+  interaction.inspectTarget.mockResolvedValue("alive");
+  const op = service.manage("exit", "session");
+  await flush();
+  time(1_000);
+  await service.poll();
+  time(6_000);
+  reader.managementSnapshot.mockRejectedValue(new Error("binding read failed"));
+  await service.poll();
+  expect(await service.get(op.operationId)).toMatchObject({
+    status: "unknown",
+    error: "binding read failed",
+  });
+  expect(interaction.killTarget).not.toHaveBeenCalled();
+});
+
+describe("safe resume operations", () => {
+  function resumable() {
+    const f = setup();
+    const original = session("original");
+    bindings.submit({
+      sessionId: original.id,
+      time: 1,
+      ordinal: 1,
+      position: 0,
+      attempt: { valid: true, ordinal: 1, ...target },
+    });
+    f.set({ sessions: [original] });
+    return { ...f, original };
+  }
+  const request = { resumeSessionId: "original", requestId: "resume-request-one" };
+
+  it("shares session occupancy, request idempotency, and observes the original session binding", async () => {
+    const f = resumable();
+    const op = f.service.create(request);
+    expect(op).toMatchObject({ type: "create", mode: "resume", sessionId: "original" });
+    expect(f.service.create(request).operationId).toBe(op.operationId);
+    expect(() => f.service.create({ ...request, requestId: "resume-request-two" })).toThrow(
+      /Another management/,
+    );
+    expect(() => f.service.manage("exit", "original")).toThrow(/Another management/);
+    expect(() => f.service.manage("archive", "original")).toThrow(/Another management/);
+    await flush();
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      op.operationId,
+      "/project",
+      false,
+      false,
+      f.original.sourceId,
+    );
+    bindings.submit({
+      sessionId: "original",
+      time: 2,
+      ordinal: 2,
+      position: 0,
+      attempt: { valid: true, ordinal: 2, ...target, operationId: op.operationId },
+    });
+    await f.service.poll();
+    expect(await f.service.get(op.operationId)).toMatchObject({
+      status: "succeeded",
+      sessionId: "original",
+      target,
+    });
+    expect(f.interaction.setBusy).toHaveBeenLastCalledWith("original", false);
+  });
+
+  it("blocks resume while another management action owns the session", () => {
+    const f = resumable();
+    f.service.manage("archive", "original");
+    expect(() => f.service.create(request)).toThrow(/Another management/);
+  });
+
+  it("rechecks safety after refreshing the source and never launches on changed bindings", async () => {
+    const f = resumable();
+    f.reader.managementSnapshot
+      .mockImplementationOnce(async () => ({ sessions: [f.original] }))
+      .mockImplementationOnce(async () => {
+        bindings.submit({
+          sessionId: "original",
+          time: 3,
+          ordinal: 3,
+          position: 0,
+          attempt: { valid: false, ordinal: 3 },
+        });
+        return { sessions: [f.original] };
+      });
+    const op = f.service.create(request);
+    await flush();
+    expect((await f.service.get(op.operationId))?.status).toBe("failed");
+    expect(f.manager.launch).not.toHaveBeenCalled();
+  });
+
+  it("does not associate a resumed operation with a different session", async () => {
+    const f = resumable();
+    const op = f.service.create(request);
+    await flush();
+    f.set({ sessions: [f.original, session("unexpected", op.operationId)] });
+    await f.service.poll();
+    expect((await f.service.get(op.operationId))?.status).toBe("unknown");
+  });
+
+  it("retains unknown target/attach information and deduplicates only the same requestId", async () => {
+    const f = resumable();
+    f.manager.launch.mockRejectedValueOnce(
+      new SessionLaunchError("unknown", "timeout", "tmux attach", { ...target, paneId: "%99" }),
+    );
+    f.probe.mockImplementation(async () => null);
+    const op = f.service.create(request);
+    await flush();
+    expect(await f.service.get(op.operationId)).toMatchObject({
+      status: "unknown",
+      attachCommand: "tmux attach",
+      target: { paneId: "%99" },
+    });
+    // The original pane is dead; the previous unknown launch is not an extra gate.
+    f.probe.mockImplementation(async (attempt) =>
+      attempt.valid && attempt.paneId === "%99" ? { ...target, paneId: "%99" } : null,
+    );
+    expect(f.service.create(request).operationId).toBe(op.operationId);
+    const retry = f.service.create({ ...request, requestId: "resume-request-new" });
+    await flush();
+    expect((await f.service.get(retry.operationId))?.status).toBe("pending");
+    expect(f.manager.launch).toHaveBeenCalledTimes(2);
+  });
+
+  it("allows a new request after an unknown launch without a known target", async () => {
+    const f = resumable();
+    f.manager.launch.mockRejectedValueOnce(
+      new SessionLaunchError("unknown", "timeout", "tmux attach"),
+    );
+    const op = f.service.create(request);
+    await flush();
+    expect((await f.service.get(op.operationId))?.status).toBe("unknown");
+    expect(f.service.create(request).operationId).toBe(op.operationId);
+    const retry = f.service.create({ ...request, requestId: "resume-request-new" });
+    await flush();
+    expect((await f.service.get(retry.operationId))?.status).toBe("pending");
+    expect(f.manager.launch).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses the original home even with multiple configured sources and accepts only yolo", async () => {
+    const f = resumable();
+    f.registry.register("other", { ...f.manager });
+    const op = f.service.create({ ...request, yolo: true });
+    await flush();
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      op.operationId,
+      "/project",
+      false,
+      true,
+      f.original.sourceId,
+    );
+    expect(() => f.service.create({ ...request, directory: "/other" } as never)).toThrow(/only/);
+  });
 });

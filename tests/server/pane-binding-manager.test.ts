@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  type LivePaneBindEvent,
-  LivePaneBindingManager,
-} from "../../src/server/interaction/live-pane-binding-manager.js";
+  type PaneBindEvent,
+  PaneBindingManager,
+} from "../../src/server/interaction/pane-binding-manager.js";
 
-function bind(sessionId: string, time: number, paneId: string, ordinal = time): LivePaneBindEvent {
+function bind(sessionId: string, time: number, paneId: string, ordinal = time): PaneBindEvent {
   return {
     sessionId,
     time,
@@ -23,11 +23,11 @@ function permutations<T>(items: T[]): T[][] {
       );
 }
 
-describe("LivePaneBindingManager", () => {
+describe("PaneBindingManager", () => {
   it("keeps independent pane claims regardless of event order, batch boundaries or duplicate scans", () => {
     const events = [bind("A", 1, "%1"), bind("B", 1, "%2"), bind("C", 2, "%1"), bind("C", 3, "%2")];
     for (const order of permutations(events)) {
-      const manager = new LivePaneBindingManager();
+      const manager = new PaneBindingManager();
       for (const event of order) manager.submit(event);
       expect(manager.replacement("A")).toBe("C");
       expect(manager.replacement("B")).toBe("C");
@@ -40,7 +40,7 @@ describe("LivePaneBindingManager", () => {
   });
 
   it("lets an older session event independently replace a newer-than-pane event", () => {
-    const manager = new LivePaneBindingManager();
+    const manager = new PaneBindingManager();
     manager.submit(bind("C", 30, "%2"));
     manager.submit(bind("A", 10, "%1"));
     manager.submit(bind("C", 20, "%1"));
@@ -49,7 +49,7 @@ describe("LivePaneBindingManager", () => {
   });
 
   it("requires a new bind to refresh a superseded session and retains claims after an invalid bind", () => {
-    const manager = new LivePaneBindingManager();
+    const manager = new PaneBindingManager();
     const original = bind("A", 1, "%1");
     manager.submit(original);
     manager.submit(bind("C", 2, "%1"));
@@ -76,7 +76,7 @@ describe("LivePaneBindingManager", () => {
       { ...bind("Z", 1, "%3", 2), position: 1 },
     ];
     for (const order of permutations(events)) {
-      const manager = new LivePaneBindingManager();
+      const manager = new PaneBindingManager();
       order.forEach((event) => manager.submit(event));
       expect(manager.replacement("A")).toBe("Z");
       expect(manager.latest("Z")).toMatchObject({ paneId: "%3" });
@@ -84,7 +84,7 @@ describe("LivePaneBindingManager", () => {
   });
 
   it("distinguishes socket paths and instance-namespaced sessions", () => {
-    const manager = new LivePaneBindingManager();
+    const manager = new PaneBindingManager();
     manager.submit(bind("instance-a/session", 1, "%1"));
     manager.submit({
       ...bind("instance-b/session", 2, "%1"),

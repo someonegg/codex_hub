@@ -57,6 +57,82 @@ function InteractionPanel(properties: Omit<ComponentProps<typeof Panel>, "previe
 }
 
 describe("interaction panel", () => {
+  it("reveals the panel on expansion and collapse without focusing the composer", async () => {
+    const user = userEvent.setup();
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    const panel = screen.getByRole("region", { name: "Session interaction" });
+    const scrollIntoView = vi.fn();
+    panel.scrollIntoView = scrollIntoView;
+    const toggle = screen.getByRole("button", { name: "Terminal preview" });
+    await user.click(toggle);
+    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+      block: "nearest",
+      behavior: "instant",
+    });
+    await user.keyboard("{Escape}");
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+    expect(screen.getByRole("textbox", { name: "Message to agent" })).not.toHaveFocus();
+  });
+
+  it("aligns an expanded panel taller than the viewport to the bottom", async () => {
+    const user = userEvent.setup();
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    const panel = screen.getByRole("region", { name: "Session interaction" });
+    const scrollIntoView = vi.fn();
+    panel.scrollIntoView = scrollIntoView;
+    vi.spyOn(panel, "getBoundingClientRect").mockReturnValue(
+      new DOMRect(0, 0, 390, window.innerHeight + 100),
+    );
+    await user.click(screen.getByRole("button", { name: "Terminal preview" }));
+    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "end", behavior: "instant" });
+  });
+
+  it("reveals the first nonempty output after an empty capture only once", async () => {
+    const handlers = props(interaction("connected"));
+    const user = userEvent.setup();
+    const { rerender } = render(<InteractionPanel {...handlers} />);
+    const panel = screen.getByRole("region", { name: "Session interaction" });
+    const scrollIntoView = vi.fn();
+    panel.scrollIntoView = scrollIntoView;
+    await user.click(screen.getByRole("button", { name: "Terminal preview" }));
+    const empty = { content: "", truncated: false, capturedAt: "2026-08-08" };
+    rerender(<InteractionPanel {...handlers} preview={empty} />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    rerender(<InteractionPanel {...handlers} preview={{ ...empty, content: "first output" }} />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+    rerender(<InteractionPanel {...handlers} preview={{ ...empty, content: "new output" }} />);
+    rerender(<InteractionPanel {...handlers} preview={empty} />);
+    rerender(<InteractionPanel {...handlers} preview={{ ...empty, content: "more output" }} />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(2);
+  });
+
+  it("focuses the preview once on expansion, including before output arrives", async () => {
+    const handlers = props(interaction("connected"));
+    const user = userEvent.setup();
+    const { rerender } = render(<InteractionPanel {...handlers} />);
+    const toggle = screen.getByRole("button", { name: "Terminal preview" });
+    await user.click(toggle);
+    const previewBody = document.getElementById(toggle.getAttribute("aria-controls")!);
+    expect(previewBody).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(handlers.onSendKeys).toHaveBeenCalledWith(["up"]);
+    const composer = screen.getByRole("textbox", { name: "Message to agent" });
+    await user.click(composer);
+    rerender(
+      <InteractionPanel
+        {...handlers}
+        preview={{ content: "fresh output", truncated: false, capturedAt: "2026-08-08" }}
+      />,
+    );
+    expect(composer).toHaveFocus();
+    await user.click(toggle);
+    expect(toggle).toHaveFocus();
+    await user.click(toggle);
+    expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
+  });
+
   it("shows the composer immediately when connected", () => {
     render(<InteractionPanel {...props(interaction("connected"))} />);
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeVisible();
@@ -91,9 +167,8 @@ describe("interaction panel", () => {
     for (const state of states) {
       view.rerender(<InteractionPanel {...handlers} interaction={state} />);
       expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
-      expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
-      expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeDisabled();
-      fireEvent.click(screen.getByRole("button", { name: "Send" }));
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Terminal preview" })).not.toBeInTheDocument();
     }
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
     view.rerender(<InteractionPanel {...handlers} />);
@@ -101,18 +176,20 @@ describe("interaction panel", () => {
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
   });
 
-  it("hides unbound and disconnected targets", () => {
+  it("shows simplified panels for unbound and disconnected targets", () => {
     const view = render(<InteractionPanel {...props(interaction("unbound"))} />);
-    expect(view.container).toBeEmptyDOMElement();
+    expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
     view.rerender(<InteractionPanel {...props(interaction("disconnected"))} />);
-    expect(view.container).toBeEmptyDOMElement();
+    expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
   it("keeps unsupported sessions read-only", () => {
     const { container, rerender } = render(<InteractionPanel {...props(null)} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector("textarea")).toBeNull();
     rerender(<InteractionPanel {...props({ supported: false, attachCommand: null })} />);
-    expect(container).toBeEmptyDOMElement();
+    expect(container.querySelector("textarea")).toBeNull();
   });
 
   it("shows the event count and local update time while connected", () => {
@@ -513,7 +590,7 @@ it("expands the preview after handoff without changing the draft and disables Ha
   view.rerender(<InteractionPanel {...handlers} interactionBusy />);
   expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
   view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
-  expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
+  expect(screen.queryByRole("button", { name: "Handoff" })).not.toBeInTheDocument();
 });
 
 it("ignores command completion after the panel unmounts", async () => {
@@ -560,10 +637,11 @@ it("shows takeover beside the status, preserves drafts, and navigates to the rep
   expect(link).toHaveAttribute("href", "/sessions/replacement");
   fireEvent.click(link);
   expect(onNavigate).toHaveBeenCalledWith("replacement");
-  expect(screen.getByRole("textbox")).toHaveValue("draft");
-  expect(screen.getByRole("textbox")).toBeDisabled();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   for (const name of ["Send", "Handoff", "Plan", "Terminal preview"])
-    expect(screen.getByRole("button", { name })).toBeDisabled();
+    expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+  view.rerender(<InteractionPanel {...props(interaction("connected"))} />);
+  expect(screen.getByRole("textbox")).toHaveValue("draft");
 });
 
 it("shows the takeover even on first load, with no link when its session is missing", () => {
@@ -681,4 +759,21 @@ it("places Plan beside Send, expands on click, and keeps the interrupt compact w
   expect(interrupt).toHaveTextContent("^C");
   expect(interrupt).not.toHaveAttribute("title");
   expect(interrupt.closest(".terminal-keypad")).not.toBeNull();
+});
+
+it("places tmux access before Exit in the connected heading and keeps operation output in the panel", () => {
+  render(
+    <InteractionPanel
+      {...props({ ...interaction("connected"), attachCommand: "tmux attach" })}
+      operationActions={<button>Exit</button>}
+      operationStatus={<p>Waiting for exit</p>}
+    />,
+  );
+  const access = screen.getByRole("button", { name: "tmux access" });
+  const exit = screen.getByRole("button", { name: "Exit" });
+  expect(access.closest(".interaction-heading")).toBe(exit.closest(".interaction-heading"));
+  expect(access.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole("region", { name: "Session interaction" })).toContainElement(
+    screen.getByText("Waiting for exit"),
+  );
 });

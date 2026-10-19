@@ -38,34 +38,37 @@ export class TmuxInteractionService implements InteractionTransport {
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
-  readonly #queries = new Map<string, Promise<TmuxBinding | null>>();
+  readonly #queries = new Map<string, Promise<ReadonlyMap<string, TmuxBinding | null>>>();
 
   async connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding> {
-    const binding = await this.archiveTarget(attempt);
+    const binding = await this.resolveTarget(attempt);
     if (!binding) throw disconnected();
     return binding;
   }
 
-  archiveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null> {
-    if (!attempt.valid) return Promise.resolve(null);
-    const key = `${attempt.socketPath}\0${attempt.paneId}`;
-    const pending = this.#queries.get(key);
-    if (pending) return pending;
-    const query = this.#query(attempt.socketPath, attempt.paneId);
-    this.#queries.set(key, query);
-    void query.then(
-      () => this.#queries.delete(key),
-      () => this.#queries.delete(key),
-    );
-    return query;
+  resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null> {
+    if (!attempt.valid || !attempt.socketPath.startsWith("/") || !/^%\d+$/.test(attempt.paneId))
+      return Promise.resolve(null);
+    const { socketPath, paneId } = attempt;
+    let query = this.#queries.get(socketPath);
+    if (!query) {
+      query = this.#query(socketPath);
+      this.#queries.set(socketPath, query);
+      // Share only in-flight observations, never completed results.
+      void query.then(
+        () => this.#queries.delete(socketPath),
+        () => this.#queries.delete(socketPath),
+      );
+    }
+    return query.then((panes) => panes.get(paneId) ?? null);
   }
 
-  async #query(socketPath: string, paneId: string): Promise<TmuxBinding | null> {
-    if (!socketPath.startsWith("/") || !/^%\d+$/.test(paneId)) return null;
+  async #query(socketPath: string): Promise<ReadonlyMap<string, TmuxBinding | null>> {
     try {
       await validateSocket(socketPath);
     } catch (error) {
-      if (error instanceof InteractionTransportError && error.code === "disconnected") return null;
+      if (error instanceof InteractionTransportError && error.code === "disconnected")
+        return new Map();
       throw error;
     }
     let result: { stdout: string };
@@ -82,7 +85,7 @@ export class TmuxInteractionService implements InteractionTransport {
         error.code === "command_failed" &&
         !(await socketListening(socketPath, this.timeoutMs))
       )
-        return null;
+        return new Map();
       throw error;
     }
     const rows = result.stdout
@@ -101,15 +104,25 @@ export class TmuxInteractionService implements InteractionTransport {
     ) {
       throw new InteractionTransportError("command_failed", "Invalid tmux pane observation");
     }
-    const row = rows.find((row) => row[0] === paneId);
-    return !row || row[1] === "1"
-      ? null
-      : { socketPath, paneId, sessionName: row.slice(2).join("|") };
+    const panes = new Map<string, TmuxBinding | null>();
+    for (const row of rows) {
+      const paneId = row[0]!;
+      // Linked windows can report a pane more than once; preserve the first session name.
+      if (!panes.has(paneId))
+        panes.set(
+          paneId,
+          row[1] === "1" ? null : { socketPath, paneId, sessionName: row.slice(2).join("|") },
+        );
+    }
+    return panes;
   }
 
-  /** Clear the Codex draft and request EOF without ever submitting composer text. */
-  exitTarget(binding: TmuxBinding, assertAvailable?: () => void): Promise<void> {
-    return this.sendKeys(binding, ["C-c", "C-d"], assertAvailable);
+  killPane(binding: TmuxBinding, assertAvailable: () => void = () => {}): Promise<void> {
+    return this.#serialize(binding, async () => {
+      await this.#revalidate(binding);
+      assertAvailable();
+      await this.#run(binding, ["kill-pane", "-t", binding.paneId]);
+    });
   }
 
   sendMessage(
@@ -185,11 +198,11 @@ export class TmuxInteractionService implements InteractionTransport {
 
   /** Query errors never establish that the selected pane exited. */
   async inspect(binding: TmuxBinding): Promise<"alive" | "exited"> {
-    return (await this.archiveTarget({ valid: true, ordinal: 0, ...binding })) ? "alive" : "exited";
+    return (await this.resolveTarget({ valid: true, ordinal: 0, ...binding })) ? "alive" : "exited";
   }
 
   async #revalidate(binding: TmuxBinding): Promise<void> {
-    if (!(await this.archiveTarget({ valid: true, ordinal: 0, ...binding }))) throw disconnected();
+    if (!(await this.resolveTarget({ valid: true, ordinal: 0, ...binding }))) throw disconnected();
   }
 
   async #run(binding: TmuxBinding, args: readonly string[], input?: string): Promise<void> {
@@ -216,7 +229,8 @@ async function validateSocket(socketPath: string): Promise<void> {
   try {
     const info = await lstat(socketPath);
     const currentUid = typeof process.getuid === "function" ? process.getuid() : null;
-    if (!info.isSocket() || currentUid === null || info.uid !== currentUid) throw disconnected();
+    if (!info.isSocket() || currentUid === null || info.uid !== currentUid)
+      throw new InteractionTransportError("command_failed", "Unsafe tmux socket");
   } catch (error) {
     if (error instanceof InteractionTransportError) throw error;
     if ((error as NodeJS.ErrnoException).code === "ENOENT") throw disconnected();

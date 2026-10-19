@@ -5,7 +5,7 @@ import { sendJson } from "./router.js";
 import { SESSION_ID_PATTERN, SESSION_ROOT, sessionPath } from "./session-path.js";
 
 const OPERATION_PATH = /^\/api\/v1\/operations\/[^/]+$/;
-const SESSION_PATH = new RegExp(`^${SESSION_ROOT}/${SESSION_ID_PATTERN}(?:/archive)?$`);
+const SESSION_PATH = new RegExp(`^${SESSION_ROOT}/${SESSION_ID_PATTERN}(?:/(?:archive|exit))?$`);
 
 export function createSessionManagementRoutes(operations?: OperationService): ApiRouteHandler {
   return {
@@ -30,7 +30,8 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
       }
       const create = url.pathname === SESSION_ROOT;
       const archive = url.pathname.endsWith("/archive");
-      const method = create || archive ? "POST" : "DELETE";
+      const exit = url.pathname.endsWith("/exit");
+      const method = create || archive || exit ? "POST" : "DELETE";
       if (request.method !== method) return false;
       const protocol = "encrypted" in request.socket && request.socket.encrypted ? "https" : "http";
       if (
@@ -43,6 +44,31 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
       if (create) {
         if (typeof body.requestId !== "string")
           throw new RequestBodyError(400, "invalid_json", "requestId is required");
+        if (body.resumeSessionId !== undefined) {
+          if (
+            typeof body.resumeSessionId !== "string" ||
+            !body.resumeSessionId.trim() ||
+            Object.keys(body).some(
+              (key) => !["resumeSessionId", "yolo", "requestId"].includes(key),
+            ) ||
+            (body.yolo !== undefined && typeof body.yolo !== "boolean")
+          )
+            throw new RequestBodyError(
+              400,
+              "invalid_json",
+              "Resume accepts only resumeSessionId, yolo and requestId",
+            );
+          sendJson(
+            response,
+            202,
+            operations.create({
+              resumeSessionId: body.resumeSessionId,
+              yolo: body.yolo as boolean | undefined,
+              requestId: body.requestId,
+            }),
+          );
+          return true;
+        }
         if (
           Object.keys(body).some(
             (key) =>
@@ -76,7 +102,11 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
         if (Object.keys(body).length !== 0)
           throw new RequestBodyError(400, "invalid_json", "Expected an empty object");
         const { id: sessionId } = sessionPath(url.pathname);
-        sendJson(response, 202, operations.manage(archive ? "archive" : "delete", sessionId));
+        sendJson(
+          response,
+          202,
+          operations.manage(exit ? "exit" : archive ? "archive" : "delete", sessionId),
+        );
       }
       return true;
     },
