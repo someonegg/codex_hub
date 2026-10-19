@@ -31,8 +31,8 @@ ESLint checks client, server, shared code, tests, and TypeScript scripts. See th
 [isolated lint toolchain](../tools/client-lint/README.md) for import rules, React
 Hooks coverage, and its separate TypeScript API dependency.
 
-GitHub Actions runs `npm ci` and `npm test` on Ubuntu with Node.js 22 for pushes
-and pull requests. The **Tests** workflow also supports manual runs. Native tmux
+GitHub Actions runs `npm ci` and `npm test` on Ubuntu with Node.js 22 for pushes to
+`main` and pull requests. The **Tests** workflow also supports manual runs. Native tmux
 and Codex CLI integration suites remain separate from this workflow.
 
 ## Integration tests and benchmarks
