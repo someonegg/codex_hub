@@ -149,7 +149,7 @@ describe("unified hub", () => {
     expect(within(nav).getAllByRole("link")).toHaveLength(1);
     expect(screen.queryByRole("link", { name: /Child trace/ })).not.toBeInTheDocument();
     expect(api.items).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Include archived" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Archived" }));
     expect(within(nav).getAllByRole("link")).toHaveLength(2);
     fireEvent.click(within(nav).getByRole("link", { name: /Reader work/ }));
     await flush();
@@ -162,14 +162,14 @@ describe("unified hub", () => {
     fireEvent.click(screen.getByRole("button", { name: /Back to list/ }));
     await flush();
     expect(window.location.pathname).toBe("/");
-    expect(screen.getByRole("checkbox", { name: "Include archived" })).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Archived" })).toBeChecked();
     act(() => {
       window.history.replaceState(null, "", `/sessions/${archiveId}`);
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
     await flush();
     expect(screen.getByRole("heading", { name: "Archived trace" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Include archived" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Archived" }));
     expect(within(nav).queryByRole("link", { name: /Archived trace/ })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Archived trace" })).toBeInTheDocument();
   });
