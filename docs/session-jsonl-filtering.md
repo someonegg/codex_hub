@@ -1,9 +1,10 @@
 # Session JSONL filtering rules
 
 This document is the canonical summary of how rollout JSONL records become
-timeline items. Keep it synchronized with `rollout-decoder.ts`,
-`session-normalizer.ts`, `tool-normalizer.ts`, `user-input-normalizer.ts`, and
-`session-read-service.ts`.
+timeline items. Decoding and normalization live in
+`src/server/adapters/codex/`; paging lives in
+`src/server/repository/session-queries.ts`; client filtering lives in
+`src/client/state/timeline-visibility.ts`.
 
 ## Decode-time skips
 
@@ -26,7 +27,8 @@ terminated. Probes and decoding use the same open handle and observed EOF bound.
 - Lines larger than 8 MiB are skipped with a diagnostic.
 - A final line without a newline is treated as an incomplete live-write
   fragment and is not decoded or reported until it is terminated.
-- Codex session diagnostics retain only the first 50 entries in production
+- Codex session diagnostics retain at most 50 entries. Decoder diagnostics take
+  priority; remaining slots contain normalizer diagnostics in their production
   order. Additional diagnostics are silently discarded.
 
 ## Record normalization
@@ -82,8 +84,9 @@ longer directives load details on demand. An
 inline directive is also hidden when either of the two preceding or two
 following loaded timeline items is a message with exactly the same text. This
 comparison uses the unfiltered timeline, so event visibility does not change
-the matching neighborhood. Enabled kinds are stored in the page URL
-as one comma-separated `show` parameter.
+the matching neighborhood. Visibility preferences are stored in `sessionStorage`
+and shared across sessions visited within the same browser tab. If storage is
+unavailable, they remain in memory.
 
 Loaded `user_input` request and response items are projected into one card by
 `call_id`. The request is shown as waiting until its output is loaded; the same
@@ -97,9 +100,10 @@ Truncation preserves an item but shortens its text; it is not filtering.
 Message text is capped at 1,000,000 JavaScript code units. Directive, tool, and
 formatted internal JSON details are capped at 256,000 code units. Directive and
 unavailable-user-input summaries and tool previews share a 256-code-unit limit.
-Terminal previews are separately capped at 256,000 UTF-8 bytes and retain only
-complete UTF-8 characters.
-Timeline paging may defer items to a later page because of the 300-item and
-approximately 4 MiB response size budget. To guarantee forward progress, the
+Terminal preview limits are separate from JSONL processing; see
+[terminal preview](technical-reference.md#terminal-preview).
+Timeline pages default to 100 items and accept a `limit` from 1 to 300.
+Paging may defer items because of the approximately 4 MiB serialized item-array
+budget, which excludes response metadata. To guarantee forward progress, the
 first item on a page is always included even when it exceeds that budget.
 Client-side filtering never changes page cursors.

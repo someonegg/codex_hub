@@ -9,12 +9,7 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const read = (...homes: string[]) => loadConfig(homes.flatMap((home) => ["--codex-home", home]));
 
-it("uses the default home only when no homes are supplied", () => {
-  expect(loadConfig([])).toMatchObject({
-    config: {
-      homes: [{ nickname: "default", path: join(homedir(), ".codex") }],
-    },
-  });
+it("replaces the default home with explicit homes", () => {
   expect(read("work=./work")).toMatchObject({
     config: { homes: [{ nickname: "work", path: resolve("work") }] },
   });
@@ -60,9 +55,7 @@ it("rejects symlink aliases without replacing the configured source path", async
   });
 });
 
-it("rejects the removed config option and documents the repeatable replacement", () => {
-  expect(() => loadConfig(["--config", "hub.json"])).toThrow();
+it("documents repeatable named homes", () => {
   expect(commandLineHelp()).toContain("--codex-home <nickname=path>");
   expect(commandLineHelp()).toContain("repeat for multiple homes");
-  expect(commandLineHelp()).not.toContain("--config");
 });

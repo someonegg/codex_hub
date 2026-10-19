@@ -5,6 +5,12 @@ date: 2026-08-07
 
 # Use repository-probed bounded long polling for automatic updates
 
+Current scope: reader long polling remains in force. The connection-description
+cache below is replaced by [ADR-0018](0018-cache-validation-per-binding-record.md):
+only concurrent checks are shared; completed results are not cached.
+[ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md) removes the
+automatic updates toggle. See the [reader reference](../technical-reference.md#reader-and-automatic-updates).
+
 ## Context and Problem Statement
 
 The session reader needs to observe timeline appends, public session metadata, and effective interaction state without issuing fixed-interval browser refreshes. Changes are discovered through immutable repository snapshots, while the opaque timeline cursor must remain the sole mechanism that confirms and advances a loaded timeline prefix.
@@ -32,10 +38,6 @@ Chosen option: "Repository-probed bounded HTTP long polling", because it removes
 `GET /api/v1/sessions/:id/updates` validates a cursor but never returns timeline items or advances it. A process-private HMAC revision covers the complete public session state and effective interaction response. The service probes immediately, then every 1.5 seconds for at most 25 seconds; it returns `200` when the revision changes or items exist after the cursor, and `204` when the wait expires unchanged. The browser loads reported backlog through the ordinary items endpoint.
 
 Waiting requests are limited to 100 per process and 10 per session. Interaction connection descriptions use a 1.5-second cache that coalesces concurrent promises, while mutation operations retain their real-time validation. Client disconnect, server shutdown, and abort signals release waiters immediately.
-
-The connection-description cache policy above is superseded by
-[ADR-0018](0018-cache-validation-per-binding-record.md). Current validation only
-coalesces concurrent checks for the same target; completed results are not cached.
 
 Composition creates shared tmux transport, catalog polling, automatic updates, and operation
 tracking services; interaction explicitly receives transport. The API router

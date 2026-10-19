@@ -5,6 +5,12 @@ date: 2026-09-04
 
 # Expose session index names as presentation metadata
 
+Current scope (updated 2026-10-16): [ADR-0021](0021-split-catalog-structure-and-activity.md) replaces the
+catalog behavior below. Catalog titles are resolved on the server, and title
+changes wake structural long polls. Reader details retain separate `title` and
+`nickname` fields; nickname-only changes do not wake reader updates. List pagination
+is historical. See the [catalog reference](../technical-reference.md#catalog).
+
 ## Context and Problem Statement
 
 Codex records user-facing thread names in `session_index.jsonl`, separately from rollout files. The hub should prefer these names without conflating presentation metadata with the canonical rollout title or allowing an advisory file to create sessions, reorder paginated results, invalidate cursors, or wake automatic updates polling when only a nickname changes.
@@ -60,11 +66,3 @@ The Codex adapter refreshes a bounded, best-effort snapshot of `session_index.js
 - Good: Preserves authoritative repository and cursor semantics while presenting one resolved title.
 - Good: Applies consistently to list, detail, item-page, and automatic updates response shapes.
 - Bad: Requires a separate canonical session value for revision calculation.
-
-## Catalog protocol update, 2026-10-16
-
-[ADR-0021](0021-split-catalog-structure-and-activity.md) supersedes only catalog
-behavior: server-resolved display titles wake structural long polls; pagination
-and three-second summary refreshes become structural long polling with best-effort
-timestamps included in list snapshots. Details retain separate title/nickname fields; reader automatic updates
-and timeline cursor semantics are unchanged.

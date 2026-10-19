@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   CATALOG_PROBE_INTERVAL_MS,
@@ -33,7 +33,6 @@ function setup() {
 const flush = async () => {
   for (let i = 0; i < 12; i++) await Promise.resolve();
 };
-afterEach(() => vi.useRealTimers());
 describe("session catalog long polling", () => {
   it("returns the first or different revision immediately, without an idle timer", async () => {
     const { service } = setup();

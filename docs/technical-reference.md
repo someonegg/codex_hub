@@ -5,11 +5,9 @@ metadata without reading Codex databases. Source adapters normalize data into
 shared snapshots. See [JSONL filtering](session-jsonl-filtering.md) for decoding,
 visibility, and truncation rules, and [ADRs](adr/README.md) for decision history.
 
-Successfully loaded archives reuse cached content without per-file checks or rereads.
-Directory discovery is unchanged: new files are validated, missing files evicted,
-symlinks rejected, and failed loads retried. Restored sessions resume normal validation;
-restart clears the cache. In-place content and permission changes are ignored while
-cached. Nicknames, project directories, and session relationships still refresh.
+Successfully loaded archives reuse cached content until restart or restoration;
+in-place content and permission changes are not detected while cached. Discovery,
+removal, metadata refresh, and retries of failed loads continue normally.
 
 Public contracts are defined in `src/shared/api-contract.ts`. IDs, timeline cursors,
 and revisions are opaque; clients must use returned values.
@@ -28,43 +26,28 @@ The only query parameter is `after`. Missing or different revisions return `200`
 immediately. Matching revisions wait up to 25 seconds: a change returns a full
 `200` snapshot; timeout returns bodyless `204`. Waiters share a 1.5-second source
 probe that stops when idle. Capacity is 100 waiters; excess requests receive `429`
-with `Retry-After`. Disconnects and server shutdown release waiters. Legacy
-pagination, filtering, and `fresh` parameters return `400`.
+with `Retry-After: 2`. Disconnects and server shutdown release waiters. `after`
+must be 43 base64url characters; other query parameters return `400`.
 
-Revisions hash the minimal structure sorted by ID. Home metadata, title, project, status, and
+Home metadata, title, project, status, and
 parent changes affect them; timestamps, content, statistics, and diagnostics do not.
 Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 
-Within a Codex source instance, a native session ID always determines the stable
-local identity. If multiple rollouts declare that ID, retain the previously
-accepted readable file; on first discovery choose the first readable file in the
-existing path order. Ignore the others: publish no additional session, submit no
-binding events, and retain no decode cache for them. Report duplicates only in
-server diagnostics, deduplicated by the diagnostic logger. If the retained file
-becomes unavailable, fully read the first remaining candidate. Rollouts without
-a native ID retain their path-based identity.
+Within each home, a native session ID determines stable identity. Duplicate rollouts
+produce one session: retain the accepted readable file, falling back to the first
+readable candidate when necessary. Rollouts without a native ID use path-based
+identity. See [ADR-0003](adr/0003-use-session-source-adapters.md) for adapter rules.
 
-`updatedAt` is best-effort metadata carried by list snapshots and excluded from
-revision calculation. Timestamp-only changes do not wake catalog waiters; unchanged
-requests still time out with `204`.
-
-The browser uses these timestamps to sort main sessions descending and projects by
-their latest visible main session. Equal times use the corresponding ID; missing
-or invalid times sort last. Displayed reader metadata (initial pages, pagination,
-refreshes, and automatic updates responses) feeds timestamps back into the local list without
-extra requests. Both list replacement and reader feedback retain the newer valid
-time for each existing ID; removed sessions are discarded. Feedback for unknown IDs
-or before the list loads is ignored. Times are not persisted. Catalog requests pause
-while hidden and reconnect when visible. Reader update revisions retain their own
-semantics, including `updatedAt`.
+`updatedAt` is best-effort metadata: timestamp-only changes do not wake catalog
+waiters. The browser sorts sessions by time and projects by their latest visible
+main session, retaining newer timestamps from list snapshots and opened readers
+without extra requests or persistence. Equal times use IDs; missing or invalid times
+sort last. Catalog requests pause while hidden and reconnect when visible.
 
 Session status is `normal | live | archived`. Archive takes precedence; Live requires
 an observed living pane currently owned by the session. Normal has no additional
-badge and does not imply that resume is safe. Adapter snapshots retain archive facts.
-Concurrent pane observations on the same socket share one `list-panes` enumeration
-and a pane lookup map. Runtime observations are bounded to eight sockets at a time;
-all panes on an active socket can join its in-flight query. Probe errors revoke
-Live and resume permission.
+badge and does not imply that resume is safe. Runtime checks share concurrent pane
+observations and bound socket concurrency. Probe errors revoke Live and resume permission.
 
 ## Reader and automatic updates
 
@@ -79,15 +62,23 @@ Live and resume permission.
 
 Timeline pages include session metadata, items, a cursor, `hasMore`, interaction
 state, and an update revision. Cursors validate timeline prefix continuity; incompatible
-changes return `409 timeline_changed`. Automatic updates timeout returns `204`.
+changes or cursors from a previous server process return `409 timeline_changed`;
+malformed cursors return `400 invalid_query`. Lazy details must be within the
+cursor's confirmed prefix. See [paging limits](session-jsonl-filtering.md#truncation-and-paging).
+
+Automatic updates validate but do not advance the cursor or return timeline items;
+the browser loads any reported backlog through the items endpoint. The server probes
+every 1.5 seconds and waits up to 25 seconds before returning `204` unchanged.
+Capacity is 100 waiters per process and 10 per session; excess waits receive `429`
+with `Retry-After: 2`. Disconnects and shutdown release waiters.
 
 Session metadata includes `status` and `resume: { allowed, reason }`. Resume is a
 detail capability; `reason` is null when allowed. Status, resume capability and
 interaction changes affect the detail update revision even without JSONL changes.
 
 Only the opened, unarchived session subscribes to automatic updates. History paging
-and automatic updates coexist while preserving the reading position. Catalog and reader polling
-use separate constants and revisions. Session diagnostics stay in server logs.
+and automatic updates coexist while preserving the reading position. Reader revisions
+are independent of catalog revisions and include `updatedAt`. Session diagnostics stay in server logs.
 
 ## Tmux interaction
 
@@ -106,19 +97,10 @@ declaration in user-message `<user_shell_command>` output. Its following lines
 contain a nonempty absolute socket path, a `%`-prefixed numeric pane ID, and an
 optional operation UUID. An invalid latest declaration does not fall back to an older one.
 
-The process-wide pane binding manager is the sole binding source. Adapters
-submit all binding attempts from accepted decoded records, including incremental
-appends; normalized interaction values contain only transport capabilities.
-Order events by timestamp (invalid timestamps use zero), global session ID,
-record ordinal, then position within the record. Retain the latest attempt per
-session and the latest valid claim per socket/pane, across source instances.
-Invalid latest attempts do not fall back; a new claim does not release older
-claims on other panes. Creation queries this same manager for `operationId`.
-The Hub explicitly injects the same process-wide manager into the Codex adapter,
-interaction service, and operation service. Their default parameters retain this
-shared instance for standalone callers; tests may inject an isolated manager.
-Closing a Hub does not clear binding history. Management snapshots contain only
-domain sessions; interaction capabilities are read through interaction snapshots.
+Bindings are shared across homes, retaining the latest attempt per session and the
+latest valid claim per socket/pane. Creation correlates its operation UUID with the
+recorded binding. See [ADR-0018](adr/0018-cache-validation-per-binding-record.md)
+for event ordering and ownership rules.
 
 When a later claim takes a pane, its former owner returns `superseded` and cannot
 send input, hand off the binding, preview, or shut down that pane during archive. A supported
@@ -129,16 +111,17 @@ Takeover facts survive archive, deletion, and full rereads for the process lifet
 a later explicit binding can reclaim a pane. Unsupported responses omit these
 state fields. `attachCommand` is null for `superseded`.
 
-Status queries never recurse or restart validation when bindings change during
-an await. Return the currently determinable state, using `unknown` for a new
-binding that has not been validated, and wait for the next refresh. Operations
-still validate ownership after resolution and immediately before queued effects.
+Interaction validates socket ownership, pane liveness, and binding ownership before
+effects. Concurrent checks are shared; completed results are not cached. Binding
+changes during validation may report `unknown` until the next refresh. Socket/pane
+reuse targets the current pane without comparing process identity. Uncertain input
+is not automatically resent.
 
-All interaction paths share current pane validation of socket ownership and pane liveness.
-Only concurrent checks for the same socket are coalesced; completed results are
-not cached. Input and preview revalidate inside the pane queue. Socket/pane reuse
-targets the current pane without comparing process identity. Uncertain input is
-not automatically resent.
+### Terminal preview
+
+Preview captures the current pane screen as plain text, not scrollback or a terminal
+emulator stream. Captures retain the last 256,000 UTF-8 bytes without splitting a
+character and report `truncated` when the beginning was removed.
 
 Expanded, connected terminal previews use event-driven long polling while the page
 is visible. `GET /api/v1/sessions/:id/terminal-preview` returns the current snapshot.
@@ -149,13 +132,10 @@ return the current snapshot when their patch history is unavailable. `HEAD` igno
 All responses use `Cache-Control: no-store`. At most 100 requests globally and 10 per
 session may wait; excess waits receive `429` with `Retry-After: 2`.
 
-Each socket/session shares a tmux control client that preserves terminal
-size and session environment. It uses `ignore-size` without `read-only`, because
-tmux may select it as the context for separate message and key commands; a
-read-only context rejects those commands. Each pane shares its snapshot and capture operation.
-Output events use a fixed one-second merge window; events during capture schedule
-another window. Only content or truncation changes publish a snapshot. Revisions
-also distinguish server processes and binding records.
+Viewers share tmux listeners and pane captures without changing terminal size or
+session environment. Output events use a one-second merge window; only content or
+truncation changes publish a snapshot. Revisions distinguish server processes and
+binding records.
 
 Line deltas use `text.split("\n")` / `lines.join("\n")`, preserving empty text,
 blank lines, and trailing newlines. A delta has `baseRevision`, final `revision`,
@@ -164,19 +144,13 @@ blank lines, and trailing newlines. A delta has `baseRevision`, final `revision`
 each patch use original line indices and run in descending `startLine` order.
 Truncation-only changes produce an empty operations array.
 
-A bounded Myers search compares whole lines, with at most 256 edits and 1,000,000
-combined state expansions and line comparisons. Each binding identity caches up
-to five consecutive patches, at most 32 KiB of serialized UTF-8 entries (base and
-target revisions plus operations), without historical full texts. When generated,
-each individual patch, serialized as a complete delta response,
-must be at most 8 KiB and smaller than its full snapshot; exceeding either bound
-or the search budget clears history and establishes a full-snapshot baseline.
-Oldest entries are evicted for count/total size limits. Requests receive an ordered
-chain when available, otherwise full text. The 8 KiB generation limit does not
-apply to combined chains. A chain as large as full text falls
-back to full text without clearing history. Repeated revisions match the current
-snapshot first, then the most recent compatible history. Binding changes discard
-snapshots and history. Frontend and backend must deploy together.
+Diff computation and patch history have bounded work and memory. The server returns
+a patch chain only when history is available and the response is smaller than a
+full snapshot; otherwise it returns full text. Clients must support both forms and
+must not assume a minimum history length. Binding changes discard cached state.
+Implementation budgets live in
+[the preview service](../src/server/interaction/terminal-preview-service.ts) and
+[line diff](../src/server/interaction/terminal-preview-diff.ts).
 
 The browser validates the base revision and integer, in-range, descending,
 nonoverlapping operations before committing the reconstructed snapshot atomically.
@@ -184,11 +158,8 @@ Invalid deltas preserve the current display and omit `after` on the next request
 to recover full text.
 
 The browser reconnects immediately after `200` or `204`. Collapse, hiding, switching
-sessions, disconnection, and unmount cancel requests. Idle subscriptions remain
-active for 10 seconds, continuing to capture output
-and update snapshots and history through the same one-second merge windows.
-Reconnecting during that period preserves pending windows. Expiry and shutdown
-release resources. Binding changes, cross-session pane moves, and listener failures
+sessions, disconnection, and unmount cancel requests. Idle subscriptions are retained
+briefly, then released. Binding changes, cross-session pane moves, and listener failures
 invalidate subscriptions and fail pending requests. Retryable failures back off and
 rebuild listening; nonretryable errors stop until a new expand, visibility, or
 connection transition.
@@ -224,37 +195,26 @@ launch concurrently for one session; identical request IDs retain create idempot
 
 - **Create:** launch Codex as the main pane process in a dedicated
   `codex-hub-<operationId>` tmux session with `--no-daemon --no-alt-screen`, optional
-  `--worktree` and `--yolo` (both off by default), and `remain-on-exit off`. Supply the binding shell instruction as
-  the initial CLI argument rather than pasting it. Confirm the operation marker,
-  launch target, project, and valid binding. Wait up to 300 seconds after launch;
-  show an attach command after 30 seconds and retain it on timeout.
+  `--worktree` and `--yolo` (both off by default). Confirm the operation marker,
+  launch target, project, and valid binding within 300 seconds after launch.
+  Show an attach command after 30 seconds and retain it on timeout.
 - **Resume:** use the owning source, native UUID and working directory from the
-  original session. Only `resumeSessionId`, optional `yolo` (default false), and
-  `requestId` are accepted; directory, source and worktree overrides are rejected.
+  original session; directory, source and worktree overrides are rejected.
+  `yolo` defaults to false.
   Require an unarchived, unique valid identity, an available directory, and a valid
   latest binding whose pane is confirmed dead/missing or explicitly transferred.
-  Missing/invalid bindings, timeouts and errors never authorize resume. Refresh the
-  adapter snapshot and repeat checks before launching `codex resume <UUID>` in a
-  new pane with the original `CODEX_HOME` and this operation's binding instruction.
-  Confirmation requires the original session/native identity, operation marker,
-  launched pane, matching project and a live owned binding. An unknown outcome
-  retains target/attach information and releases session occupancy. As with Create,
-  the same requestId returns the original operation; a new requestId may launch
-  again after the normal resume safety checks. No separate unknown-launch
-  reservation is retained. Inspect tmux before submitting another request because
-  the previous launch may still be running. Request records remain in memory for
-  30 minutes and are lost on server restart.
+  Missing/invalid bindings, timeouts and errors never authorize resume. Revalidate
+  before launching `codex resume <UUID>` in a new pane. Confirmation requires the
+  original identity, operation marker, matching project and a live owned launch target.
 - **Exit:** resolve the source and latest binding; no native UUID is required.
   Binding transfers control of the whole pane, including manually bound panes.
-  Codex sends `Ctrl+C` three times, one second apart; the shared exit service waits
-  four more seconds, sends `Ctrl+D`, then waits nine seconds before one targeted
-  `kill-pane` if needed. Success requires a missing or dead pane within a
-  30-second total deadline. Binding ownership and operation activity are checked
-  before effects; query errors or changed ownership end tracking as `unknown`.
+  Send interrupts and EOF with grace periods, then force-close that pane if needed.
+  Success requires a missing or dead pane within 30 seconds; query errors or
+  changed ownership end tracking as `unknown`.
   Uncertain effects are not retried. An unbound session succeeds without effects;
   a missing session fails. Archived sessions use the same checks. Exit preserves
   session data. See [ADR-0022](adr/0022-separate-session-exit-from-archive.md)
-  for the whole-pane shutdown rationale and tradeoffs.
+  for the shutdown sequence and whole-pane tradeoffs.
 - **Archive:** reread the source snapshot. Already archived sessions succeed
   immediately. Validate the unique native identity, then reuse the independent
   exit service. Only successful exit proceeds to native archive, once. The native
@@ -271,12 +231,15 @@ and still confirm results; thrown read errors do not prove deletion.
 
 ### Tracking and recovery
 
-A shared one-second server loop observes pending operations. Timeout ends tracking
-as `unknown` and cannot undo commands already submitted. Terminal states are
-immutable and immediately release execution context and session occupancy;
-results and create deduplication records remain in memory for 30 minutes.
-Queries only read results. Restarting the server does not recover operations or
-close tmux sessions.
+Operations continue independently of browser queries. Timeout ends tracking as
+`unknown` without undoing submitted commands. Terminal states are immutable and
+release session occupancy; results and create deduplication records remain in
+memory for 30 minutes. Restart loses these records and leaves tmux sessions running.
+
+Unknown Create and Resume outcomes retain known target/attach information. Reuse
+the same `requestId` to retrieve the original operation during retention. A new ID
+may launch another session after normal checks, even if the previous launch is
+still running; inspect tmux before submitting again.
 
 The browser polls pending operations one second after each completed query.
 Hidden pages pause queries and resume when visible; submitted writes continue,
@@ -289,12 +252,9 @@ terminal result, after which the ID is discarded.
 
 See [Multiple homes](usage.md#multiple-homes) for command-line usage.
 
-Each home has its own source, session index reader, and management adapter. Source
-identity retains the configured absolute path, not the nickname, list position, or
-canonical symlink target. Renaming, reordering, or adding homes preserves session IDs;
-moving a configured path creates a new source. Native IDs and relationships are scoped
-to that source. Projects merge by directory across sources. Recoverable I/O errors
-remain scoped to their home; configuration errors prevent startup.
+Session identity follows the configured absolute home path; nicknames and ordering
+do not affect IDs. Native IDs and relationships are scoped to their home; projects
+merge by directory across homes. Recoverable I/O errors remain scoped to their home.
 
 Creation requires `sourceInstanceId` with multiple homes; omission with a single home
 selects that home. Unknown IDs and ambiguous omission return `400`. The source is part

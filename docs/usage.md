@@ -71,10 +71,10 @@ Wide screens show navigation and the conversation together. Below 768px, the
 hub switches between them. Session URLs support direct access, refresh,
 and browser back/forward navigation; the home page does not select a session automatically.
 
-Unarchived conversations receive automatic updates automatically. Archived conversations
+Unarchived conversations receive automatic updates. Archived conversations
 remain readable. Restart the server to see external edits to cached archive content;
 archive, deletion, and restoration are detected normally.
-History can load while automatic updates is active without losing the reading position.
+History can load while automatic updates are active without losing the reading position.
 Technical event filters are optional; see [JSONL filtering](session-jsonl-filtering.md).
 
 Use the project **+** to prefill its directory, or the global **+** to choose an
@@ -185,9 +185,11 @@ Check server stderr for skipped or unreadable data.
 
 **Port already in use:** select another port with `npm start -- --port 4180`.
 
-**No interaction panel:** confirm Codex is running in tmux and has recorded a valid
-V3 binding. Complete any CLI prompts in tmux. The hub does not infer a
-connection from the presence of rollout files.
+**Interaction controls are unavailable:** archived sessions have no interaction panel.
+Unarchived sessions show the panel immediately, but messaging and terminal controls
+require a live, owned pane with a valid V3 binding. Complete any CLI prompts in tmux.
+Rollout files alone do not establish a connection. Resume is available only when
+the server can confirm safe recovery; see [session management](#reading-and-managing-sessions).
 
 **Management progress is unavailable:** retry the progress query after a network
 error. A missing operation or server restart cannot recover execution tracking;

@@ -7,6 +7,9 @@ date: 2026-10-16
 
 The exit sequence and no-forced-kill policy below are historical; see
 [ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
+[ADR-0023](0023-separate-runtime-status-from-resume-permission.md) extends creation
+and session occupancy to Resume. See the
+[management reference](../technical-reference.md#asynchronous-management) for the current protocol.
 
 ## Context and Problem Statement
 

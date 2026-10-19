@@ -5,6 +5,11 @@ date: 2026-07-30
 
 # Use JSONL-only session discovery
 
+Current scope (updated 2026-10-18): JSONL-only discovery remains in force. Unreadable rollouts are
+skipped with server-side diagnostics and retried on later refreshes; the unavailable
+placeholder behavior described below is historical. See the
+[technical reference](../technical-reference.md) for current behavior.
+
 ## Context and Problem Statement
 
 The reader treated rollout JSONL as its correctness source while optionally using Codex SQLite state for discovery and identity metadata. Maintaining two discovery paths added schema detection, compatibility fallback, configuration, cache invalidation, diagnostics, and tests even though SQLite was not required to decode a session. The project must choose whether that optional enrichment justifies a second source of catalog truth.
@@ -64,8 +69,3 @@ Catalog discovery now scans only the allowlisted `sessions/` and `archived_sessi
 - Good: Removes database schema and runtime dependencies without changing JSONL normalization.
 - Bad: Gives up metadata and rollout entries available only from SQLite.
 - Bad: Makes unavailable placeholders intentionally sparse.
-
-## Current behavior clarification, 2026-10-18
-
-Unreadable rollouts are now skipped with server-side diagnostics and retried on
-later refreshes; the placeholder behavior above is historical.

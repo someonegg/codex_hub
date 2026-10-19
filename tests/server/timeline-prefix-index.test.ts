@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { NormalizedSession } from "../../src/server/domain/session-domain.js";
 import {
@@ -8,8 +8,6 @@ import {
   TimelinePrefixIndex,
 } from "../../src/server/repository/timeline-prefix-index.js";
 import { TimelinePrefixRegistry } from "../../src/server/repository/timeline-prefix-registry.js";
-
-afterEach(() => vi.restoreAllMocks());
 
 describe("timeline prefix index", () => {
   it("retains old prefix tokens after append and rejects a rewritten prefix", () => {

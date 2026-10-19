@@ -346,27 +346,16 @@ it("formats a fixed large catalog once and reuses dates when groups and selectio
   vi.spyOn(Intl.DateTimeFormat.prototype as { format: unknown }, "format", "get").mockReturnValue(
     format,
   );
-  const started = performance.now();
   render(<App />);
   await flush();
-  const initialMs = performance.now() - started;
   expect(format).toHaveBeenCalledTimes(count);
   const group = screen.getByRole("button", { name: /reader, 1000 main sessions/ });
-  const toggled = performance.now();
   fireEvent.click(group);
   fireEvent.click(group);
   expect(format).toHaveBeenCalledTimes(count);
-  const toggledMs = performance.now() - toggled;
   fireEvent.click(screen.getByRole("link", { name: /Large catalog 0/ }));
   await flush();
   expect(format.mock.calls.length).toBeLessThan(count + 5);
-  console.info("Catalog date benchmark", {
-    count,
-    initialMs,
-    toggledMs,
-    formatCalls: format.mock.calls.length,
-    previousCallsPerExpandedRender: count * 2,
-  });
 });
 
 describe("hub link entry points", () => {

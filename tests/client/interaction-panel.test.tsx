@@ -186,21 +186,26 @@ describe("interaction panel", () => {
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
   });
 
-  it("shows simplified panels for unbound and disconnected targets", () => {
-    const view = render(<InteractionPanel {...props(interaction("unbound"))} />);
-    expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-    view.rerender(<InteractionPanel {...props(interaction("disconnected"))} />);
-    expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  });
-
-  it("keeps unsupported sessions read-only", () => {
-    const { container, rerender } = render(<InteractionPanel {...props(null)} />);
-    expect(container.querySelector("textarea")).toBeNull();
-    rerender(<InteractionPanel {...props({ supported: false, attachCommand: null })} />);
-    expect(container.querySelector("textarea")).toBeNull();
-  });
+  it.each(["unbound", "disconnected", "unknown", "unsupported", "loading"] as const)(
+    "shows connection information without input on initial %s state",
+    (state) => {
+      const value: InteractionResponse | null =
+        state === "loading"
+          ? null
+          : state === "unsupported"
+            ? { supported: false, attachCommand: null }
+            : {
+                supported: true,
+                state,
+                supersededBySessionId: null,
+                attachCommand: null,
+              };
+      render(<InteractionPanel {...props(value)} />);
+      expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
+      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: "Terminal preview" })).not.toBeInTheDocument();
+    },
+  );
 
   it("shows the event count and local update time while connected", () => {
     const updatedAt = "2026-08-08T12:00:00.000Z";
@@ -422,11 +427,6 @@ describe("interaction panel", () => {
     expect(refreshed).not.toHaveTextContent(staleLine);
     expect(refreshed.scrollTop).toBe(120);
     expect(refreshed).toHaveFocus();
-  });
-
-  it("has no automatic refresh switch", () => {
-    render(<InteractionPanel {...props(interaction("connected"))} />);
-    expect(screen.queryByRole("switch", { name: "Auto refresh" })).toBeNull();
   });
 
   it("sends the six terminal keys from the rectangular terminal keypad", async () => {

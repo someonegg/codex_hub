@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CODEX_INTERACTION_KEY_BINDINGS } from "../../src/server/adapters/codex/interaction-parser.js";
 import type {
@@ -11,6 +11,8 @@ import { TmuxInteractionService } from "../../src/server/interaction/tmux-servic
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
 
 let bindings: PaneBindingManager;
+const services: SessionInteractionService[] = [];
+afterEach(() => services.splice(0).forEach((service) => service.close()));
 beforeEach(() => {
   bindings = new PaneBindingManager();
 });
@@ -18,6 +20,7 @@ beforeEach(() => {
 class TestSessionInteractionService extends SessionInteractionService {
   constructor(reader: SessionReader, enabled: boolean, tmux: TmuxInteractionService) {
     super(reader, enabled, tmux, bindings, () => ({ ready: Promise.resolve(), close() {} }));
+    services.push(this);
   }
 }
 

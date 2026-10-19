@@ -188,7 +188,7 @@ describe("interaction HTTP API", () => {
     expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, boundaryKeys);
   });
 
-  it("returns an uncached terminal preview and rejects query parameters", async () => {
+  it("returns a no-store terminal snapshot and rejects unsupported query parameters", async () => {
     const { base, interaction } = await start();
     const response = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/terminal-preview`);
     expect(response.status).toBe(200);

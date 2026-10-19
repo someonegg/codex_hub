@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type { TerminalPreviewResponse } from "../../src/shared/api-contract";
 
@@ -14,7 +14,6 @@ const frame = {
   revision: "r".repeat(43),
   capturedAt: "2026-08-08T12:00:00Z",
 };
-afterEach(() => vi.useRealTimers());
 
 it("starts folded, continues without overlap, and commits snapshot metadata while advancing revision", async () => {
   vi.useFakeTimers();
@@ -173,7 +172,7 @@ it("auto-expands once per latest message, waits for connection, and resets acros
   expect(result.current.previewExpanded).toBe(true);
 });
 
-it("cancels preview polling when a updates update marks the session superseded", async () => {
+it("cancels pending previews when interaction state becomes superseded", async () => {
   vi.useFakeTimers();
   let complete!: (value: TerminalPreviewResponse) => void;
   const capture = vi.spyOn(api, "terminalPreview").mockImplementation(

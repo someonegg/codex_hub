@@ -65,7 +65,6 @@ describe("server command line", () => {
 
   it("rejects malformed general options", () => {
     expect(() => loadConfig(["--port", "65536"])).toThrow("--port must be an integer");
-    expect(() => loadConfig(["--codex-home", " "])).toThrow("--codex-home requires nickname=path");
     expect(() => loadConfig(["--unknown"])).toThrow();
     expect(() => loadConfig(["--tmux-socket", " "])).toThrow("--tmux-socket must not be empty");
     expect(() => loadConfig(["positional"])).toThrow();

@@ -7,6 +7,9 @@ date: 2026-10-16
 
 The exit sequence and no-forced-kill policy below are historical; see
 [ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
+[ADR-0023](0023-separate-runtime-status-from-resume-permission.md) adds shared bounded
+runtime observations and explicit resume permission. See the
+[interaction reference](../technical-reference.md#tmux-interaction) for current behavior.
 
 ## Context and Problem Statement
 

@@ -5,6 +5,11 @@ date: 2026-10-16
 
 # Use a unified project hub
 
+Current scope: the unified hub remains in force. Navigation storage now records
+`includeArchived`, `expanded` project IDs, and `scroll`; the `collapsed` field
+described below is historical. See [usage](../usage.md#reading-and-managing-sessions)
+for current navigation behavior.
+
 ## Context and Problem Statement
 
 Separate catalog and reader pages split navigation, reading, and management,

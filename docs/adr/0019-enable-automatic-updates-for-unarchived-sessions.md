@@ -5,6 +5,11 @@ date: 2026-10-16
 
 # Enable automatic updates by default for unarchived sessions
 
+Current scope (updated 2026-10-16): reader automatic updates remain in force.
+[ADR-0021](0021-split-catalog-structure-and-activity.md) replaces the periodic catalog
+summary refresh below with structural long polling and best-effort timestamps in
+list snapshots. See the [catalog reference](../technical-reference.md#catalog).
+
 ## Context and Problem Statement
 
 An interactive hub needs timely updates. Manual toggles and browser
@@ -48,11 +53,3 @@ only the opened session subscribed to conversation updates.
 
 - Good: Preserves existing behavior with fewer changes.
 - Bad: Adds manual steps and can obstruct history paging.
-
-## Catalog protocol update, 2026-10-16
-
-[ADR-0021](0021-split-catalog-structure-and-activity.md) supersedes only the catalog
-behavior: server-resolved display titles participate in structural long polling;
-pagination and three-second summary refreshes become structural long polling and
-best-effort timestamps included in list snapshots. Details retain separate title/nickname fields;
-reader automatic updates and timeline cursor semantics are unchanged.

@@ -112,12 +112,13 @@ describe("automatic update HTTP API", () => {
     const getSessionUpdates = vi
       .fn<SessionReader["getSessionUpdates"]>()
       .mockResolvedValue(snapshot(false));
-    const { base } = await start(getSessionUpdates, {
+    const { base, updates } = await start(getSessionUpdates, {
       waitTimeoutMs: 5_000,
       probeIntervalMs: 1_000,
       maxWaiters: 1,
       maxWaitersPerSession: 1,
     });
+    const wait = vi.spyOn(updates, "wait");
     const abort = new AbortController();
     const pending = fetch(url(base, REVISION), { signal: abort.signal });
     await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalled());
@@ -127,14 +128,20 @@ describe("automatic update HTTP API", () => {
       error: { code: "updates_capacity_exceeded" },
     });
     expect(limited.headers.get("retry-after")).toBe("2");
+    const released = expect(wait.mock.results[0]!.value).rejects.toMatchObject({
+      name: "AbortError",
+    });
     abort.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    await released;
 
-    getSessionUpdates.mockResolvedValue(snapshot(true));
-    await vi.waitFor(async () => {
-      const recovered = await fetch(url(base, REVISION));
-      expect(recovered.status).toBe(200);
-    });
+    // The replacement must enter the wait path before a later probe reports backlog.
+    // An immediately changed snapshot would bypass capacity and hide a leaked slot.
+    getSessionUpdates.mockResolvedValueOnce(snapshot(false)).mockResolvedValue(snapshot(true));
+    const probes = getSessionUpdates.mock.calls.length;
+    const recovered = await fetch(url(base, REVISION));
+    expect(recovered.status).toBe(200);
+    expect(getSessionUpdates.mock.calls.length - probes).toBe(2);
   });
 });
 
@@ -180,7 +187,7 @@ async function start(
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
   const { port } = server.address() as AddressInfo;
-  return { base: `http://${LOOPBACK_HOST}:${port}` };
+  return { base: `http://${LOOPBACK_HOST}:${port}`, updates };
 }
 
 function url(base: string, after: UpdateRevision): string {

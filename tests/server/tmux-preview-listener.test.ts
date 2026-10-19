@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn }));
@@ -16,7 +16,6 @@ function child() {
   });
 }
 const binding = { socketPath: "/tmp/control.sock", paneId: "%1", sessionName: "name with spaces" };
-afterEach(() => vi.useRealTimers());
 it("shares socket/session clients, parses fragmented notifications, and closes the final subscription", async () => {
   const process = child();
   spawn.mockReturnValue(process);

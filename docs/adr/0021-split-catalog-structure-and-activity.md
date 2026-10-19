@@ -5,6 +5,11 @@ date: 2026-10-16
 
 # Long-poll session structure with best-effort timestamps
 
+Current scope: structural long polling remains in force.
+[ADR-0023](0023-separate-runtime-status-from-resume-permission.md) adds runtime status
+to catalog revisions. The response also includes home metadata; see the
+[catalog reference](../technical-reference.md#catalog) for the complete current schema.
+
 ## Context and Problem Statement
 
 Catalog pagination and periodic summary refreshes repeatedly transfer metadata and

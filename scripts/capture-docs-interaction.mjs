@@ -54,6 +54,7 @@ async function capture(page, origin, output, session, interaction, timestamp) {
     if (path.endsWith("/terminal-preview")) {
       return route.fulfill({
         json: {
+          revision: "d".repeat(43),
           content: "Codex ready\n\n› Design the project dashboard.\n\nWaiting for input…",
           truncated: false,
           capturedAt: timestamp,

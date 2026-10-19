@@ -25,12 +25,11 @@ Use `npm run format` to format maintained files, and `npm run lint -- --fix` to
 fix import ordering and type imports. Prettier owns formatting: double quotes,
 semicolons, two-space indentation, 100 columns, trailing commas, and LF.
 Markdown preserves paragraph line breaks. `.prettierignore` excludes generated
-files, fixtures, images, lockfiles, historical ADRs, and benchmark records.
+files, fixtures, images, lockfiles, and ADRs.
 
-ESLint checks client, server, shared, tests, and TypeScript scripts. React Hooks
-rules apply only to client code and tests. Imports stay at the top; server imports
-group Node, third-party, and project modules. The [isolated lint toolchain](../tools/client-lint/README.md)
-uses a compatible TypeScript API separately from the project compiler.
+ESLint checks client, server, shared code, tests, and TypeScript scripts. See the
+[isolated lint toolchain](../tools/client-lint/README.md) for import rules, React
+Hooks coverage, and its separate TypeScript API dependency.
 
 ## Integration tests and benchmarks
 
@@ -54,6 +53,10 @@ user sessions.
 
 ## Documentation screenshots
 
+Use `playwright-cli` with its browser installed. Capture the rendered UI without
+DOM or style overrides; inspect for page errors, clipping, and horizontal overflow.
+Close dedicated browser sessions and stop demo servers after capture.
+
 ### README introduction animation
 
 The README GIF shows the real client with fabricated API responses: create a
@@ -61,7 +64,7 @@ session with the `default` home preselected among multiple homes, type and send
 a prompt, then read a preset reply. It does not start Codex,
 call a model, or access the user's sessions. The browser intercepts all API requests.
 
-Requirements: `playwright-cli` with its browser installed, and Python 3 with Pillow.
+The animation additionally requires Python 3 with Pillow.
 Start the client in one terminal:
 
 ```sh
@@ -90,14 +93,12 @@ Generate the demo outside the repository and start a built server:
 ```sh
 node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
 npm run build
-mkdir -p /tmp/codex-hub-docs-work/sessions
 npm start -- \
   --codex-home 'default=/tmp/codex-hub-docs-demo' \
-  --codex-home 'work=/tmp/codex-hub-docs-work' \
   --port 4187
 ```
 
-With `playwright-cli` installed, open the server in a dedicated browser session:
+Open the server in a dedicated browser session:
 
 ```sh
 playwright-cli -s=docs open http://127.0.0.1:4187
@@ -109,8 +110,7 @@ Use `playwright-cli -s=docs run-code` to create a browser context with
 before capturing each screenshot.
 Capture the home page to `docs/images/codex-hub-mobile-catalog.png`, then
 select **Design the project dashboard** and capture `docs/images/codex-hub-mobile-reader.png`.
-Keep default event filters and the archive filter off. Capture the rendered UI
-without DOM or style overrides; inspect for clipping and horizontal overflow.
+Keep default event filters and the archive filter off.
 
 Close the dedicated browser session and stop the demo server after capture.
 The generator refuses an existing destination to avoid overwriting other data.
@@ -118,7 +118,7 @@ It uses only fabricated project paths and conversations, never the user's Codex 
 
 ### Session interaction screenshot
 
-Requirements: `playwright-cli` with its browser installed, and a running client:
+With a running client:
 
 ```sh
 npm run dev -- --port 4187 --strictPort
@@ -133,8 +133,6 @@ node scripts/record-docs-intro.mjs http://127.0.0.1:4187 /tmp/codex-hub-intro.gi
 ```
 
 The interaction capture defaults to `docs/images/codex-hub-session-interaction.png`.
-Both scripts intercept API requests with shared fabricated fixtures. Inspect for page
-errors, clipping and horizontal overflow; confirm terminal output, terminal controls,
-the message input and Handoff are visible. Inspect the animation at README display
-width and keep it under 5 MiB. Use temporary output paths for verification and stop
-the client server afterward.
+Both scripts intercept API requests with shared fabricated fixtures. Confirm terminal
+output, terminal controls, the message input and Handoff are visible in the interaction
+screenshot. Use temporary output paths for verification.

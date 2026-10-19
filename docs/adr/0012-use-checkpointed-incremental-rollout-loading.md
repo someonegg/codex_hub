@@ -5,6 +5,10 @@ date: 2026-08-08
 
 # Use checkpointed incremental rollout loading with probe validation
 
+Current scope (updated 2026-10-18): this validation policy applies to unarchived
+rollouts. Successfully loaded archives reuse cached content; directory discovery
+is unchanged. See the [cache rules](../technical-reference.md) for details.
+
 ## Context and Problem Statement
 
 Codex rollout files are append-heavy JSONL streams, but the generation-based source rereads and renormalizes an entire changed file. Large active sessions therefore make each refresh proportional to historical size. Incremental state must preserve incomplete-tail, malformed-line, diagnostic, tool-pairing, atomic snapshot, paging, and cursor semantics while safely recovering from truncation or replacement.
@@ -69,9 +73,3 @@ Identity and normalization use copy-on-write accumulators and publish only after
 - Good: Allows stable normalized objects and repository prefix slots to be reused.
 - Bad: Accepts the documented possibility of an undetected middle rewrite.
 - Bad: Requires explicit decoder and normalizer version invalidation.
-
-## Archived rollout scope update, 2026-10-18
-
-This policy now applies to unarchived rollouts. Successfully loaded archives reuse
-cached content; directory discovery is unchanged. See the
-[cache rules](../technical-reference.md) for details.

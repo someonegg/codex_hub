@@ -56,6 +56,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       catalogService.close();
       updates.close();
       operations.close();
+      interaction.close();
     },
   );
   servers.push(server);

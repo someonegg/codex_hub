@@ -33,6 +33,7 @@ it("closes the composed services once before waiting for HTTP connections", asyn
   const catalogClose = vi.spyOn(hub.catalog, "close");
   const updatesClose = vi.spyOn(hub.updates, "close");
   const operationsClose = vi.spyOn(hub.operations, "close");
+  const interactionClose = vi.spyOn(hub.interaction, "close");
   let server: ReturnType<typeof createServer>;
   const close = vi.fn(() => {
     expect(server.listening).toBe(true);
@@ -54,6 +55,7 @@ it("closes the composed services once before waiting for HTTP connections", asyn
     expect(catalogClose).toHaveBeenCalledOnce();
     expect(updatesClose).toHaveBeenCalledOnce();
     expect(operationsClose).toHaveBeenCalledOnce();
+    expect(interactionClose).toHaveBeenCalledOnce();
     await expect(hub.catalog.wait()).rejects.toMatchObject({ name: "AbortError" });
   } finally {
     hub.close();

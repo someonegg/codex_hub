@@ -122,7 +122,16 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
       return route.fulfill({ status: 204 });
     }
     if (path.endsWith("/terminal-preview")) {
-      return json({ content: "Codex ready", truncated: false, capturedAt: timestamp });
+      if (url.searchParams.has("after")) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        return route.fulfill({ status: 204 });
+      }
+      return json({
+        revision: "d".repeat(43),
+        content: "Codex ready",
+        truncated: false,
+        capturedAt: timestamp,
+      });
     }
     throw new Error(`Unexpected demo API: ${route.request().method()} ${path}`);
   });

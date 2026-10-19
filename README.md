@@ -20,7 +20,7 @@ Requirements:
 
 - Node.js 22.13 or newer and npm
 - A local Codex home (usually `~/.codex`)
-- Codex CLI with `--no-daemon`, `--worktree`, `archive`, and `delete --force` support
+- Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
 
 ```sh

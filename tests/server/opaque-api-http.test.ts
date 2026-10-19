@@ -246,27 +246,26 @@ describe("opaque cursor API", () => {
     const metadata = await fetch(`${base}/api/v1/sessions/${sessionId}`).then((response) =>
       response.json(),
     );
-    expect(metadata.session.title).toBe("Synthetic trace");
-    expect(metadata.session.nickname).toBe("Current nickname");
-    expect(metadata).not.toHaveProperty("revisionSession");
+    expect(metadata).toEqual({
+      session: expect.objectContaining({ title: "Synthetic trace", nickname: "Current nickname" }),
+      interaction: { supported: false, attachCommand: null },
+      updateRevision: expect.any(String),
+    });
 
     const first = await fetch(`${base}/api/v1/sessions/${sessionId}/items?limit=1`).then(
       (response) => response.json(),
     );
-    expect(first).toEqual(
-      expect.objectContaining({
-        session: expect.objectContaining({
-          title: "Synthetic trace",
-          nickname: "Current nickname",
-        }),
-        interaction: { supported: false, attachCommand: null },
-        items: expect.any(Array),
-        cursor: expect.any(String),
-        hasMore: true,
-        updateRevision: expect.any(String),
+    expect(first).toEqual({
+      session: expect.objectContaining({
+        title: "Synthetic trace",
+        nickname: "Current nickname",
       }),
-    );
-    expect(first).not.toHaveProperty("revisionSession");
+      interaction: { supported: false, attachCommand: null },
+      items: expect.any(Array),
+      cursor: expect.any(String),
+      hasMore: true,
+      updateRevision: expect.any(String),
+    });
     const unconfirmed = await fetch(
       `${base}/api/v1/sessions/${sessionId}/items/directive-4/directive?cursor=${encodeURIComponent(first.cursor)}`,
     );
