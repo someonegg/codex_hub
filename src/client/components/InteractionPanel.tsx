@@ -28,6 +28,8 @@ interface InteractionPanelProps {
   onSendKeys: (keys: readonly InteractionKey[]) => Promise<void>;
   preview: TerminalPreviewSnapshot | null;
   previewBusy: boolean;
+  previewStopped: boolean;
+  onRetryPreview: () => void;
   previewError: string | null;
   onDismissPreviewError: () => void;
   previewExpanded: boolean;
@@ -50,6 +52,8 @@ export function InteractionPanel({
   onSendKeys,
   preview,
   previewBusy,
+  previewStopped,
+  onRetryPreview,
   previewError,
   onDismissPreviewError,
   previewExpanded,
@@ -246,6 +250,14 @@ export function InteractionPanel({
               ) : null}
             </button>
           </div>
+          {previewStopped ? (
+            <div className="terminal-preview-notice" role="status">
+              <span>Preview updates stopped.</span>{" "}
+              <button type="button" onClick={onRetryPreview} disabled={previewBusy}>
+                {previewBusy ? "Reconnecting…" : "Retry preview"}
+              </button>
+            </div>
+          ) : null}
           {previewError ? (
             <div className="interaction-error terminal-preview-error" role="alert">
               <span>{previewError}</span>

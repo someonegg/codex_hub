@@ -454,3 +454,80 @@ it("rejects an exit observation when ownership changes while querying pane liven
   resolve("exited");
   await rejected;
 });
+
+it.each(["takeover", "different pane", "invalid"])(
+  "keeps duplicate bindings streaming and permanently closes the old preview on %s",
+  async (change) => {
+    const snapshot = boundSession();
+    const binding = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    let content = "first";
+    let notify = () => {};
+    const stop = vi.fn();
+    const listen = vi.fn((_binding, changed) => {
+      notify = changed;
+      return { ready: Promise.resolve(), close: stop };
+    });
+    const tmux = {
+      connect: vi.fn().mockResolvedValue(binding),
+      resolveTarget: vi.fn().mockResolvedValue(binding),
+      captureTerminal: vi.fn(async () => ({ content, truncated: false })),
+    } as unknown as TmuxInteractionService;
+    const service = new SessionInteractionService(
+      repository(snapshot),
+      true,
+      tmux,
+      bindings,
+      listen,
+    );
+    services.push(service);
+    const frame = vi.fn();
+    const fail = vi.fn();
+    await service.subscribePreview("session", frame, fail, new AbortController().signal);
+    await vi.waitFor(() => expect(frame).toHaveBeenCalledOnce());
+    const submit = (time: number, sessionId = "session", paneId = "%7", valid = true) =>
+      bindings.submit({
+        sessionId,
+        time,
+        ordinal: time,
+        position: 0,
+        attempt: valid
+          ? { valid: true, ordinal: time, ...binding, paneId, projectDirectory: "/new-project" }
+          : { valid: false, ordinal: time },
+      });
+    submit(1);
+    submit(2);
+    const secondFrame = vi.fn();
+    await service.subscribePreview("session", secondFrame, fail, new AbortController().signal);
+    await vi.waitFor(() => expect(secondFrame).toHaveBeenCalledOnce());
+    expect(listen).toHaveBeenCalledOnce();
+    content = "after duplicate";
+    notify();
+    await vi.waitFor(() => expect(frame).toHaveBeenCalledTimes(2));
+    expect(secondFrame).toHaveBeenCalledTimes(2);
+    expect(fail).not.toHaveBeenCalled();
+    submit(
+      3,
+      change === "takeover" ? "other" : "session",
+      change === "different pane" ? "%8" : "%7",
+      change !== "invalid",
+    );
+    expect(fail).toHaveBeenCalledTimes(2);
+    expect(stop).toHaveBeenCalledOnce();
+    if (change === "takeover")
+      expect(await service.describe("session")).toMatchObject({ state: "superseded" });
+    submit(4);
+    content = "returned";
+    notify();
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(frame).toHaveBeenCalledTimes(2);
+    expect(secondFrame).toHaveBeenCalledTimes(2);
+    const recovered = vi.fn();
+    await service.subscribePreview("session", recovered, vi.fn(), new AbortController().signal);
+    await vi.waitFor(() =>
+      expect(recovered).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "snapshot", content: "returned" }),
+      ),
+    );
+    expect(listen).toHaveBeenCalledTimes(2);
+  },
+);

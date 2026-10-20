@@ -32,6 +32,8 @@ function props(value: InteractionResponse | null) {
     onSendKeys: vi.fn().mockResolvedValue(undefined),
     preview: null,
     previewBusy: false,
+    previewStopped: false,
+    onRetryPreview: vi.fn(),
     previewError: null,
     onDismissPreviewError: vi.fn(),
     onTogglePreview: vi.fn(),

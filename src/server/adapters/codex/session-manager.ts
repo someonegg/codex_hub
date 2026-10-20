@@ -1,8 +1,8 @@
-import { validProjectDirectory } from "../../domain/project-directory.js";
 import { execFile } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 
+import { validProjectDirectory } from "../../domain/project-directory.js";
 import { TmuxLauncher } from "../../interaction/tmux-launcher.js";
 import type { SessionManager } from "../../management/session-manager.js";
 import { codexBindingCommand } from "./interaction-parser.js";

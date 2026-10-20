@@ -17,6 +17,8 @@ export function useTerminalPreview(
   const [expanded, setExpanded] = useState(false);
   const [preview, setPreview] = useState<TerminalPreviewSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
+  const [stopped, setStopped] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(() => document.visibilityState !== "hidden");
   const [activeSession, setActiveSession] = useState(sessionId);
@@ -25,6 +27,7 @@ export function useTerminalPreview(
     autoExpanded.current = null;
     setExpanded(false);
     setPreview(null);
+    setStopped(false);
     setError(null);
     setBusy(false);
   }
@@ -45,6 +48,7 @@ export function useTerminalPreview(
       setExpanded(false);
       setBusy(false);
       setPreview(null);
+      setStopped(false);
       setError(null);
     }
     if (!connected || !expanded || !visible) return;
@@ -64,6 +68,7 @@ export function useTerminalPreview(
         ++generation;
         setBusy(false);
         setError(message);
+        setStopped(true);
         if (retryable) {
           timer = setTimeout(connect, retryDelayMs(retry));
           retry = nextRetryMs(retry);
@@ -77,6 +82,7 @@ export function useTerminalPreview(
             if (!applied) return false;
             confirmed = applied;
             setPreview(applied);
+            setStopped(false);
             setBusy(false);
             setError(null);
             retry = INITIAL_RETRY_MS;
@@ -96,10 +102,14 @@ export function useTerminalPreview(
       clearTimeout(timer);
       setBusy(false);
     };
-  }, [sessionId, connected, expanded, visible]);
+  }, [sessionId, connected, expanded, visible, retryKey]);
   return {
     preview,
     previewBusy: busy,
+    previewStopped: stopped,
+    onRetryPreview: () => {
+      if (connection.current && expanded && visible && !busy) setRetryKey((value) => value + 1);
+    },
     previewError: error,
     previewExpanded: expanded,
     onExpandPreview: () => {

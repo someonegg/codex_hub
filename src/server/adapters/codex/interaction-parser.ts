@@ -1,6 +1,6 @@
 import { isAbsolute } from "node:path";
-import { validProjectDirectory } from "../../domain/project-directory.js";
 
+import { validProjectDirectory } from "../../domain/project-directory.js";
 import type {
   DomainAgentInteraction,
   InteractionBindingAttempt,
@@ -42,7 +42,7 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     const lines = rawLines.map((line) => line.replace(/\r$/, ""));
     for (let index = 0; index < lines.length; index += 1) {
       if (!["CODEX_HUB_TMUX_BIND_V3", "CODEX_HUB_TMUX_BIND_V4"].includes(lines[index]!)) continue;
-      const project = lines[index] === "CODEX_HUB_TMUX_BIND_V4" ? rawLines[index + 4] : undefined;
+      const project = lines[index] === "CODEX_HUB_TMUX_BIND_V4" ? lines[index + 4] : undefined;
       const tmux = lines[index + 1] ?? "";
       const paneId = lines[index + 2] ?? "";
       const operationId = lines[index + 3] ?? "";

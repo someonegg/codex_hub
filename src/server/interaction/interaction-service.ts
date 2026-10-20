@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-
 import type {
   InteractionKey,
   InteractionResponse,
@@ -52,7 +50,6 @@ export class SessionInteractionService {
   readonly #busy = new Set<string>();
   readonly #previews: TerminalPreviewService;
   readonly #unsubscribe: () => void;
-  readonly #bindingIds = new WeakMap<InteractionBindingAttempt, string>();
 
   close(): void {
     this.#unsubscribe();
@@ -226,24 +223,12 @@ export class SessionInteractionService {
     fail: (error: unknown) => void,
     signal: AbortSignal,
   ): Promise<() => void> {
-    const { binding, attempt } = await this.#resolve(sessionId);
+    const { binding } = await this.#resolve(sessionId);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-    let identity = this.#bindingIds.get(attempt);
-    if (!identity) {
-      identity = randomUUID();
-      this.#bindingIds.set(attempt, identity);
-    }
     return this.#previews.subscribe(
-      `${sessionId}:${identity}`,
+      sessionId,
       binding,
-      () => {
-        this.#assertOwner(sessionId, binding);
-        if (this.bindings.latest(sessionId) !== attempt)
-          throw new SessionInteractionError(
-            "interaction_not_connected",
-            "The pane binding changed",
-          );
-      },
+      () => this.#assertOwner(sessionId, binding),
       frame,
       fail,
       signal,
