@@ -29,6 +29,8 @@ export function codexInteraction(projectDirectory?: string | null): DomainAgentI
 
 export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBindingAttempt[] {
   if (record.value.type !== "response_item") return [];
+  const metadata = record.value.metadata;
+  if (isObject(metadata) && metadata.inherited_user_message === true) return [];
   const payload = record.value.payload;
   if (!isObject(payload) || payload.type !== "message" || payload.role !== "user") {
     return [];
