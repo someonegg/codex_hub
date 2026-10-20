@@ -35,3 +35,14 @@ jobs:
       - run: npm run lint
       - run: npm run format:check
       - run: npm run test:package
+
+  test-result:
+    name: npm test
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all matrix checks to pass
+        env:
+          CHECK_RESULT: ${{ needs.test.result }}
+        run: test "$CHECK_RESULT" = success
