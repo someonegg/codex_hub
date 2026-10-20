@@ -57,86 +57,49 @@ user sessions.
 
 ## Documentation screenshots
 
-Use `playwright-cli` with its browser installed. Capture the rendered UI without
-DOM or style overrides; inspect for page errors, clipping, and horizontal overflow.
-Close dedicated browser sessions and stop demo servers after capture.
-
-### README introduction animation
-
-The README GIF shows the real client with fabricated API responses: create a
-session with the `default` home preselected among multiple homes, type and send
-a prompt, then read a preset reply. It does not start Codex,
-call a model, or access the user's sessions. The browser intercepts all API requests.
-
-The animation additionally requires Python 3 with Pillow.
-Start the client in one terminal:
+Install `playwright-cli` and its browser; the GIF also requires Python 3 with Pillow.
+Start the client, then run the capture scripts in another terminal:
 
 ```sh
 npm run dev -- --port 4187 --strictPort
 ```
 
-In another terminal, from the repository root:
-
 ```sh
 node scripts/record-docs-intro.mjs
+node scripts/capture-docs-interaction.mjs
 ```
 
-An optional URL argument selects a different client server. The script uses a
-dedicated browser session and a 1440 × 1000 viewport with English locale and UTC.
-It saves PNG frames in a new temporary directory, closes its browser, and combines
-the frames into `docs/images/codex-hub-intro.gif` using a shared palette. The GIF
-loops automatically, pauses on the reply, and must stay under 5 MiB. Source frames
-remain in the printed temporary directory for inspection. Stop the client server
-after recording. Inspect the GIF at README display width before committing.
+The scripts capture the real UI without DOM or style overrides, using shared
+fabricated English data and intercepted API requests, including terminal WebSocket
+snapshots. They do not start Codex or access the user's sessions.
 
-### Static screenshots
+Outputs in `docs/images/`:
 
-Screenshots use synthetic English rollouts served by the real application.
-Generate the demo outside the repository and start a built server:
+- `codex-hub-intro.gif`: session creation, prompt submission, reply, and an answered
+  **User input** card at 1440 × 1000. It loops with a 6.5-second final pause.
+- `codex-hub-session-interaction.png`: the answered card and full interaction panel,
+  including terminal output, at 1440 × 1500.
+- `codex-hub-mobile-catalog.png` and `codex-hub-mobile-reader.png`: project navigation
+  and the same answered card at 390 × 844.
+
+Both scripts accept optional URL and output path arguments:
+
+```sh
+node scripts/record-docs-intro.mjs http://127.0.0.1:4187 /tmp/codex-hub-intro.gif
+node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/codex-hub-interaction.png
+```
+
+The static script writes the mobile PNGs beside its output. GIF source frames remain
+in the printed temporary directory. Scripts check page errors and horizontal overflow
+and close their browsers. Inspect readability and clipping at README display widths,
+confirm the answered card and terminal output, and keep the GIF below 5 MiB.
+Stop the client server after capture.
+
+For manual exploration with synthetic rollouts, create a new isolated demo home
+and serve it with a built application:
 
 ```sh
 node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
 npm run build
-npm start -- \
-  --codex-home 'default=/tmp/codex-hub-docs-demo' \
-  --port 4187
+npm start -- --codex-home 'default=/tmp/codex-hub-docs-demo' --port 4187
 ```
-
-Open the server in a dedicated browser session:
-
-```sh
-playwright-cli -s=docs open http://127.0.0.1:4187
-```
-
-Use `playwright-cli -s=docs run-code` to create a browser context with
-`locale: "en-US"`, `timezoneId: "UTC"`, `deviceScaleFactor: 1`, and a
-390 × 844 viewport. Wait for the conversation, `document.fonts.ready`, and stable layout
-before capturing each screenshot.
-Capture the home page to `docs/images/codex-hub-mobile-catalog.png`, then
-select **Design the project dashboard** and capture `docs/images/codex-hub-mobile-reader.png`.
-Keep default event filters and the archive filter off.
-
-Close the dedicated browser session and stop the demo server after capture.
-The generator refuses an existing destination to avoid overwriting other data.
-It uses only fabricated project paths and conversations, never the user's Codex home.
-
-### Session interaction screenshot
-
-With a running client:
-
-```sh
-npm run dev -- --port 4187 --strictPort
-node scripts/capture-docs-interaction.mjs
-```
-
-Both capture scripts accept optional URL and output path arguments:
-
-```sh
-node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/codex-hub-interaction.png
-node scripts/record-docs-intro.mjs http://127.0.0.1:4187 /tmp/codex-hub-intro.gif
-```
-
-The interaction capture defaults to `docs/images/codex-hub-session-interaction.png`.
-Both scripts intercept API requests with shared fabricated fixtures. Confirm terminal
-output, terminal controls, the message input and Handoff are visible in the interaction
-screenshot. Use temporary output paths for verification.

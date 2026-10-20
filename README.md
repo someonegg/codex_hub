@@ -4,13 +4,13 @@ A local web hub for Codex that pairs readable conversations with live CLI intera
 Browse sessions by project, follow responses in near real time, and keep working with
 Codex from desktop or mobile.
 
-![Codex Hub: create a session, send a prompt, and read the response](docs/images/codex-hub-intro.gif)
+![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/codex-hub-intro.gif)
 
 <details>
 <summary>Mobile screenshots</summary>
 
 <img src="docs/images/codex-hub-mobile-catalog.png" alt="Mobile project navigation" width="260">
-<img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation reader" width="260">
+<img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
 
 </details>
 
@@ -59,7 +59,7 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 Send prompts, preview terminal output, and use terminal controls from the session
 page.
 
-<img src="docs/images/codex-hub-session-interaction.png" alt="Session interaction: terminal preview, controls, message input, and Handoff" width="600">
+<img src="docs/images/codex-hub-session-interaction.png" alt="Session conversation with answered User input, live terminal preview, controls, message input, and Handoff" width="900">
 
 ### Continue with Handoff
 
