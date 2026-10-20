@@ -74,6 +74,7 @@ function setup(managementWaitMs = 30) {
     })),
   };
   const manager = {
+    isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async () => ({ directory: "/project" })),
     launch: vi.fn(async () => target),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
@@ -233,24 +234,22 @@ describe("observed management operations", () => {
     expect(service.create({ ...input, yolo: false })).toEqual(first);
     expect(() => service.create({ ...input, yolo: true })).toThrow(/different parameters/);
     await flush();
-    expect(manager.launch).toHaveBeenLastCalledWith(
-      first.operationId,
-      "/project",
-      false,
-      false,
-      undefined,
-      "/project",
-    );
+    expect(manager.launch).toHaveBeenLastCalledWith({
+      operationId: first.operationId,
+      directory: "/project",
+      worktree: false,
+      yolo: false,
+      projectDirectory: "/project",
+    });
     const second = service.create({ ...input, requestId: "yolo-enabled", yolo: true });
     await flush();
-    expect(manager.launch).toHaveBeenLastCalledWith(
-      second.operationId,
-      "/project",
-      false,
-      true,
-      undefined,
-      "/project",
-    );
+    expect(manager.launch).toHaveBeenLastCalledWith({
+      operationId: second.operationId,
+      directory: "/project",
+      worktree: false,
+      yolo: true,
+      projectDirectory: "/project",
+    });
   });
   it("keeps timeout terminal and never relaunches on queries", async () => {
     const { service, manager, set, time } = setup();
@@ -957,9 +956,9 @@ it("does not kill after binding refresh fails at the force deadline", async () =
 });
 
 describe("safe resume operations", () => {
-  function resumable() {
+  function resumable(sourceId = session().sourceId) {
     const f = setup();
-    const original = session("original");
+    const original = { ...session("original"), sourceId };
     bindings.submit({
       sessionId: original.id,
       time: 1,
@@ -973,7 +972,7 @@ describe("safe resume operations", () => {
   const request = { resumeSessionId: "original", requestId: "resume-request-one" };
 
   it("shares session occupancy, request idempotency, and observes the original session binding", async () => {
-    const f = resumable();
+    const f = resumable("native:会话/42%");
     const op = f.service.create(request);
     expect(op).toMatchObject({ type: "create", mode: "resume", sessionId: "original" });
     expect(f.service.create(request).operationId).toBe(op.operationId);
@@ -983,14 +982,14 @@ describe("safe resume operations", () => {
     expect(() => f.service.manage("exit", "original")).toThrow(/Another management/);
     expect(() => f.service.manage("archive", "original")).toThrow(/Another management/);
     await flush();
-    expect(f.manager.launch).toHaveBeenCalledWith(
-      op.operationId,
-      "/project",
-      false,
-      false,
-      f.original.sourceId,
-      f.original.projectDirectory,
-    );
+    expect(f.manager.launch).toHaveBeenCalledWith({
+      operationId: op.operationId,
+      directory: "/project",
+      worktree: false,
+      yolo: false,
+      resumeNativeId: f.original.sourceId,
+      projectDirectory: f.original.projectDirectory,
+    });
     bindings.submit({
       sessionId: "original",
       time: 2,
@@ -1005,6 +1004,16 @@ describe("safe resume operations", () => {
       target,
     });
     expect(f.interaction.setBusy).toHaveBeenLastCalledWith("original", false);
+  });
+
+  it("denies resume when the owning adapter rejects the native identity", async () => {
+    const f = resumable();
+    f.manager.isValidNativeId.mockReturnValue(false);
+    const op = f.service.create(request);
+    await flush();
+    expect(await f.service.get(op.operationId)).toMatchObject({ status: "failed" });
+    expect(f.manager.isValidNativeId).toHaveBeenCalledWith(f.original.sourceId);
+    expect(f.manager.launch).not.toHaveBeenCalled();
   });
 
   it("blocks resume while another management action owns the session", () => {
@@ -1101,14 +1110,14 @@ describe("safe resume operations", () => {
     f.registry.register("other", { ...f.manager });
     const op = f.service.create({ ...request, yolo: true });
     await flush();
-    expect(f.manager.launch).toHaveBeenCalledWith(
-      op.operationId,
-      "/project",
-      false,
-      true,
-      f.original.sourceId,
-      f.original.projectDirectory,
-    );
+    expect(f.manager.launch).toHaveBeenCalledWith({
+      operationId: op.operationId,
+      directory: "/project",
+      worktree: false,
+      yolo: true,
+      resumeNativeId: f.original.sourceId,
+      projectDirectory: f.original.projectDirectory,
+    });
     expect(() => f.service.create({ ...request, directory: "/other" } as never)).toThrow(/only/);
   });
 });

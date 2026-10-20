@@ -3,6 +3,7 @@ import { expect, it, vi } from "vitest";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import type { DomainDiagnostic } from "../../src/server/domain/session-domain.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import type { SessionLaunchOptions } from "../../src/server/management/session-manager.js";
 import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import { RefreshDiagnosticLogger } from "../../src/server/repository/diagnostic-logger.js";
 import { opaqueIdForParts } from "../../src/server/security/opaque-id.js";
@@ -269,8 +270,9 @@ it.each(["create", "archive", "delete"] as const)(
       diagnosticLogger: { log() {} },
     });
     const manager = {
+      isValidNativeId: vi.fn((_nativeId: string) => true),
       resolveDirectory: vi.fn(async () => ({ directory: "/project" })),
-      launch: vi.fn(async (operationId: string) => {
+      launch: vi.fn(async ({ operationId }: SessionLaunchOptions) => {
         const sessionId = opaqueIdForParts(descriptor.instanceKey, current.localId);
         bindings.submit({
           sessionId,

@@ -11,7 +11,9 @@ function setup() {
   const bindings = new PaneBindingManager();
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
   const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
+  const isValidNativeId = vi.fn((_nativeId: string) => true);
   const managers = new SessionManagerRegistry("home").register("home", {
+    isValidNativeId,
     resolveDirectory,
     launch: vi.fn(),
     archive: vi.fn(),
@@ -53,7 +55,16 @@ function setup() {
       attempt: valid ? { valid: true, ordinal: time, ...pane } : { valid: false, ordinal: time },
     });
   const evaluate = (value = session, all = [value]) => runtime.evaluate(value, all);
-  return { runtime, bindings, resolveTarget, resolveDirectory, session, bind, evaluate };
+  return {
+    isValidNativeId,
+    runtime,
+    bindings,
+    resolveTarget,
+    resolveDirectory,
+    session,
+    bind,
+    evaluate,
+  };
 }
 
 describe("session runtime evidence", () => {
@@ -85,10 +96,25 @@ describe("session runtime evidence", () => {
     expect(await f.evaluate()).toMatchObject({ status: "normal", resume: { allowed: false } });
   });
 
+  it.each(["name", "native:会话/42%", "00000000-0000-4000-8000-000000000001"])(
+    "delegates opaque native identity %s to the owning manager",
+    async (sourceId) => {
+      const f = setup();
+      f.bind();
+      const value = { ...f.session, sourceId };
+      expect((await f.evaluate(value)).resume.allowed).toBe(true);
+      expect(f.isValidNativeId).toHaveBeenCalledWith(sourceId);
+      f.isValidNativeId.mockReturnValue(false);
+      expect((await f.evaluate(value)).resume.allowed).toBe(false);
+    },
+  );
+
   it("rejects invalid identities, duplicate identities in one home and unavailable directories", async () => {
     const f = setup();
     f.bind();
-    expect((await f.evaluate({ ...f.session, sourceId: "name" })).resume.allowed).toBe(false);
+    expect((await f.evaluate({ ...f.session, sourceId: "" })).resume.allowed).toBe(false);
+    expect((await f.evaluate({ ...f.session, sourceId: null })).resume.allowed).toBe(false);
+    expect((await f.evaluate({ ...f.session, sourceId: "   " })).resume.allowed).toBe(false);
     expect(
       (await f.evaluate(f.session, [f.session, { ...f.session, id: "duplicate" }])).resume.allowed,
     ).toBe(false);

@@ -72,7 +72,8 @@ Technical event filters are optional; see [JSONL filtering](session-jsonl-filter
 
 Use the project **+** to prefill its directory, or the global **+** to choose an
 existing project or enter an absolute local directory. Creation optionally uses
-a native Codex worktree and can enable `--yolo`. Both options are off by default. The session **…** menu offers archive and, for archived
+a native Codex worktree through **Enable worktree** and YOLO mode through **Enable YOLO mode**.
+Both options reset to off whenever the creation dialog opens. The session **…** menu offers archive and, for archived
 sessions, permanent deletion with confirmation.
 
 Creation starts Codex in a dedicated tmux session and waits for its recorded binding.
@@ -93,7 +94,7 @@ Exit stops the pane without archiving the conversation.
 
 Disconnected panels hide input and terminal controls while preserving unsent drafts.
 They show **Resume** when the server can establish safe recovery, or explain why it
-is unavailable. Resume opens a dialog with only a `--yolo` switch, off by default;
+is unavailable. Resume opens a dialog with only an **Enable YOLO mode** switch, reset to off whenever it opens;
 it uses the original home and working directory and preserves session identity.
 No binding, invalid bindings, uncertain checks and archived sessions cannot resume.
 After an unknown launch result, inspect the attach target before trying again.

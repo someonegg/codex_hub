@@ -380,8 +380,12 @@ it("formats a fixed large catalog once and reuses dates when groups and selectio
   fireEvent.click(group);
   fireEvent.click(group);
   expect(format).toHaveBeenCalledTimes(count);
-  fireEvent.click(screen.getByRole("link", { name: /Large catalog 0/ }));
+  // Avoid computing accessible names for all 1,000 links in this cache regression test.
+  const link = screen.getByText("Large catalog 0", { exact: true }).closest("a")!;
+  expect(link).toHaveAttribute("href", `/sessions/${SESSION_ID}`);
+  fireEvent.click(link);
   await flush();
+  expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
   expect(format.mock.calls.length).toBeLessThan(count + 5);
 });
 

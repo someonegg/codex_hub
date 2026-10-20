@@ -110,14 +110,13 @@ export class OperationService {
         const resolved = await manager.resolveDirectory(input.directory);
         if (!this.#pending(entry)) return;
         this.#transition(entry, { kind: "create", phase: "launching" });
-        const target = await manager.launch(
-          entry.metadata.operationId,
-          resolved.directory,
-          input.worktree,
-          input.yolo ?? false,
-          undefined,
-          resolved.directory,
-        );
+        const target = await manager.launch({
+          operationId: entry.metadata.operationId,
+          directory: resolved.directory,
+          worktree: input.worktree,
+          yolo: input.yolo ?? false,
+          projectDirectory: resolved.directory,
+        });
         if (!this.#pending(entry)) return;
         this.#transition(
           entry,
@@ -205,14 +204,14 @@ export class OperationService {
           throw new Error("Session identity, binding or directory changed during validation");
         if (!this.#pending(entry)) return;
         this.#transition(entry, { kind: "create", phase: "launching" });
-        const target = await manager.launch(
-          entry.metadata.operationId,
-          resolved.directory,
-          false,
-          input.yolo ?? false,
-          session.sourceId!,
-          session.projectDirectory,
-        );
+        const target = await manager.launch({
+          operationId: entry.metadata.operationId,
+          directory: resolved.directory,
+          worktree: false,
+          yolo: input.yolo ?? false,
+          resumeNativeId: session.sourceId!,
+          projectDirectory: session.projectDirectory,
+        });
         if (!this.#pending(entry)) return;
         this.#transition(
           entry,
