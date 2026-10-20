@@ -51,31 +51,33 @@ export function HubSidebar({
           Codex Hub
         </InternalLink>
       </header>
-      {(catalog.list?.homes?.length ?? 0) > 1 ? (
-        <label className="archive-switch">
-          Home
-          <select
-            aria-label="Filter by home"
-            value={homeFilter}
-            onChange={(event) => onHomeFilter?.(event.target.value)}
-          >
-            <option value="">All homes</option>
-            {catalog.list!.homes.map((home) => (
-              <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
-                {home.nickname}
-              </option>
-            ))}
-          </select>
+      <div className="catalog-filters">
+        {(catalog.list?.homes?.length ?? 0) > 1 ? (
+          <label className="home-filter">
+            Home
+            <select
+              aria-label="Filter by home"
+              value={homeFilter}
+              onChange={(event) => onHomeFilter?.(event.target.value)}
+            >
+              <option value="">All homes</option>
+              {catalog.list!.homes.map((home) => (
+                <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                  {home.nickname}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <label className="check-row archive-switch">
+          <input
+            type="checkbox"
+            checked={navigation.includeArchived}
+            onChange={(event) => setIncludeArchived(event.target.checked)}
+          />
+          Archived
         </label>
-      ) : null}
-      <label className="check-row archive-switch">
-        <input
-          type="checkbox"
-          checked={navigation.includeArchived}
-          onChange={(event) => setIncludeArchived(event.target.checked)}
-        />
-        Include archived
-      </label>
+      </div>
       <div className="hub-section-label">
         Projects
         <button
