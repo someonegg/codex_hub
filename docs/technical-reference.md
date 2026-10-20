@@ -29,8 +29,8 @@ probe that stops when idle. Capacity is 100 waiters; excess requests receive `42
 with `Retry-After: 2`. Disconnects and server shutdown release waiters. `after`
 must be 43 base64url characters; other query parameters return `400`.
 
-Home metadata, title, project, status, and
-parent changes affect them; timestamps, content, statistics, and diagnostics do not.
+Catalog revisions track home metadata, titles, projects, status, and parent
+relationships, but exclude timestamps, content, statistics, and diagnostics.
 Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 
 Within each home, a native session ID determines stable identity. Duplicate rollouts
@@ -142,11 +142,10 @@ original line indices, and run in strictly descending, nonoverlapping order.
 Splitting and joining on `"\n"` preserves blank lines and trailing newlines;
 truncation-only changes may use an empty operations array.
 
-If diff computation exceeds its budget or a delta is too large or no smaller than
-full text, the server sends a snapshot instead. Subsequent deltas use that snapshot
-as their base. Clients validate frames before committing them; invalid updates
-preserve the display and require reconnection for a full snapshot. There is no
-cross-connection resume state.
+The server falls back to a snapshot if diff computation exceeds its budget or a
+delta is too large or no smaller than full text. Clients validate frames before
+applying them; invalid updates preserve the display and require reconnection.
+Connections always restart from a full snapshot.
 
 Viewers share tmux listeners and captures without changing terminal size or session
 environment. Output events merge over 350 milliseconds; only content or truncation changes
@@ -157,13 +156,13 @@ Ownership loss, invalid binds, target changes and listener failures invalidate a
 subscriptions immediately; returning ownership does not revive a closed subscription.
 
 The browser connects only while the preview is expanded, connected, and visible.
-It backs off retryable failures and stops on terminal errors until expansion,
-visibility, connection changes, or an explicit retry. Failed previews retain the last
-frame with a stopped-updates notice until a valid snapshot arrives. Dismissing error
-details does not clear that notice or reconnect; the separate retry action cancels
-pending retries and opens a fresh connection. See [preview service](../src/server/interaction/terminal-preview-service.ts)
-and [WebSocket transport](../src/server/http/terminal-preview-websocket.ts) for resource
-limits and connection cleanup.
+Retryable failures use backoff; terminal errors wait for expansion, visibility,
+connection changes, or explicit retry. Failures retain the last frame and a
+stopped-updates notice until a valid snapshot arrives. Dismissing error details
+does not reconnect; explicit retry cancels pending retries and reconnects.
+See [preview service](../src/server/interaction/terminal-preview-service.ts) and
+[WebSocket transport](../src/server/http/terminal-preview-websocket.ts) for limits
+and cleanup.
 
 ## Asynchronous management
 

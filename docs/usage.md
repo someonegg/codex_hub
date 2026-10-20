@@ -29,31 +29,24 @@ npm start -- \
   --codex-home 'work=/path/to/codex-work'
 ```
 
-Each value is split at the first `=`. The nickname and path are trimmed at both
-ends; internal spaces and additional `=` characters in the path are preserved.
-Quote values containing spaces or `~/` as shown above. Missing `=`, empty nicknames,
-and empty paths prevent startup. Trimmed nicknames must be unique and are
-case-sensitive (`work` and `Work` are distinct).
+Values require `nickname=path`, split at the first `=`, and trim surrounding
+whitespace; internal spaces and additional `=` characters are preserved. Nicknames must be nonempty, unique,
+and case-sensitive; paths must be nonempty. Quote spaces and `~/` as shown above.
+Relative paths resolve from the server's working directory, and `~/` expands to
+the user's home. Duplicate paths, including symlink aliases, prevent startup.
+Explicit homes replace `default=~/.codex` and retain their supplied order.
 
-Relative paths resolve from the server's current working directory; `~/` expands
-to the user's home directory. Duplicate paths, including equivalent paths and
-symlink aliases, prevent startup. With no home options, the server uses
-`default=~/.codex`. Explicit options replace that default and retain their supplied
-order. Configuration is read at startup; restart after changing options.
-
-The sidebar defaults to **All homes** and remembers the home filter within the tab.
-Projects sharing a directory merge across homes. Counts and archive filtering use
-visible sessions. Filtering leaves the current reader open; direct links, parent/child
-navigation, and tmux takeover links remain available across homes. Removed home filters
-fall back to **All homes**. Multi-home lists and readers display the home nickname,
-which is separate from a session's nickname.
+The sidebar remembers its home filter within the tab, defaulting to **All homes**
+when unset or removed. Projects merge by directory across homes; counts and archive
+filtering use visible sessions. Filtering keeps the current reader open and allows
+cross-home navigation. Multi-home lists and readers show the home nickname,
+separate from the session nickname.
 
 The create dialog preselects the filtered home, otherwise the home nicknamed
 `default`, or the sole configured home. With multiple homes and no `default` in
 aggregate view, select one explicitly, including an empty home.
-Creation, archive, and deletion always use the owning home. Every home uses the same
-local `codex` executable. A recoverable read failure
-in one home does not prevent browsing other homes.
+Creation, archive, and deletion use the owning home and the same local `codex`
+executable. Recoverable read failures are isolated to the affected home.
 
 Session IDs depend on the configured absolute home path. Renaming, reordering, or
 adding homes preserves existing IDs. Moving a home creates a new source identity.
@@ -114,18 +107,20 @@ In Codex running inside tmux, execute:
 ! printf 'CODEX_HUB_TMUX_BIND_V3\n%s\n%s\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"
 ```
 
-Session names are unrestricted for manual bindings. A valid, connected binding
-enables the full interaction panel. The terminal preview starts collapsed unless an
-automatic expansion rule below applies. While expanded and visible, it updates as
-terminal output changes, merging bursts over one second. Collapsing or hiding it
-preserves its last frame; disconnection clears it. Switching sessions resets the preview.
-Sending a slash command consisting of a single English word (for example, `/plan`)
-automatically expands the preview after successful delivery. Leading and trailing
-whitespace is ignored for command detection. The preview also expands when the
-latest message is User input or a final Plan, once the latest timeline page is
-loaded and the session is connected. Each qualifying message triggers this expansion
-only once per session visit. Manually collapsing it keeps it folded until a new
-qualifying message arrives or another slash command is successfully delivered.
+Manual bindings allow any session name; a valid, connected binding enables the
+full interaction panel. Terminal preview updates while expanded and visible.
+Collapsing or hiding it preserves the last frame; disconnection clears it, and
+switching sessions resets it.
+
+Preview starts collapsed and expands automatically after either:
+
+- Successful delivery of a single-word English slash command, such as `/plan`
+  (surrounding whitespace is ignored).
+- Loading the latest timeline page while connected, when its latest message is
+  User input or a final Plan. Each qualifying message expands it once per visit.
+
+After manually collapsing it, it stays folded until a new qualifying message or
+another successfully delivered slash command.
 
 If another session binds the same tmux pane, the former session shows that its
 pane was taken over. Input, Handoff, and terminal preview become unavailable there;
@@ -134,14 +129,12 @@ the taken-over pane when archived. This state remains after the replacement is
 archived or deleted; the link disappears if that session is no longer readable.
 An explicit later binding can reclaim the pane.
 
-After `/clear`, `/resume`, or running a plan after clearing context, if the Codex
-session has changed and is not yet bound, click **Handoff** on the **previously
-connected old session page**. It sends the binding command through that page’s
-connected pane so the active Codex session can record its binding. Successful
-sending does not mean the handoff is complete. Once the new binding is recognized,
-the old page shows a link to the replacement session. An unbound new session cannot
-initiate this operation. Handoff preserves the hub draft and expands the terminal
-preview after successful delivery.
+If Codex changes sessions after `/clear`, `/resume`, or running a plan after
+clearing context, click **Handoff** on the **previous session's connected page**.
+It sends a binding command to the active Codex session through the shared pane;
+an unbound new page cannot initiate it. Delivery opens the preview and preserves
+your draft, but handoff completes only when the new binding is recognized and the
+old page links to the replacement session.
 
 Without `--tmux-socket`, creation follows tmux's default socket selection. With it,
 creation uses the resolved absolute path. Later interaction uses the actual socket
