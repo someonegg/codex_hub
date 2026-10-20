@@ -38,8 +38,7 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
   const shellBlocks = [...text.matchAll(/<user_shell_command>([\s\S]*?)<\/user_shell_command>/g)];
   const found: InteractionBindingAttempt[] = [];
   for (const block of shellBlocks) {
-    const rawLines = (block[1] ?? "").split("\n");
-    const lines = rawLines.map((line) => line.replace(/\r$/, ""));
+    const lines = (block[1] ?? "").split("\n").map((line) => line.replace(/\r$/, ""));
     for (let index = 0; index < lines.length; index += 1) {
       if (!["CODEX_HUB_TMUX_BIND_V3", "CODEX_HUB_TMUX_BIND_V4"].includes(lines[index]!)) continue;
       const project = lines[index] === "CODEX_HUB_TMUX_BIND_V4" ? lines[index + 4] : undefined;

@@ -455,9 +455,13 @@ it("rejects an exit observation when ownership changes while querying pane liven
   await rejected;
 });
 
-it.each(["takeover", "different pane", "invalid"])(
-  "keeps duplicate bindings streaming and permanently closes the old preview on %s",
-  async (change) => {
+it.each([
+  { change: "takeover", sessionId: "other", paneId: "%7", valid: true },
+  { change: "different pane", sessionId: "session", paneId: "%8", valid: true },
+  { change: "invalid", sessionId: "session", paneId: "%7", valid: false },
+])(
+  "keeps duplicate bindings streaming and permanently closes the old preview on $change",
+  async ({ change, ...target }) => {
     const snapshot = boundSession();
     const binding = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
     let content = "first";
@@ -484,7 +488,7 @@ it.each(["takeover", "different pane", "invalid"])(
     const fail = vi.fn();
     await service.subscribePreview("session", frame, fail, new AbortController().signal);
     await vi.waitFor(() => expect(frame).toHaveBeenCalledOnce());
-    const submit = (time: number, sessionId = "session", paneId = "%7", valid = true) =>
+    const submit = (time: number, { sessionId = "session", paneId = "%7", valid = true } = {}) =>
       bindings.submit({
         sessionId,
         time,
@@ -505,12 +509,7 @@ it.each(["takeover", "different pane", "invalid"])(
     await vi.waitFor(() => expect(frame).toHaveBeenCalledTimes(2));
     expect(secondFrame).toHaveBeenCalledTimes(2);
     expect(fail).not.toHaveBeenCalled();
-    submit(
-      3,
-      change === "takeover" ? "other" : "session",
-      change === "different pane" ? "%8" : "%7",
-      change !== "invalid",
-    );
+    submit(3, target);
     expect(fail).toHaveBeenCalledTimes(2);
     expect(stop).toHaveBeenCalledOnce();
     if (change === "takeover")
