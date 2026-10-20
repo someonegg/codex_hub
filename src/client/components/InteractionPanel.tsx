@@ -134,7 +134,7 @@ export function InteractionPanel({
   };
   const sendKeys = (keys: readonly InteractionKey[]) => {
     if (!previewConnected || interactionBusy) return;
-    if (keys.includes("plan")) {
+    if (keys.includes("interrupt")) {
       if (!previewExpanded) scrollOnExpand.current = true;
       onExpandPreview();
     }
@@ -182,11 +182,7 @@ export function InteractionPanel({
   return (
     <section ref={panel} className="interaction-panel" aria-label="Session interaction">
       <div className="interaction-heading">
-        {attachCommand ? (
-          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
-            tmux access
-          </button>
-        ) : null}
+        <div className="interaction-management-actions">{operationActions}</div>
         {status.kind !== "connected" ? (
           <span className={`interaction-status interaction-status-${status.kind}`}>
             {status.label}
@@ -206,7 +202,11 @@ export function InteractionPanel({
             <span>Replacement session unavailable</span>
           )
         ) : null}
-        <div className="interaction-management-actions">{operationActions}</div>
+        {attachCommand ? (
+          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
+            tmux access
+          </button>
+        ) : null}
       </div>
       {accessOpen && attachCommand ? (
         <TmuxAccessDialog command={attachCommand} onClose={() => setAccessOpen(false)} />
@@ -248,6 +248,15 @@ export function InteractionPanel({
               {preview === null && previewBusy ? (
                 <span className="terminal-preview-status">Capturing…</span>
               ) : null}
+            </button>
+            <button
+              type="button"
+              className="terminal-preview-interrupt"
+              disabled={!previewConnected}
+              aria-disabled={interactionBusy || !previewConnected}
+              onClick={() => sendKeys(["interrupt"])}
+            >
+              Interrupt
             </button>
           </div>
           {previewStopped ? (
@@ -350,14 +359,6 @@ export function InteractionPanel({
             <div className="interaction-primary-actions">
               <button
                 type="button"
-                disabled={!previewConnected}
-                aria-disabled={interactionBusy}
-                onClick={() => sendKeys(["plan"])}
-              >
-                Plan
-              </button>
-              <button
-                type="button"
                 className="interaction-send"
                 disabled={!previewConnected || messageIsBlank || messageTooLarge}
                 aria-disabled={interactionBusy}
@@ -396,13 +397,13 @@ const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
 };
 
 const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
-  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "interrupt">;
+  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "plan">;
   readonly label: string;
   readonly glyph: string;
 }> = [
   { key: "enter", label: "Enter", glyph: "Enter" },
   { key: "up", label: "Up", glyph: "↑" },
-  { key: "interrupt", label: "Interrupt", glyph: "^C" },
+  { key: "plan", label: "Plan", glyph: "Plan" },
   { key: "left", label: "Left", glyph: "←" },
   { key: "down", label: "Down", glyph: "↓" },
   { key: "right", label: "Right", glyph: "→" },
