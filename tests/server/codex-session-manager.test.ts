@@ -4,7 +4,7 @@ import { CodexSessionManager } from "../../src/server/adapters/codex/session-man
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 
 it.each([
-  [false, undefined, []],
+  [false, false, []],
   [true, false, ["--worktree"]],
   [false, true, ["--yolo"]],
   [true, true, ["--worktree", "--yolo"]],
@@ -20,7 +20,7 @@ it.each([
       operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
       directory: "/project with spaces",
       worktree,
-      yolo: yolo ?? false,
+      yolo,
     });
     const args = launch.mock.calls[0]![2];
     expect(args.filter((arg) => arg === "--worktree" || arg === "--yolo")).toEqual(flags);
