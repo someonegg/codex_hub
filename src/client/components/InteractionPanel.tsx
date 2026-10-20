@@ -7,7 +7,9 @@ import type {
   TerminalPreviewSnapshot,
 } from "../../shared/api-contract";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
+import { MAX_UPLOAD_BYTES } from "../../shared/uploads";
 
+import { api } from "../api/client";
 import { InternalLink } from "./InternalLink";
 import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
@@ -72,6 +74,55 @@ export function InteractionPanel({
     if (!attachCommand) setAccessOpen(false);
   }, [attachCommand]);
   const [message, setMessage] = useState("");
+  const composer = useRef<HTMLTextAreaElement | null>(null);
+  const upload = useRef<AbortController | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  useEffect(() => () => upload.current?.abort(), []);
+  const uploadFiles = async (files: File[]) => {
+    if (!files.length || upload.current || interactionBusy || !previewConnected) return;
+    setDragging(false);
+    setUploadError(null);
+    if (files.some((file) => file.size > MAX_UPLOAD_BYTES)) {
+      setUploadError("Files must be at most 20 MiB");
+      return;
+    }
+    const controller = new AbortController();
+    upload.current = controller;
+    let text = message;
+    let caret = composer.current?.selectionStart ?? message.length;
+    let selectionEnd = composer.current?.selectionEnd ?? caret;
+    try {
+      for (const [index, file] of files.entries()) {
+        setUploadProgress(`Uploading ${index + 1}/${files.length}…`);
+        const result = await api.upload(file, controller.signal);
+        if (controller.signal.aborted) return;
+        const path = /[\s"'\\]/.test(result.path) ? JSON.stringify(result.path) : result.path;
+        const before = text.slice(0, caret);
+        const after = text.slice(selectionEnd);
+        const insertion = (before && !/\s$/.test(before) ? " " : "") + path;
+        const suffix = after && !/^\s/.test(after) ? " " : "";
+        text = before + insertion + suffix + after;
+        caret = before.length + insertion.length;
+        selectionEnd = caret;
+        setMessage(text);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted)
+        setUploadError(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      if (!controller.signal.aborted) {
+        upload.current = null;
+        setUploadProgress(null);
+        requestAnimationFrame(() => {
+          if (!mounted.current) return;
+          composer.current?.focus();
+          composer.current?.setSelectionRange(caret, caret);
+        });
+      }
+    }
+  };
   const panel = useRef<HTMLElement | null>(null);
   const wasPreviewExpanded = useRef(false);
   const hadPreviewContent = useRef(false);
@@ -115,7 +166,8 @@ export function InteractionPanel({
     }
   }, [preview, previewExpanded]);
   const send = async () => {
-    if (!previewConnected || interactionBusy || messageIsBlank || messageTooLarge) return;
+    if (!previewConnected || interactionBusy || upload.current || messageIsBlank || messageTooLarge)
+      return;
     const isCommand = /^\/[A-Za-z]+$/.test(message.trim());
     await onSendMessage(message);
     if (!mounted.current) return;
@@ -126,7 +178,7 @@ export function InteractionPanel({
     setMessage("");
   };
   const handoff = async () => {
-    if (!previewConnected || interactionBusy) return;
+    if (!previewConnected || interactionBusy || upload.current) return;
     await onHandoffPaneBinding();
     if (!mounted.current) return;
     if (!previewExpanded) scrollOnExpand.current = true;
@@ -253,7 +305,7 @@ export function InteractionPanel({
               type="button"
               className="terminal-preview-interrupt"
               disabled={!previewConnected}
-              aria-disabled={interactionBusy || !previewConnected}
+              aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
               onClick={() => sendKeys(["interrupt"])}
             >
               Interrupt
@@ -319,7 +371,7 @@ export function InteractionPanel({
                     className={`terminal-key terminal-key-${key}`}
                     aria-label={label}
                     disabled={!previewConnected}
-                    aria-disabled={interactionBusy || !previewConnected}
+                    aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
                     onClick={() => sendKeys([key])}
                   >
                     <span aria-hidden="true">{glyph}</span>
@@ -329,14 +381,62 @@ export function InteractionPanel({
             </div>
           ) : null}
         </section>
-        <div className="interaction-composer">
+        <div
+          className={`interaction-composer${dragging ? " interaction-composer-dragging" : ""}`}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = upload.current || interactionBusy ? "none" : "copy";
+            setDragging(!upload.current && !interactionBusy);
+          }}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+              setDragging(false);
+          }}
+          onDrop={(event) => {
+            if (
+              !event.dataTransfer.files.length &&
+              !Array.from(event.dataTransfer.items ?? []).some((item) => item.kind === "file")
+            )
+              return;
+            event.preventDefault();
+            setDragging(false);
+            const items = Array.from(event.dataTransfer.items ?? []);
+            if (items.some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
+              if (!upload.current) setUploadError("Folders are not supported");
+              return;
+            }
+            void uploadFiles(Array.from(event.dataTransfer.files));
+          }}
+        >
+          {dragging ? <p role="status">Drop files to upload</p> : null}
+          {uploadProgress ? <p role="status">{uploadProgress}</p> : null}
+          {uploadError ? (
+            <div className="interaction-error" role="alert">
+              {uploadError}
+              <button
+                type="button"
+                aria-label="Dismiss upload error"
+                onClick={() => setUploadError(null)}
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
           <textarea
+            ref={composer}
+            onPaste={(event) => {
+              const files = Array.from(event.clipboardData.files);
+              if (!files.length) return;
+              event.preventDefault();
+              void uploadFiles(files.map(normalizeClipboardFile));
+            }}
             aria-label="Message to agent"
             value={message}
-            disabled={interactionBusy || !previewConnected}
+            disabled={interactionBusy || !!uploadProgress || !previewConnected}
             rows={6}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
-            placeholder="Send a prompt… Enter for a new line, Shift+Enter to send"
+            placeholder="Send a prompt… Paste images or drop files. Shift+Enter to send"
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={onKeyDown}
           />
@@ -351,7 +451,7 @@ export function InteractionPanel({
               type="button"
               className="interaction-handoff"
               title="Hand off this pane’s binding to the active Codex session."
-              disabled={!previewConnected || interactionBusy}
+              disabled={!previewConnected || interactionBusy || !!uploadProgress}
               onClick={() => void handoff().catch(() => undefined)}
             >
               Handoff
@@ -360,7 +460,9 @@ export function InteractionPanel({
               <button
                 type="button"
                 className="interaction-send"
-                disabled={!previewConnected || messageIsBlank || messageTooLarge}
+                disabled={
+                  !previewConnected || !!uploadProgress || messageIsBlank || messageTooLarge
+                }
                 aria-disabled={interactionBusy}
                 onClick={() => void send().catch(() => undefined)}
               >
@@ -372,6 +474,26 @@ export function InteractionPanel({
       </>
     );
   }
+}
+
+const CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "image/gif": "gif",
+  "image/tiff": "tiff",
+  "image/bmp": "bmp",
+  "image/avif": "avif",
+  "image/svg+xml": "svg",
+  "image/heic": "heic",
+  "image/heif": "heif",
+  "image/x-icon": "ico",
+};
+
+function normalizeClipboardFile(file: File): File {
+  const extension = CLIPBOARD_IMAGE_EXTENSIONS[file.type];
+  if (/\.[a-zA-Z0-9]{1,16}$/.test(file.name) || !extension) return file;
+  return new File([file], `${file.name || "clipboard"}.${extension}`, { type: file.type });
 }
 
 function interactionStatus(

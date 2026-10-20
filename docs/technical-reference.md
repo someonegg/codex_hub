@@ -80,6 +80,26 @@ Only the opened, unarchived session subscribes to automatic updates. History pag
 and automatic updates coexist while preserving the reading position. Reader revisions
 are independent of catalog revisions and include `updatedAt`. Session diagnostics stay in server logs.
 
+## File uploads
+
+`POST /api/v1/uploads?filename=<URL-encoded filename>` accepts raw binary (up to
+20 MiB per file) and returns `201 { "path": "/absolute/path/<uuid>.<ext>" }`.
+The filename supplies only a safe extension. Oversize uploads return `413`;
+storage failures return `500`, using the standard API error envelope.
+Failed or interrupted uploads remove incomplete files.
+
+Use `--upload-dir <path>` to choose storage. Missing directories are created,
+relative paths resolve from the startup directory, and `~/` is supported.
+Otherwise the process reuses a `codex-hub-uploads-*` directory under `os.tmpdir()`.
+Uploads are retained after shutdown; the OS may clear temporary storage.
+The directory must be visible to the Codex process.
+
+The composer accepts pasted images and dropped files, including multiple files but
+not folders. Uploads freeze editing, Send, and Handoff, then insert paths at the
+selection without sending. A failure stops the batch and retains earlier paths;
+switching sessions cancels pending uploads. Finder paste works when the browser
+supplies files; text-only paths remain text.
+
 ## Tmux interaction
 
 | Endpoint                                         | Request or response                                                                                                                              |

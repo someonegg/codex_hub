@@ -56,7 +56,9 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 
 ## Session interaction
 
-Send prompts and control the live terminal from the session page.
+Send prompts and control the live terminal from the session page. Paste screenshots
+or drop files into the message input, then review and send the inserted paths.
+See [file uploads](docs/technical-reference.md#file-uploads) for limits and storage options.
 
 <details>
 <summary>Show session interaction screenshot</summary>

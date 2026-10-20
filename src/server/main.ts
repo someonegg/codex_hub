@@ -3,6 +3,7 @@ import { createCodexHub } from "./create-hub.js";
 import { createApiRouter } from "./http/api-router.js";
 import { startServer } from "./http/create-server.js";
 import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
+import { uploadDirectory } from "./http/upload-routes.js";
 
 async function main(): Promise<void> {
   const command = loadConfig();
@@ -12,10 +13,11 @@ async function main(): Promise<void> {
   }
 
   const { config } = command;
+  await uploadDirectory(config.uploadDirectory);
   const hub = await createCodexHub(config.homes, config.tmuxSocket, config.interactionEnabled);
   const server = await startServer(
     config,
-    createApiRouter(hub),
+    createApiRouter({ ...hub, uploadDirectory: config.uploadDirectory }),
     hub.close,
     createTerminalPreviewWebSocket(hub.interaction),
   );

@@ -36,6 +36,7 @@ export function SessionInteraction({
 
   return (
     <InteractionPanel
+      key={sessionId}
       operationActions={operationActions}
       operationStatus={operationStatus}
       interaction={interaction}

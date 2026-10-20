@@ -27,6 +27,7 @@ export interface ServerConfig {
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
   tmuxSocket?: string;
+  uploadDirectory?: string;
 }
 
 export type CommandLineResult =
@@ -66,6 +67,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       "ssl-ca": { type: "string" },
       help: { type: "boolean" },
       "tmux-socket": { type: "string" },
+      "upload-dir": { type: "string" },
     },
   });
 
@@ -106,6 +108,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       clientDirectory: resolve(process.cwd(), "dist/client"),
       tls,
       interactionEnabled: true,
+      ...(values["upload-dir"] !== undefined
+        ? { uploadDirectory: resolveUploadDirectory(values["upload-dir"]) }
+        : {}),
       ...(values["tmux-socket"] !== undefined
         ? { tmuxSocket: resolve(nonEmptyOption("tmux-socket", values["tmux-socket"])!) }
         : {}),
@@ -126,6 +131,7 @@ Options:
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
   --tmux-socket <path> tmux socket (default: tmux default selection)
+  --upload-dir <path>  Store uploads here (default: a persistent process temporary directory)
   --help               Show this help
 
 TLS example:
@@ -168,4 +174,9 @@ function parseHomes(values: readonly string[]): CodexHomeConfig[] {
     paths.add(canonical);
     return { nickname, path };
   });
+}
+
+function resolveUploadDirectory(value: string): string {
+  const path = nonEmptyOption("upload-dir", value)!;
+  return resolve(path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : path);
 }

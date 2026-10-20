@@ -78,6 +78,11 @@ function queryString(values: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
+  upload: (file: File, signal: AbortSignal) =>
+    request<{ path: string }>(`/api/v1/uploads?filename=${encodeURIComponent(file.name)}`, signal, {
+      method: "POST",
+      body: file,
+    }),
   createSession: (input: CreateSessionRequest) => postJson<HubOperation>("/api/v1/sessions", input),
   exitSession: (id: string) =>
     postJson<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}/exit`, {}),
