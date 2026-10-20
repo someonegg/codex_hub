@@ -152,11 +152,16 @@ Viewers share tmux listeners and captures without changing terminal size or sess
 environment. Output events merge over 350 milliseconds; only content or truncation changes
 publish a frame. The server allows 100 connections globally and 10 per session,
 including initialization; excess connections receive retryable `preview_capacity_exceeded`.
-Binding changes and listener failures invalidate affected subscriptions.
+Repeated valid binds for the same session, socket and pane preserve subscriptions.
+Ownership loss, invalid binds, target changes and listener failures invalidate affected
+subscriptions immediately; returning ownership does not revive a closed subscription.
 
 The browser connects only while the preview is expanded, connected, and visible.
 It backs off retryable failures and stops on terminal errors until expansion,
-visibility, or connection changes. See [preview service](../src/server/interaction/terminal-preview-service.ts)
+visibility, connection changes, or an explicit retry. Failed previews retain the last
+frame with a stopped-updates notice until a valid snapshot arrives. Dismissing error
+details does not clear that notice or reconnect; the separate retry action cancels
+pending retries and opens a fresh connection. See [preview service](../src/server/interaction/terminal-preview-service.ts)
 and [WebSocket transport](../src/server/http/terminal-preview-websocket.ts) for resource
 limits and connection cleanup.
 

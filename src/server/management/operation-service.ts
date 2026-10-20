@@ -10,8 +10,8 @@ import { SessionExitService, type SessionExitTask } from "./session-exit-service
 import type { SessionManagerRegistry } from "./session-manager.js";
 import {
   type ManagementSnapshot,
-  SessionLaunchError,
   resolveResumeDirectory,
+  SessionLaunchError,
 } from "./session-manager.js";
 
 type Context =

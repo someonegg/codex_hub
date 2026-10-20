@@ -1,10 +1,12 @@
 import { execFileSync } from "node:child_process";
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { expect, it, vi } from "vitest";
-import { validProjectDirectory } from "../../src/server/domain/project-directory.js";
+
 import { codexBindingCommand } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
+import { validProjectDirectory } from "../../src/server/domain/project-directory.js";
 import {
   resolveResumeDirectory,
   type SessionManager,

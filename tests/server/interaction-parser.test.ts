@@ -154,3 +154,32 @@ it.each([undefined, "", "relative", "/bad\0path", "/bad\rpath"])(
     ).toEqual([{ ordinal: 1, valid: true, socketPath: "/tmp/socket", paneId: "%1" }]);
   },
 );
+
+it.each(["\n", "\r\n"])("normalizes V4 project line endings %j", (eol) => {
+  const text = [
+    "<user_shell_command>",
+    "CODEX_HUB_TMUX_BIND_V4",
+    "/tmp/socket",
+    "%1",
+    "",
+    "/project",
+    "</user_shell_command>",
+  ].join(eol);
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text }],
+      }),
+    ),
+  ).toEqual([
+    {
+      ordinal: 1,
+      valid: true,
+      socketPath: "/tmp/socket",
+      paneId: "%1",
+      projectDirectory: "/project",
+    },
+  ]);
+});

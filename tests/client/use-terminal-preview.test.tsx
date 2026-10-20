@@ -216,3 +216,43 @@ it("auto-expands once per key, waits for connection, and resets across sessions"
   expect(latest().close).not.toHaveBeenCalled();
   unmount();
 });
+
+it.each([false, true])(
+  "dismisses details while retaining stopped status and manually retries (retryable=%s)",
+  async (retryable) => {
+    vi.useFakeTimers();
+    const { unmount } = render(
+      <SessionInteraction
+        sessionId="a"
+        interaction={{
+          supported: true,
+          state: "connected",
+          supersededBySessionId: null,
+          attachCommand: null,
+        }}
+        itemCount={0}
+        updatedAt={null}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+    const old = latest();
+    act(() => old.message(frame));
+    act(() => old.message({ type: "error", code: "failed", message: "Capture failed", retryable }));
+    expect(screen.getByText("Preview updates stopped.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss terminal preview error" }));
+    expect(screen.queryByText("Capture failed")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
+    expect(MockWebSocket.instances).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Retry preview" }));
+    expect(MockWebSocket.instances).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Reconnecting…" })).toBeDisabled();
+    act(() => old.message({ ...frame, content: "stale" }));
+    act(() => latest().message({ ...frame, revision: "recovered", content: "recovered" }));
+    expect(screen.queryByText("Preview updates stopped.")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("recovered");
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(MockWebSocket.instances).toHaveLength(2);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  },
+);
