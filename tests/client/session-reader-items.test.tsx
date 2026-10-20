@@ -14,7 +14,11 @@ import { InternalEventItem } from "../../src/client/components/InternalEventItem
 import { Timeline } from "../../src/client/components/Timeline";
 import { ToolItem } from "../../src/client/components/ToolItem";
 import { SessionPage } from "../../src/client/SessionPage";
-import { installIntersectionObserver, intersectLatest } from "./intersection-observer";
+import {
+  installIntersectionObserver,
+  intersectLatest,
+  latestObserverOptions,
+} from "./intersection-observer";
 import {
   baseSession,
   directiveItem,
@@ -200,6 +204,8 @@ describe("session reader items", () => {
     vi.stubGlobal("fetch", fetchMock);
     render(<SessionPage sessionId={SESSION_ID} />);
     await screen.findByText("First");
+    // The content can commit before the sentinel's observer effect runs.
+    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
 
     vi.useFakeTimers();
     vi.spyOn(Math, "random").mockReturnValue(0.5);
