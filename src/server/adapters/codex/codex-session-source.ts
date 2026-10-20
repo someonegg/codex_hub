@@ -22,12 +22,11 @@ import type {
   SourceSessionEntry,
 } from "../../source/session-source.js";
 import { type IdentityAccumulatorState, IdentityResolver } from "./identity-resolver.js";
-import { codexBindingAttemptsFrom } from "./interaction-parser.js";
+import { codexBindingAttemptsFrom, codexInteraction } from "./interaction-parser.js";
 import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
 import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
 import { PathPolicy, type RolloutDescriptor } from "./path-policy.js";
-import { ProjectDirectoryResolver } from "./project-directory-resolver.js";
 import {
   CheckpointedRolloutDecoder,
   type RolloutCheckpoint,
@@ -58,6 +57,7 @@ interface CodexCacheEntry {
   readonly checkpoint: RolloutCheckpoint;
   readonly identityState: IdentityAccumulatorState;
   readonly normalizerState: SessionNormalizerState;
+  readonly bindProjectDirectory: string | null;
 }
 
 export interface CodexRefreshTelemetry {
@@ -92,7 +92,6 @@ export class CodexSessionSource implements SessionSource {
     private readonly identity = new IdentityResolver(),
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
-    private readonly projectDirectories = new ProjectDirectoryResolver(),
     private readonly bindings: PaneBindingManager = paneBindings,
   ) {
     this.descriptor = {
@@ -174,21 +173,6 @@ export class CodexSessionSource implements SessionSource {
       }
       nextCache.set(descriptor.sourceRelativePath, loaded);
     }
-    const directories = await this.projectDirectories.resolveAll(
-      [...nextCache.values()].map((entry) => entry.normalized.session.workingDirectory),
-    );
-    for (const [key, entry] of nextCache) {
-      const session = entry.normalized.session;
-      const projectDirectory = directories.get(session.workingDirectory) ?? null;
-      if (session.projectDirectory === projectDirectory) continue;
-      nextCache.set(key, {
-        ...entry,
-        normalized: {
-          ...entry.normalized,
-          session: { ...session, projectDirectory },
-        },
-      });
-    }
     const sessions = sourceEntries(nextCache);
     const diagnostics = [
       ...discovery.diagnostics.map((item) => ({ ...item })),
@@ -214,7 +198,7 @@ export class CodexSessionSource implements SessionSource {
     const signature = JSON.stringify({
       discoverySignature,
       unavailableRollouts,
-      directories: [...directories],
+      projects: sessions.map((entry) => [entry.localId, entry.normalized.session.projectDirectory]),
     });
     const snapshot = { signature, sessions, diagnostics };
     this.#cache = nextCache;
@@ -271,23 +255,21 @@ export class CodexSessionSource implements SessionSource {
         decoded.records,
         decoded.diagnostics,
       );
-      binds.set(
-        descriptor.id,
-        decoded.records.flatMap((record) => {
-          const timestamp =
-            typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
-          return codexBindingAttemptsFrom(record).map((attempt, position) => ({
-            sessionId: descriptor.id,
-            time: Number.isFinite(timestamp) ? timestamp : 0,
-            ordinal: record.ordinal,
-            position,
-            attempt,
-          }));
-        }),
-      );
+      const bindingEvents = decoded.records.flatMap((record) => {
+        const timestamp =
+          typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
+        return codexBindingAttemptsFrom(record).map((attempt, position) => ({
+          sessionId: descriptor.id,
+          time: Number.isFinite(timestamp) ? timestamp : 0,
+          ordinal: record.ordinal,
+          position,
+          attempt,
+        }));
+      });
+      binds.set(descriptor.id, bindingEvents);
       const metadata = this.identity.metadata(identityState);
       const origin = this.#origin(metadata.agentVersion);
-      const normalized =
+      const baseNormalized =
         decoded.mode === "append" &&
         cached !== undefined &&
         identityState === cached.identityState &&
@@ -295,6 +277,18 @@ export class CodexSessionSource implements SessionSource {
         sameOrigin(origin, cached.origin)
           ? cached.normalized
           : this.normalizer.materialize(normalizerState, metadata, origin);
+      let bindProjectDirectory =
+        decoded.mode === "append" ? (cached?.bindProjectDirectory ?? null) : null;
+      for (const { attempt } of bindingEvents) {
+        if (attempt.valid && attempt.projectDirectory)
+          bindProjectDirectory = attempt.projectDirectory;
+      }
+      const projectDirectory = bindProjectDirectory ?? baseNormalized.session.workingDirectory;
+      const normalized = {
+        ...baseNormalized,
+        session: { ...baseNormalized.session, projectDirectory },
+        interaction: codexInteraction(projectDirectory),
+      };
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
       return {
         descriptor,
@@ -306,6 +300,7 @@ export class CodexSessionSource implements SessionSource {
         checkpoint: decoded.checkpoint,
         identityState,
         normalizerState,
+        bindProjectDirectory,
       };
     } catch (error) {
       if (!isExpectedIoError(error)) throw error;
@@ -332,7 +327,6 @@ export async function createCodexSessionSource(
   return new CodexSessionSource(
     configured,
     `codex-jsonl\0${configured}`,
-    undefined,
     undefined,
     undefined,
     undefined,

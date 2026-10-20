@@ -122,6 +122,10 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     expect(original.workingDirectory).toBe(directory);
     expect(worktree.workingDirectory).not.toBe(directory);
     expect(worktree.projectDirectory).toBe(directory);
+    expect(bindings.latest(worktree.id)).toMatchObject({
+      valid: true,
+      projectDirectory: directory,
+    });
     const empty = snapshot.sessions.find((session) => session.id === manualId)!;
     for (const [index, record] of [original, worktree, empty].entries()) {
       // Cover a multiline draft, a cursor inside the draft, and an empty composer.

@@ -10,7 +10,7 @@ const pane = { socketPath: "/tmp/runtime.sock", paneId: "%1" };
 function setup() {
   const bindings = new PaneBindingManager();
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
-  const resolveDirectory = vi.fn(async () => ({ directory: "/project", project: "/project" }));
+  const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
   const managers = new SessionManagerRegistry("home").register("home", {
     resolveDirectory,
     launch: vi.fn(),
@@ -118,7 +118,7 @@ describe("session runtime evidence", () => {
     expect((await f.evaluate()).resume.allowed).toBe(false);
     f.resolveDirectory.mockImplementationOnce(async () => {
       f.bind("session", 3, false);
-      return { directory: "/project", project: "/project" };
+      return { directory: "/project" };
     });
     expect((await f.evaluate()).resume.allowed).toBe(false);
   });

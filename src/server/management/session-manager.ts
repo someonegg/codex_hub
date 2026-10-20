@@ -1,3 +1,4 @@
+import { validProjectDirectory } from "../domain/project-directory.js";
 import type { DomainSession, TmuxKey } from "../domain/session-domain.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 
@@ -15,13 +16,14 @@ export interface SessionExitCapability {
 }
 
 export interface SessionManager extends SessionExitCapability {
-  resolveDirectory(directory: string): Promise<{ directory: string; project: string }>;
+  resolveDirectory(directory: string): Promise<{ directory: string }>;
   launch(
     operationId: string,
     directory: string,
     worktree: boolean,
     yolo: boolean,
     resumeNativeId?: string,
+    projectDirectory?: string | null,
   ): Promise<TmuxBinding>;
   archive(nativeId: string): Promise<void>;
   delete(nativeId: string): Promise<void>;
@@ -71,4 +73,20 @@ export class SessionManagerRegistry {
     }
     return manager;
   }
+}
+
+export async function resolveResumeDirectory(
+  manager: SessionManager,
+  session: Pick<DomainSession, "workingDirectory" | "projectDirectory">,
+): Promise<{ directory: string }> {
+  for (const candidate of new Set([session.workingDirectory, session.projectDirectory])) {
+    if (!validProjectDirectory(candidate)) continue;
+    try {
+      return await manager.resolveDirectory(candidate);
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT" && code !== "ENOTDIR") throw error;
+    }
+  }
+  throw new Error("Session has no available working or project directory");
 }

@@ -1,6 +1,9 @@
 import type { ResumeCapability, SessionStatus } from "../../shared/domain.js";
 import type { DomainSession, InteractionBindingAttempt } from "../domain/session-domain.js";
-import type { SessionManagerRegistry } from "../management/session-manager.js";
+import {
+  resolveResumeDirectory,
+  type SessionManagerRegistry,
+} from "../management/session-manager.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
 import type { InteractionTransport, TmuxBinding } from "./transport.js";
 
@@ -86,10 +89,7 @@ export class SessionRuntime {
         ).length !== 1
       )
         return deny("Native session identity is ambiguous");
-      if (!session.workingDirectory) return deny("Session has no working directory");
-      await this.managers
-        .get(session.origin.sourceInstanceId)
-        .resolveDirectory(session.workingDirectory);
+      await resolveResumeDirectory(this.managers.get(session.origin.sourceInstanceId), session);
       if (
         attempt !== this.bindings.latest(session.id) ||
         replacement !== this.bindings.replacement(session.id)

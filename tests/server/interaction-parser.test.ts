@@ -118,7 +118,7 @@ it("reports a damaged shell wrapper as an invalid attempt", () => {
 
 it("generates a basic binding command while retaining creation operation IDs", () => {
   const basic = codexBindingCommand();
-  expect(basic).toContain("CODEX_HUB_TMUX_BIND_V3");
+  expect(basic).toContain("CODEX_HUB_TMUX_BIND_V4");
   expect(basic).toContain("#{socket_path}");
   expect(basic).toContain("$TMUX_PANE");
   expect(codexBindingCommand(operationId)).toContain(operationId);
@@ -142,3 +142,15 @@ it("returns every bind including multiple binds within one record and shell bloc
     { valid: false, ordinal: 1 },
   ]);
 });
+
+it.each([undefined, "", "relative", "/bad\0path", "/bad\rpath"])(
+  "ignores invalid V4 project %j without invalidating the pane",
+  (project) => {
+    const text = `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V4\n/tmp/socket\n%1\n\n${project ?? ""}\n</user_shell_command>`;
+    expect(
+      codexBindingAttemptsFrom(
+        response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+      ),
+    ).toEqual([{ ordinal: 1, valid: true, socketPath: "/tmp/socket", paneId: "%1" }]);
+  },
+);

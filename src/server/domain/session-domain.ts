@@ -31,6 +31,7 @@ export type InteractionBindingAttempt =
       readonly ordinal: number;
       readonly valid: true;
       readonly operationId?: string;
+      readonly projectDirectory?: string;
       readonly socketPath: string;
       readonly paneId: string;
     }

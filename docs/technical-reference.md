@@ -187,16 +187,29 @@ conflicting operations return `409` without queuing. Resume uses the same sessio
 occupancy as exit/archive/delete. Resume requests with different request IDs cannot
 launch concurrently for one session; identical request IDs retain create idempotency.
 
+### Project directory
+
+Project Directory is the latest valid project path recorded in a pane bind, falling
+back to Working Directory. Paths must be absolute and contain no NUL, CR or LF;
+values are preserved without filesystem checks or Git discovery. Invalid or empty
+project fields do not invalidate the pane bind or erase an earlier project path.
+New binds emit V4 with five lines: marker, socket, pane, operation ID, project path.
+The last two fields may be empty. V3 remains readable.
+
 ### Execution and confirmation
 
-- **Create:** launch Codex as the main pane process in a dedicated
+- **Create:** validate an existing directory and use its real path for both launch
+  and the bind project field, including when Codex creates a worktree.
+  Launch Codex as the main pane process in a dedicated
   `codex-hub-<operationId>` tmux session with `--no-daemon --no-alt-screen`, optional
   `--worktree` and `--yolo` (both off by default). Confirm the operation marker,
   launch target, project, and valid binding within 300 seconds after launch.
   Show an attach command after 30 seconds and retain it on timeout.
-- **Resume:** use the owning source, native UUID and working directory from the
-  original session; directory, source and worktree overrides are rejected.
-  `yolo` defaults to false.
+- **Resume:** use the owning source and native UUID from the original session.
+  Try Working Directory first, then Project Directory. Skip empty or invalid paths;
+  fall back when a candidate is missing or is not a directory. Launch with the
+  selected real path while retaining the original project in the bind.
+  Directory, source and worktree overrides are rejected. `yolo` defaults to false.
   Require an unarchived, unique valid identity, an available directory, and a valid
   latest binding whose pane is confirmed dead/missing or explicitly transferred.
   Missing/invalid bindings, timeouts and errors never authorize resume. Revalidate

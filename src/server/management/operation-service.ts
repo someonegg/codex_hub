@@ -8,7 +8,11 @@ import { attachCommand } from "../interaction/tmux-launcher.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 import { SessionExitService, type SessionExitTask } from "./session-exit-service.js";
 import type { SessionManagerRegistry } from "./session-manager.js";
-import { type ManagementSnapshot, SessionLaunchError } from "./session-manager.js";
+import {
+  type ManagementSnapshot,
+  SessionLaunchError,
+  resolveResumeDirectory,
+} from "./session-manager.js";
 
 type Context =
   | { kind: "create"; phase: "resolving" | "launching" }
@@ -111,6 +115,8 @@ export class OperationService {
           resolved.directory,
           input.worktree,
           input.yolo ?? false,
+          undefined,
+          resolved.directory,
         );
         if (!this.#pending(entry)) return;
         this.#transition(
@@ -118,7 +124,7 @@ export class OperationService {
           {
             kind: "create",
             phase: "observing",
-            project: resolved.project,
+            project: resolved.directory,
             target,
             startedAt: this.now(),
           },
@@ -159,7 +165,9 @@ export class OperationService {
         entry.sourceInstanceId = session.origin.sourceInstanceId;
         entry.resumeNativeId = session.sourceId ?? undefined;
         const manager = this.managers.get(entry.sourceInstanceId);
-        const resolved = await manager.resolveDirectory(session.workingDirectory!);
+        const attempt = this.bindings.latest(session.id);
+        const replacement = this.bindings.replacement(session.id);
+        await resolveResumeDirectory(manager, session);
         // Refresh the source after asynchronous checks, then revalidate immediately before launch.
         snapshot = await this.sessions.managementSnapshot();
         const latest = snapshot.sessions.find((item) => item.id === sessionId);
@@ -167,12 +175,34 @@ export class OperationService {
           !latest ||
           latest.sourceId !== session.sourceId ||
           latest.origin.sourceInstanceId !== entry.sourceInstanceId ||
-          latest.workingDirectory !== session.workingDirectory
+          latest.workingDirectory !== session.workingDirectory ||
+          latest.projectDirectory !== session.projectDirectory ||
+          attempt !== this.bindings.latest(session.id) ||
+          replacement !== this.bindings.replacement(session.id)
         )
           throw new Error("Session identity or directory changed during validation");
         session = latest;
         capability = await this.runtime.evaluate(session, snapshot.sessions);
         if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
+        const resolved = await resolveResumeDirectory(manager, session);
+        const finalSnapshot = await this.sessions.managementSnapshot();
+        const finalSession = finalSnapshot.sessions.find((item) => item.id === sessionId);
+        if (
+          !finalSession ||
+          finalSession.sourceId !== session.sourceId ||
+          finalSession.origin.sourceInstanceId !== session.origin.sourceInstanceId ||
+          finalSession.archived ||
+          finalSession.workingDirectory !== session.workingDirectory ||
+          finalSession.projectDirectory !== session.projectDirectory ||
+          finalSnapshot.sessions.filter(
+            (item) =>
+              item.sourceId === session.sourceId &&
+              item.origin.sourceInstanceId === session.origin.sourceInstanceId,
+          ).length !== 1 ||
+          attempt !== this.bindings.latest(session.id) ||
+          replacement !== this.bindings.replacement(session.id)
+        )
+          throw new Error("Session identity, binding or directory changed during validation");
         if (!this.#pending(entry)) return;
         this.#transition(entry, { kind: "create", phase: "launching" });
         const target = await manager.launch(
@@ -181,6 +211,7 @@ export class OperationService {
           false,
           input.yolo ?? false,
           session.sourceId!,
+          session.projectDirectory,
         );
         if (!this.#pending(entry)) return;
         this.#transition(
@@ -189,7 +220,7 @@ export class OperationService {
             kind: "create",
             phase: "observing",
             target,
-            project: resolved.project,
+            project: session.projectDirectory ?? resolved.directory,
             startedAt: this.now(),
           },
           this.now() + this.waitMs.create,

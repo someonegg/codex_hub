@@ -222,3 +222,35 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(2);
 });
+
+it("accumulates valid V4 project backups and rebuilds the same grouping without filesystem lookup", async () => {
+  const home = await createTempDirectory("project-backup-");
+  await mkdir(join(home, "sessions"));
+  const file = join(home, "sessions/rollout-project.jsonl");
+  await writeFile(
+    file,
+    line({ type: "session_meta", payload: { id: "project", cwd: "/missing/working" } }),
+  );
+  const source = await createCodexSessionSource(home, bindings);
+  const project = async () =>
+    (await source.refresh()).sessions[0]!.normalized.session.projectDirectory;
+  expect(await project()).toBe("/missing/working");
+  const bind = (path: string) =>
+    `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V4\n/tmp/socket\n%1\n\n${path}\n</user_shell_command>`;
+  await appendFile(file, message(1, bind("/missing/project ' $()")));
+  expect(await project()).toBe("/missing/project ' $()");
+  for (const invalid of ["", "relative", "/bad\0path", "/bad\rpath"]) {
+    await appendFile(file, message(2, bind(invalid)));
+    expect(await project()).toBe("/missing/project ' $()");
+  }
+  await appendFile(file, message(3, shell("/tmp/socket", "%2")));
+  expect(await project()).toBe("/missing/project ' $()");
+  const rebuilt = await createCodexSessionSource(home, new PaneBindingManager());
+  expect((await rebuilt.refresh()).sessions[0]!.normalized.session.projectDirectory).toBe(
+    await project(),
+  );
+  await appendFile(file, message(4, bind("/new/project")));
+  expect(await project()).toBe("/new/project");
+  await writeFile(file, line({ type: "session_meta", payload: { id: "project", cwd: "/reset" } }));
+  expect(await project()).toBe("/reset");
+});

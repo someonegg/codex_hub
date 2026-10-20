@@ -1,27 +1,25 @@
+import { validProjectDirectory } from "../../domain/project-directory.js";
 import { execFile } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
 import { promisify } from "node:util";
 
 import { TmuxLauncher } from "../../interaction/tmux-launcher.js";
 import type { SessionManager } from "../../management/session-manager.js";
 import { codexBindingCommand } from "./interaction-parser.js";
-import { ProjectDirectoryResolver } from "./project-directory-resolver.js";
 
 const execute = promisify(execFile);
 export class CodexSessionManager implements SessionManager {
-  readonly #projects = new ProjectDirectoryResolver();
   constructor(
     private readonly home: string,
     private readonly tmux = new TmuxLauncher(),
   ) {}
 
   async resolveDirectory(input: string) {
-    if (!isAbsolute(input) || input.includes("\0"))
-      throw new Error("Directory must be an absolute local path");
+    if (!validProjectDirectory(input)) throw new Error("Directory must be an absolute local path");
     const directory = await realpath(input);
-    if (!(await stat(directory)).isDirectory()) throw new Error("Path is not a directory");
-    return { directory, project: (await this.#projects.resolve(directory))! };
+    if (!(await stat(directory)).isDirectory())
+      throw Object.assign(new Error("Path is not a directory"), { code: "ENOTDIR" });
+    return { directory };
   }
   launch(
     operationId: string,
@@ -29,6 +27,7 @@ export class CodexSessionManager implements SessionManager {
     worktree: boolean,
     yolo = false,
     resumeNativeId?: string,
+    projectDirectory?: string | null,
   ) {
     if (resumeNativeId && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(resumeNativeId))
       throw new Error("Invalid resume identity");
@@ -41,7 +40,7 @@ export class CodexSessionManager implements SessionManager {
       "--no-alt-screen",
       ...(worktree ? ["--worktree"] : []),
       ...(yolo ? ["--yolo"] : []),
-      codexBindingCommand(operationId),
+      codexBindingCommand(operationId, projectDirectory),
     ]);
   }
   exitSteps() {
