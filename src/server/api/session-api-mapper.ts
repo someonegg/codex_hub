@@ -34,7 +34,8 @@ export class SessionApiMapper {
       .map((session) => {
         const directory = session.projectDirectory;
         const projectId = directory === null ? null : opaqueIdForParts("project", directory);
-        if (directory !== null && projectId !== null)
+        const isChild = session.isChild ?? session.parentId !== null;
+        if (!isChild && directory !== null && projectId !== null)
           projects.set(projectId, { id: projectId, directory });
         return {
           id: session.id,
@@ -43,7 +44,7 @@ export class SessionApiMapper {
           projectId,
           status: session.archived ? ("archived" as const) : ("normal" as const),
           parentId: session.parentId,
-          isChild: session.isChild ?? session.parentId !== null,
+          isChild,
           updatedAt: session.updatedAt,
         };
       })

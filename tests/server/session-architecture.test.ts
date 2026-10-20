@@ -133,6 +133,30 @@ describe("server architecture boundaries", () => {
     expect(detail.session.origin).not.toBe(session.origin);
   });
 
+  it("excludes child-only projects while retaining child sessions in the catalog", () => {
+    const mapper = new SessionApiMapper();
+    const catalog = mapper.list([
+      session,
+      { ...session, id: "child", parentId: session.id, projectDirectory: "/child-only" },
+      {
+        ...session,
+        id: "orphan-child",
+        isChild: true,
+        projectDirectory: "/orphan-only",
+      },
+      { ...session, id: "shared-child", parentId: session.id },
+    ]);
+
+    expect(catalog.projects).toEqual([{ id: expect.any(String), directory: "/project" }]);
+    expect(catalog.sessions).toHaveLength(4);
+    expect(catalog.sessions.filter((item) => item.isChild).map((item) => item.id)).toEqual([
+      "child",
+      "orphan-child",
+      "shared-child",
+    ]);
+    expect(mapper.list([{ ...session, isChild: true }]).projects).toEqual([]);
+  });
+
   it("limits catalog diagnostics while preserving their order", async () => {
     const diagnostics = Array.from({ length: MAX_CATALOG_DIAGNOSTICS + 1 }, (_, index) => ({
       code: `catalog_warning_${index + 1}`,
