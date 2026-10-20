@@ -1,4 +1,10 @@
-import { connectedInteraction, docsSession, docsTimestamp } from "./docs-fixtures.mjs";
+import {
+  connectedInteraction,
+  docsSession,
+  docsTimestamp,
+  docsUserInput,
+  mockDocsTerminal,
+} from "./docs-fixtures.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -10,7 +16,16 @@ const output = resolve(process.argv[3] ?? "docs/images/codex-hub-intro.gif");
 const frames = await mkdtemp(join(tmpdir(), "codex-hub-intro-"));
 const browserSession = `intro-${Date.now()}`;
 
-async function record(page, frames, origin, docsSession, connectedInteraction, timestamp) {
+async function record(
+  page,
+  frames,
+  origin,
+  docsSession,
+  connectedInteraction,
+  timestamp,
+  docsUserInput,
+  mockDocsTerminal,
+) {
   const context = await page
     .context()
     .browser()
@@ -35,7 +50,7 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
     id: "demo-session",
     title: "Improve the project dashboard",
     messageCount: stage,
-    itemCount: stage,
+    itemCount: stage === 2 ? 4 : stage,
   });
   const interaction = connectedInteraction;
   const items = () =>
@@ -52,7 +67,7 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
       },
       {
         id: "reply",
-        ordinal: 1,
+        ordinal: 3,
         timestamp,
         kind: "message",
         role: "assistant",
@@ -60,7 +75,9 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
         itemType: null,
         markdown: reply,
       },
-    ].slice(0, stage);
+    ]
+      .slice(0, stage)
+      .flatMap((item) => (item.id === "reply" ? [...docsUserInput, item] : [item]));
   const snapshot = () => ({
     session: session(),
     interaction,
@@ -121,20 +138,9 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
       stage = 1;
       return route.fulfill({ status: 204 });
     }
-    if (path.endsWith("/terminal-preview")) {
-      if (url.searchParams.has("after")) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        return route.fulfill({ status: 204 });
-      }
-      return json({
-        revision: "d".repeat(43),
-        content: "Codex ready",
-        truncated: false,
-        capturedAt: timestamp,
-      });
-    }
     throw new Error(`Unexpected demo API: ${route.request().method()} ${path}`);
   });
+  await mockDocsTerminal(context, timestamp);
   let frame = 0;
   const capture = async (duration) => {
     await demo.evaluate(() => document.fonts.ready);
@@ -177,7 +183,10 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
     stage = 2;
     await demo.getByRole("heading", { name: "Three focused improvements" }).waitFor();
     await demo.locator(".interaction-panel").scrollIntoViewIfNeeded();
-    await capture(4500);
+    await demo.locator(".user-input-status.answered").waitFor();
+    await demo.locator(".user-input-card").scrollIntoViewIfNeeded();
+    await demo.evaluate(() => window.scrollBy(0, -40));
+    await capture(6500);
     if (await demo.getByRole("alert").count()) throw new Error("Demo contains an error alert");
     if (errors.length) throw new Error(errors.join("\n"));
     const overflow = await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth);
@@ -191,7 +200,7 @@ async function record(page, frames, origin, docsSession, connectedInteraction, t
 const recording = join(frames, "record.js");
 await writeFile(
   recording,
-  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)})`,
+  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)}, ${JSON.stringify(docsUserInput)}, ${mockDocsTerminal.toString()})`,
 );
 const cli = (...args) =>
   execFileSync("playwright-cli", [`-s=${browserSession}`, ...args], { stdio: "inherit" });

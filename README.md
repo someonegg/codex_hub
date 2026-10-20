@@ -4,13 +4,13 @@ A local web hub for Codex that pairs readable conversations with live CLI intera
 Browse sessions by project, follow responses in near real time, and keep working with
 Codex from desktop or mobile.
 
-![Codex Hub: create a session, send a prompt, and read the response](docs/images/codex-hub-intro.gif)
+![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/codex-hub-intro.gif)
 
 <details>
 <summary>Mobile screenshots</summary>
 
 <img src="docs/images/codex-hub-mobile-catalog.png" alt="Mobile project navigation" width="260">
-<img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation reader" width="260">
+<img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
 
 </details>
 
@@ -56,26 +56,22 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 
 ## Session interaction
 
-Send prompts, preview terminal output, and use terminal controls from the session
-page.
+Send prompts and control the live terminal from the session page.
 
-<img src="docs/images/codex-hub-session-interaction.png" alt="Session interaction: terminal preview, controls, message input, and Handoff" width="600">
+<img src="docs/images/codex-hub-session-interaction.png" alt="Session conversation with answered User input, live terminal preview, controls, message input, and Handoff" width="900">
 
 ### Continue with Handoff
 
-After `/clear`, `/resume`, or clearing context to run a plan, Codex may switch to
-another session in the same terminal. On the **previous session's page**, click
-**Handoff** to connect the hub to that session. The terminal preview opens after
-the request is sent. When the old page shows **Superseded**, follow **Go to bound
-session** to continue there. Your draft stays on the old page.
+If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
+running a plan, click **Handoff** on the previous session's page. Once it shows
+**Superseded**, follow **Go to bound session**. Your draft stays on the old page.
+See [tmux interaction](docs/usage.md#binding-an-existing-tmux-session) for details.
 
 ## Security
 
-Codex Hub keeps its integration minimal: it reads local session logs and the
-session index to build conversations, and interacts with the Codex CLI as a black
-box through tmux. Session management uses native Codex commands. The hub does not
-read or manage Codex authentication tokens, API keys, or credential files;
-authentication stays with the Codex CLI.
+Codex Hub reads local session logs and the session index, interacts with Codex
+through tmux, and manages sessions through native CLI commands. Authentication
+stays with Codex; the hub does not read or manage tokens, API keys, or credential files.
 
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add

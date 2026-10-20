@@ -134,7 +134,7 @@ export function InteractionPanel({
   };
   const sendKeys = (keys: readonly InteractionKey[]) => {
     if (!previewConnected || interactionBusy) return;
-    if (keys.includes("plan")) {
+    if (keys.includes("interrupt")) {
       if (!previewExpanded) scrollOnExpand.current = true;
       onExpandPreview();
     }
@@ -249,6 +249,15 @@ export function InteractionPanel({
                 <span className="terminal-preview-status">Capturing…</span>
               ) : null}
             </button>
+            <button
+              type="button"
+              className="terminal-preview-interrupt"
+              disabled={!previewConnected}
+              aria-disabled={interactionBusy || !previewConnected}
+              onClick={() => sendKeys(["interrupt"])}
+            >
+              Interrupt
+            </button>
           </div>
           {previewStopped ? (
             <div className="terminal-preview-notice" role="status">
@@ -350,14 +359,6 @@ export function InteractionPanel({
             <div className="interaction-primary-actions">
               <button
                 type="button"
-                disabled={!previewConnected}
-                aria-disabled={interactionBusy}
-                onClick={() => sendKeys(["plan"])}
-              >
-                Plan
-              </button>
-              <button
-                type="button"
                 className="interaction-send"
                 disabled={!previewConnected || messageIsBlank || messageTooLarge}
                 aria-disabled={interactionBusy}
@@ -396,13 +397,13 @@ const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
 };
 
 const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
-  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "interrupt">;
+  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "plan">;
   readonly label: string;
   readonly glyph: string;
 }> = [
   { key: "enter", label: "Enter", glyph: "Enter" },
   { key: "up", label: "Up", glyph: "↑" },
-  { key: "interrupt", label: "Interrupt", glyph: "^C" },
+  { key: "plan", label: "Plan", glyph: "Plan" },
   { key: "left", label: "Left", glyph: "←" },
   { key: "down", label: "Down", glyph: "↓" },
   { key: "right", label: "Right", glyph: "→" },

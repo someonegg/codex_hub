@@ -18,15 +18,13 @@ same-size changes, probe mismatches, incompatible state, and process startup
 require a full decode. See [ADR-0012](adr/0012-use-checkpointed-incremental-rollout-loading.md).
 
 Incremental reads resume after the last committed newline. Unterminated tails,
-including partial UTF-8 and oversized lines, remain invisible and are reread until
-terminated. Probes and decoding use the same open handle and observed EOF bound.
+including partial UTF-8 and oversized lines, are reread without decoding or
+diagnostics until terminated. Probes and decoding use the same open handle and observed EOF bound.
 
 - Empty lines are ignored.
 - Malformed JSON and JSON values that are not objects are skipped with a
   diagnostic.
 - Lines larger than 8 MiB are skipped with a diagnostic.
-- A final line without a newline is treated as an incomplete live-write
-  fragment and is not decoded or reported until it is terminated.
 - Codex session diagnostics retain at most 50 entries. Decoder diagnostics take
   priority; remaining slots contain normalizer diagnostics in their production
   order. Additional diagnostics are silently discarded.
@@ -88,11 +86,9 @@ the matching neighborhood. Visibility preferences are stored in `sessionStorage`
 and shared across sessions visited within the same browser tab. If storage is
 unavailable, they remain in memory.
 
-Loaded `user_input` request and response items are projected into one card by
-`call_id`. The request is shown as waiting until its output is loaded; the same
-card then displays exact selected answers or an aborted state while retaining
-the original options. This projection does not rewrite the server timeline or
-its cursor prefix.
+Loaded `user_input` requests and responses merge into one card by `call_id`,
+showing waiting status until the output loads, then exact answers or an aborted
+state alongside the original options. Server timeline items and cursors are unchanged.
 
 ## Truncation and paging
 

@@ -141,7 +141,7 @@
   align-items: center;
   gap: 0.45rem;
   min-width: 0;
-  min-height: 44px;
+  min-height: var(--control-height);
   overflow: hidden;
   padding: 0.55rem 0.7rem;
   white-space: nowrap;
@@ -152,6 +152,23 @@
   font-family: var(--body-font);
   font-size: var(--text-small);
   text-align: left;
+}
+.terminal-preview-interrupt {
+  align-self: center;
+  flex: 0 0 auto;
+  min-height: var(--control-height);
+  margin: 0.3rem 0.5rem;
+  padding: 0.3rem 0.65rem;
+  color: var(--terminal-ink);
+  background: transparent;
+  border: 1px solid var(--terminal-border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  font-family: var(--body-font);
+  font-size: var(--text-small);
+  line-height: 1.3;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 .terminal-preview-toggle:disabled {
   cursor: wait;
@@ -266,14 +283,12 @@
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-.terminal-key-enter {
+.terminal-key-enter,
+.terminal-key-plan {
   font-size: var(--text-small);
   font-weight: 650;
 }
-.terminal-key-interrupt {
-  font-size: var(--text-small);
-  font-weight: 650;
-}
+.terminal-preview-interrupt:focus-visible,
 .terminal-key:focus-visible {
   position: relative;
   z-index: 1;
@@ -283,6 +298,7 @@
 .terminal-key:active:not([aria-disabled="true"]) {
   transform: translateY(1px);
 }
+.terminal-preview-interrupt[aria-disabled="true"],
 .terminal-key[aria-disabled="true"] {
   cursor: default;
   opacity: 0.38;
@@ -297,6 +313,7 @@
     background: var(--current-hover);
     border-color: var(--current-hover);
   }
+  .terminal-preview-interrupt:hover:not([aria-disabled="true"]),
   .terminal-key:hover:not([aria-disabled="true"]) {
     color: #fff;
     background: #27727b;

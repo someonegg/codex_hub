@@ -223,7 +223,7 @@ describe("interaction panel", () => {
     const summary = screen.getByText(`12 events · Updated ${localTime}`);
     const preview = screen.getByRole("region", { name: "Terminal preview" });
     const prompt = screen.getByRole("textbox", { name: "Message to agent" });
-    const lastAction = screen.getByRole("button", { name: "Plan" });
+    const lastAction = screen.getByRole("button", { name: "Interrupt" });
     expect(summary).toBeInTheDocument();
     expect(preview.compareDocumentPosition(prompt) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(
@@ -285,18 +285,18 @@ describe("interaction panel", () => {
     const { rerender } = render(<InteractionPanel {...handlers} />);
     expect(screen.getByText(/12 events · Updated/)).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Plan" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Interrupt" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Send" }).parentElement).toHaveClass(
       "interaction-primary-actions",
     );
     expect(screen.queryByRole("button", { name: "Esc" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terminal preview" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Plan" }));
-    expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["plan"]);
+    await user.click(screen.getByRole("button", { name: "Interrupt" }));
+    expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["interrupt"]);
     expect(handlers.onSendKeys).toHaveBeenCalledTimes(1);
 
     await user.type(screen.getByRole("textbox"), "draft");
-    const interrupt = screen.getByRole("button", { name: "Plan" });
+    const interrupt = screen.getByRole("button", { name: "Interrupt" });
     interrupt.focus();
     handlers.onSendKeys.mockClear();
     handlers.onSendMessage.mockClear();
@@ -448,19 +448,19 @@ describe("interaction panel", () => {
     expect([...keypad.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
       "Enter",
       "↑",
-      "^C",
+      "Plan",
       "←",
       "↓",
       "→",
     ]);
 
-    for (const name of ["Enter", "Up", "Interrupt", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
       await user.click(screen.getByRole("button", { name }));
     }
     expect(handlers.onSendKeys.mock.calls).toEqual([
       [["enter"]],
       [["up"]],
-      [["interrupt"]],
+      [["plan"]],
       [["left"]],
       [["down"]],
       [["right"]],
@@ -468,7 +468,7 @@ describe("interaction panel", () => {
 
     rerender(<InteractionPanel {...handlers} interactionBusy />);
     handlers.onSendKeys.mockClear();
-    for (const name of ["Enter", "Up", "Interrupt", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeEnabled();
       expect(button).toHaveAttribute("aria-disabled", "true");
@@ -766,21 +766,49 @@ it("sends once when Enter is pressed on a terminal button", async () => {
   expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["enter"]);
 });
 
-it("places Plan beside Send, expands on click, and keeps the interrupt compact without a tooltip", () => {
+it("places Interrupt in the header and expands on click without toggling closed", () => {
   const handlers = props(interaction("connected"));
   render(<InteractionPanel {...handlers} />);
+  const interrupt = screen.getByRole("button", { name: "Interrupt" });
+  const toggle = screen.getByRole("button", { name: "Terminal preview" });
+  expect(interrupt).toHaveTextContent("Interrupt");
+  expect(interrupt.parentElement).toBe(toggle.parentElement);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  fireEvent.click(interrupt);
+  expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["interrupt"]);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  fireEvent.click(interrupt);
+  expect(handlers.onSendKeys).toHaveBeenCalledTimes(2);
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+it("places Plan in the third keypad slot and never requests preview expansion", () => {
+  const handlers = props(interaction("connected"));
+  const view = render(<Panel {...handlers} previewExpanded />);
+  const keypad = screen.getByRole("group", { name: "Terminal controls" });
   const plan = screen.getByRole("button", { name: "Plan" });
-  expect(plan.parentElement).toBe(screen.getByRole("button", { name: "Send" }).parentElement);
+  expect(keypad.querySelectorAll("button")[2]).toBe(plan);
+  expect(plan).toHaveClass("terminal-key", "terminal-key-plan");
   fireEvent.click(plan);
   expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["plan"]);
-  expect(screen.getByRole("button", { name: "Terminal preview" })).toHaveAttribute(
-    "aria-expanded",
-    "true",
-  );
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+  view.rerender(<Panel {...handlers} previewExpanded={false} />);
+  expect(screen.queryByRole("button", { name: "Plan" })).not.toBeInTheDocument();
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+});
+
+it("ignores Interrupt and Plan while busy, including preview expansion", () => {
+  const handlers = props(interaction("connected"));
+  const view = render(<Panel {...handlers} interactionBusy previewExpanded={false} />);
   const interrupt = screen.getByRole("button", { name: "Interrupt" });
-  expect(interrupt).toHaveTextContent("^C");
-  expect(interrupt).not.toHaveAttribute("title");
-  expect(interrupt.closest(".terminal-keypad")).not.toBeNull();
+  expect(interrupt).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(interrupt);
+  view.rerender(<Panel {...handlers} interactionBusy previewExpanded />);
+  const plan = screen.getByRole("button", { name: "Plan" });
+  expect(plan).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(plan);
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
 });
 
 it("places tmux access before Exit in the connected heading and keeps operation output in the panel", () => {
