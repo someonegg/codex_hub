@@ -1,6 +1,7 @@
 import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 export const LOOPBACK_HOST = "127.0.0.1" as const;
@@ -105,7 +106,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       host,
       port: parsePort(values.port),
       homes,
-      clientDirectory: resolve(process.cwd(), "dist/client"),
+      clientDirectory: fileURLToPath(new URL("../../client/", import.meta.url)),
       tls,
       interactionEnabled: true,
       ...(values["upload-dir"] !== undefined
@@ -119,7 +120,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 }
 
 export function commandLineHelp(): string {
-  return `Usage: npm start -- [options]
+  return `Usage: codex-hub [options]
 
 Options:
   --codex-home <nickname=path>
@@ -135,10 +136,10 @@ Options:
   --help               Show this help
 
 TLS example:
-  npm start -- --ssl --ssl-cert server.crt --ssl-key server.key
+  codex-hub --ssl --ssl-cert server.crt --ssl-key server.key
 
 mTLS example:
-  npm start -- --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
+  codex-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
 }
 
 function parseHomes(values: readonly string[]): CodexHomeConfig[] {

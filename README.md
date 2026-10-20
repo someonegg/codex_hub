@@ -18,33 +18,43 @@ Codex from desktop or mobile.
 
 Requirements:
 
-- Node.js 22.13 or newer and npm
+- macOS or Linux with Node.js 22.13 or newer and npm
 - A local Codex home (usually `~/.codex`)
 - Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
 
+Try it without a global installation:
+
 ```sh
-npm ci
-npm run build
-npm start
+npx @someonegg/codex-hub@latest
+```
+
+Or install it for regular use:
+
+```sh
+npm install -g @someonegg/codex-hub
+codex-hub
 ```
 
 Open <http://127.0.0.1:4173>. Press `Ctrl-C` to stop the server.
 To use a different Codex home or port:
 
 ```sh
-npm start -- --codex-home 'personal=/path/to/codex-home' --port 4180
+codex-hub --codex-home 'personal=/path/to/codex-home' --port 4180
 ```
 
 To use multiple Codex homes:
 
 ```sh
-npm start -- \
+codex-hub \
   --codex-home 'personal=~/.codex' \
   --codex-home 'work=/path/to/codex-work'
 ```
 
 See [home configuration and usage](docs/usage.md#multiple-homes) for detailed rules.
+
+To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
+For running from source, see [Development](docs/development.md).
 
 ## Features
 

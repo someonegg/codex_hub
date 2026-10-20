@@ -1,8 +1,7 @@
 {
-  "name": "codex-hub",
-  "version": "1.0.0",
+  "name": "@someonegg/codex-hub",
+  "version": "0.1.0",
   "description": "Local project and session hub for Codex",
-  "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.13"
@@ -19,7 +18,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.tests-server.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "lint": "lint-client"
+    "lint": "lint-client",
+    "prepack": "npm run build",
+    "test:package": "node scripts/test-package.mjs"
   },
   "keywords": [
     "codex",
@@ -57,5 +58,24 @@
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
     "vitest": "^4.1.10"
+  },
+  "bin": {
+    "codex-hub": "dist/server/server/main.js"
+  },
+  "files": [
+    "dist/client",
+    "dist/server",
+    "!dist/**/*.map"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/someonegg/codex_hub.git"
+  },
+  "homepage": "https://github.com/someonegg/codex_hub#readme",
+  "bugs": {
+    "url": "https://github.com/someonegg/codex_hub/issues"
   }
 }

@@ -2,7 +2,7 @@
 
 ## Server options
 
-Pass options after `npm start --`. Restart the server after configuration changes.
+Pass options to `codex-hub`. Restart the server after configuration changes.
 
 | Option                         | Default            | Description                                                          |
 | ------------------------------ | ------------------ | -------------------------------------------------------------------- |
@@ -24,7 +24,7 @@ A home is one independent `CODEX_HOME`, containing `sessions/` and optionally
 `archived_sessions/`. Repeat the option to configure multiple homes:
 
 ```sh
-npm start -- \
+codex-hub \
   --codex-home 'personal=~/.codex' \
   --codex-home 'work=/path/to/codex-work'
 ```
@@ -145,7 +145,7 @@ recorded in the binding. See [binding details](technical-reference.md#tmux-inter
 Enable HTTPS with a server certificate and matching private key:
 
 ```sh
-npm start -- \
+codex-hub \
   --host 0.0.0.0 \
   --ssl \
   --ssl-cert /path/to/server-fullchain.pem \
@@ -176,7 +176,7 @@ unsafe links. File reads and responses are bounded.
 not at `sessions/` itself. Rollouts must be regular files named `rollout-*.jsonl`.
 Check server stderr for skipped or unreadable data.
 
-**Port already in use:** select another port with `npm start -- --port 4180`.
+**Port already in use:** select another port with `codex-hub --port 4180`.
 
 **Interaction controls are unavailable:** archived sessions have no interaction panel.
 Unarchived sessions show the panel immediately, but messaging and terminal controls
