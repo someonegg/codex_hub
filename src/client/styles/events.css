@@ -82,6 +82,29 @@
 .message-body :is(p, li) {
   line-height: 1.7;
 }
+.trace-event :is(h1, h2, h3, h4, h5, h6, strong, b, th) {
+  font-weight: 500;
+}
+.message-body :is(h1, h2, h3, h4, h5, h6) {
+  margin-block: 1.5em 0.6em;
+  font-family: var(--body-font);
+  line-height: 1.4;
+}
+.message-body h1 {
+  font-size: 1.5rem;
+}
+.message-body h2 {
+  font-size: 1.375rem;
+}
+.message-body h3 {
+  font-size: 1.25rem;
+}
+.message-body h4 {
+  font-size: 1.125rem;
+}
+.message-body :is(h5, h6) {
+  font-size: 1rem;
+}
 .message-body :is(p, h1, h2, h3, h4, h5, h6, li, a, code) {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -254,7 +277,7 @@
 .detail-summary strong,
 .internal-event-body > p > strong,
 .user-input-options strong {
-  font-weight: 600;
+  font-weight: 500;
 }
 .character-count {
   display: inline-flex;
@@ -300,7 +323,7 @@
   border: 1px solid var(--mist);
   font-family: var(--body-font);
   font-size: var(--text-status);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: normal;
   text-transform: none;
 }
@@ -325,7 +348,7 @@
 .user-input-question h3 {
   margin: 0.25rem 0 0.75rem;
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.45;
 }
 .user-input-header {
@@ -392,7 +415,7 @@
 .event-detail h4 {
   font-family: var(--body-font);
   font-size: var(--text-small);
-  font-weight: 600;
+  font-weight: 500;
   text-transform: none;
   margin: 1rem 0 0.35rem;
 }
