@@ -182,7 +182,11 @@ export function InteractionPanel({
   return (
     <section ref={panel} className="interaction-panel" aria-label="Session interaction">
       <div className="interaction-heading">
-        <div className="interaction-management-actions">{operationActions}</div>
+        {attachCommand ? (
+          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
+            tmux access
+          </button>
+        ) : null}
         {status.kind !== "connected" ? (
           <span className={`interaction-status interaction-status-${status.kind}`}>
             {status.label}
@@ -202,11 +206,7 @@ export function InteractionPanel({
             <span>Replacement session unavailable</span>
           )
         ) : null}
-        {attachCommand ? (
-          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
-            tmux access
-          </button>
-        ) : null}
+        <div className="interaction-management-actions">{operationActions}</div>
       </div>
       {accessOpen && attachCommand ? (
         <TmuxAccessDialog command={attachCommand} onClose={() => setAccessOpen(false)} />

@@ -811,7 +811,7 @@ it("ignores Interrupt and Plan while busy, including preview expansion", () => {
   expect(handlers.onExpandPreview).not.toHaveBeenCalled();
 });
 
-it("places Exit before tmux access in the connected heading and keeps operation output in the panel", () => {
+it("places tmux access before Exit in the connected heading and keeps operation output in the panel", () => {
   render(
     <InteractionPanel
       {...props({ ...interaction("connected"), attachCommand: "tmux attach" })}
@@ -822,7 +822,7 @@ it("places Exit before tmux access in the connected heading and keeps operation 
   const access = screen.getByRole("button", { name: "tmux access" });
   const exit = screen.getByRole("button", { name: "Exit" });
   expect(access.closest(".interaction-heading")).toBe(exit.closest(".interaction-heading"));
-  expect(exit.compareDocumentPosition(access) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(access.compareDocumentPosition(exit) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getByRole("region", { name: "Session interaction" })).toContainElement(
     screen.getByText("Waiting for exit"),
   );
