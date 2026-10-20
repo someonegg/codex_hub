@@ -58,7 +58,12 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 
 Send prompts and control the live terminal from the session page.
 
+<details>
+<summary>Show session interaction screenshot</summary>
+
 <img src="docs/images/codex-hub-session-interaction.png" alt="Session conversation with answered User input, live terminal preview, controls, message input, and Handoff" width="900">
+
+</details>
 
 ### Continue with Handoff
 
