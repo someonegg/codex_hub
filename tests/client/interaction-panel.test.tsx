@@ -827,3 +827,132 @@ it("places tmux access before Exit in the connected heading and keeps operation 
     screen.getByText("Waiting for exit"),
   );
 });
+
+describe("composer uploads", () => {
+  it("inserts files in order at the selection, freezes controls and restores the caret", async () => {
+    const { api } = await import("../../src/client/api/client");
+    let finish!: (value: { path: string }) => void;
+    const upload = vi
+      .spyOn(api, "upload")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValueOnce({ path: "/tmp/two.txt" });
+    const handlers = props(interaction("connected"));
+    render(<InteractionPanel {...handlers} />);
+    const input = screen.getByRole("textbox") as HTMLTextAreaElement;
+    fireEvent.change(input, { target: { value: "before replace after" } });
+    input.setSelectionRange(7, 14);
+    fireEvent.paste(input, {
+      clipboardData: { files: [new File(["one"], "one.png"), new File(["two"], "two.txt")] },
+    });
+    expect(input).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
+    expect(screen.getByText("Uploading 1/2…")).toBeInTheDocument();
+    await act(async () => finish({ path: "/tmp/space dir/one.png" }));
+    expect(input.value).toBe('before "/tmp/space dir/one.png" /tmp/two.txt after');
+    expect(input).toBeEnabled();
+    await vi.waitFor(() => expect(input).toHaveFocus());
+    expect(input.selectionStart).toBe(input.value.indexOf(" after"));
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    upload.mockRestore();
+  });
+
+  it("keeps successful paths after failure and stops the batch", async () => {
+    const { api } = await import("../../src/client/api/client");
+    const upload = vi
+      .spyOn(api, "upload")
+      .mockResolvedValueOnce({ path: "/tmp/one.txt" })
+      .mockRejectedValueOnce(new Error("Disk full"));
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    const input = screen.getByRole("textbox");
+    fireEvent.drop(input, {
+      dataTransfer: { files: [1, 2, 3].map((n) => new File(["x"], `${n}.txt`)), items: [] },
+    });
+    await screen.findByText("Disk full");
+    expect(input).toHaveValue("/tmp/one.txt");
+    expect(input).toBeEnabled();
+    expect(upload).toHaveBeenCalledTimes(2);
+    upload.mockRestore();
+  });
+
+  it("aborts on unmount and ignores late responses", async () => {
+    const { api } = await import("../../src/client/api/client");
+    let finish!: (value: { path: string }) => void;
+    const upload = vi.spyOn(api, "upload").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const view = render(<InteractionPanel {...props(interaction("connected"))} />);
+    fireEvent.paste(screen.getByRole("textbox"), {
+      clipboardData: { files: [new File(["x"], "a.txt")] },
+    });
+    const signal = upload.mock.calls[0]![1];
+    view.unmount();
+    expect(signal.aborted).toBe(true);
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    await act(async () => finish({ path: "/tmp/old.txt" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    upload.mockRestore();
+  });
+
+  it("leaves ordinary text paste alone and rejects oversized files before uploading", async () => {
+    const { api } = await import("../../src/client/api/client");
+    const upload = vi.spyOn(api, "upload");
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    const input = screen.getByRole("textbox");
+    expect(
+      fireEvent.paste(input, { clipboardData: { files: [], getData: () => "/local/file.txt" } }),
+    ).toBe(true);
+    const file = new File(["x"], "large.txt");
+    Object.defineProperty(file, "size", { value: 20 * 1024 * 1024 + 1 });
+    fireEvent.paste(input, { clipboardData: { files: [file] } });
+    expect(await screen.findByText("Files must be at most 20 MiB")).toBeInTheDocument();
+    expect(upload).not.toHaveBeenCalled();
+    expect(input).toBeEnabled();
+    upload.mockRestore();
+  });
+});
+
+it("adds a MIME extension to clipboard images and refuses new uploads while busy", async () => {
+  const { api } = await import("../../src/client/api/client");
+  let finish!: (value: { path: string }) => void;
+  const upload = vi.spyOn(api, "upload").mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  render(<InteractionPanel {...props(interaction("connected"))} />);
+  const input = screen.getByRole("textbox");
+  const clipboard = {
+    clipboardData: { files: [new File(["pixels"], "clipboard", { type: "image/png" })] },
+  };
+  fireEvent.paste(input, clipboard);
+  expect(upload.mock.calls[0]![0].name).toBe("clipboard.png");
+  fireEvent.paste(input, clipboard);
+  expect(upload).toHaveBeenCalledTimes(1);
+  await act(async () => finish({ path: "/tmp/image.png" }));
+  upload.mockRestore();
+});
+
+it("rejects folders without uploading", async () => {
+  const { api } = await import("../../src/client/api/client");
+  const upload = vi.spyOn(api, "upload");
+  render(<InteractionPanel {...props(interaction("connected"))} />);
+  fireEvent.drop(screen.getByRole("textbox"), {
+    dataTransfer: {
+      files: [],
+      items: [{ kind: "file", webkitGetAsEntry: () => ({ isDirectory: true }) }],
+    },
+  });
+  expect(await screen.findByText("Folders are not supported")).toBeInTheDocument();
+  expect(upload).not.toHaveBeenCalled();
+  upload.mockRestore();
+});

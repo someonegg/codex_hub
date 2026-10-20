@@ -80,6 +80,32 @@ Only the opened, unarchived session subscribes to automatic updates. History pag
 and automatic updates coexist while preserving the reading position. Reader revisions
 are independent of catalog revisions and include `updatedAt`. Session diagnostics stay in server logs.
 
+## File uploads
+
+`POST /api/v1/uploads?filename=<URL-encoded filename>` accepts raw binary and returns
+`201 { "path": "/absolute/path/<uuid>.<ext>" }`. The filename supplies only a safe
+alphanumeric extension (1–16 characters); it never determines the storage directory
+or basename. Clipboard images without an extension receive one from their MIME type.
+The endpoint is independent of sessions and rejects cross-origin browser requests.
+
+The maximum file size is 20 MiB, checked against both Content-Length and actual bytes.
+Oversize uploads return `413` with the standard API error envelope. Storage failures
+use the existing `500 internal_error` envelope. Exclusive creation prevents overwrites;
+failed or interrupted uploads remove incomplete files. Files already uploaded remain
+when a later file fails or the browser switches sessions.
+
+`--upload-dir <path>` creates the directory as needed; relative paths use the startup
+working directory and `~/` expands to the user's home. Empty values fail startup.
+Without this option the process creates and reuses a directory named
+`codex-hub-uploads-*` under `os.tmpdir()`. Uploads are never automatically removed by
+the hub, including on shutdown. Default temporary storage may be cleaned by the OS.
+
+The composer uploads files serially, replaces the current selection with their paths,
+and restores focus and the caret. Paths containing whitespace or quotes use double
+quotes with escaped special characters. No message is sent automatically. Ordinary
+files are supplied as paths; Codex's ability to read them depends on their type.
+Finder paste that provides only text does not read local files.
+
 ## Tmux interaction
 
 | Endpoint                                         | Request or response                                                                                                                              |

@@ -12,6 +12,7 @@ import { createSessionInteractionRoutes } from "./session-interaction-routes.js"
 import { createSessionManagementRoutes } from "./session-management-routes.js";
 import { createSessionReadRoutes } from "./session-read-routes.js";
 import { createSessionUpdatesRoutes } from "./session-updates-routes.js";
+import { createUploadRoutes } from "./upload-routes.js";
 
 export interface ApiErrorLogger {
   error(message: string, context: { readonly requestId: string; readonly error: unknown }): void;
@@ -28,6 +29,7 @@ export interface ApiRouterDependencies {
   readonly updates: SessionUpdatesService;
   readonly interaction?: InteractionApi;
   readonly operations?: OperationService;
+  readonly uploadDirectory?: string;
 }
 
 export interface ApiRouterOptions {
@@ -48,6 +50,7 @@ export function createApiRouter(
   const logger = options.logger ?? CONSOLE_ERROR_LOGGER;
   const requestIdFactory = options.requestId ?? randomUUID;
   const handlers = [
+    createUploadRoutes(dependencies.uploadDirectory),
     createSessionManagementRoutes(dependencies.operations),
     createSessionUpdatesRoutes(dependencies.updates),
     createSessionInteractionRoutes(dependencies.interaction),

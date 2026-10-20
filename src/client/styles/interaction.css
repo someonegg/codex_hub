@@ -376,3 +376,8 @@
   font-size: var(--text-status);
   font-weight: 600;
 }
+
+.interaction-composer-dragging {
+  outline: 2px dashed var(--color-accent, #3675cf);
+  outline-offset: 4px;
+}
