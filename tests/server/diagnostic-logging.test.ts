@@ -269,7 +269,7 @@ it.each(["create", "archive", "delete"] as const)(
       diagnosticLogger: { log() {} },
     });
     const manager = {
-      resolveDirectory: vi.fn(async () => ({ directory: "/project", project: "/project" })),
+      resolveDirectory: vi.fn(async () => ({ directory: "/project" })),
       launch: vi.fn(async (operationId: string) => {
         const sessionId = opaqueIdForParts(descriptor.instanceKey, current.localId);
         bindings.submit({

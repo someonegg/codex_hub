@@ -863,7 +863,7 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   });
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
   const transport = { resolveTarget } as unknown as InteractionTransport;
-  const resolveDirectory = vi.fn(async () => ({ directory: "/project", project: "/project" }));
+  const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
   const registry = new SessionManagerRegistry(domain.origin.sourceInstanceId).register(
     domain.origin.sourceInstanceId,
     {

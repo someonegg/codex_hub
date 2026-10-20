@@ -74,7 +74,7 @@ function setup(managementWaitMs = 30) {
     })),
   };
   const manager = {
-    resolveDirectory: vi.fn(async () => ({ directory: "/project", project: "/project" })),
+    resolveDirectory: vi.fn(async () => ({ directory: "/project" })),
     launch: vi.fn(async () => target),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
@@ -233,10 +233,24 @@ describe("observed management operations", () => {
     expect(service.create({ ...input, yolo: false })).toEqual(first);
     expect(() => service.create({ ...input, yolo: true })).toThrow(/different parameters/);
     await flush();
-    expect(manager.launch).toHaveBeenLastCalledWith(first.operationId, "/project", false, false);
+    expect(manager.launch).toHaveBeenLastCalledWith(
+      first.operationId,
+      "/project",
+      false,
+      false,
+      undefined,
+      "/project",
+    );
     const second = service.create({ ...input, requestId: "yolo-enabled", yolo: true });
     await flush();
-    expect(manager.launch).toHaveBeenLastCalledWith(second.operationId, "/project", false, true);
+    expect(manager.launch).toHaveBeenLastCalledWith(
+      second.operationId,
+      "/project",
+      false,
+      true,
+      undefined,
+      "/project",
+    );
   });
   it("keeps timeout terminal and never relaunches on queries", async () => {
     const { service, manager, set, time } = setup();
@@ -975,6 +989,7 @@ describe("safe resume operations", () => {
       false,
       false,
       f.original.sourceId,
+      f.original.projectDirectory,
     );
     bindings.submit({
       sessionId: "original",
@@ -1017,6 +1032,21 @@ describe("safe resume operations", () => {
     expect((await f.service.get(op.operationId))?.status).toBe("failed");
     expect(f.manager.launch).not.toHaveBeenCalled();
   });
+
+  it.each(["workingDirectory", "projectDirectory", "sourceId"] as const)(
+    "rejects a changed %s immediately before launch",
+    async (field) => {
+      const f = resumable();
+      f.reader.managementSnapshot
+        .mockResolvedValueOnce({ sessions: [f.original] })
+        .mockResolvedValueOnce({ sessions: [f.original] })
+        .mockResolvedValueOnce({ sessions: [{ ...f.original, [field]: "/changed" }] });
+      const op = f.service.create(request);
+      await flush();
+      expect((await f.service.get(op.operationId))?.status).toBe("failed");
+      expect(f.manager.launch).not.toHaveBeenCalled();
+    },
+  );
 
   it("does not associate a resumed operation with a different session", async () => {
     const f = resumable();
@@ -1077,6 +1107,7 @@ describe("safe resume operations", () => {
       false,
       true,
       f.original.sourceId,
+      f.original.projectDirectory,
     );
     expect(() => f.service.create({ ...request, directory: "/other" } as never)).toThrow(/only/);
   });
