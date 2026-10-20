@@ -31,9 +31,27 @@ ESLint checks client, server, shared code, tests, and TypeScript scripts. See th
 [isolated lint toolchain](../tools/client-lint/README.md) for import rules, React
 Hooks coverage, and its separate TypeScript API dependency.
 
-GitHub Actions runs `npm ci` and `npm test` on Ubuntu with Node.js 22 for pushes to
-`main` and pull requests. The **Tests** workflow also supports manual runs. Native tmux
-and Codex CLI integration suites remain separate from this workflow.
+GitHub Actions runs tests, type checking, linting, formatting, and an installed-package
+smoke test on Ubuntu with Node.js 22.13 and 24. Native tmux and Codex CLI integration
+suites remain separate from this workflow.
+
+## Releases
+
+The public npm package is `@someonegg/codex-hub`; its executable is `codex-hub`.
+Run `npm run test:package` to build, pack, install into a temporary directory, and
+verify help, server startup, and web assets outside the repository.
+
+For a release, update the package and lockfile versions in a PR, run the checks,
+and merge it. Tag that commit as `v<package-version>` and push the tag. The
+`publish.yml` workflow validates the tag, runs the checks, and publishes to npm
+using trusted publishing. Create a matching GitHub Release with English release
+notes after verifying installation from the registry. Never reuse a published
+version; fix release defects in a new patch version.
+
+The first release bootstraps the package with a local authenticated `npm publish`.
+Then configure npm trusted publishing for GitHub user `someonegg`, repository
+`codex_hub`, workflow `publish.yml`, without an environment, allowing direct
+publishing. Subsequent releases use GitHub Actions without an npm token.
 
 ## Integration tests and benchmarks
 

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { commandLineHelp, loadConfig } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
 import { createApiRouter } from "./http/api-router.js";

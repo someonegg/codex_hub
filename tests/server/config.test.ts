@@ -73,7 +73,7 @@ describe("server command line", () => {
   it("returns help without requiring runtime options", () => {
     expect(loadConfig(["--help"])).toEqual({ kind: "help" });
     expect(commandLineHelp()).toContain("--ssl-ca <path>");
-    expect(commandLineHelp()).toContain("npm start -- --ssl");
+    expect(commandLineHelp()).toContain("codex-hub --ssl");
   });
 });
 
