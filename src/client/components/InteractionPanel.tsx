@@ -434,7 +434,7 @@ export function InteractionPanel({
             aria-label="Message to agent"
             value={message}
             disabled={interactionBusy || !!uploadProgress || !previewConnected}
-            rows={6}
+            rows={5}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
             placeholder="Send a prompt… Paste images or drop files. Shift+Enter to send"
             onChange={(event) => setMessage(event.target.value)}

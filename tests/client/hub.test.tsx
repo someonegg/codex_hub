@@ -35,6 +35,7 @@ const flush = async () => {
   });
 };
 beforeEach(() => {
+  sessionStorage.clear();
   sessionStorage.setItem(
     "codex-hub.navigation",
     JSON.stringify({ includeArchived: false, expanded: ["project-reader"], scroll: 0 }),
@@ -58,6 +59,32 @@ beforeEach(() => {
   }));
 });
 describe("unified hub", () => {
+  it("remembers child session expansion and collapse after remounting", async () => {
+    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
+    let view = render(<App />);
+    await flush();
+    const group = () => screen.getByText("Child sessions · 1").closest("details")!;
+    expect(group()).not.toHaveAttribute("open");
+    group().open = true;
+    fireEvent(group(), new Event("toggle"));
+    await flush();
+    view.unmount();
+
+    vi.mocked(api.sessions).mockResolvedValueOnce(catalog);
+    view = render(<App />);
+    await flush();
+    expect(group()).toHaveAttribute("open");
+    group().open = false;
+    fireEvent(group(), new Event("toggle"));
+    await flush();
+    view.unmount();
+
+    vi.mocked(api.sessions).mockResolvedValueOnce(catalog);
+    render(<App />);
+    await flush();
+    expect(group()).not.toHaveAttribute("open");
+  });
+
   it("offers a home link below a missing session error without redirecting automatically", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
     vi.mocked(api.items).mockRejectedValue(
