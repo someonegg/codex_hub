@@ -37,7 +37,7 @@ jobs:
       - run: npm run test:package
 
   test-result:
-    name: npm test
+    name: CI Passed
     needs: test
     if: always()
     runs-on: ubuntu-latest
