@@ -325,7 +325,7 @@ export function InteractionPanel({
             aria-label="Message to agent"
             value={message}
             disabled={interactionBusy || !previewConnected}
-            rows={3}
+            rows={6}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
             placeholder="Send a prompt… Enter for a new line, Shift+Enter to send"
             onChange={(event) => setMessage(event.target.value)}
@@ -338,25 +338,6 @@ export function InteractionPanel({
             </p>
           ) : null}
           <div className="interaction-actions">
-            <div className="interaction-primary-actions">
-              <button
-                type="button"
-                className="interaction-send"
-                disabled={!previewConnected || messageIsBlank || messageTooLarge}
-                aria-disabled={interactionBusy}
-                onClick={() => void send().catch(() => undefined)}
-              >
-                Send
-              </button>
-              <button
-                type="button"
-                disabled={!previewConnected}
-                aria-disabled={interactionBusy}
-                onClick={() => sendKeys(["plan"])}
-              >
-                Plan
-              </button>
-            </div>
             <button
               type="button"
               className="interaction-handoff"
@@ -366,6 +347,25 @@ export function InteractionPanel({
             >
               Handoff
             </button>
+            <div className="interaction-primary-actions">
+              <button
+                type="button"
+                disabled={!previewConnected}
+                aria-disabled={interactionBusy}
+                onClick={() => sendKeys(["plan"])}
+              >
+                Plan
+              </button>
+              <button
+                type="button"
+                className="interaction-send"
+                disabled={!previewConnected || messageIsBlank || messageTooLarge}
+                aria-disabled={interactionBusy}
+                onClick={() => void send().catch(() => undefined)}
+              >
+                Send
+              </button>
+            </div>
           </div>
         </div>
       </>
