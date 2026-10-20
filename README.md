@@ -56,19 +56,9 @@ See [home configuration and usage](docs/usage.md#multiple-homes) for detailed ru
 
 ## Session interaction
 
-Send prompts and control the live terminal from the session page.
-Paste screenshots or drop ordinary files into the message input (up to 20 MiB per
-file; multiple files supported, folders excluded). Uploads start immediately and
-freeze editing, Send, and Handoff. Paths are inserted at your selection in order;
-review the draft and send it yourself. A failed upload stops the batch while
-preserving earlier paths. Switching sessions cancels pending uploads.
-
-Use `npm start -- --upload-dir '/path/with spaces/uploads'` to choose storage.
-Relative paths resolve from the server startup directory; `~/` is supported.
-Otherwise the process reuses a `codex-hub-uploads-*` directory under the system
-temporary directory. Files are retained after shutdown; the OS may clear temporary
-storage. The directory must be visible to the Codex process. Finder file paste works
-when the browser supplies files; plain text paths remain plain text.
+Send prompts and control the live terminal from the session page. Paste screenshots
+or drop files into the message input, then review and send the inserted paths.
+See [file uploads](docs/technical-reference.md#file-uploads) for limits and storage options.
 
 <details>
 <summary>Show session interaction screenshot</summary>

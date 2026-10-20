@@ -82,29 +82,23 @@ are independent of catalog revisions and include `updatedAt`. Session diagnostic
 
 ## File uploads
 
-`POST /api/v1/uploads?filename=<URL-encoded filename>` accepts raw binary and returns
-`201 { "path": "/absolute/path/<uuid>.<ext>" }`. The filename supplies only a safe
-alphanumeric extension (1–16 characters); it never determines the storage directory
-or basename. Clipboard images without an extension receive one from their MIME type.
-The endpoint is independent of sessions and rejects cross-origin browser requests.
+`POST /api/v1/uploads?filename=<URL-encoded filename>` accepts raw binary (up to
+20 MiB per file) and returns `201 { "path": "/absolute/path/<uuid>.<ext>" }`.
+The filename supplies only a safe extension. Oversize uploads return `413`;
+storage failures return `500`, using the standard API error envelope.
+Failed or interrupted uploads remove incomplete files.
 
-The maximum file size is 20 MiB, checked against both Content-Length and actual bytes.
-Oversize uploads return `413` with the standard API error envelope. Storage failures
-use the existing `500 internal_error` envelope. Exclusive creation prevents overwrites;
-failed or interrupted uploads remove incomplete files. Files already uploaded remain
-when a later file fails or the browser switches sessions.
+Use `--upload-dir <path>` to choose storage. Missing directories are created,
+relative paths resolve from the startup directory, and `~/` is supported.
+Otherwise the process reuses a `codex-hub-uploads-*` directory under `os.tmpdir()`.
+Uploads are retained after shutdown; the OS may clear temporary storage.
+The directory must be visible to the Codex process.
 
-`--upload-dir <path>` creates the directory as needed; relative paths use the startup
-working directory and `~/` expands to the user's home. Empty values fail startup.
-Without this option the process creates and reuses a directory named
-`codex-hub-uploads-*` under `os.tmpdir()`. Uploads are never automatically removed by
-the hub, including on shutdown. Default temporary storage may be cleaned by the OS.
-
-The composer uploads files serially, replaces the current selection with their paths,
-and restores focus and the caret. Paths containing whitespace or quotes use double
-quotes with escaped special characters. No message is sent automatically. Ordinary
-files are supplied as paths; Codex's ability to read them depends on their type.
-Finder paste that provides only text does not read local files.
+The composer accepts pasted images and dropped files, including multiple files but
+not folders. Uploads freeze editing, Send, and Handoff, then insert paths at the
+selection without sending. A failure stops the batch and retains earlier paths;
+switching sessions cancels pending uploads. Finder paste works when the browser
+supplies files; text-only paths remain text.
 
 ## Tmux interaction
 
