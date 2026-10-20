@@ -15,16 +15,23 @@ export interface SessionExitCapability {
   exitSteps(): readonly SessionExitStep[];
 }
 
+/** Shared launch inputs; native identities remain opaque outside their adapter. */
+export interface SessionLaunchOptions {
+  readonly operationId: string;
+  /** Actual process working directory, resolved before launch. */
+  readonly directory: string;
+  readonly worktree: boolean;
+  readonly yolo: boolean;
+  /** Present for resume; absent for creation. */
+  readonly resumeNativeId?: string;
+  /** Original project association, retained even when launching in a worktree. */
+  readonly projectDirectory?: string | null;
+}
+
 export interface SessionManager extends SessionExitCapability {
+  isValidNativeId(nativeId: string): boolean;
   resolveDirectory(directory: string): Promise<{ directory: string }>;
-  launch(
-    operationId: string,
-    directory: string,
-    worktree: boolean,
-    yolo: boolean,
-    resumeNativeId?: string,
-    projectDirectory?: string | null,
-  ): Promise<TmuxBinding>;
+  launch(options: SessionLaunchOptions): Promise<TmuxBinding>;
   archive(nativeId: string): Promise<void>;
   delete(nativeId: string): Promise<void>;
 }

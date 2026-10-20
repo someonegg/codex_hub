@@ -229,7 +229,8 @@ The last two fields may be empty. V3 remains readable.
   `--worktree` and `--yolo` (both off by default). Confirm the operation marker,
   launch target, project, and valid binding within 300 seconds after launch.
   Show an attach command after 30 seconds and retain it on timeout.
-- **Resume:** use the owning source and native UUID from the original session.
+- **Resume:** use the owning source and opaque native ID from the original session.
+  The owning adapter validates its format; only the Codex adapter requires a UUID.
   Try Working Directory first, then Project Directory. Skip empty or invalid paths;
   fall back when a candidate is missing or is not a directory. Launch with the
   selected real path while retaining the original project in the bind.
@@ -239,7 +240,7 @@ The last two fields may be empty. V3 remains readable.
   Missing/invalid bindings, timeouts and errors never authorize resume. Revalidate
   before launching `codex resume <UUID>` in a new pane. Confirmation requires the
   original identity, operation marker, matching project and a live owned launch target.
-- **Exit:** resolve the source and latest binding; no native UUID is required.
+- **Exit:** resolve the source and latest binding; no native ID is required.
   Binding transfers control of the whole pane, including manually bound panes.
   Send interrupts and EOF with grace periods, then force-close that pane if needed.
   Success requires a missing or dead pane within 30 seconds; query errors or

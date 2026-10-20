@@ -27,6 +27,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   const sessions = await createCodexSessionReadService(home);
   const interaction = new SessionInteractionService(sessions, true, new TmuxInteractionService());
   const manager = {
+    isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async () => ({ directory: home })),
     launch: vi.fn(async () => ({ socketPath: "/tmp/test", paneId: "%1" })),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],

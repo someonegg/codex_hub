@@ -4,7 +4,7 @@ import { promisify } from "node:util";
 
 import { validProjectDirectory } from "../../domain/project-directory.js";
 import { TmuxLauncher } from "../../interaction/tmux-launcher.js";
-import type { SessionManager } from "../../management/session-manager.js";
+import type { SessionLaunchOptions, SessionManager } from "../../management/session-manager.js";
 import { codexBindingCommand } from "./interaction-parser.js";
 
 const execute = promisify(execFile);
@@ -21,15 +21,18 @@ export class CodexSessionManager implements SessionManager {
       throw Object.assign(new Error("Path is not a directory"), { code: "ENOTDIR" });
     return { directory };
   }
-  launch(
-    operationId: string,
-    directory: string,
-    worktree: boolean,
-    yolo = false,
-    resumeNativeId?: string,
-    projectDirectory?: string | null,
-  ) {
-    if (resumeNativeId && !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(resumeNativeId))
+  isValidNativeId(nativeId: string): boolean {
+    return /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(nativeId);
+  }
+  launch({
+    operationId,
+    directory,
+    worktree,
+    yolo,
+    resumeNativeId,
+    projectDirectory,
+  }: SessionLaunchOptions) {
+    if (resumeNativeId !== undefined && !this.isValidNativeId(resumeNativeId))
       throw new Error("Invalid resume identity");
     return this.tmux.launch(operationId, directory, [
       "env",
@@ -57,8 +60,7 @@ export class CodexSessionManager implements SessionManager {
     await this.#command(["delete", nativeId, "--force"]);
   }
   async #command(args: string[]) {
-    if (!/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(args[1]!))
-      throw new Error("Session has no valid native UUID");
+    if (!this.isValidNativeId(args[1]!)) throw new Error("Session has no valid native UUID");
     await execute("codex", args, {
       env: { ...process.env, CODEX_HOME: this.home },
       timeout: 25_000,

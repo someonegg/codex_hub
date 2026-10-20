@@ -867,6 +867,7 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   const registry = new SessionManagerRegistry(domain.origin.sourceInstanceId).register(
     domain.origin.sourceInstanceId,
     {
+      isValidNativeId: vi.fn((_nativeId: string) => true),
       resolveDirectory,
       launch: vi.fn(),
       archive: vi.fn(),

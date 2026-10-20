@@ -123,6 +123,12 @@ export function CreateSession({
   }, [open]);
   const [worktree, setWorktree] = useState(false);
   const [yolo, setYolo] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setWorktree(false);
+      setYolo(false);
+    }
+  }, [open]);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
   const controller = useHubOperation("create", onCreated);
   useEffect(() => {
@@ -209,7 +215,7 @@ export function CreateSession({
             onChange={(event) => setWorktree(event.target.checked)}
             disabled={controller.busy}
           />
-          Create Codex worktree
+          Enable worktree
         </label>
         <label className="check-row">
           <input
@@ -218,7 +224,7 @@ export function CreateSession({
             onChange={(event) => setYolo(event.target.checked)}
             disabled={controller.busy}
           />
-          Enable --yolo
+          Enable YOLO mode
         </label>
         <OperationStatus controller={controller} />
         <button
@@ -429,7 +435,7 @@ export function ResumeSession({
               disabled={controller.busy}
               onChange={(event) => setYolo(event.target.checked)}
             />
-            Enable --yolo
+            Enable YOLO mode
           </label>
           <button type="submit" disabled={controller.busy || !session.resume.allowed}>
             Resume session

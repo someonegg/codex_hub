@@ -65,14 +65,13 @@ it("validates create directories, resolves symlinks and passes the explicit proj
   });
   for (const path of ["relative", "/a\nb", "/a\rb", "/a\0b"])
     await expect(manager.resolveDirectory(path)).rejects.toThrow("absolute local path");
-  await manager.launch(
-    "00000000-0000-4000-8000-000000000001",
-    resolved.directory,
-    true,
-    false,
-    undefined,
-    "/original/project",
-  );
+  await manager.launch({
+    operationId: "00000000-0000-4000-8000-000000000001",
+    directory: resolved.directory,
+    worktree: true,
+    yolo: false,
+    projectDirectory: "/original/project",
+  });
   expect(launch.mock.calls[0]![2]).toContain("--worktree");
   expect(launch.mock.calls[0]![2].at(-1)).toContain("'/original/project'");
 });

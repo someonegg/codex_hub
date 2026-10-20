@@ -39,7 +39,7 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     expect(document.querySelector(".session-action-menu")?.textContent).toBe("Archive session");
     fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
-    expect(screen.getByRole("checkbox", { name: "Enable --yolo" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
     await flush();
     expect(archive).toHaveBeenCalledWith(session.id);
@@ -48,6 +48,20 @@ describe("hub management", () => {
       expect.objectContaining({ yolo: false, requestId: expect.stringMatching(/^[a-f0-9]{32}$/) }),
     );
   });
+  it("resets creation launch options whenever the dialog reopens", () => {
+    const props = { project: "/project", projects: [], onCreated: vi.fn() };
+    const view = render(<CreateSession {...props} open />);
+    for (const name of ["Enable worktree", "Enable YOLO mode"]) {
+      expect(screen.getByRole("checkbox", { name })).not.toBeChecked();
+      fireEvent.click(screen.getByRole("checkbox", { name }));
+      expect(screen.getByRole("checkbox", { name })).toBeChecked();
+    }
+    view.rerender(<CreateSession {...props} open={false} />);
+    view.rerender(<CreateSession {...props} open />);
+    for (const name of ["Enable worktree", "Enable YOLO mode"])
+      expect(screen.getByRole("checkbox", { name })).not.toBeChecked();
+  });
+
   it("uses a new request after definite failure but preserves it for uncertain retries", async () => {
     const create = vi
       .spyOn(api, "createSession")
@@ -75,8 +89,8 @@ describe("hub management", () => {
     });
     const onCreated = vi.fn();
     render(<CreateSession project="/project with spaces" projects={[]} onCreated={onCreated} />);
-    fireEvent.click(screen.getByRole("checkbox", { name: "Create Codex worktree" }));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Enable --yolo" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable worktree" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
     await flush();
     expect(create).toHaveBeenCalledWith(
@@ -574,10 +588,14 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Resume" }));
   expect(screen.getByRole("dialog", { name: "Resume session" })).toBeVisible();
-  expect(screen.getByRole("checkbox", { name: "Enable --yolo" })).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  expect(screen.queryByRole("checkbox", { name: "Create Codex worktree" })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole("checkbox", { name: "Enable --yolo" }));
+  expect(screen.queryByRole("checkbox", { name: "Enable worktree" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+  expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
   fireEvent.click(screen.getByRole("button", { name: "Resume session" }));
   await flush();
   expect(create).toHaveBeenCalledWith({
