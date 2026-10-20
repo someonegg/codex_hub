@@ -255,23 +255,21 @@ export class CodexSessionSource implements SessionSource {
         decoded.records,
         decoded.diagnostics,
       );
-      binds.set(
-        descriptor.id,
-        decoded.records.flatMap((record) => {
-          const timestamp =
-            typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
-          return codexBindingAttemptsFrom(record).map((attempt, position) => ({
-            sessionId: descriptor.id,
-            time: Number.isFinite(timestamp) ? timestamp : 0,
-            ordinal: record.ordinal,
-            position,
-            attempt,
-          }));
-        }),
-      );
+      const bindingEvents = decoded.records.flatMap((record) => {
+        const timestamp =
+          typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
+        return codexBindingAttemptsFrom(record).map((attempt, position) => ({
+          sessionId: descriptor.id,
+          time: Number.isFinite(timestamp) ? timestamp : 0,
+          ordinal: record.ordinal,
+          position,
+          attempt,
+        }));
+      });
+      binds.set(descriptor.id, bindingEvents);
       const metadata = this.identity.metadata(identityState);
       const origin = this.#origin(metadata.agentVersion);
-      let normalized =
+      const baseNormalized =
         decoded.mode === "append" &&
         cached !== undefined &&
         identityState === cached.identityState &&
@@ -281,16 +279,14 @@ export class CodexSessionSource implements SessionSource {
           : this.normalizer.materialize(normalizerState, metadata, origin);
       let bindProjectDirectory =
         decoded.mode === "append" ? (cached?.bindProjectDirectory ?? null) : null;
-      for (const record of decoded.records) {
-        for (const attempt of codexBindingAttemptsFrom(record)) {
-          if (attempt.valid && attempt.projectDirectory)
-            bindProjectDirectory = attempt.projectDirectory;
-        }
+      for (const { attempt } of bindingEvents) {
+        if (attempt.valid && attempt.projectDirectory)
+          bindProjectDirectory = attempt.projectDirectory;
       }
-      const projectDirectory = bindProjectDirectory ?? normalized.session.workingDirectory;
-      normalized = {
-        ...normalized,
-        session: { ...normalized.session, projectDirectory },
+      const projectDirectory = bindProjectDirectory ?? baseNormalized.session.workingDirectory;
+      const normalized = {
+        ...baseNormalized,
+        session: { ...baseNormalized.session, projectDirectory },
         interaction: codexInteraction(projectDirectory),
       };
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
