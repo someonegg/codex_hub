@@ -44,7 +44,8 @@ verify help, server startup, and web assets outside the repository.
 For a release, update the package and lockfile versions in a PR, run the checks,
 and merge it. Tag that commit as `v<package-version>` and push the tag. The
 `publish.yml` workflow validates the tag, runs the checks, and publishes to npm
-using trusted publishing. Create a matching GitHub Release with English release
+using trusted publishing, skipping versions already published during bootstrap or
+a workflow retry. Create a matching GitHub Release with English release
 notes after verifying installation from the registry. Never reuse a published
 version; fix release defects in a new patch version.
 
