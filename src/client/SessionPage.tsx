@@ -37,6 +37,14 @@ export function SessionPage({
     (session) =>
       session.parentId === sessionId && (includeArchived || session.status !== "archived"),
   );
+  const childSessionsKey = `codex-hub.child-sessions.${sessionId}`;
+  const [childrenExpanded, setChildrenExpanded] = useState(() => {
+    try {
+      return sessionStorage.getItem(childSessionsKey) === "true";
+    } catch {
+      return false;
+    }
+  });
   const focused = useRef(false);
   const timelineVisibility = useTimelineVisibility();
   const reader = useSessionReader(sessionId);
@@ -143,7 +151,19 @@ export function SessionPage({
                 </nav>
               ) : null}
               {children.length ? (
-                <details className="child-session-group">
+                <details
+                  className="child-session-group"
+                  open={childrenExpanded}
+                  onToggle={(event) => {
+                    const open = event.currentTarget.open;
+                    setChildrenExpanded(open);
+                    try {
+                      sessionStorage.setItem(childSessionsKey, String(open));
+                    } catch {
+                      // Optional storage; toggling still works in memory.
+                    }
+                  }}
+                >
                   <summary>Child sessions · {children.length}</summary>
                   <nav className="child-sessions" aria-label="Child sessions">
                     {children.map((session) => (
