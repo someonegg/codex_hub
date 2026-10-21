@@ -102,10 +102,10 @@ authentication and restrict access. See the [security guidance](docs/usage.md#se
 - [All documentation and architecture decisions](docs/README.md)
 
 <details>
-<summary>Warm paper theme</summary>
+<summary>Paper theme</summary>
 
-Choose **Warm paper** from the theme list at the bottom of the sidebar. Your choice is saved on this device.
+Choose **Paper** from the theme list at the bottom of the sidebar. Your choice is saved on this device.
 
-<img src="docs/images/codex-hub-session-interaction-warm.png" alt="Warm paper theme with cream surfaces and muted green accents" width="900">
+<img src="docs/images/codex-hub-session-interaction-warm.png" alt="Paper theme with cream surfaces and muted green accents" width="900">
 
 </details>

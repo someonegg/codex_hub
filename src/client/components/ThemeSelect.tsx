@@ -35,8 +35,8 @@ export function ThemeSelect() {
           }
         }}
       >
-        <option value="classic">Classic</option>
-        <option value="warm">Warm paper</option>
+        <option value="classic">Mist</option>
+        <option value="warm">Paper</option>
       </select>
     </label>
   );
