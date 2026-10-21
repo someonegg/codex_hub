@@ -135,7 +135,7 @@ async function capture(
       path: output.replace(/\.png$/, "-warm.png"),
       animations: "disabled",
     });
-    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("classic");
+    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("mist");
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
     await demo.getByRole("button", { name: /atlas-dashboard, .* main sessions/ }).click();
