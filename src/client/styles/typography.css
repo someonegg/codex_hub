@@ -12,12 +12,22 @@
 
   .message-content {
     color: var(--body-ink);
-    line-height: 1.95;
+    line-height: 1.8;
   }
 
-  .message-body :is(p, li) {
-    line-height: 1.95;
-    margin-bottom: 0.8em;
+  .message-body p {
+    line-height: 1.8;
+    margin-bottom: 0.65em;
+  }
+
+  .message-body li {
+    line-height: 1.7;
+    margin-bottom: 0.35em;
+  }
+
+  .message-body li > p {
+    line-height: 1.7;
+    margin-bottom: 0.35em;
   }
 
   .message-body :is(h1, h2, h3, h4, h5, h6) {
@@ -95,6 +105,13 @@
   @media (max-width: 720px) {
     .message-body h2 {
       font-size: 1.4375rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .message-body blockquote {
+      margin-inline: 0.65rem 0;
+      padding-inline-start: 0.75rem;
     }
   }
 }
