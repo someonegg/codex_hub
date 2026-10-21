@@ -112,10 +112,12 @@ supplies files; text-only paths remain text.
 Supported keys and message limits are defined in `src/shared/interaction.ts`.
 Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
 
-The Codex adapter recognizes every `CODEX_HUB_TMUX_BIND_V3`
-declaration in user-message `<user_shell_command>` output. Its following lines
-contain a nonempty absolute socket path, a `%`-prefixed numeric pane ID, and an
-optional operation UUID. An invalid latest declaration does not fall back to an older one.
+The Codex adapter recognizes `CODEX_HUB_TMUX_BIND_V4` declarations in user-message
+`<user_shell_command>` output. Successive lines contain an absolute socket path,
+a `%`-prefixed numeric pane ID, an optional operation UUID, and an optional project
+directory. Empty optional fields retain their lines. V3 remains supported without
+the project field. An invalid latest binding does not fall back to an older one;
+project-field handling is described under [Project directory](#project-directory).
 
 Bindings are shared across homes, retaining the latest attempt per session and the
 latest valid claim per socket/pane. Creation correlates its operation UUID with the

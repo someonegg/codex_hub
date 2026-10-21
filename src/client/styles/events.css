@@ -485,10 +485,6 @@
   .message-body :is(ul, ol) :is(ul, ol) {
     padding-inline-start: 1rem;
   }
-  .message-body blockquote {
-    margin-inline: 0.65rem 0;
-    padding-inline-start: 0.75rem;
-  }
 }
 @media (prefers-reduced-motion: no-preference) {
   .plan-toggle-mark {

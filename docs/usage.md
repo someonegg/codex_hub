@@ -105,8 +105,12 @@ The hub does not restore archived sessions or manage worktree cleanup.
 In Codex running inside tmux, execute:
 
 ```sh
-! printf 'CODEX_HUB_TMUX_BIND_V3\n%s\n%s\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"
+! printf 'CODEX_HUB_TMUX_BIND_V4\n%s\n%s\n%s\n%s\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" '' '/absolute/path/to/project'
 ```
+
+Replace `/absolute/path/to/project` with the project directory; for worktree
+sessions, use the original project directory. The preceding `''` leaves the
+operation ID empty for manual binding.
 
 Manual bindings allow any session name; a valid, connected binding enables the
 full interaction panel. Terminal preview updates while expanded and visible.
