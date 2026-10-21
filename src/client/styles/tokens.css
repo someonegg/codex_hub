@@ -53,9 +53,11 @@
   --current: #176b75;
   --human: #9d4e3a;
   --signal: #c4862d;
-  --title-font: var(--body-font);
-  --body-font: "Avenir Next", "PingFang SC", Inter, system-ui, sans-serif;
-  --mono-font: "SFMono-Regular", Consolas, monospace;
+  --title-font: "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+  --body-font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono-font: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --body-ink: #48545b;
+  --quote-border: #6d9198;
   font-size: 16px;
   color: var(--ink);
   font-family: var(--body-font);
@@ -63,27 +65,29 @@
 }
 
 :root[data-theme="warm"] {
+  --body-ink: #48554d;
+  --quote-border: #6d9481;
   --paper: #f9f8f3;
-  --paper-deep: #f0f0e7;
+  --paper-deep: #f5f6ee;
   --surface: #fffefb;
   --ink: #263d36;
-  --ink-soft: #536157;
-  --mist: #ddded4;
+  --ink-soft: #737e72;
+  --mist: #dddeda;
   --current: #3e7563;
   --current-hover: #2c594a;
   --human: #965b3e;
   --signal: #a37732;
-  --hover-surface: #e9eddf;
-  --selected-surface: #e1e8d8;
-  --panel-surface: #eaece1;
-  --panel-soft: #eff1e8;
+  --hover-surface: #f5f6ee;
+  --selected-surface: #edf1e9;
+  --panel-surface: #edf1e9;
+  --panel-soft: #f5f6ee;
   --answer-ink: #385a43;
   --answer-border: #cbd6bd;
   --detail-ink: #32634f;
-  --notice-border: #cbd1bf;
-  --code-surface: #f0efe7;
+  --notice-border: #c7cec0;
+  --code-surface: #f5f6ee;
   --code-ink: #354239;
-  --code-border: #d6d7ca;
+  --code-border: #dddeda;
   --terminal-surface: #29352e;
   --terminal-output-surface: #202b24;
   --terminal-ink: #e4e9db;

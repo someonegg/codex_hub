@@ -1,0 +1,100 @@
+/* Both palettes share editorial headings and system UI typography. */
+:root {
+  .reader-header h2,
+  .empty-state h2 {
+    letter-spacing: 0.01em;
+    line-height: 1.55;
+  }
+
+  .hub-project a {
+    font-size: 0.9375rem;
+  }
+
+  .message-content {
+    color: var(--body-ink);
+    line-height: 1.95;
+  }
+
+  .message-body :is(p, li) {
+    line-height: 1.95;
+    margin-bottom: 0.8em;
+  }
+
+  .message-body :is(h1, h2, h3, h4, h5, h6) {
+    margin-block: 1.6em 0.8em;
+    color: var(--ink);
+    font-family: var(--title-font);
+    font-weight: 500;
+    line-height: 1.55;
+  }
+
+  .message-body h1 {
+    font-size: 1.75rem;
+  }
+
+  .message-body h2 {
+    font-size: 1.625rem;
+    padding-top: 0.6em;
+    border-top: 1px solid var(--mist);
+  }
+
+  .message-body h3 {
+    font-size: 1.3125rem;
+  }
+
+  .message-body :is(h4, h5, h6) {
+    font-family: var(--body-font);
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .message-body :is(strong, b, th) {
+    font-weight: 600;
+  }
+
+  .message-content > :first-child {
+    margin-top: 0;
+  }
+
+  .message-content > :last-child {
+    margin-bottom: 0;
+  }
+
+  .message-body blockquote {
+    margin: 14px 0;
+    padding: 8px 20px;
+    border-left: 3px solid var(--quote-border);
+    border-radius: 0 4px 4px 0;
+    background: var(--selected-surface);
+  }
+
+  .message-body blockquote > :last-child {
+    margin-bottom: 8px;
+  }
+
+  .message-body code {
+    font-size: 0.92em;
+  }
+
+  .markdown-scroll-code pre {
+    padding: 12px;
+    line-height: 1.65;
+  }
+
+  .message-body pre code {
+    font-size: inherit;
+  }
+
+  .message-body :not(pre) > code {
+    padding: 0.1em 0.35em;
+    border: 1px solid var(--code-border);
+    border-radius: 4px;
+    background: var(--code-surface);
+  }
+
+  @media (max-width: 720px) {
+    .message-body h2 {
+      font-size: 1.4375rem;
+    }
+  }
+}
