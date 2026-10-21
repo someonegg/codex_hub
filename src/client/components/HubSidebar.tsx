@@ -6,6 +6,7 @@ import type { useSessionList } from "../state/use-session-list";
 import { ErrorState } from "./ErrorState";
 import { InternalLink } from "./InternalLink";
 import { StatusBadge } from "./StatusBadge";
+import { ThemeSelect } from "./ThemeSelect";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
@@ -175,8 +176,7 @@ export function HubSidebar({
         ) : null}
       </nav>
       <footer className="hub-sidebar-footer">
-        <span className="status-dot" />
-        Local hub
+        <ThemeSelect />
       </footer>
     </aside>
   );

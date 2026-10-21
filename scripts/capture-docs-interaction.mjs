@@ -126,6 +126,16 @@ async function capture(
       path: output,
       animations: "disabled",
     });
+    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("warm");
+    await demo.reload();
+    await demo.locator(".user-input-status.answered").waitFor();
+    if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
+      throw new Error("Theme was not restored after reload");
+    await demo.screenshot({
+      path: output.replace(/\.png$/, "-warm.png"),
+      animations: "disabled",
+    });
+    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("classic");
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
     await demo.getByRole("button", { name: /atlas-dashboard, .* main sessions/ }).click();

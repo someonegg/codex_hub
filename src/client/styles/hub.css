@@ -202,18 +202,24 @@
   font-size: var(--text-small);
   flex-shrink: 0;
 }
-.status-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--current);
+.theme-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+.theme-select select {
+  min-height: 44px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
 }
 .hub-project a:hover {
   background: var(--hover-surface);
 }
 .hub-project a[aria-current] {
-  background: #dfeaea;
+  background: var(--selected-surface);
   color: var(--ink);
 }
 .hub-project a[aria-current]::before {
