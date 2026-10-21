@@ -98,7 +98,7 @@ Outputs in `docs/images/`:
   **User input** card at 1440 × 1000. It loops with a 6.5-second final pause.
 - `codex-hub-session-interaction.png`: the answered card and full interaction panel,
   including terminal output, at 1440 × 1500.
-- `codex-hub-session-interaction-warm.png`: the same desktop view in Warm paper,
+- `codex-hub-session-interaction-warm.png`: the same desktop view in Paper,
   captured after verifying that the theme survives a reload.
 - `codex-hub-mobile-catalog.png` and `codex-hub-mobile-reader.png`: project navigation
   and the same answered card at 390 × 844.

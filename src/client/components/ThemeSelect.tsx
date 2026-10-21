@@ -2,13 +2,13 @@ import { useState } from "react";
 
 const STORAGE_KEY = "codex-hub.theme";
 
-type Theme = "classic" | "warm";
+type Theme = "mist" | "warm";
 
 function savedTheme(): Theme {
   try {
-    return localStorage.getItem(STORAGE_KEY) === "warm" ? "warm" : "classic";
+    return localStorage.getItem(STORAGE_KEY) === "warm" ? "warm" : "mist";
   } catch {
-    return "classic";
+    return "mist";
   }
 }
 
@@ -25,7 +25,7 @@ export function ThemeSelect() {
         aria-label="Theme"
         value={theme}
         onChange={(event) => {
-          const next = event.target.value === "warm" ? "warm" : "classic";
+          const next = event.target.value === "warm" ? "warm" : "mist";
           setTheme(next);
           document.documentElement.dataset.theme = next;
           try {
@@ -35,8 +35,8 @@ export function ThemeSelect() {
           }
         }}
       >
-        <option value="classic">Classic</option>
-        <option value="warm">Warm paper</option>
+        <option value="mist">Mist</option>
+        <option value="warm">Paper</option>
       </select>
     </label>
   );
