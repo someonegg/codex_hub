@@ -131,6 +131,19 @@ async function capture(
     await demo.locator(".user-input-status.answered").waitFor();
     if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
       throw new Error("Theme was not restored after reload");
+    await demo.getByRole("button", { name: "Terminal preview", exact: true }).click();
+    await demo.getByLabel("Terminal preview content", { exact: true }).waitFor();
+    await demo.getByRole("textbox", { name: "Message to agent" }).fill("Suggest the next step.");
+    await demo.evaluate(() => document.fonts.ready);
+    for (const selector of [".user-input-card", ".interaction-panel"]) {
+      const bounds = await demo.locator(selector).boundingBox();
+      if (!bounds || bounds.y < 0 || bounds.y + bounds.height > 1500)
+        throw new Error(`Paper ${selector} is clipped`);
+    }
+    if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+      throw new Error("Paper horizontal overflow");
+    if (errors.length || (await demo.getByRole("alert").count()))
+      throw new Error(errors.join("\n") || "Paper error alert");
     await demo.screenshot({
       path: output.replace(/\.png$/, "-warm.png"),
       animations: "disabled",
