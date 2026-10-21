@@ -213,7 +213,7 @@
   font-size: inherit;
 }
 .message-body a {
-  color: #075f70;
+  color: var(--detail-ink);
   text-underline-offset: 0.18em;
 }
 .image-placeholder {
@@ -328,9 +328,9 @@
   text-transform: none;
 }
 .user-input-status.answered {
-  color: #31545a;
-  background: #dfeaea;
-  border-color: #c6d8da;
+  color: var(--answer-ink);
+  background: var(--selected-surface);
+  border-color: var(--answer-border);
 }
 .user-input-status.aborted {
   color: var(--unavailable-ink);

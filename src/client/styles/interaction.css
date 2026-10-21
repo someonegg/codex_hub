@@ -17,7 +17,7 @@
   flex: 0 0 auto;
   padding: 0.18rem 0.38rem;
   color: var(--ink-soft);
-  background: #e2eaeb;
+  background: var(--panel-surface);
   border: 1px solid var(--notice-border);
   font-family: var(--body-font);
   font-size: var(--text-status);
@@ -69,7 +69,7 @@
 }
 .interaction-composer textarea:disabled {
   color: var(--ink-soft);
-  background: #e7eeee;
+  background: var(--panel-soft);
 }
 .interaction-actions {
   display: flex;
@@ -378,6 +378,6 @@
 }
 
 .interaction-composer-dragging {
-  outline: 2px dashed var(--color-accent, #3675cf);
+  outline: 2px dashed var(--current);
   outline-offset: 4px;
 }

@@ -100,3 +100,12 @@ authentication and restrict access. See the [security guidance](docs/usage.md#se
 - [Technical reference](docs/technical-reference.md)
 - [Development and screenshots](docs/development.md)
 - [All documentation and architecture decisions](docs/README.md)
+
+<details>
+<summary>Warm paper theme</summary>
+
+Choose **Warm paper** from the theme list at the bottom of the sidebar. Your choice is saved on this device.
+
+<img src="docs/images/codex-hub-session-interaction-warm.png" alt="Warm paper theme with cream surfaces and muted green accents" width="900">
+
+</details>

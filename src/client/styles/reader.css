@@ -186,7 +186,7 @@
   padding: 0.45rem 0.7rem;
   color: var(--current);
   background: color-mix(in srgb, var(--paper) 94%, transparent);
-  border: 1px solid #aebfc3;
+  border: 1px solid var(--notice-border);
   border-radius: 999px;
   box-shadow: 0 0.3rem 1rem rgb(33 49 56 / 12%);
   font-family: var(--body-font);
