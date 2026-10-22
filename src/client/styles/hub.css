@@ -161,14 +161,10 @@
   color: var(--ink-soft);
 }
 .brand-logo {
-  display: grid;
-  place-items: center;
+  display: block;
+  flex-shrink: 0;
   width: 29px;
   height: 29px;
-  border-radius: var(--radius-panel);
-  background: var(--current);
-  color: white;
-  font: 18px var(--mono-font);
 }
 .hub-sidebar button:hover {
   background: var(--hover-surface);

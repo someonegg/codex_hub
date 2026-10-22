@@ -128,3 +128,16 @@ node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
 npm run build
 npm start -- --codex-home 'default=/tmp/codex-hub-docs-demo' --port 4187
 ```
+
+## Application icons
+
+Run `python3 scripts/generate-icons.py` (requires Pillow) to regenerate the SVG,
+ICO, Apple touch icon, and PNG icons in `public/`. The terminal prompt and session
+branches use the application's teal palette. Keep the artwork inside the central
+maskable safe circle; mobile platforms apply their own icon masks.
+
+`index.html` links the browser and Apple icons and `manifest.webmanifest`. The
+manifest launches the project catalog in a standalone window, including when
+installed from a session page. For mobile installation, serve the app over HTTPS
+(localhost also works for development), then use the browser's install or Add to
+Home Screen action. This does not add offline session access.
