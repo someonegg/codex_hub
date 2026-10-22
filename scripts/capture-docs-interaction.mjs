@@ -170,6 +170,25 @@ async function capture(
     if (errors.length || (await demo.getByRole("alert").count()))
       throw new Error(errors.join("\n") || "Mobile error alert");
     await demo.screenshot({ path: resolveMobile("reader"), animations: "disabled" });
+    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
+    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await composer.fill("Suggest the next step.");
+    await composer.scrollIntoViewIfNeeded();
+    if (await demo.locator(".page-jump-controls").isVisible())
+      throw new Error("Page jumps overlap the focused mobile composer");
+    if (await demo.getByRole("button", { name: "Back to top" }).count())
+      throw new Error("Hidden page jumps remain accessible");
+    await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
+    await demo.setViewportSize({ width: 390, height: 400 });
+    if (await demo.locator(".page-jump-controls").isVisible())
+      throw new Error("Page jumps reappear in a keyboard-sized viewport");
+    await composer.blur();
+    if (!(await demo.locator(".page-jump-controls").isVisible()))
+      throw new Error("Page jumps do not return after blur");
+    await composer.focus();
+    await demo.setViewportSize({ width: 1440, height: 1000 });
+    if (!(await demo.locator(".page-jump-controls").isVisible()))
+      throw new Error("Desktop page jumps are hidden while composing");
   } finally {
     await context.close();
   }
