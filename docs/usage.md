@@ -4,17 +4,18 @@
 
 Pass options to `codex-hub`. Restart the server after configuration changes.
 
-| Option                         | Default            | Description                                                          |
-| ------------------------------ | ------------------ | -------------------------------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex` | Directory containing `sessions/` and optionally `archived_sessions/` |
-| `--host <host>`                | `127.0.0.1`        | Listen address                                                       |
-| `--port <port>`                | `4173`             | Listen port; `0` selects a free port                                 |
-| `--ssl`                        | disabled           | Accept HTTPS only                                                    |
-| `--ssl-cert <path>`            | none               | PEM server certificate or chain; required with `--ssl`               |
-| `--ssl-key <path>`             | none               | PEM private key; required with `--ssl`                               |
-| `--ssl-ca <path>`              | none               | Trusted client CA bundle; requires client certificates               |
-| `--tmux-socket <path>`         | tmux default       | Socket path, resolved to an absolute path                            |
-| `--help`                       | —                  | Print command-line help                                              |
+| Option                         | Default                     | Description                                                          |
+| ------------------------------ | --------------------------- | -------------------------------------------------------------------- |
+| `--codex-home <nickname=path>` | `default=~/.codex`          | Directory containing `sessions/` and optionally `archived_sessions/` |
+| `--host <host>`                | `127.0.0.1`                 | Listen address                                                       |
+| `--port <port>`                | `4173`                      | Listen port; `0` selects a free port                                 |
+| `--ssl`                        | disabled                    | Accept HTTPS only                                                    |
+| `--ssl-cert <path>`            | none                        | PEM server certificate or chain; required with `--ssl`               |
+| `--ssl-key <path>`             | none                        | PEM private key; required with `--ssl`                               |
+| `--ssl-ca <path>`              | none                        | Trusted client CA bundle; requires client certificates               |
+| `--tmux-socket <path>`         | tmux default                | Socket path, resolved to an absolute path                            |
+| `--upload-dir <path>`          | process temporary directory | Upload storage; see [file uploads](#file-uploads)                    |
+| `--help`                       | —                           | Print command-line help                                              |
 
 The server prints its URL at startup and detects session changes without a restart.
 
@@ -37,19 +38,15 @@ the user's home. Duplicate paths, including symlink aliases, prevent startup.
 Explicit homes replace `default=~/.codex` and retain their supplied order.
 
 The sidebar remembers its home filter within the tab, defaulting to **All homes**
-when unset or removed. Projects merge by directory across homes; counts and archive
-filtering use visible sessions. Filtering keeps the current reader open and allows
-cross-home navigation. Multi-home lists and readers show the home nickname,
+when unset or removed. Counts and archive filtering use visible sessions.
+Filtering keeps the current reader open and allows cross-home navigation. Multi-home lists and readers show the home nickname,
 separate from the session nickname.
 
 The create dialog preselects the filtered home, otherwise the home nicknamed
 `default`, or the sole configured home. With multiple homes and no `default` in
 aggregate view, select one explicitly, including an empty home.
-Creation, archive, and deletion use the owning home and the same local `codex`
-executable. Recoverable read failures are isolated to the affected home.
-
-Session IDs depend on the configured absolute home path. Renaming, reordering, or
-adding homes preserves existing IDs. Moving a home creates a new source identity.
+See [home identity and routing](technical-reference.md#home-identity-and-routing)
+for session identity, source isolation, and management routing rules.
 
 ## Reading and managing sessions
 
@@ -124,15 +121,17 @@ completion. Activity continues updating while preview is collapsed; no badge is
 shown while observation is starting or unavailable. **Interrupt** sits beside
 **Handoff**, with **Send** on the right.
 
-Preview starts collapsed and expands automatically after either:
+Preview starts collapsed. These conversation events expand it automatically:
 
 - Successful delivery of a single-word English slash command, such as `/plan`
   (surrounding whitespace is ignored).
 - Loading the latest timeline page while connected, when its latest message is
   User input or a final Plan. Each qualifying message expands it once per visit.
 
-After manually collapsing it, it stays folded until a new qualifying message or
-another successfully delivered slash command.
+Manually collapsing it suppresses repeated expansion for the same message. A new
+qualifying message or another successfully delivered slash command can expand it
+again. Successful **Handoff** delivery and pressing **Interrupt** also expand the
+preview so you can inspect the terminal.
 
 If another session binds the same tmux pane, the former session shows that its
 pane was taken over. Input, Handoff, and terminal preview become unavailable there;
@@ -151,6 +150,23 @@ old page links to the replacement session.
 Without `--tmux-socket`, creation follows tmux's default socket selection. With it,
 creation uses the resolved absolute path. Later interaction uses the actual socket
 recorded in the binding. See [binding details](technical-reference.md#tmux-interaction).
+
+## File uploads
+
+Paste images or drop files into the message input, then review and send the inserted
+paths. Multiple files are supported; folders are not. Uploads freeze editing, Send,
+and Handoff. A failure stops the batch and retains earlier paths; switching sessions
+cancels pending uploads. Finder paste works when the browser supplies files;
+text-only paths remain text.
+
+Use `--upload-dir <path>` to choose storage. Missing directories are created,
+relative paths resolve from the startup directory, and `~/` is supported.
+Otherwise the process creates and reuses a `codex-hub-uploads-*` directory under
+the operating system's temporary directory. The directory must be visible to the
+Codex process. Uploads remain after shutdown and uninstall; remove unneeded files
+manually. The OS may clear temporary storage, so use an explicit directory when
+files must remain available. See the [upload API](technical-reference.md#file-uploads)
+for size limits and error responses.
 
 ## TLS and mTLS
 
@@ -192,7 +208,9 @@ Check server stderr for skipped or unreadable data.
 
 **Interaction controls are unavailable:** archived sessions have no interaction panel.
 Unarchived sessions show the panel immediately, but messaging and terminal controls
-require a live, owned pane with a valid V3 binding. Complete any CLI prompts in tmux.
+require a live, owned pane with a valid binding. See the
+[current binding format](technical-reference.md#tmux-interaction), and complete any
+CLI prompts in tmux.
 Rollout files alone do not establish a connection. Resume is available only when
 the server can confirm safe recovery; see [session management](#reading-and-managing-sessions).
 
@@ -202,6 +220,15 @@ check the session catalog and tmux before repeating an uncertain action.
 
 ## Uninstall
 
-Stop the server, then remove the repository. Codex owns created sessions and
-worktrees. Existing tmux sessions continue running when the hub stops;
-clean up those resources separately as needed.
+Stop the server. For a global npm installation, run:
+
+```sh
+npm uninstall -g @someonegg/codex-hub
+```
+
+For a source checkout, remove the checkout when it is no longer needed. An `npx`
+run requires no global uninstall.
+
+Codex owns created sessions and worktrees. Existing tmux sessions continue running
+when the hub stops; clean up those resources separately as needed. Uploaded files
+also remain; see [upload storage and cleanup](#file-uploads).

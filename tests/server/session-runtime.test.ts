@@ -173,10 +173,11 @@ describe("session runtime evidence", () => {
           socketPath: sockets === "shared" ? shared.socketPath : `/socket-${i}`,
         }),
       );
-      for (let i = 0; i < 30; i++) {
+      await vi.waitFor(() => {
         releases.splice(0).forEach((release) => release());
-        await Promise.resolve();
-      }
+        expect(f.resolveTarget).toHaveBeenCalledTimes(21);
+        expect(active).toBe(0);
+      });
       await Promise.all([first, ...batch]);
       expect(maximum).toBe(sockets === "shared" ? 21 : 8);
       expect(f.resolveTarget).toHaveBeenCalledTimes(21);

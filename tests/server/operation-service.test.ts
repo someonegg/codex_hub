@@ -1,3 +1,5 @@
+import { setImmediate as settlePromises } from "node:timers/promises";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { DomainSession } from "../../src/server/domain/session-domain.js";
@@ -16,9 +18,7 @@ const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
 const services: OperationService[] = [];
 let bindings = new PaneBindingManager();
 afterEach(() => services.splice(0).forEach((service) => service.close()));
-const flush = async () => {
-  for (let i = 0; i < 30; i++) await Promise.resolve();
-};
+const flush = () => settlePromises();
 function session(id = "session", operationId?: string): DomainSession {
   if (operationId)
     bindings.submit({

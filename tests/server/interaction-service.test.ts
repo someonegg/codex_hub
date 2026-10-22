@@ -503,6 +503,7 @@ it.each([
 ])(
   "keeps duplicate bindings streaming and permanently closes the old preview on $change",
   async ({ change, ...target }) => {
+    vi.useFakeTimers();
     const snapshot = boundSession();
     const binding = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
     let content = "first";
@@ -558,7 +559,7 @@ it.each([
     submit(4);
     content = "returned";
     notify();
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await vi.advanceTimersByTimeAsync(400);
     expect(frame).toHaveBeenCalledTimes(2);
     expect(secondFrame).toHaveBeenCalledTimes(2);
     const recovered = vi.fn();

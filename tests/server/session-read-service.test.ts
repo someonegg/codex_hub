@@ -20,7 +20,9 @@ import { MAX_ITEM_PAGE_BYTES } from "../../src/server/repository/session-queries
 import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { TimelineCursor } from "../../src/shared/api-contract.js";
+import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 async function fixtureRepository() {
   const home = await createTempDirectory("codex-repository-");
@@ -529,15 +531,24 @@ describe("SessionReadService", () => {
     );
   });
 
-  it("returns every timeline event type in one unfiltered view", async () => {
-    const { repository } = await fixtureRepository();
-    const list = await repository.list();
-    const session = list.sessions.find((session) => session.title === "Synthetic trace")!;
-    const page = await repository.getItems(session.id, {
-      limit: 200,
-    });
+  it("returns all current timeline event kinds in one unfiltered view", async () => {
+    const { repository, session, rollout } = await basicFixtureSession();
+    await appendFile(
+      rollout,
+      JSON.stringify({
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "request_user_input",
+          call_id: "question",
+          arguments: JSON.stringify({ questions: [] }),
+        },
+      }) + "\n",
+    );
+    await repository.refresh();
+    const page = await repository.getItems(session.id, { limit: 200 });
     expect(new Set(page?.items.map((item) => item.kind))).toEqual(
-      new Set(["message", "directive", "tool", "token", "internal"]),
+      new Set(["message", "directive", "tool", "token", "internal", "user_input"]),
     );
     expect(
       page?.items.find((item) => item.kind === "internal" && item.eventType === "reasoning"),
@@ -877,7 +888,9 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   );
   const runtime = new SessionRuntime(transport, registry, bindings);
   reader.runtime = runtime;
-  const interaction = new SessionInteractionService(reader, true, transport, bindings);
+  const interaction = closeAfterEach(
+    new SessionInteractionService(reader, true, transport, bindings, createTestPreviewListener()),
+  );
   interaction.runtime = runtime;
   const catalog = new SessionCatalogService(reader);
   const updates = new SessionUpdatesService(reader, { interaction, probeIntervalMs: 2 });

@@ -7,6 +7,11 @@ import { createCodexHub } from "../../src/server/create-hub.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import type { UpdateRevision } from "../../src/shared/api-contract.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
+
+vi.mock("../../src/server/interaction/tmux-preview-listener.js", () => ({
+  createTmuxPreviewListener: () => createTestPreviewListener(),
+}));
 
 it("isolates native identities, names and relationships while merging projects and retaining empty homes", async () => {
   const root = await createTempDirectory("multi-home-");

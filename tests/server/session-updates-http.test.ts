@@ -1,36 +1,17 @@
-import { writeFile } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
-import { join } from "node:path";
-
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
-import { createServer } from "../../src/server/http/create-server.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { TimelineCursor, UpdateRevision } from "../../src/shared/api-contract.js";
-import type { SessionDetail } from "../../src/shared/domain.js";
-import { createTempDirectory } from "../helpers/temp-directories.js";
+import { startHttpServer } from "../helpers/http-server.js";
+import { sessionDetail } from "../helpers/session-fixtures.js";
 
 const SESSION_ID = "abcdefghijklmnopqrstuvwx";
 const CURSOR = "opaque.timeline.cursor" as TimelineCursor;
 const REVISION = "a".repeat(43) as UpdateRevision;
 const OTHER_REVISION = "b".repeat(43) as UpdateRevision;
-const servers: ReturnType<typeof createServer>[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    servers.splice(0).map(
-      (server) =>
-        new Promise<void>((resolve) => {
-          if (!server.listening) return resolve();
-          server.close(() => resolve());
-        }),
-    ),
-  );
-});
 
 describe("automatic update HTTP API", () => {
   it("does not take ownership of injected services", () => {
@@ -149,8 +130,6 @@ async function start(
   getSessionUpdates: SessionReader["getSessionUpdates"],
   options: ConstructorParameters<typeof SessionUpdatesService>[1],
 ) {
-  const clientDirectory = await createTempDirectory("codex-session-updates-http-");
-  await writeFile(join(clientDirectory, "index.html"), "hub");
   const unavailable = async () => null;
   const repository = {
     list: vi.fn(),
@@ -167,27 +146,16 @@ async function start(
     createRevision: () => REVISION,
     ...options,
   });
-  const config: ServerConfig = {
-    host: LOOPBACK_HOST,
-    port: 0,
-    homes: [{ nickname: "default", path: "/unused" }],
-    clientDirectory,
-    tls: { enabled: false },
-    interactionEnabled: false,
-  };
+
   const catalog = new SessionCatalogService(repository);
-  const server = createServer(
-    config,
+  const { base } = await startHttpServer(
     createApiRouter({ sessions: repository, catalog, updates }),
     () => {
       catalog.close();
       updates.close();
     },
   );
-  servers.push(server);
-  await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
-  const { port } = server.address() as AddressInfo;
-  return { base: `http://${LOOPBACK_HOST}:${port}`, updates };
+  return { base, updates };
 }
 
 function url(base: string, after: UpdateRevision): string {
@@ -203,28 +171,4 @@ function snapshot(hasMore: boolean) {
   };
 }
 
-const SESSION: SessionDetail = {
-  id: SESSION_ID,
-  origin: {
-    sourceType: "test",
-    sourceInstanceId: "test",
-    agentName: "Test",
-    agentVersion: null,
-    formatVersion: null,
-  },
-  title: "Session",
-  nickname: null,
-  workingDirectory: null,
-  projectDirectory: null,
-  createdAt: null,
-  updatedAt: null,
-  status: "normal",
-  resume: { allowed: false, reason: "Unavailable" },
-  parentId: null,
-  childIds: [],
-  agent: null,
-  messageCount: 0,
-  toolCount: 0,
-  sourceId: "session",
-  itemCount: 0,
-};
+const SESSION = sessionDetail({ id: SESSION_ID });
