@@ -282,13 +282,14 @@ export function InteractionPanel({
   function renderConnectedInteraction() {
     return (
       <>
-        <section className="terminal-preview" aria-label="Terminal preview">
+        <section className="terminal-preview" aria-label="Terminal Preview">
           <div className="terminal-preview-header">
             <button
               type="button"
               className="terminal-preview-toggle"
               ref={previewToggle}
               aria-expanded={previewExpanded}
+              aria-label="Terminal Preview"
               aria-controls={previewContentId}
               onClick={togglePreview}
               disabled={!previewConnected}
@@ -296,19 +297,20 @@ export function InteractionPanel({
               <span className="terminal-preview-mark" aria-hidden="true">
                 {preview !== null && previewExpanded ? "▾" : "▸"}
               </span>
-              <span>Terminal preview</span>
+              <span>Terminal Preview</span>
+              {interaction?.supported &&
+              (interaction.activity === "working" || interaction.activity === "idle") ? (
+                <span
+                  className={`terminal-activity terminal-activity-${interaction.activity}`}
+                  role="status"
+                >
+                  <span className="terminal-activity-dot" aria-hidden="true" />
+                  {interaction.activity === "working" ? "Working" : "Idle"}
+                </span>
+              ) : null}
               {preview === null && previewBusy ? (
                 <span className="terminal-preview-status">Capturing…</span>
               ) : null}
-            </button>
-            <button
-              type="button"
-              className="terminal-preview-interrupt"
-              disabled={!previewConnected}
-              aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
-              onClick={() => sendKeys(["interrupt"])}
-            >
-              Interrupt
             </button>
           </div>
           {previewStopped ? (
@@ -349,7 +351,7 @@ export function InteractionPanel({
                 </p>
               ) : null}
               {preview && preview.content.length > 0 ? (
-                <pre ref={previewContent} aria-label="Terminal preview content" tabIndex={0}>
+                <pre ref={previewContent} aria-label="Terminal Preview content" tabIndex={0}>
                   <span key={preview.capturedAt} className="terminal-preview-content">
                     {preview.content}
                   </span>
@@ -359,7 +361,7 @@ export function InteractionPanel({
                   {preview === null && previewBusy
                     ? "Capturing terminal pane…"
                     : preview === null
-                      ? "Terminal preview unavailable."
+                      ? "Terminal Preview unavailable."
                       : "The terminal pane is empty."}
                 </p>
               )}
@@ -447,15 +449,26 @@ export function InteractionPanel({
             </p>
           ) : null}
           <div className="interaction-actions">
-            <button
-              type="button"
-              className="interaction-handoff"
-              title="Hand off this pane’s binding to the active Codex session."
-              disabled={!previewConnected || interactionBusy || !!uploadProgress}
-              onClick={() => void handoff().catch(() => undefined)}
-            >
-              Handoff
-            </button>
+            <div className="interaction-secondary-actions">
+              <button
+                type="button"
+                className="interaction-handoff"
+                title="Hand off this pane’s binding to the active Codex session."
+                disabled={!previewConnected || interactionBusy || !!uploadProgress}
+                onClick={() => void handoff().catch(() => undefined)}
+              >
+                Handoff
+              </button>
+              <button
+                type="button"
+                className="interaction-interrupt"
+                disabled={!previewConnected}
+                aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
+                onClick={() => sendKeys(["interrupt"])}
+              >
+                Interrupt
+              </button>
+            </div>
             <div className="interaction-primary-actions">
               <button
                 type="button"

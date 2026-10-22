@@ -325,6 +325,7 @@ it.each(["create", "archive", "delete"] as const)(
       matchesTarget: vi.fn(async () => true),
       describe: vi.fn(async () => ({
         supported: true as const,
+        activity: "unknown" as const,
         supersededBySessionId: null,
         state: "connected" as const,
         attachCommand: null,

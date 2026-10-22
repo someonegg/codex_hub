@@ -157,11 +157,11 @@
   font-size: var(--text-small);
   text-align: left;
 }
-.terminal-preview-interrupt {
+.interaction-interrupt {
   align-self: center;
   flex: 0 0 auto;
   min-height: var(--control-height);
-  margin: 0.3rem 0.5rem;
+  margin: 0;
   padding: 0.3rem 0.65rem;
   color: var(--terminal-ink);
   background: transparent;
@@ -292,7 +292,7 @@
   font-size: var(--text-small);
   font-weight: var(--weight-semibold);
 }
-.terminal-preview-interrupt:focus-visible,
+.interaction-interrupt:focus-visible,
 .terminal-key:focus-visible {
   position: relative;
   z-index: 1;
@@ -302,7 +302,7 @@
 .terminal-key:active:not([aria-disabled="true"]) {
   transform: translateY(1px);
 }
-.terminal-preview-interrupt[aria-disabled="true"],
+.interaction-interrupt[aria-disabled="true"],
 .terminal-key[aria-disabled="true"] {
   cursor: default;
   opacity: 0.38;
@@ -317,7 +317,7 @@
     background: var(--current-hover);
     border-color: var(--current-hover);
   }
-  .terminal-preview-interrupt:hover:not([aria-disabled="true"]),
+  .interaction-interrupt:hover:not([aria-disabled="true"]),
   .terminal-key:hover:not([aria-disabled="true"]) {
     color: #fff;
     background: #27727b;
@@ -369,4 +369,45 @@
 .interaction-composer-dragging {
   outline: 2px dashed var(--current);
   outline-offset: 4px;
+}
+
+.interaction-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.terminal-activity {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+  margin-left: 0.3rem;
+  color: var(--terminal-ink);
+  font-size: var(--text-small);
+  line-height: 1.3;
+}
+
+.terminal-activity-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  flex: 0 0 auto;
+  color: #83b9ad;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+}
+
+.terminal-activity-working .terminal-activity-dot {
+  background: currentColor;
+}
+
+@media (max-width: 480px) {
+  .terminal-preview-toggle {
+    flex-wrap: wrap;
+  }
+
+  .terminal-preview-status {
+    flex-basis: 100%;
+    margin-left: 1.15rem;
+  }
 }

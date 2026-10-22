@@ -98,6 +98,7 @@ describe("session interaction policy", () => {
     );
     expect(await service.describe("session")).toEqual({
       supported: true,
+      activity: null,
       supersededBySessionId: null,
       attachCommand: null,
       state: "unbound",
@@ -132,6 +133,7 @@ describe("session interaction policy", () => {
 
     await expect(service.describe("session")).resolves.toEqual({
       supported: true,
+      activity: "unknown",
       supersededBySessionId: null,
       attachCommand: null,
       state: "connected",

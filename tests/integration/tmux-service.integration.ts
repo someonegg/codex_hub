@@ -12,6 +12,7 @@ import { applyPreview } from "../../src/client/state/terminal-preview-patch.js";
 import { codexInterruptSteps } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { TerminalPreviewService } from "../../src/server/interaction/terminal-preview-service.js";
+import type { PreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
 import {
   MAX_TERMINAL_PREVIEW_BYTES,
   TmuxInteractionService,
@@ -428,3 +429,58 @@ function reconstruct(messages: TerminalPreviewMessage[]): TerminalPreviewSnapsho
   }
   return snapshot;
 }
+
+it("keeps output activity alive without preview and preserves pane dimensions", async () => {
+  const { TerminalActivityService } = await import(
+    "../../src/server/interaction/terminal-activity-service.js"
+  );
+  const { createTmuxPreviewListener } = await import(
+    "../../src/server/interaction/tmux-preview-listener.js"
+  );
+  const directory = await createTempDirectory("activity-tmux-");
+  const socketPath = join(directory, "server.sock");
+  const tmux = (...args: string[]) =>
+    execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
+  tmux("new-session", "-d", "-s", "activity", "-x", "100", "-y", "30");
+  let now = 0;
+  const listen = createTmuxPreviewListener();
+  const subscriptions: { ready: Promise<void>; disconnected: Promise<void> }[] = [];
+  const observe: PreviewListener = (binding, change, fail) => {
+    let disconnected!: () => void;
+    const ended = new Promise<void>((resolve) => {
+      disconnected = resolve;
+    });
+    const subscription = listen(binding, change, (error) => {
+      fail(error);
+      disconnected();
+    });
+    subscriptions.push({ ready: subscription.ready, disconnected: ended });
+    return subscription;
+  };
+  const activity = new TerminalActivityService(observe, () => now);
+  try {
+    const paneId = tmux("display-message", "-p", "-t", "activity", "#{pane_id}");
+    const binding = { socketPath, paneId, sessionName: "activity" };
+    const size = () => tmux("display-message", "-p", "-t", paneId, "#{pane_width}x#{pane_height}");
+    const before = size();
+    expect(activity.read("test", binding)).toBe("unknown");
+    await subscriptions[0]!.ready;
+    now = 5000;
+    expect(activity.read("test", binding)).toBe("idle");
+    tmux("send-keys", "-t", paneId, "printf 'activity-test\\n'", "Enter");
+    await vi.waitFor(() => expect(activity.read("test", binding)).toBe("working"));
+    expect(size()).toBe(before);
+    tmux("list-clients", "-F", "#{client_name}")
+      .split("\n")
+      .forEach((client) => tmux("detach-client", "-t", client));
+    await subscriptions[0]!.disconnected;
+    expect(activity.read("test", binding)).toBe("unknown");
+    expect(subscriptions).toHaveLength(2);
+    await subscriptions[1]!.ready;
+    now += 5000;
+    expect(activity.read("test", binding)).toBe("idle");
+  } finally {
+    activity.close();
+    tmux("kill-server");
+  }
+});

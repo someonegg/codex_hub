@@ -96,8 +96,8 @@ async function capture(
     return route.abort();
   });
   async function prepareDesktopPreview() {
-    await demo.getByRole("button", { name: "Terminal preview", exact: true }).click();
-    await demo.getByLabel("Terminal preview content", { exact: true }).waitFor();
+    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
+    await demo.getByLabel("Terminal Preview content", { exact: true }).waitFor();
     await demo.getByRole("textbox", { name: "Message to agent" }).fill("Suggest the next step.");
     await demo.evaluate(() => document.fonts.ready);
   }
@@ -114,7 +114,7 @@ async function capture(
   try {
     await demo.goto(`${origin}/sessions/${session.id}`);
     await prepareDesktopPreview();
-    for (const name of ["Message to agent", "Terminal preview content"]) {
+    for (const name of ["Message to agent", "Terminal Preview content"]) {
       if (!(await demo.getByLabel(name, { exact: true }).isVisible()))
         throw new Error(`${name} is hidden`);
     }

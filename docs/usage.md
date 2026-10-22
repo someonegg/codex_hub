@@ -113,9 +113,16 @@ sessions, use the original project directory. The preceding `''` leaves the
 operation ID empty for manual binding.
 
 Manual bindings allow any session name; a valid, connected binding enables the
-full interaction panel. Terminal preview updates while expanded and visible.
+full interaction panel. Terminal Preview updates while expanded and visible.
 Collapsing or hiding it preserves the last frame; disconnection clears it, and
 switching sessions resets it.
+
+The preview heading shows **Working** when the pane produced output in the past
+five seconds, including redraws, spinners, and input echoes. It shows **Idle**
+after five seconds of silence. This measures terminal output, not agent task
+completion. Activity continues updating while preview is collapsed; no badge is
+shown while observation is starting or unavailable. **Interrupt** sits beside
+**Handoff**, with **Send** on the right.
 
 Preview starts collapsed and expands automatically after either:
 

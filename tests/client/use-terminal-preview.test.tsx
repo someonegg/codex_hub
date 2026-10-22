@@ -181,6 +181,7 @@ it("connects the panel toggle to the socket lifecycle", () => {
       sessionId="a"
       interaction={{
         supported: true,
+        activity: "unknown",
         supersededBySessionId: null,
         state: "connected",
         attachCommand: null,
@@ -190,10 +191,10 @@ it("connects the panel toggle to the socket lifecycle", () => {
     />,
   );
   expect(MockWebSocket.instances).toHaveLength(0);
-  fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
   act(() => latest().message(frame));
-  expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
-  fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+  expect(screen.getByLabelText("Terminal Preview content")).toHaveTextContent("output");
+  fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
   expect(latest().close).toHaveBeenCalledOnce();
   unmount();
 });
@@ -226,6 +227,7 @@ it.each([false, true])(
         sessionId="a"
         interaction={{
           supported: true,
+          activity: null,
           state: "connected",
           supersededBySessionId: null,
           attachCommand: null,
@@ -234,14 +236,14 @@ it.each([false, true])(
         updatedAt={null}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Terminal preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
     const old = latest();
     act(() => old.message(frame));
     act(() => old.message({ type: "error", code: "failed", message: "Capture failed", retryable }));
     expect(screen.getByText("Preview updates stopped.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss terminal preview error" }));
     expect(screen.queryByText("Capture failed")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("output");
+    expect(screen.getByLabelText("Terminal Preview content")).toHaveTextContent("output");
     expect(MockWebSocket.instances).toHaveLength(1);
     fireEvent.click(screen.getByRole("button", { name: "Retry preview" }));
     expect(MockWebSocket.instances).toHaveLength(2);
@@ -249,7 +251,7 @@ it.each([false, true])(
     act(() => old.message({ ...frame, content: "stale" }));
     act(() => latest().message({ ...frame, revision: "recovered", content: "recovered" }));
     expect(screen.queryByText("Preview updates stopped.")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Terminal preview content")).toHaveTextContent("recovered");
+    expect(screen.getByLabelText("Terminal Preview content")).toHaveTextContent("recovered");
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(MockWebSocket.instances).toHaveLength(2);
     unmount();

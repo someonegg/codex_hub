@@ -68,6 +68,7 @@ function setup(managementWaitMs = 30) {
     matchesTarget: vi.fn(async () => true),
     describe: vi.fn(async () => ({
       supported: true as const,
+      activity: "unknown" as const,
       supersededBySessionId: null,
       attachCommand: null,
       state: "connected" as const,
@@ -213,6 +214,7 @@ describe("observed management operations", () => {
       if (scenario === "binding-failure")
         interaction.describe.mockResolvedValue({
           supported: true,
+          activity: null,
           supersededBySessionId: null,
           attachCommand: null,
           state: "disconnected",
@@ -269,6 +271,7 @@ describe("observed management operations", () => {
     set({ sessions: [session()] });
     interaction.describe.mockResolvedValue({
       supported: true,
+      activity: null,
       supersededBySessionId: null,
       attachCommand: null,
       state: "unbound",

@@ -182,7 +182,7 @@ function previewError(error: unknown): TerminalPreviewError {
   return {
     type: "error",
     code: "interaction_failed",
-    message: "Terminal preview is temporarily unavailable",
+    message: "Terminal Preview is temporarily unavailable",
     retryable: true,
   };
 }

@@ -85,6 +85,7 @@ describe("session automatic updates", () => {
     });
     const connected = {
       supported: true as const,
+      activity: "unknown" as const,
       supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: null,
@@ -93,7 +94,7 @@ describe("session automatic updates", () => {
     vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
     render(<SessionPage sessionId={SESSION_ID} />);
     await flush();
-    expect(screen.getByRole("button", { name: /^Terminal preview/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Terminal Preview/ })).toHaveAttribute(
       "aria-expanded",
       String(expands),
     );
@@ -103,6 +104,7 @@ describe("session automatic updates", () => {
     installIntersectionObserver();
     const connected = {
       supported: true as const,
+      activity: "unknown" as const,
       supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: null,
@@ -121,7 +123,7 @@ describe("session automatic updates", () => {
     vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
     render(<SessionPage sessionId={SESSION_ID} />);
     await flush();
-    expect(screen.getByRole("button", { name: /^Terminal preview/ })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: /^Terminal Preview/ })).toHaveAttribute(
       "aria-expanded",
       "false",
     );
@@ -131,6 +133,7 @@ describe("session automatic updates", () => {
   it("keeps the draft and in-flight send across connection loss, then hides on archival", async () => {
     const connected = {
       supported: true as const,
+      activity: "unknown" as const,
       supersededBySessionId: null,
       state: "connected" as const,
       attachCommand: "tmux attach-session -t test",
@@ -160,6 +163,7 @@ describe("session automatic updates", () => {
       resolveUpdates(
         updates(false, NEXT_REVISION, {
           supported: true,
+          activity: null,
           supersededBySessionId: null,
           state: "unknown",
           attachCommand: null,
@@ -181,7 +185,7 @@ describe("session automatic updates", () => {
     });
     await flush();
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeEnabled();
-    fireEvent.click(screen.getByRole("button", { name: /^Terminal preview/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Terminal Preview/ }));
     await flush();
     expect(MockWebSocket.instances).toHaveLength(1);
     const previewSocket = MockWebSocket.instances[0]!;
@@ -222,6 +226,7 @@ describe("session automatic updates", () => {
     const archivedPage = page([], TIMELINE_CURSOR, true, true);
     archivedPage.interaction = {
       supported: true,
+      activity: "unknown",
       supersededBySessionId: null,
       state: "connected",
       attachCommand: null,
@@ -314,6 +319,7 @@ describe("session automatic updates", () => {
   it("adopts interaction and metadata-only automatic updates changes without advancing cursor", async () => {
     const changed = updates(false, NEXT_REVISION, {
       supported: true,
+      activity: "unknown",
       supersededBySessionId: null,
       attachCommand: null,
       state: "connected",

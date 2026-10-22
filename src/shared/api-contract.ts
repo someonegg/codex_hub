@@ -104,6 +104,7 @@ export type InteractionResponse =
   | {
       supported: true;
       state: InteractionState;
+      activity: "working" | "idle" | "unknown" | null;
       supersededBySessionId: string | null;
       attachCommand: string | null;
     };

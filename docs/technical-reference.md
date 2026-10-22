@@ -110,6 +110,16 @@ supplies files; text-only paths remain text.
 | `WS /api/v1/sessions/:id/terminal-preview`       | JSON `snapshot`, `delta`, and `error` messages (see below)                                                                                       |
 
 Supported keys and message limits are defined in `src/shared/interaction.ts`.
+Supported interaction responses require `activity`: `working`, `idle`, or
+`unknown` while connected, and `null` in every other state. Activity uses pane
+`%output` / `%extended-output` notifications and a monotonic five-second window.
+Initial or failed observation is `unknown`; failed subscriptions retry on the
+next read. Detail, timeline, updates, and interaction reads renew a 60-second
+subscription lease. Preview and activity share control clients without capturing
+frames for activity. Activity transitions participate in `updateRevision` and
+the existing 1.5-second update checks; repeated output while working does not
+change the revision. Catalog summaries do not include activity.
+
 Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
 
 The Codex adapter recognizes `CODEX_HUB_TMUX_BIND_V4` declarations in user-message
@@ -139,13 +149,13 @@ changes during validation may report `unknown` until the next refresh. Socket/pa
 reuse targets the current pane without comparing process identity. Uncertain input
 is not automatically resent.
 
-### Terminal preview
+### Terminal Preview
 
 Preview captures the current pane screen as plain text, not scrollback or a terminal
 emulator stream. Captures retain the last 256,000 UTF-8 bytes without splitting a
 character and report `truncated` when the beginning was removed.
 
-Terminal previews use `/api/v1/sessions/:id/terminal-preview` over `ws` or `wss`,
+Terminal Previews use `/api/v1/sessions/:id/terminal-preview` over `ws` or `wss`,
 inheriting the server's TLS and optional client certificate requirements. Upgrade
 requests accept no query parameters and reject cross-origin browser requests.
 Ordinary HTTP requests receive `426 Upgrade Required`. Clients send no application

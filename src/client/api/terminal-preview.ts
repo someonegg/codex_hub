@@ -55,7 +55,7 @@ export function connectTerminalPreview(
       failed("Invalid terminal preview update; reconnecting", true);
     }
   };
-  socket.onerror = () => failed("Terminal preview connection failed", true);
-  socket.onclose = (event) => failed("Terminal preview connection closed", event.code !== 1008);
+  socket.onerror = () => failed("Terminal Preview connection failed", true);
+  socket.onclose = (event) => failed("Terminal Preview connection closed", event.code !== 1008);
   return close;
 }
