@@ -2,7 +2,7 @@ import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { request } from "node:http";
 import { request as secureRequest } from "node:https";
 import type { AddressInfo } from "node:net";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -165,6 +165,38 @@ async function startSecure(requireClientCertificate: boolean): Promise<string> {
 }
 
 describe("secure HTTP foundation", () => {
+  it("serves install metadata and icons with browser-compatible content types", async () => {
+    const server = createServer({
+      host: LOOPBACK_HOST,
+      port: 0,
+      homes: [{ nickname: "default", path: "/unused" }],
+      clientDirectory: resolve("public"),
+      tls: { enabled: false },
+      interactionEnabled: false,
+    });
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
+    const { port } = server.address() as AddressInfo;
+    const origin = `http://${LOOPBACK_HOST}:${port}`;
+    const response = await fetch(`${origin}/manifest.webmanifest`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("application/manifest+json; charset=utf-8");
+    const manifest = await response.json();
+    expect(manifest).toMatchObject({ id: "/", start_url: "/", scope: "/", display: "standalone" });
+    const assets = [
+      ["/favicon.svg", "image/svg+xml"],
+      ["/favicon.ico", "image/vnd.microsoft.icon"],
+      ["/apple-touch-icon.png", "image/png"],
+      ...manifest.icons.map((icon: { src: string; type: string }) => [icon.src, icon.type]),
+    ];
+    for (const [path, type] of assets) {
+      const asset = await fetch(`${origin}${path}`);
+      expect(asset.status).toBe(200);
+      expect(asset.headers.get("content-type")).toBe(type);
+      expect((await asset.arrayBuffer()).byteLength).toBeGreaterThan(0);
+    }
+  });
+
   it("rejects the startup promise when the listen address is already in use", async () => {
     const clientDirectory = await createTempDirectory("codex-reader-listen-error-");
     const config: ServerConfig = {

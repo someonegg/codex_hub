@@ -46,9 +46,7 @@ export function HubSidebar({
     <aside ref={sidebar} className="hub-sidebar" aria-label="Session catalog">
       <header className="hub-brand">
         <InternalLink href="/" onNavigate={() => navigate(null)}>
-          <span className="brand-logo" aria-hidden="true">
-            ⌘
-          </span>
+          <img className="brand-logo" src="/favicon.svg" alt="" width="29" height="29" />
           Codex Hub
         </InternalLink>
       </header>
