@@ -182,7 +182,8 @@ codex-hub \
 
 That port accepts HTTPS only; there is no separate HTTP listener or redirect.
 Add `--ssl-ca /path/to/client-ca.pem` to require a client certificate signed by a
-configured CA. Certificates, keys, and CA bundles are read at startup; restart
+configured CA. See [What is mutual TLS (mTLS)?](https://www.cloudflare.com/learning/ssl/what-is-mutual-tls/)
+for an introduction. Certificates, keys, and CA bundles are read at startup; restart
 after replacing them.
 
 ## Security
@@ -197,13 +198,6 @@ the server certificate, and configure `--ssl-ca` to require trusted client certi
 Once configured, clients authenticate with their certificates without a separate
 application login or authentication proxy. HTTPS without `--ssl-ca` encrypts traffic
 but does not authenticate clients.
-
-Treat client private keys as access credentials. Every accepted client has full
-access to the read, interaction, and management endpoints; mTLS does not add
-per-user permissions. Certificate installation, renewal, and trust configuration
-require maintenance. The server does not configure certificate revocation checks;
-if a client key is lost or compromised, replace the affected trust configuration
-and restart the server to reject that certificate.
 
 The server rejects path traversal and symlink escapes, avoids permissive CORS,
 and does not expose rollout paths or raw records in public session responses.
