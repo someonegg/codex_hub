@@ -10,20 +10,21 @@ import type {
 } from "../../shared/api-contract.js";
 import type { SessionReader } from "../application/session-reader.js";
 import {
+  assembleSessionResponse,
+  type SessionInteractionReader,
+} from "../application/session-response.js";
+import {
   CatalogCapacityError,
   type SessionCatalogService,
 } from "../catalog/session-catalog-service.js";
-import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import { reconcileSessionState } from "../interaction/reconcile-session-state.js";
 import { RepositoryQueryError } from "../repository/session-queries.js";
 import type { SessionUpdatesService } from "../updates/session-updates-service.js";
-import { withUpdateRevision } from "../updates/update-revision.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { invalid, only, optional } from "./query-params.js";
 import { sendJson } from "./router.js";
 import { isOpaqueId, readPathname, SESSION_ROOT, sessionPath } from "./session-path.js";
 
-type InteractionReader = Pick<SessionInteractionService, "describe">;
+type InteractionReader = SessionInteractionReader;
 
 export function createSessionReadRoutes(dependencies: {
   readonly sessions: SessionReader;
@@ -79,15 +80,12 @@ export function createSessionReadRoutes(dependencies: {
         if (result === null) {
           return notFound(response, headOnly, "session_not_found");
         }
-        const interaction = await describeInteraction(dependencies.interaction, id);
         sendJson(
           response,
           200,
-          withUpdateRevision(
-            reconcileSessionState({
-              ...result,
-              interaction,
-            }),
+          await assembleSessionResponse(
+            result,
+            dependencies.interaction,
             dependencies.updates.revision.bind(dependencies.updates),
           ),
           headOnly,
@@ -99,15 +97,12 @@ export function createSessionReadRoutes(dependencies: {
         if (result === null) {
           return notFound(response, headOnly, "session_not_found");
         }
-        const interaction = await describeInteraction(dependencies.interaction, id);
         sendJson(
           response,
           200,
-          withUpdateRevision(
-            reconcileSessionState({
-              ...result,
-              interaction,
-            }),
+          await assembleSessionResponse(
+            result,
+            dependencies.interaction,
             dependencies.updates.revision.bind(dependencies.updates),
           ),
           headOnly,
@@ -183,13 +178,6 @@ export function createSessionReadRoutes(dependencies: {
       return true;
     },
   };
-}
-
-async function describeInteraction(interaction: InteractionReader | undefined, sessionId: string) {
-  if (interaction === undefined) return { supported: false as const, attachCommand: null };
-  return (
-    (await interaction.describe(sessionId)) ?? { supported: false as const, attachCommand: null }
-  );
 }
 
 function parseListQuery(params: URLSearchParams): SessionListQuery {

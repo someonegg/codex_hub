@@ -20,7 +20,7 @@ export interface ApiErrorLogger {
 
 type InteractionApi = Pick<
   SessionInteractionService,
-  "describe" | "sendMessage" | "handoffPaneBinding" | "sendKeys"
+  "describe" | "describeSnapshot" | "sendMessage" | "handoffPaneBinding" | "sendKeys"
 >;
 
 export interface ApiRouterDependencies {

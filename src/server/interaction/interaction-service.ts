@@ -7,6 +7,7 @@ import type { InteractionSessionSnapshot, SessionReader } from "../application/s
 import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
+import { isCurrentObservation, observePaneBinding } from "./pane-observation.js";
 import type { SessionRuntime } from "./session-runtime.js";
 import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
@@ -127,44 +128,36 @@ export class SessionInteractionService {
     session: InteractionSessionSnapshot,
   ): Promise<InteractionResponse> {
     if (!this.#supported(session)) return { supported: false, attachCommand: null };
-    const attempt = this.bindings.latest(sessionId);
-    if (attempt === null) return response("unbound");
-    if (!attempt.valid) {
-      return response("disconnected");
-    }
-    const replacement = this.bindings.replacement(sessionId);
-    if (replacement !== null) {
-      const unchanged = () =>
-        this.bindings.latest(sessionId) === attempt &&
-        this.bindings.replacement(sessionId) === replacement;
-      try {
-        const checked = await this.#check(attempt);
-        if (!unchanged()) return this.#currentState(sessionId);
-        if (checked === null) return response("disconnected");
-        const target = await this.sessions.getInteractionSession(replacement);
-        if (!unchanged()) return this.#currentState(sessionId);
-        return { ...response("superseded"), supersededBySessionId: target ? replacement : null };
-      } catch {
-        return unchanged() ? response("unknown") : this.#currentState(sessionId);
+    const observed =
+      session.observation ??
+      (await observePaneBinding(sessionId, this.bindings, (attempt) =>
+        this.#check(attempt).then((checked) => checked?.binding ?? null),
+      ));
+    if (observed.sessionId !== sessionId || !isCurrentObservation(observed, this.bindings))
+      return response("unknown");
+    switch (observed.state) {
+      case "unbound":
+        return response("unbound");
+      case "invalid":
+        return response("disconnected");
+      case "unknown":
+        return response("unknown");
+      case "exited":
+        return response("disconnected");
+      case "alive": {
+        if (observed.replacement === null) return response("connected", observed.target);
+        try {
+          const replacement = await this.sessions.getInteractionSession(observed.replacement);
+          if (!isCurrentObservation(observed, this.bindings)) return response("unknown");
+          return {
+            ...response("superseded"),
+            supersededBySessionId: replacement ? observed.replacement : null,
+          };
+        } catch {
+          return response("unknown");
+        }
       }
     }
-    try {
-      const checked = await this.#check(attempt);
-      if (this.bindings.latest(sessionId) !== attempt || !this.bindings.owns(sessionId, attempt))
-        return this.#currentState(sessionId);
-      return response(checked === null ? "disconnected" : "connected", checked?.binding);
-    } catch {
-      if (this.bindings.latest(sessionId) !== attempt || !this.bindings.owns(sessionId, attempt))
-        return this.#currentState(sessionId);
-      return response("unknown");
-    }
-  }
-
-  #currentState(sessionId: string): InteractionResponse {
-    const attempt = this.bindings.latest(sessionId);
-    if (attempt === null) return response("unbound");
-    if (!attempt.valid) return response("disconnected");
-    return response("unknown");
   }
 
   #check(attempt: InteractionBindingAttempt & { valid: true }): Promise<CheckedBinding | null> {

@@ -5,6 +5,11 @@ import {
   type SessionManagerRegistry,
 } from "../management/session-manager.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
+import {
+  isCurrentObservation,
+  observePaneBinding,
+  type RuntimeObservation,
+} from "./pane-observation.js";
 import type { InteractionTransport, TmuxBinding } from "./transport.js";
 
 /** Shared, bounded observations. Errors never prove that a pane exited. */
@@ -51,10 +56,19 @@ export class SessionRuntime {
     return query;
   }
 
+  observe(sessionId: string): Promise<RuntimeObservation> {
+    return observePaneBinding(sessionId, this.bindings, (attempt) => this.probe(attempt));
+  }
+
+  isCurrent(observation: RuntimeObservation): boolean {
+    return isCurrentObservation(observation, this.bindings);
+  }
+
   async evaluate(
     session: DomainSession,
     sessions: readonly DomainSession[],
     detail = true,
+    observation?: RuntimeObservation,
   ): Promise<{
     status: SessionStatus;
     resume: ResumeCapability;
@@ -62,18 +76,14 @@ export class SessionRuntime {
     let status: SessionStatus = session.archived ? "archived" : "normal";
     const deny = (reason: string) => ({ status, resume: { allowed: false, reason } });
     if (session.archived) return deny("Archived sessions cannot be resumed");
-    const attempt = this.bindings.latest(session.id);
-    if (!attempt) return deny("No pane binding has been recorded");
-    if (!attempt.valid) return deny("The latest pane binding is invalid");
-    const replacement = this.bindings.replacement(session.id);
+    const observed = observation ?? (await this.observe(session.id));
+    if (observed.sessionId !== session.id || !this.isCurrent(observed))
+      return deny("Pane binding changed during validation");
+    if (observed.state === "unbound") return deny("No pane binding has been recorded");
+    if (observed.state === "invalid") return deny("The latest pane binding is invalid");
+    if (observed.state === "unknown") return deny("Runtime or working directory validation failed");
     try {
-      const target = await this.probe(attempt);
-      if (
-        attempt !== this.bindings.latest(session.id) ||
-        replacement !== this.bindings.replacement(session.id)
-      )
-        return deny("Pane binding changed during validation");
-      if (target && replacement === null) status = "live";
+      if (observed.state === "alive" && observed.replacement === null) status = "live";
       if (!detail) return deny("Resume validation required");
       if (status === "live") return deny("Session is already live");
       const manager = this.managers.get(session.origin.sourceInstanceId);
@@ -88,11 +98,7 @@ export class SessionRuntime {
       )
         return deny("Native session identity is ambiguous");
       await resolveResumeDirectory(manager, session);
-      if (
-        attempt !== this.bindings.latest(session.id) ||
-        replacement !== this.bindings.replacement(session.id)
-      )
-        return deny("Pane binding changed during validation");
+      if (!this.isCurrent(observed)) return deny("Pane binding changed during validation");
       return { status, resume: { allowed: true, reason: null } };
     } catch {
       status = "normal";

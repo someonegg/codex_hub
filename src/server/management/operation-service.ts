@@ -5,36 +5,23 @@ import type { SessionInteractionService } from "../interaction/interaction-servi
 import { type PaneBindingManager, paneBindings } from "../interaction/pane-binding-manager.js";
 import type { SessionRuntime } from "../interaction/session-runtime.js";
 import { attachCommand } from "../interaction/tmux-launcher.js";
-import type { TmuxBinding } from "../interaction/transport.js";
-import { SessionExitService, type SessionExitTask } from "./session-exit-service.js";
-import type { SessionManagerRegistry } from "./session-manager.js";
 import {
-  type ManagementSnapshot,
-  resolveResumeDirectory,
-  SessionLaunchError,
-} from "./session-manager.js";
+  AssociationError,
+  type OperationContext,
+  type OperationControl,
+  type OperationEntry,
+  type OperationStage,
+  type OperationTimeouts,
+} from "./operation-state.js";
+import { SessionLaunchExecutor } from "./session-launch-executor.js";
+import { SessionLifecycleExecutor } from "./session-lifecycle-executor.js";
+import type { SessionManagerRegistry } from "./session-manager.js";
+import { type ManagementSnapshot, SessionLaunchError } from "./session-manager.js";
 
-type Context =
-  | { kind: "create"; phase: "resolving" | "launching" }
-  | { kind: "create"; phase: "observing"; target: TmuxBinding; project: string; startedAt: number }
-  | { kind: "manage"; phase: "resolving" }
-  | { kind: "delete"; phase: "deleting" | "confirming"; nativeId: string }
-  | { kind: "archive"; phase: "resolving_target" | "archiving" | "confirming"; nativeId: string }
-  | { kind: "exiting"; task: SessionExitTask; nativeId: string | null };
-type Stage = Context & { deadline: number | null };
-interface Entry {
-  readonly metadata: Omit<HubOperation, "status" | "error" | "phase">;
-  result?: Readonly<HubOperation>;
-  sourceInstanceId: string;
-  resumeNativeId?: string;
-  stage: Stage | null;
-  checking?: Promise<void>;
-}
 interface RequestRecord {
   readonly fingerprint: string;
   readonly operationId: string;
 }
-class AssociationError extends Error {}
 export class ManagementError extends Error {
   constructor(
     readonly status: number,
@@ -45,16 +32,17 @@ export class ManagementError extends Error {
 }
 
 export class OperationService {
-  readonly #entries = new Map<string, Entry>();
+  readonly #entries = new Map<string, OperationEntry>();
   readonly #requests = new Map<string, RequestRecord>();
-  readonly #active = new Map<string, Entry>();
+  readonly #active = new Map<string, OperationEntry>();
   readonly #results = new Map<string, HubOperation>();
   readonly #timer: ReturnType<typeof setInterval>;
   #closed = false;
-  readonly #exit: SessionExitService;
+  readonly #launch: SessionLaunchExecutor;
+  readonly #lifecycle: SessionLifecycleExecutor;
 
   constructor(
-    private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
+    sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
     private readonly interaction: Pick<
       SessionInteractionService,
       | "describe"
@@ -67,16 +55,41 @@ export class OperationService {
     >,
     private readonly managers: SessionManagerRegistry,
     private readonly now = Date.now,
-    private readonly waitMs: { create: number; exit?: number; archive: number; delete: number } = {
+    private readonly waitMs: OperationTimeouts = {
       create: 300_000,
       exit: 30_000,
       archive: 30_000,
       delete: 30_000,
     },
-    private readonly bindings: PaneBindingManager = paneBindings,
-    private readonly runtime?: SessionRuntime,
+    bindings: PaneBindingManager = paneBindings,
+    runtime?: SessionRuntime,
   ) {
-    this.#exit = new SessionExitService(interaction, now);
+    const control: OperationControl = {
+      pending: (entry): entry is OperationEntry & { stage: OperationStage } => this.#pending(entry),
+      transition: (entry, context, deadline) => this.#transition(entry, context, deadline),
+      finish: (entry, status, error) => this.#finish(entry, status, error),
+      error: (entry, error) => this.#error(entry, error),
+      timeout: (entry) => this.#timeout(entry),
+      observe: (entry) => this.#observe(entry),
+    };
+    this.#launch = new SessionLaunchExecutor(
+      sessions,
+      interaction,
+      managers,
+      bindings,
+      control,
+      now,
+      waitMs,
+      runtime,
+    );
+    this.#lifecycle = new SessionLifecycleExecutor(
+      sessions,
+      interaction,
+      managers,
+      control,
+      now,
+      waitMs,
+    );
     this.#timer = setInterval(() => {
       void this.poll();
     }, 1_000);
@@ -104,35 +117,7 @@ export class OperationService {
     entry.metadata.mode = "new";
     entry.sourceInstanceId = sourceInstanceId;
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
-    void (async () => {
-      try {
-        const manager = this.managers.get(entry.sourceInstanceId);
-        const resolved = await manager.resolveDirectory(input.directory);
-        if (!this.#pending(entry)) return;
-        this.#transition(entry, { kind: "create", phase: "launching" });
-        const target = await manager.launch({
-          operationId: entry.metadata.operationId,
-          directory: resolved.directory,
-          worktree: input.worktree,
-          yolo: input.yolo ?? false,
-          projectDirectory: resolved.directory,
-        });
-        if (!this.#pending(entry)) return;
-        this.#transition(
-          entry,
-          {
-            kind: "create",
-            phase: "observing",
-            project: resolved.directory,
-            target,
-            startedAt: this.now(),
-          },
-          this.now() + this.waitMs.create,
-        );
-      } catch (error) {
-        this.#error(entry, error);
-      }
-    })();
+    void this.#launch.create(entry, input);
     return this.#project(entry);
   }
 
@@ -153,81 +138,7 @@ export class OperationService {
     this.#active.set(sessionId, entry);
     this.interaction.setBusy(sessionId, true);
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
-    void (async () => {
-      try {
-        if (!this.runtime) throw new Error("Resume is unavailable");
-        let snapshot = await this.sessions.managementSnapshot();
-        let session = snapshot.sessions.find((item) => item.id === sessionId);
-        if (!session) throw new Error("Session not found");
-        let capability = await this.runtime.evaluate(session, snapshot.sessions);
-        if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-        entry.sourceInstanceId = session.origin.sourceInstanceId;
-        entry.resumeNativeId = session.sourceId ?? undefined;
-        const manager = this.managers.get(entry.sourceInstanceId);
-        const attempt = this.bindings.latest(session.id);
-        const replacement = this.bindings.replacement(session.id);
-        await resolveResumeDirectory(manager, session);
-        // Refresh the source after asynchronous checks, then revalidate immediately before launch.
-        snapshot = await this.sessions.managementSnapshot();
-        const latest = snapshot.sessions.find((item) => item.id === sessionId);
-        if (
-          !latest ||
-          latest.sourceId !== session.sourceId ||
-          latest.origin.sourceInstanceId !== entry.sourceInstanceId ||
-          latest.workingDirectory !== session.workingDirectory ||
-          latest.projectDirectory !== session.projectDirectory ||
-          attempt !== this.bindings.latest(session.id) ||
-          replacement !== this.bindings.replacement(session.id)
-        )
-          throw new Error("Session identity or directory changed during validation");
-        session = latest;
-        capability = await this.runtime.evaluate(session, snapshot.sessions);
-        if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-        const resolved = await resolveResumeDirectory(manager, session);
-        const finalSnapshot = await this.sessions.managementSnapshot();
-        const finalSession = finalSnapshot.sessions.find((item) => item.id === sessionId);
-        if (
-          !finalSession ||
-          finalSession.sourceId !== session.sourceId ||
-          finalSession.origin.sourceInstanceId !== session.origin.sourceInstanceId ||
-          finalSession.archived ||
-          finalSession.workingDirectory !== session.workingDirectory ||
-          finalSession.projectDirectory !== session.projectDirectory ||
-          finalSnapshot.sessions.filter(
-            (item) =>
-              item.sourceId === session.sourceId &&
-              item.origin.sourceInstanceId === session.origin.sourceInstanceId,
-          ).length !== 1 ||
-          attempt !== this.bindings.latest(session.id) ||
-          replacement !== this.bindings.replacement(session.id)
-        )
-          throw new Error("Session identity, binding or directory changed during validation");
-        if (!this.#pending(entry)) return;
-        this.#transition(entry, { kind: "create", phase: "launching" });
-        const target = await manager.launch({
-          operationId: entry.metadata.operationId,
-          directory: resolved.directory,
-          worktree: false,
-          yolo: input.yolo ?? false,
-          resumeNativeId: session.sourceId!,
-          projectDirectory: session.projectDirectory,
-        });
-        if (!this.#pending(entry)) return;
-        this.#transition(
-          entry,
-          {
-            kind: "create",
-            phase: "observing",
-            target,
-            project: session.projectDirectory ?? resolved.directory,
-            startedAt: this.now(),
-          },
-          this.now() + this.waitMs.create,
-        );
-      } catch (error) {
-        this.#error(entry, error);
-      }
-    })();
+    void this.#launch.resume(entry, input);
     return this.#project(entry);
   }
 
@@ -247,47 +158,7 @@ export class OperationService {
       this.now() +
         (type === "exit" ? (this.waitMs.exit ?? this.waitMs.archive) : this.waitMs[type]),
     );
-    void (async () => {
-      try {
-        const snapshot = await this.sessions.managementSnapshot();
-        if (!this.#pending(entry)) return;
-        const session = snapshot.sessions.find((item) => item.id === sessionId);
-        if (!session) {
-          if (type === "delete") {
-            this.#finish(entry, "succeeded", null);
-            return;
-          }
-          throw new Error("Session not found");
-        }
-        entry.sourceInstanceId = session.origin.sourceInstanceId;
-        const manager = this.managers.get(entry.sourceInstanceId);
-        if (type === "archive" && session.archived) {
-          this.#finish(entry, "succeeded", null);
-          return;
-        }
-        if (type === "exit") {
-          await this.#startExit(entry, sessionId, null);
-          return;
-        }
-        const nativeId = session.sourceId;
-        if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
-        if (this.#matches(snapshot, entry, nativeId).length !== 1)
-          throw new Error("Native session identity is ambiguous");
-        if (type === "delete") {
-          if (!session.archived) throw new Error("Only archived sessions can be deleted");
-          this.#transition(entry, { kind: "delete", phase: "deleting", nativeId });
-          await manager.delete(nativeId);
-          if (!this.#pending(entry)) return;
-          this.#transition(entry, { kind: "delete", phase: "confirming", nativeId });
-        } else {
-          this.#transition(entry, { kind: "archive", phase: "resolving_target", nativeId });
-          await this.#startExit(entry, sessionId, nativeId);
-        }
-        if (this.#pending(entry)) await this.#observe(entry);
-      } catch (error) {
-        this.#error(entry, error);
-      }
-    })();
+    void this.#lifecycle.manage(entry, type, sessionId);
     return this.#project(entry);
   }
 
@@ -334,7 +205,7 @@ export class OperationService {
     this.#closed = true;
   }
 
-  #observe(entry: Entry): Promise<void> {
+  #observe(entry: OperationEntry): Promise<void> {
     if (entry.checking) return entry.checking;
     entry.checking = this.#check(entry).finally(() => {
       entry.checking = undefined;
@@ -342,90 +213,11 @@ export class OperationService {
     return entry.checking;
   }
 
-  async #check(entry: Entry) {
+  async #check(entry: OperationEntry) {
     if (!this.#pending(entry)) return;
     try {
-      let context = entry.stage;
-      if (context.kind === "exiting") {
-        try {
-          // Refresh adapter bindings before observing or acting on the fixed target.
-          await this.sessions.managementSnapshot();
-          if (!this.#pending(entry)) return;
-          const phase = context.task.phase;
-          const exited = await context.task.advance();
-          if (!this.#pending(entry)) return;
-          if (phase !== context.task.phase)
-            entry.metadata.updatedAt = new Date(this.now()).toISOString();
-          if (!exited) return;
-          if (context.nativeId === null) {
-            this.#finish(entry, "succeeded", null);
-            return;
-          }
-          await this.#archive(entry, context.nativeId);
-          if (!this.#pending(entry)) return;
-        } catch (error) {
-          if (this.#pending(entry))
-            this.#finish(entry, "unknown", error instanceof Error ? error.message : String(error));
-          return;
-        }
-      }
-      const snapshot = await this.sessions.managementSnapshot();
-      if (!this.#pending(entry)) return;
-      context = entry.stage;
-      if (context.kind === "create" && context.phase === "observing") {
-        const matches = snapshot.sessions.filter((session) => {
-          const attempt = this.bindings.latest(session.id);
-          return (
-            session.origin.sourceInstanceId === entry.sourceInstanceId &&
-            attempt?.valid &&
-            attempt.operationId === entry.metadata.operationId
-          );
-        });
-        if (matches.length > 1)
-          throw new AssociationError("Multiple sessions claimed this operation ID");
-        const match = matches[0];
-        if (match) {
-          if (
-            entry.metadata.mode === "resume" &&
-            (match.id !== entry.metadata.sessionId ||
-              match.archived ||
-              match.sourceId !== entry.resumeNativeId ||
-              !match.sourceId ||
-              this.#matches(snapshot, entry, match.sourceId).length !== 1)
-          )
-            throw new AssociationError("Resume did not bind the original unique session");
-          const attempt = this.bindings.latest(match.id);
-          if (
-            !attempt?.valid ||
-            attempt.socketPath !== context.target.socketPath ||
-            attempt.paneId !== context.target.paneId ||
-            match.projectDirectory !== context.project
-          ) {
-            throw new AssociationError("Binding does not match the launched target/project");
-          }
-          const binding = await this.interaction.describe(match.id);
-          if (!this.#pending(entry)) return;
-          if (binding?.supported && binding.state === "unknown") return;
-          if (!binding?.supported || binding.state !== "connected")
-            throw new AssociationError("The new session binding failed validation");
-          const matchesTarget = await this.interaction.matchesTarget(match.id, context.target);
-          if (!this.#pending(entry)) return;
-          if (!matchesTarget)
-            throw new AssociationError("Binding does not match the launched target");
-          entry.metadata.sessionId = match.id;
-          this.#finish(entry, "succeeded", null);
-        }
-      } else if (
-        (context.kind === "archive" || context.kind === "delete") &&
-        context.phase === "confirming"
-      ) {
-        const matches = this.#matches(snapshot, entry, context.nativeId);
-        if (
-          (context.kind === "archive" && matches.length === 1 && matches[0]?.archived) ||
-          (context.kind === "delete" && matches.length === 0)
-        )
-          this.#finish(entry, "succeeded", null);
-      }
+      if (entry.stage.kind === "create") await this.#launch.observe(entry);
+      else await this.#lifecycle.observe(entry);
     } catch (error) {
       // Read failures never prove disappearance or justify another command.
       if (error instanceof AssociationError) this.#finish(entry, "unknown", error.message);
@@ -433,49 +225,11 @@ export class OperationService {
     this.#timeout(entry);
   }
 
-  async #startExit(entry: Entry, sessionId: string, nativeId: string | null) {
-    const target = await this.interaction.resolveTarget(sessionId);
-    if (!this.#pending(entry)) return;
-    if (!target) {
-      if (nativeId === null) this.#finish(entry, "succeeded", null);
-      else await this.#archive(entry, nativeId);
-      return;
-    }
-    const task = this.#exit.start(
-      sessionId,
-      target,
-      this.managers.get(entry.sourceInstanceId),
-      () => {
-        this.#timeout(entry);
-        if (!this.#pending(entry)) throw new Error("Exit operation is no longer active");
-      },
-    );
-    this.#transition(
-      entry,
-      { kind: "exiting", task, nativeId },
-      this.now() + (this.waitMs.exit ?? this.waitMs.archive),
-    );
-    await this.#observe(entry);
-  }
-
-  async #archive(entry: Entry, nativeId: string) {
-    if (!this.#pending(entry)) return;
-    this.#transition(entry, { kind: "archive", phase: "archiving", nativeId }, this.now() + 25_000);
-    try {
-      await this.managers.get(entry.sourceInstanceId).archive(nativeId);
-      if (!this.#pending(entry)) return;
-      this.#transition(
-        entry,
-        { kind: "archive", phase: "confirming", nativeId },
-        this.now() + this.waitMs.archive,
-      );
-    } catch (error) {
-      if (!this.#pending(entry)) return;
-      this.#error(entry, error);
-    }
-  }
-
-  #transition(entry: Entry, context: Context, deadline = entry.stage?.deadline ?? null) {
+  #transition(
+    entry: OperationEntry,
+    context: OperationContext,
+    deadline = entry.stage?.deadline ?? null,
+  ) {
     if (!this.#pending(entry)) return;
     const previous = this.#project(entry).phase;
     entry.stage = { ...context, deadline };
@@ -488,7 +242,7 @@ export class OperationService {
     const entry = this.#entries.get(id);
     return entry ? this.#project(entry) : undefined;
   }
-  #project(entry: Entry): HubOperation {
+  #project(entry: OperationEntry): HubOperation {
     if (entry.result) return { ...entry.result };
     const context = entry.stage;
     if (!context) throw new Error("Pending operation has no execution stage");
@@ -504,22 +258,16 @@ export class OperationService {
           : null;
     return { ...entry.metadata, phase, status: "pending", error: null };
   }
-  #attach(entry: Entry, command: string | null) {
+  #attach(entry: OperationEntry, command: string | null) {
     if (!this.#pending(entry) || entry.metadata.attachCommand === command) return;
     entry.metadata.attachCommand = command;
     entry.metadata.updatedAt = new Date(this.now()).toISOString();
   }
 
-  #matches(snapshot: ManagementSnapshot, entry: Entry, nativeId: string) {
-    return snapshot.sessions.filter(
-      (session) =>
-        session.origin.sourceInstanceId === entry.sourceInstanceId && session.sourceId === nativeId,
-    );
-  }
-  #pending(entry: Entry): entry is Entry & { stage: Stage } {
+  #pending(entry: OperationEntry): entry is OperationEntry & { stage: OperationStage } {
     return !this.#closed && !entry.result && entry.stage !== null;
   }
-  #timeout(entry: Entry) {
+  #timeout(entry: OperationEntry) {
     if (
       this.#pending(entry) &&
       entry.stage.deadline !== null &&
@@ -534,7 +282,7 @@ export class OperationService {
       );
     }
   }
-  #error(entry: Entry, error: unknown) {
+  #error(entry: OperationEntry, error: unknown) {
     if (error instanceof SessionLaunchError) {
       this.#attach(entry, error.attachCommand);
       if (error.target) entry.metadata.target = error.target;
@@ -551,7 +299,11 @@ export class OperationService {
       error instanceof Error ? error.message : String(error),
     );
   }
-  #finish(entry: Entry, status: Exclude<HubOperation["status"], "pending">, error: string | null) {
+  #finish(
+    entry: OperationEntry,
+    status: Exclude<HubOperation["status"], "pending">,
+    error: string | null,
+  ) {
     if (entry.result) return;
     const context = entry.stage;
     if (context?.kind === "create" && context.phase === "observing" && status === "unknown") {
@@ -571,11 +323,11 @@ export class OperationService {
       this.interaction.setBusy(sessionId, false);
     }
   }
-  #new(type: HubOperation["type"], sessionId: string | null): Entry {
+  #new(type: HubOperation["type"], sessionId: string | null): OperationEntry {
     if (this.#closed) throw new ManagementError(503, "Server stopped tracking operations");
     this.#prune();
     const timestamp = new Date(this.now()).toISOString();
-    const entry: Entry = {
+    const entry: OperationEntry = {
       metadata: {
         attachCommand: null,
         operationId: randomUUID(),

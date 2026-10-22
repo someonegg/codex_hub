@@ -3,14 +3,13 @@ import type {
   SessionUpdatesQuery,
   SessionUpdatesResponse,
 } from "../../shared/api-contract.js";
-import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
+import type { SessionReader } from "../application/session-reader.js";
+import { assembleSessionResponse } from "../application/session-response.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import { reconcileSessionState } from "../interaction/reconcile-session-state.js";
 import {
   createProcessUpdateRevisionFactory,
   type UpdateRevisionFactory,
   type UpdateRevisionSession,
-  withUpdateRevision,
 } from "./update-revision.js";
 
 export const UPDATES_PROBE_INTERVAL_MS = 1_500;
@@ -109,25 +108,7 @@ export class SessionUpdatesService {
     if (snapshot === null) {
       throw new SessionUpdatesError("session_not_found", "Session not found");
     }
-    const interaction = await this.#describeInteraction(sessionId, snapshot.interactionSession);
-    return withUpdateRevision(
-      reconcileSessionState({
-        session: snapshot.session,
-        cursor: snapshot.cursor,
-        hasMore: snapshot.hasMore,
-        interaction,
-      }),
-      this.#createRevision,
-    );
-  }
-
-  #describeInteraction(
-    sessionId: string,
-    input: InteractionSessionSnapshot,
-  ): Promise<InteractionResponse> {
-    if (this.options.interaction === undefined)
-      return Promise.resolve({ supported: false, attachCommand: null });
-    return this.options.interaction.describeSnapshot(sessionId, input);
+    return assembleSessionResponse(snapshot, this.options.interaction, this.#createRevision);
   }
 
   #acquire(sessionId: string, signal?: AbortSignal): AbortController {

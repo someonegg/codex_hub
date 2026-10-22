@@ -109,3 +109,18 @@ Session discovery is independent of operation tracking; restarts do not recover 
   remains coupled to execution.
 
 See [ADR-0018](0018-cache-validation-per-binding-record.md) for V3 binding and current pane validation.
+
+## Execution responsibility refinement (2026-10-21)
+
+`OperationService` owns registration, request idempotency, session occupancy,
+tracking deadlines, result publication, and retention. `SessionLaunchExecutor`
+executes create/resume validation, adapter launch, and association observation.
+`SessionLifecycleExecutor` executes exit/archive/delete and confirms their effects,
+reusing `SessionExitService` for pane shutdown.
+
+Executors use an internal operation control contract to advance phases, request
+coalesced observations, and report outcomes. They do not own operation registries,
+idempotency records, or occupancy cleanup. This extraction preserves operation
+semantics, adapter-native identity boundaries, and cancellation checks after
+asynchronous work. The cost is an explicit internal state/control contract shared
+between the coordinator and executors.
