@@ -5,6 +5,7 @@ import {
   codexBindingAttemptsFrom,
   codexBindingCommand,
   codexInteraction,
+  codexInterruptSteps,
 } from "../../src/server/adapters/codex/interaction-parser.js";
 const operationId = "00000000-0000-4000-8000-000000000001";
 
@@ -83,6 +84,7 @@ it("parses only user shell output and keeps binding outside normalized interacti
     transport: "tmux",
     bindingCommand: codexBindingCommand(),
     keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+    interruptSteps: codexInterruptSteps,
   });
 });
 
@@ -222,5 +224,12 @@ it.each(["\n", "\r\n"])("normalizes V4 project line endings %j", (eol) => {
       paneId: "%1",
       projectDirectory: "/project",
     },
+  ]);
+});
+
+it("interrupts with End then Escape after the configured delay", () => {
+  expect(codexInterruptSteps()).toEqual([
+    { keys: ["End"], delayMs: 0 },
+    { keys: ["Escape"], delayMs: 100 },
   ]);
 });

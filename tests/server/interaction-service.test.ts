@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { CODEX_INTERACTION_KEY_BINDINGS } from "../../src/server/adapters/codex/interaction-parser.js";
+import {
+  CODEX_INTERACTION_KEY_BINDINGS,
+  codexInterruptSteps,
+} from "../../src/server/adapters/codex/interaction-parser.js";
 import type {
   InteractionSessionSnapshot,
   SessionReader,
@@ -45,6 +48,7 @@ function session(archived = false): InteractionSessionSnapshot {
       transport: "tmux",
       bindingCommand: "! bind",
       keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+      interruptSteps: codexInterruptSteps,
     },
   };
 }
@@ -63,6 +67,7 @@ function boundSession(): InteractionSessionSnapshot {
       transport: "tmux",
       bindingCommand: "! bind",
       keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+      interruptSteps: codexInterruptSteps,
     },
   };
 }
@@ -157,11 +162,45 @@ describe("session interaction policy", () => {
     expect(tmux.sendMessage).toHaveBeenCalledWith(binding, "! bind", expect.any(Function));
     expect(tmux.sendKeys).toHaveBeenCalledWith(
       binding,
-      ["Enter", "Up", "Down", "Left", "Right", "C-c", "BTab"],
+      [
+        ...(["Enter", "Up", "Down", "Left", "Right"] as const).map((key) => ({
+          keys: [key],
+          delayMs: 0,
+        })),
+        ...codexInterruptSteps(),
+        { keys: ["BTab"], delayMs: 0 },
+      ],
       expect.any(Function),
     );
     expect(tmux.captureTerminal).toHaveBeenCalledWith(binding, expect.any(Function));
   });
+});
+
+it("uses the adapter interrupt capability and preserves repeated interrupt ordering", async () => {
+  const snapshot = boundSession();
+  const interruptSteps = vi.fn(codexInterruptSteps);
+  const tmux = {
+    connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
+    resolveTarget: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
+    sendKeys: vi.fn().mockResolvedValue(undefined),
+  } as unknown as TmuxInteractionService;
+  const service = new TestSessionInteractionService(
+    repository({
+      ...snapshot,
+      interaction: { ...snapshot.interaction!, interruptSteps },
+    }),
+    true,
+    tmux,
+  );
+
+  await service.sendKeys("session", ["interrupt", "interrupt", "enter"]);
+
+  expect(interruptSteps).toHaveBeenCalledTimes(2);
+  expect(tmux.sendKeys).toHaveBeenCalledExactlyOnceWith(
+    expect.any(Object),
+    [...codexInterruptSteps(), ...codexInterruptSteps(), { keys: ["Enter"], delayMs: 0 }],
+    expect.any(Function),
+  );
 });
 
 it("refreshes connection status after each completed query", async () => {

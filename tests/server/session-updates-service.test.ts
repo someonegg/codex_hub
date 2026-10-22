@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { CODEX_INTERACTION_KEY_BINDINGS } from "../../src/server/adapters/codex/interaction-parser.js";
+import {
+  CODEX_INTERACTION_KEY_BINDINGS,
+  codexInterruptSteps,
+} from "../../src/server/adapters/codex/interaction-parser.js";
 import type {
   SessionReader,
   SessionUpdatesSnapshot,
@@ -178,6 +181,7 @@ function snapshot(hasMore: boolean, interaction = false): SessionUpdatesSnapshot
             transport: "tmux",
             bindingCommand: "! bind",
             keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+            interruptSteps: codexInterruptSteps,
           }
         : null,
     },

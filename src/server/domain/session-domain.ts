@@ -40,11 +40,30 @@ export type InteractionBindingAttempt =
       readonly valid: false;
     };
 
-export type TmuxKey = "Enter" | "Up" | "Down" | "Left" | "Right" | "C-d" | "C-c" | "BTab";
+export type TmuxKey =
+  | "Enter"
+  | "Up"
+  | "Down"
+  | "Left"
+  | "Right"
+  | "C-d"
+  | "C-c"
+  | "BTab"
+  | "End"
+  | "Escape";
 
-export type InteractionKeyBindings = Readonly<Record<InteractionKey, TmuxKey>>;
+export type InteractionKeyBindings = Readonly<
+  Record<Exclude<InteractionKey, "interrupt">, TmuxKey>
+>;
+
+export interface InteractionKeyStep {
+  readonly keys: readonly TmuxKey[];
+  readonly delayMs: number;
+}
 
 export type DomainAgentInteraction = {
+  /** Adapter-owned steps, executed as one ordered transport operation. */
+  interruptSteps(): readonly InteractionKeyStep[];
   readonly transport: "tmux";
   readonly bindingCommand: string;
   readonly keyBindings: InteractionKeyBindings;

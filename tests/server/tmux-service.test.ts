@@ -129,14 +129,10 @@ describe("tmux interaction transport", () => {
     const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
 
     await service.sendKeys(binding, [
-      "Enter",
-      "Up",
-      "Down",
-      "Left",
-      "Right",
-      "C-c",
-      "BTab",
-      "Left",
+      {
+        keys: ["Enter", "Up", "Down", "Left", "Right", "End", "Escape", "BTab", "Left"],
+        delayMs: 0,
+      },
     ]);
 
     expect(runner.calls.filter((call) => call.args[0] === "list-panes")).toHaveLength(2);
@@ -151,11 +147,35 @@ describe("tmux interaction transport", () => {
           "Down",
           "Left",
           "Right",
-          "C-c",
+          "End",
+          "Escape",
           "BTab",
           "Left",
         ],
       }),
+    ]);
+  });
+
+  it("separates End from Escape and keeps concurrent input after the final step", async () => {
+    const socketPath = await unixSocket();
+    const runner = new FakeRunner();
+    const service = new TmuxInteractionService(runner);
+    const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
+    const started = Date.now();
+    const interrupt = service.sendKeys(binding, [
+      { keys: ["End"], delayMs: 0 },
+      { keys: ["Escape"], delayMs: 100 },
+    ]);
+    const concurrent = service.sendKeys(binding, [{ keys: ["Enter"], delayMs: 0 }]);
+    await interrupt;
+    expect(Date.now() - started).toBeGreaterThanOrEqual(90);
+    await concurrent;
+    expect(
+      runner.calls.filter((call) => call.args[0] === "send-keys").map((call) => call.args),
+    ).toEqual([
+      ["send-keys", "-t", "%3", "End"],
+      ["send-keys", "-t", "%3", "Escape"],
+      ["send-keys", "-t", "%3", "Enter"],
     ]);
   });
 
@@ -203,7 +223,7 @@ describe("tmux interaction transport", () => {
     while (!runner.calls.some((call) => call.args[0] === "load-buffer")) {
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
-    const keys = service.sendKeys(binding, ["BTab"]);
+    const keys = service.sendKeys(binding, [{ keys: ["BTab"], delayMs: 0 }]);
     expect(runner.calls.filter((call) => call.args[0] === "list-panes")).toHaveLength(2);
     releaseLoad();
     await Promise.all([message, keys]);

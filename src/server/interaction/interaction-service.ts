@@ -4,7 +4,12 @@ import type {
   TerminalPreviewFrame,
 } from "../../shared/api-contract.js";
 import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
-import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
+import type {
+  DomainAgentInteraction,
+  InteractionBindingAttempt,
+  InteractionKeyStep,
+  TmuxKey,
+} from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
 import { isCurrentObservation, observePaneBinding } from "./pane-observation.js";
@@ -40,6 +45,7 @@ interface CheckedBinding {
 }
 
 interface ResolvedBinding extends CheckedBinding {
+  readonly interruptSteps: DomainAgentInteraction["interruptSteps"];
   readonly bindingCommand: string;
   readonly keyBindings: NonNullable<InteractionSessionSnapshot["interaction"]>["keyBindings"];
 }
@@ -92,7 +98,7 @@ export class SessionInteractionService {
     keys: readonly TmuxKey[],
     assertActive: () => void,
   ) {
-    return this.tmux.sendKeys(target, keys, () => {
+    return this.tmux.sendKeys(target, [{ keys, delayMs: 0 }], () => {
       assertActive();
       this.#assertOwner(sessionId, target);
     });
@@ -202,9 +208,11 @@ export class SessionInteractionService {
 
   async sendKeys(sessionId: string, keys: readonly InteractionKey[]): Promise<void> {
     this.#assertAvailable(sessionId);
-    const { binding, keyBindings } = await this.#resolve(sessionId);
+    const { binding, keyBindings, interruptSteps } = await this.#resolve(sessionId);
     this.#assertAvailable(sessionId);
-    const mapped = keys.map((key) => keyBindings[key]);
+    const mapped = keys.flatMap((key): readonly InteractionKeyStep[] =>
+      key === "interrupt" ? interruptSteps() : [{ keys: [keyBindings[key]], delayMs: 0 }],
+    );
     await this.#perform(() =>
       this.tmux.sendKeys(binding, mapped, () => this.#assertInputAllowed(sessionId, binding)),
     );
@@ -258,6 +266,7 @@ export class SessionInteractionService {
     this.#assertOwner(sessionId, attempt);
     return {
       ...checked,
+      interruptSteps: () => interaction.interruptSteps(),
       keyBindings: interaction.keyBindings,
       bindingCommand: interaction.bindingCommand,
     };
