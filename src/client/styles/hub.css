@@ -123,7 +123,7 @@
   margin: 2px 0;
   color: var(--ink-soft);
   border-radius: var(--radius-control);
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   line-height: 1.5;
   align-items: center;
 }
@@ -178,6 +178,7 @@
   justify-content: space-between;
   padding: 0 18px 8px 23px;
   color: var(--ink-soft);
+  font-family: var(--title-font);
   font-size: var(--text-small);
   letter-spacing: normal;
 }
@@ -238,12 +239,14 @@
 }
 .session-nav-copy > span {
   display: block;
+  font-family: var(--title-font);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .session-nav-copy time {
   display: block;
+  font-family: var(--mono-font);
   margin-top: 3px;
   color: var(--ink-soft);
   font-size: var(--text-small);

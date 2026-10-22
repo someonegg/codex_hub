@@ -8,7 +8,7 @@
 .reader-header h2 {
   font-family: var(--title-font);
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   display: -webkit-box;
   max-width: 50rem;
   overflow: hidden;
@@ -16,13 +16,14 @@
   font-size: 2rem;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-  line-height: 1.3;
+  line-height: 1.55;
   margin: 0;
 }
 .empty-state h2 {
+  line-height: 1.55;
   font-family: var(--title-font);
   font-weight: 500;
-  letter-spacing: -0.02em;
+  letter-spacing: 0.01em;
   color: var(--ink);
 }
 .session-meta {
