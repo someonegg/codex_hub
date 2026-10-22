@@ -182,7 +182,8 @@ codex-hub \
 
 That port accepts HTTPS only; there is no separate HTTP listener or redirect.
 Add `--ssl-ca /path/to/client-ca.pem` to require a client certificate signed by a
-configured CA. Certificates, keys, and CA bundles are read at startup; restart
+configured CA. See [What is mutual TLS (mTLS)?](https://www.cloudflare.com/learning/ssl/what-is-mutual-tls/)
+for an introduction. Certificates, keys, and CA bundles are read at startup; restart
 after replacing them.
 
 ## Security
@@ -190,7 +191,13 @@ after replacing them.
 Interaction and management endpoints are enabled by default and share the read
 API's network trust boundary. There is no application authentication. Loopback
 limits network access but does not isolate other users or processes on the machine.
-For a non-loopback listener or reverse proxy, add authentication and restrict access.
+For a non-loopback listener or reverse proxy, authenticate clients and restrict access.
+Built-in [mTLS](#tls-and-mtls) is an option for personal access from a small number
+of devices: install a client certificate and its private key on each device, trust
+the server certificate, and configure `--ssl-ca` to require trusted client certificates.
+Once configured, clients authenticate with their certificates without a separate
+application login or authentication proxy. HTTPS without `--ssl-ca` encrypts traffic
+but does not authenticate clients.
 
 The server rejects path traversal and symlink escapes, avoids permissive CORS,
 and does not expose rollout paths or raw records in public session responses.

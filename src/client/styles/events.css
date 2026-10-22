@@ -41,8 +41,8 @@
 }
 .user_input .trace-mark {
   border-radius: 50% 50% 50% 2px;
-  top: 1.22rem;
-  left: 1.1rem;
+  top: 0.97rem;
+  left: 0.85rem;
 }
 .directive .trace-mark {
   border-style: dashed;
@@ -244,8 +244,7 @@
   margin-top: 0.8rem;
 }
 .detail-summary strong,
-.internal-event-body > p > strong,
-.user-input-options strong {
+.internal-event-body > p > strong {
   font-weight: var(--weight-medium);
 }
 .character-count {
@@ -270,10 +269,11 @@
   overflow-wrap: anywhere;
 }
 .user-input-card {
-  padding: 1rem 1.1rem;
+  padding: 0.75rem 0.85rem;
   border: 1px solid var(--mist);
-  border-left: 3px solid var(--trace-color);
-  background: var(--paper-deep);
+  border-left: 2px solid var(--trace-color);
+  background: var(--paper);
+  font-size: var(--text-control);
 }
 .user-input-heading {
   display: flex;
@@ -313,11 +313,11 @@
   border-color: var(--unavailable-border);
 }
 .user-input-question {
-  margin-top: 1.25rem;
+  margin-top: 0.85rem;
 }
 .user-input-question h3 {
-  margin: 0.25rem 0 0.75rem;
-  font-size: 1rem;
+  margin: 0.15rem 0 0.45rem;
+  font-size: inherit;
   font-weight: var(--weight-medium);
   line-height: 1.45;
 }
@@ -330,7 +330,7 @@
 }
 .user-input-options {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.35rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -340,17 +340,17 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid var(--notice-border);
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--mist);
   background: var(--paper);
 }
 .user-input-options li.selected {
   border-color: var(--scrollbar-thumb);
   background: var(--hover-surface);
-  box-shadow: inset 3px 0 var(--current);
+  box-shadow: inset 2px 0 var(--current);
 }
 .user-input-options p {
-  margin: 0.25rem 0 0;
+  margin: 0.15rem 0 0;
   color: var(--ink-soft);
   font-size: var(--text-small);
   line-height: 1.45;
