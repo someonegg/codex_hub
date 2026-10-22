@@ -11,7 +11,9 @@ import {
   paneBindings,
 } from "../../src/server/interaction/pane-binding-manager.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
+import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 let bindings: PaneBindingManager;
 beforeEach(() => {
@@ -61,7 +63,15 @@ it.each([false, true])(
       inspect: vi.fn(),
       killPane: vi.fn(),
     } satisfies InteractionTransport;
-    const service = new SessionInteractionService(sessions, true, transport, bindings);
+    const service = closeAfterEach(
+      new SessionInteractionService(
+        sessions,
+        true,
+        transport,
+        bindings,
+        createTestPreviewListener(),
+      ),
+    );
     const catalog = (await sessions.list()).sessions;
     expect(catalog).toHaveLength(2);
     for (const item of catalog) expect(paneBindings.latest(item.id)).toBeNull();
@@ -145,7 +155,9 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   const transport = {
     connect: vi.fn(async (attempt) => attempt),
   } as unknown as InteractionTransport;
-  const service = new SessionInteractionService(sessions, true, transport, bindings);
+  const service = closeAfterEach(
+    new SessionInteractionService(sessions, true, transport, bindings, createTestPreviewListener()),
+  );
   expect(await service.describe(a)).toMatchObject({ state: "connected" });
   await appendFile(cFile, message(2, shell(socket, "%1")));
   await sessions.refresh();
@@ -158,8 +170,20 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   });
   expect(await service.describe(c)).toMatchObject({ state: "connected" });
   // A forced full decode must produce the same result as the append path.
-  const rebuilt = new SessionReadService([await createCodexSessionSource(home, bindings)]);
-  const rebuiltService = new SessionInteractionService(rebuilt, true, transport, bindings);
+  const rebuiltBindings = new PaneBindingManager();
+  const rebuilt = new SessionReadService([await createCodexSessionSource(home, rebuiltBindings)]);
+  const rebuiltService = closeAfterEach(
+    new SessionInteractionService(
+      rebuilt,
+      true,
+      transport,
+      rebuiltBindings,
+      createTestPreviewListener(),
+    ),
+  );
+  await rebuilt.managementSnapshot();
+  expect(rebuiltBindings.latest(c)).toEqual(bindings.latest(c));
+  expect(rebuiltBindings.replacement(a)).toBe(c);
   expect(await rebuiltService.describe(a)).toMatchObject({
     state: "superseded",
     supersededBySessionId: c,

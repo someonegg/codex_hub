@@ -48,4 +48,5 @@ Retain ADR-0007's socket ownership, pane liveness, and serialized-input constrai
 - Good: Preserves existing behavior with fewer changes.
 - Bad: Does not support the complete project workflow.
 
-See [ADR-0018](0018-cache-validation-per-binding-record.md) for V3 bindings and current pane validation.
+See [ADR-0018](0018-cache-validation-per-binding-record.md) for binding ownership and pane
+validation; see the [current binding format](../technical-reference.md#tmux-interaction) for supported versions.

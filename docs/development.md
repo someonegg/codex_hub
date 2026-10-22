@@ -44,15 +44,17 @@ verify help, server startup, and web assets outside the repository.
 For a release, update the package and lockfile versions in a PR, run the checks,
 and merge it. Tag that commit as `v<package-version>` and push the tag. The
 `publish.yml` workflow validates the tag, runs the checks, and publishes to npm
-using trusted publishing, skipping versions already published during bootstrap or
-a workflow retry. Create a matching GitHub Release with English release
-notes after verifying installation from the registry. Never reuse a published
+using trusted publishing, skipping versions already published during a workflow retry.
+Create a matching GitHub Release with English release notes after verifying
+installation from the registry. Never reuse a published
 version; fix release defects in a new patch version.
 
-The first release bootstraps the package with a local authenticated `npm publish`.
-Then configure npm trusted publishing for GitHub user `someonegg`, repository
-`codex_hub`, workflow `publish.yml`, without an environment, allowing direct
-publishing. Subsequent releases use GitHub Actions without an npm token.
+### One-time publishing setup
+
+The initial package bootstrap uses a local authenticated `npm publish`. After that,
+configure npm trusted publishing for GitHub user `someonegg`, repository `codex_hub`,
+workflow `publish.yml`, without an environment, allowing direct publishing. This is
+one-time setup; routine releases use the workflow above without an npm token.
 
 ## Integration tests and benchmarks
 

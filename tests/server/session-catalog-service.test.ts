@@ -30,9 +30,7 @@ function setup() {
     },
   };
 }
-const flush = async () => {
-  for (let i = 0; i < 12; i++) await Promise.resolve();
-};
+const flush = () => vi.advanceTimersByTimeAsync(0);
 describe("session catalog long polling", () => {
   it("returns the first or different revision immediately, without an idle timer", async () => {
     const { service } = setup();

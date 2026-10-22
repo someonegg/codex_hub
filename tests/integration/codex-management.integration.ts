@@ -214,6 +214,7 @@ ${terminal}`);
     expect((await reader.managementSnapshot()).sessions).toHaveLength(0);
   } finally {
     operations.close();
+    interaction.close();
     try {
       execFileSync("tmux", ["-S", socket, "kill-server"], { stdio: "ignore" });
     } catch {
@@ -300,6 +301,7 @@ it("reports the native refusal for a running unbound session and archives it aft
     expect((await reader.managementSnapshot()).sessions[0]?.archived).toBe(true);
   } finally {
     operations.close();
+    interaction.close();
     try {
       execFileSync("tmux", ["-S", socket, "kill-server"], { stdio: "ignore" });
     } catch {

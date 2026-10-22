@@ -36,7 +36,8 @@ Catalog diagnostics are deduplicated in server logs rather than sent to clients.
 Within each home, a native session ID determines stable identity. Duplicate rollouts
 produce one session: retain the accepted readable file, falling back to the first
 readable candidate when necessary. Rollouts without a native ID use path-based
-identity. See [ADR-0003](adr/0003-use-session-source-adapters.md) for adapter rules.
+identity. See [ADR-0003](adr/0003-use-session-source-adapters.md) for duplicate-selection
+rules and [home identity and routing](#home-identity-and-routing) for source scoping.
 
 `updatedAt` is best-effort metadata: timestamp-only changes do not wake catalog
 waiters. The browser sorts sessions by time and projects by their latest visible
@@ -88,17 +89,8 @@ The filename supplies only a safe extension. Oversize uploads return `413`;
 storage failures return `500`, using the standard API error envelope.
 Failed or interrupted uploads remove incomplete files.
 
-Use `--upload-dir <path>` to choose storage. Missing directories are created,
-relative paths resolve from the startup directory, and `~/` is supported.
-Otherwise the process reuses a `codex-hub-uploads-*` directory under `os.tmpdir()`.
-Uploads are retained after shutdown; the OS may clear temporary storage.
-The directory must be visible to the Codex process.
-
-The composer accepts pasted images and dropped files, including multiple files but
-not folders. Uploads freeze editing, Send, and Handoff, then insert paths at the
-selection without sending. A failure stops the batch and retains earlier paths;
-switching sessions cancels pending uploads. Finder paste works when the browser
-supplies files; text-only paths remain text.
+See [file uploads](usage.md#file-uploads) for composer behavior, storage configuration,
+and cleanup.
 
 ## Tmux interaction
 
@@ -298,12 +290,12 @@ terminal result, after which the ID is discarded.
 
 See [Multiple homes](usage.md#multiple-homes) for command-line usage.
 
-Session identity follows the configured absolute home path; nicknames and ordering
-do not affect IDs. Native IDs and relationships are scoped to their home; projects
+Session identity follows the configured absolute home path; renaming, reordering,
+or adding homes preserves existing IDs. Moving a home creates a new source identity. Native IDs and relationships are scoped to their home; projects
 merge by directory across homes. Recoverable I/O errors remain scoped to their home.
 
 Creation requires `sourceInstanceId` with multiple homes; omission with a single home
 selects that home. Unknown IDs and ambiguous omission return `400`. The source is part
 of the idempotency fingerprint, so reuse of a request ID for another home returns
 `409`. Launch environment, association, exit, archive, deletion, and confirmation use the
-selected or owning home.
+selected or owning home, with the same local `codex` executable.

@@ -108,7 +108,8 @@ Session discovery is independent of operation tracking; restarts do not recover 
 - Bad: Command completion does not establish visible results, and page lifetime
   remains coupled to execution.
 
-See [ADR-0018](0018-cache-validation-per-binding-record.md) for V3 binding and current pane validation.
+See [ADR-0018](0018-cache-validation-per-binding-record.md) for binding ownership and pane
+validation; see the [current binding format](../technical-reference.md#tmux-interaction) for supported versions.
 
 ## Execution responsibility refinement (2026-10-21)
 

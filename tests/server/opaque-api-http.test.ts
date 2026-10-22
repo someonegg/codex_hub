@@ -1,64 +1,41 @@
 import { cp, readFile, rename, writeFile } from "node:fs/promises";
 import { request } from "node:http";
-import type { AddressInfo } from "node:net";
 import { join, resolve } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import {
   CatalogCapacityError,
   SessionCatalogService,
 } from "../../src/server/catalog/session-catalog-service.js";
-import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
-import { createServer } from "../../src/server/http/create-server.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
+import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { normalizeFixture } from "./session-normalizer.fixtures.js";
-
-const servers: ReturnType<typeof createServer>[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    servers.splice(0).map((server) => new Promise<void>((done) => server.close(() => done()))),
-  );
-});
 
 async function startApi(existingHome?: string, override?: SessionReadService) {
   const home = existingHome ?? (await createTempDirectory("codex-opaque-api-"));
   if (existingHome === undefined) {
     await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
   }
-  const clientDirectory = await createTempDirectory("codex-opaque-client-");
-  await Promise.all([writeFile(join(clientDirectory, "index.html"), "<h1>sessions</h1>")]);
   const repository = override ?? (await createCodexSessionReadService(home));
-  const config: ServerConfig = {
-    host: LOOPBACK_HOST,
-    port: 0,
-    homes: [{ nickname: "default", path: home }],
-    clientDirectory,
-    tls: { enabled: false },
-    interactionEnabled: false,
-  };
+
   const updates = new SessionUpdatesService(repository, {
     probeIntervalMs: 5,
     waitTimeoutMs: 15,
   });
   const catalog = new SessionCatalogService(repository);
-  const server = createServer(
-    config,
+  const { base } = await startHttpServer(
     createApiRouter({ sessions: repository, catalog, updates }),
     () => {
       catalog.close();
       updates.close();
     },
   );
-  servers.push(server);
-  await new Promise<void>((done) => server.listen(0, LOOPBACK_HOST, done));
-  const { port } = server.address() as AddressInfo;
-  return { base: `http://${LOOPBACK_HOST}:${port}`, home, repository };
+  return { base, home, repository };
 }
 
 describe("opaque cursor API", () => {

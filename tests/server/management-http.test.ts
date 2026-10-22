@@ -1,31 +1,28 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
-import { join } from "node:path";
-
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
-import { createServer } from "../../src/server/http/create-server.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { paneBindings } from "../../src/server/interaction/pane-binding-manager.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
+import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
-const servers: ReturnType<typeof createServer>[] = [];
-afterEach(async () => {
-  for (const server of servers.splice(0))
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-});
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
   const home = await createTempDirectory("management-http-");
-  await mkdir(join(home, "client"));
-  await writeFile(join(home, "client/index.html"), "hub");
   const sessions = await createCodexSessionReadService(home);
-  const interaction = new SessionInteractionService(sessions, true, new TmuxInteractionService());
+  const interaction = new SessionInteractionService(
+    sessions,
+    true,
+    new TmuxInteractionService(),
+    paneBindings,
+    createTestPreviewListener(),
+  );
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async () => ({ directory: home })),
@@ -43,15 +40,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   );
   const catalogService = new SessionCatalogService(sessions);
   const updates = new SessionUpdatesService(sessions, { interaction });
-  const server = createServer(
-    {
-      host: "127.0.0.1",
-      port: 0,
-      homes: [{ nickname: "default", path: home }],
-      clientDirectory: join(home, "client"),
-      tls: { enabled: false },
-      interactionEnabled: true,
-    },
+  const { base: origin } = await startHttpServer(
     createApiRouter({ sessions, catalog: catalogService, interaction, operations, updates }),
     () => {
       catalogService.close();
@@ -60,9 +49,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       interaction.close();
     },
   );
-  servers.push(server);
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}/api/v1`;
+  const base = `${origin}/api/v1`;
   const body = { directory: home, worktree: false, requestId: "http-request-one" };
   const post = (path: string, value: unknown, extra: RequestInit = {}) =>
     fetch(`${base}${path}`, {

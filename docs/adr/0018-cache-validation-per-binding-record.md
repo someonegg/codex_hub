@@ -42,14 +42,12 @@ shared instance for standalone callers; tests may inject an isolated manager.
 Closing a Hub does not clear binding history. Management snapshots contain only
 domain sessions; interaction capabilities are read through interaction snapshots.
 
-When a later claim takes a pane, its former owner returns `superseded` and cannot
-send input, hand off the binding, preview, or shut down that pane during archive. A supported
-interaction response always includes nullable `supersededBySessionId`: it names
-the replacing session only while that session is readable, including when
-archived. Missing replacements leave the state `superseded` with a null ID.
-Takeover facts survive archive, deletion, and full rereads for the process lifetime;
-a later explicit binding can reclaim a pane. Unsupported responses omit these
-state fields. `attachCommand` is null for `superseded`.
+A later pane claim revokes the former owner's control. Retaining claims for the
+process lifetime prevents archive, deletion, or a full reread from silently restoring
+stale authority; reclaiming control requires an explicit later binding. Replacement
+links depend on readability, while ownership does not. See the
+[interaction reference](../technical-reference.md#tmux-interaction) for the public
+`superseded` response fields and restrictions.
 
 Status queries never recurse or restart validation when bindings change during
 an await. Return the currently determinable state, using `unknown` for a new

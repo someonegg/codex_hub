@@ -1,57 +1,16 @@
-import { writeFile } from "node:fs/promises";
-import type { AddressInfo } from "node:net";
-import { join } from "node:path";
-
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
-import { createServer } from "../../src/server/http/create-server.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
-import type { SessionDetail } from "../../src/shared/domain.js";
-import { createTempDirectory } from "../helpers/temp-directories.js";
+import { startHttpServer } from "../helpers/http-server.js";
+import { sessionDetail } from "../helpers/session-fixtures.js";
 
 const SESSION_ID = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
-const SESSION: SessionDetail = {
-  id: SESSION_ID,
-  origin: {
-    sourceType: "test",
-    sourceInstanceId: "test",
-    agentName: "Test",
-    agentVersion: null,
-    formatVersion: null,
-  },
-  title: "Session",
-  nickname: null,
-  workingDirectory: null,
-  projectDirectory: null,
-  createdAt: null,
-  updatedAt: null,
-  status: "normal",
-  resume: { allowed: false, reason: "Unavailable" },
-  parentId: null,
-  childIds: [],
-  agent: null,
-  messageCount: 0,
-  toolCount: 0,
-  sourceId: "session",
-  itemCount: 0,
-};
-const servers: ReturnType<typeof createServer>[] = [];
-
-afterEach(async () => {
-  await Promise.all(
-    servers
-      .splice(0)
-      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
-  );
-});
+const SESSION = sessionDetail({ id: SESSION_ID });
 
 async function start() {
-  const clientDirectory = await createTempDirectory("codex-interaction-http-");
-  await writeFile(join(clientDirectory, "index.html"), "hub");
   const unavailable = async () => null;
   const repository: SessionReader = {
     list: vi.fn(),
@@ -86,28 +45,17 @@ async function start() {
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendKeys: vi.fn().mockResolvedValue(undefined),
   };
-  const config: ServerConfig = {
-    host: LOOPBACK_HOST,
-    port: 0,
-    homes: [{ nickname: "default", path: "/unused" }],
-    clientDirectory,
-    tls: { enabled: false },
-    interactionEnabled: true,
-  };
+
   const updates = new SessionUpdatesService(repository);
   const catalog = new SessionCatalogService(repository);
-  const server = createServer(
-    config,
+  const { base } = await startHttpServer(
     createApiRouter({ sessions: repository, catalog, updates, interaction }),
     () => {
       catalog.close();
       updates.close();
     },
   );
-  servers.push(server);
-  await new Promise<void>((resolve) => server.listen(0, LOOPBACK_HOST, resolve));
-  const { port } = server.address() as AddressInfo;
-  return { base: `http://${LOOPBACK_HOST}:${port}`, interaction };
+  return { base, interaction };
 }
 
 describe("interaction HTTP API", () => {

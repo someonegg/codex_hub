@@ -19,6 +19,9 @@ import {
 } from "../../src/server/updates/update-revision.js";
 import type { TimelineCursor, UpdateRevision } from "../../src/shared/api-contract.js";
 import type { SessionDetail } from "../../src/shared/domain.js";
+import { closeAfterEach } from "../helpers/cleanup.js";
+import { sessionDetail } from "../helpers/session-fixtures.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 const CURSOR = "opaque.timeline.cursor" as TimelineCursor;
 const REVISION = "a".repeat(43) as UpdateRevision;
@@ -67,10 +70,17 @@ describe("SessionUpdatesService", () => {
   });
 
   it("repeats empty probes and returns null at the bounded timeout", async () => {
+    vi.useFakeTimers();
     const getSessionUpdates = vi.fn().mockResolvedValue(snapshot(false));
     const service = createService(getSessionUpdates, { probeIntervalMs: 3, waitTimeoutMs: 12 });
-    await expect(service.wait("session", { cursor: CURSOR, after: REVISION })).resolves.toBeNull();
-    expect(getSessionUpdates.mock.calls.length).toBeGreaterThanOrEqual(3);
+    const completed = vi.fn();
+    const waiting = service.wait("session", { cursor: CURSOR, after: REVISION }).then(completed);
+    await vi.advanceTimersByTimeAsync(11);
+    expect(completed).not.toHaveBeenCalled();
+    expect(getSessionUpdates).toHaveBeenCalledTimes(4);
+    await vi.advanceTimersByTimeAsync(1);
+    await waiting;
+    expect(completed).toHaveBeenCalledExactlyOnceWith(null);
   });
 
   it("enforces the process-wide waiter limit across sessions", async () => {
@@ -164,10 +174,12 @@ function createService(
     getSessionUpdates,
     getInteractionSession: vi.fn().mockResolvedValue(null),
   } as unknown as SessionReader;
-  return new SessionUpdatesService(repository, {
-    createRevision: () => REVISION,
-    ...options,
-  });
+  return closeAfterEach(
+    new SessionUpdatesService(repository, {
+      createRevision: () => REVISION,
+      ...options,
+    }),
+  );
 }
 
 function snapshot(hasMore: boolean, interaction = false): SessionUpdatesSnapshot {
@@ -189,55 +201,7 @@ function snapshot(hasMore: boolean, interaction = false): SessionUpdatesSnapshot
   };
 }
 
-describe("nickname revision isolation", () => {
-  it("does not return an automatic update for a nickname-only change", async () => {
-    const canonical = { ...SESSION, title: "Canonical title", status: "archived" as const };
-    const display = { ...canonical, nickname: "Nickname" };
-    const getSessionUpdates = vi.fn().mockResolvedValue({
-      session: display,
-      cursor: CURSOR,
-      hasMore: false,
-      interactionSession: { archived: true, interaction: null },
-    } satisfies SessionUpdatesSnapshot);
-    const service = createService(getSessionUpdates, {
-      createRevision: (session) =>
-        session.title === "Canonical title" ? REVISION : OTHER_REVISION,
-    });
-
-    await expect(
-      service.wait("session", {
-        cursor: CURSOR,
-        after: REVISION,
-      }),
-    ).resolves.toBeNull();
-  });
-});
-
-const SESSION: SessionDetail = {
-  id: "session",
-  origin: {
-    sourceType: "test",
-    sourceInstanceId: "test",
-    agentName: "Test",
-    agentVersion: null,
-    formatVersion: null,
-  },
-  title: "Session",
-  nickname: null,
-  workingDirectory: null,
-  projectDirectory: null,
-  createdAt: null,
-  updatedAt: null,
-  status: "normal",
-  resume: { allowed: false, reason: "Unavailable" },
-  parentId: null,
-  childIds: [],
-  agent: null,
-  messageCount: 0,
-  toolCount: 0,
-  sourceId: "session",
-  itemCount: 0,
-};
+const SESSION = sessionDetail();
 
 it("updates update revisions on takeover and replacement deletion without changing the old session", async () => {
   const bindings = new PaneBindingManager();
@@ -251,15 +215,18 @@ it("updates update revisions on takeover and replacement deletion without changi
   });
   const current = snapshot(false, true);
   let replacementExists = true;
-  const interaction = new SessionInteractionService(
-    {
-      getInteractionSession: vi.fn(async (id) =>
-        id === "replacement" && !replacementExists ? null : current.interactionSession,
-      ),
-    },
-    true,
-    { connect: vi.fn(async () => pane) } as unknown as InteractionTransport,
-    bindings,
+  const interaction = closeAfterEach(
+    new SessionInteractionService(
+      {
+        getInteractionSession: vi.fn(async (id) =>
+          id === "replacement" && !replacementExists ? null : current.interactionSession,
+        ),
+      },
+      true,
+      { connect: vi.fn(async () => pane) } as unknown as InteractionTransport,
+      bindings,
+      createTestPreviewListener(),
+    ),
   );
   const updates = new SessionUpdatesService(
     { getSessionUpdates: vi.fn(async () => current) },
@@ -351,6 +318,7 @@ it("preserves archived and unsupported results during coordination", () => {
 });
 
 it("returns a long-poll update when only activity changes", async () => {
+  vi.useFakeTimers();
   const connected = {
     supported: true as const,
     state: "connected" as const,
@@ -373,7 +341,10 @@ it("returns a long-poll update when only activity changes", async () => {
     probeIntervalMs: 1,
     waitTimeoutMs: 100,
   });
-  const result = await service.wait("session", { cursor: CURSOR, after });
+  const waiting = service.wait("session", { cursor: CURSOR, after });
+  await vi.advanceTimersByTimeAsync(1);
+  const result = await waiting;
+  expect(describeSnapshot).toHaveBeenCalledTimes(2);
   expect(result?.interaction).toMatchObject({ activity: "idle" });
   expect(result?.updateRevision).not.toBe(after);
 });

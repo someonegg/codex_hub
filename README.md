@@ -68,7 +68,7 @@ For running from source, see [Development](docs/development.md).
 
 Send prompts and control the live terminal from the session page. Paste screenshots
 or drop files into the message input, then review and send the inserted paths.
-See [file uploads](docs/technical-reference.md#file-uploads) for limits and storage options.
+See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API limits.
 
 <details>
 <summary>Show session interaction screenshot</summary>

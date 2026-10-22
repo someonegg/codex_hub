@@ -12,6 +12,8 @@ import type { InteractionTransport } from "../../src/server/interaction/transpor
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { createProcessUpdateRevisionFactory } from "../../src/server/updates/update-revision.js";
+import { closeAfterEach } from "../helpers/cleanup.js";
+import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 async function setup(archived = false) {
   const bindings = new PaneBindingManager();
@@ -42,7 +44,9 @@ async function setup(archived = false) {
   );
   const runtime = new SessionRuntime(transport, managers, bindings);
   reader.runtime = runtime;
-  const interaction = new SessionInteractionService(reader, true, transport, bindings);
+  const interaction = closeAfterEach(
+    new SessionInteractionService(reader, true, transport, bindings, createTestPreviewListener()),
+  );
   interaction.runtime = runtime;
   const updates = new SessionUpdatesService(reader, { interaction });
   const bind = (valid = true, ordinal = 1) =>
