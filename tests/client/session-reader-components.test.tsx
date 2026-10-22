@@ -83,11 +83,15 @@ describe("session reader components", () => {
     expect(
       screen.getByText(
         new Intl.DateTimeFormat(undefined, {
-          dateStyle: "medium",
-          timeStyle: "medium",
+          month: "short",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          second: "2-digit",
         }).format(new Date(valid)),
       ),
     ).toHaveAttribute("datetime", valid);
+    expect(view.container.querySelector("time")).not.toHaveTextContent("2026");
 
     view.rerender(<EventTime timestamp={null} />);
     expect(document.querySelector("time")).toBeNull();

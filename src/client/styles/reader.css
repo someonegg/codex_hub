@@ -7,15 +7,13 @@
 }
 .reader-header h2 {
   font-family: var(--title-font);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   letter-spacing: 0.01em;
-  display: -webkit-box;
-  max-width: 50rem;
-  overflow: hidden;
+  display: block;
+  flex: 1;
+  min-width: 0;
   overflow-wrap: anywhere;
   font-size: 2rem;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   line-height: 1.55;
   margin: 0;
 }
@@ -23,7 +21,7 @@
   font-size: 1.5rem;
   line-height: 1.55;
   font-family: var(--title-font);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   letter-spacing: 0.01em;
   color: var(--ink);
 }
@@ -36,7 +34,7 @@
 .reader {
   width: 100%;
   max-width: 72rem;
-  padding: 3.5rem clamp(1.5rem, 5vw, 5rem);
+  padding: 3.5rem clamp(1.5rem, 5vw, 5rem) 5rem;
 }
 .reader-header {
   display: flex;
@@ -47,6 +45,7 @@
 }
 .reader-header > div {
   min-width: 0;
+  width: 100%;
 }
 .reader-header .session-meta {
   overflow-wrap: anywhere;
@@ -84,7 +83,8 @@
 .event-toggle {
   flex: 0 0 auto;
   margin-top: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-control);
+  min-height: var(--control-height);
 }
 .timeline {
   padding: 2rem 0 0;
@@ -116,12 +116,11 @@
 .error-state {
   margin: 1.25rem 0;
   padding: 0.9rem 1rem;
-  border-left: 3px solid var(--signal);
+  border-left: 3px solid var(--human);
   position: relative;
   padding-right: 3rem;
   color: var(--error-ink);
   background: var(--error-surface);
-  border-left-color: var(--human);
 }
 .continuity-notice {
   display: flex;
@@ -193,7 +192,7 @@
   box-shadow: 0 0.3rem 1rem rgb(33 49 56 / 12%);
   font-family: var(--body-font);
   font-size: var(--text-small);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   letter-spacing: normal;
   text-transform: none;
   cursor: pointer;
@@ -216,27 +215,12 @@
   font-family: var(--body-font);
   font-size: var(--text-small);
 }
-.hub .reader-header {
-  padding-top: 0;
-}
-.hub .reader-header > div {
-  width: 100%;
-}
 .session-title-row {
   position: relative;
   display: flex;
   align-items: flex-start;
   gap: 1rem;
   padding: 0;
-}
-.session-title-row h2 {
-  display: block;
-  overflow: visible;
-  -webkit-line-clamp: unset;
-  max-width: none;
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
 }
 .child-sessions {
   display: grid;
@@ -253,11 +237,6 @@
   border-top: 1px solid var(--mist);
   padding: 12px 15px;
   font-size: 0.875rem;
-}
-.hub .reader {
-  max-width: 72rem;
-  margin: 0;
-  padding: 3.5rem clamp(1.5rem, 5vw, 5rem) 5rem;
 }
 .reader-header .eyebrow {
   margin-bottom: 12px;
@@ -297,9 +276,6 @@
   outline: none;
 }
 @media (max-width: 720px) {
-  .reader {
-    padding-top: 2.5rem;
-  }
   .reader-header {
     display: block;
   }
@@ -314,16 +290,6 @@
       border-color 120ms ease;
   }
 }
-@media (width < 768px) {
-  .hub .reader {
-    padding: 25px 20px 5rem;
-  }
-  .session-metadata {
-    gap: 8px;
-    margin-bottom: 20px;
-  }
-}
-
 .session-information summary {
   width: fit-content;
   min-height: var(--control-height);
@@ -350,15 +316,16 @@
 .session-information-content p {
   line-height: 1.6;
 }
-.event-toggle {
-  min-height: var(--control-height);
-}
 @media (width < 768px) {
-  .reader-header h2 {
-    font-size: 1.75rem;
+  .reader {
+    padding: 25px 20px 5rem;
   }
   .session-metadata {
+    gap: var(--space-small);
     margin-bottom: var(--space-small);
+  }
+  .reader-header h2 {
+    font-size: 1.75rem;
   }
   .reader-controls {
     gap: var(--space-small);

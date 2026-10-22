@@ -24,7 +24,7 @@
     margin-block: 1.6em 0.8em;
     color: var(--ink);
     font-family: var(--title-font);
-    font-weight: 500;
+    font-weight: var(--weight-medium);
     line-height: 1.55;
   }
 
@@ -43,11 +43,11 @@
   .message-body :is(h4, h5, h6) {
     font-family: var(--body-font);
     font-size: 1rem;
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
   }
 
   .message-body :is(strong, b, th) {
-    font-weight: 600;
+    font-weight: var(--weight-semibold);
   }
 
   .message-content > :first-child {
