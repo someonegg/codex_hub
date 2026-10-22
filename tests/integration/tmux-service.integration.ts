@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { writeFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +9,7 @@ import type {
 } from "../../src/shared/api-contract.js";
 
 import { applyPreview } from "../../src/client/state/terminal-preview-patch.js";
+import { codexInterruptSteps } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { TerminalPreviewService } from "../../src/server/interaction/terminal-preview-service.js";
 import {
@@ -26,6 +28,58 @@ beforeAll(() => {
 });
 
 describe("tmux interaction integration", () => {
+  it("delivers interrupt End then Escape separately through a real terminal", async () => {
+    const directory = await createTempDirectory("codex-interrupt-tmux-");
+    const socketPath = join(directory, "server.sock");
+    const script = join(directory, "read.cjs");
+    const output = join(directory, "events.json");
+    await writeFile(
+      script,
+      `
+      const fs = require("node:fs");
+      process.stdin.setRawMode(true);
+      const events = [];
+      process.stdin.on("data", data => {
+        events.push({ bytes: [...data], at: Date.now() });
+        fs.writeFileSync(process.argv[2], JSON.stringify(events));
+      });
+      console.log("READER-READY");
+    `,
+    );
+    const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+    execFileSync("tmux", [
+      "-S",
+      socketPath,
+      "new-session",
+      "-d",
+      "-s",
+      "interrupt-test",
+      [process.execPath, script, output].map(quote).join(" "),
+    ]);
+    try {
+      const paneId = execFileSync(
+        "tmux",
+        ["-S", socketPath, "display-message", "-p", "-t", "interrupt-test", "#{pane_id}"],
+        { encoding: "utf8" },
+      ).trim();
+      const service = new TmuxInteractionService();
+      const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId });
+      await waitForPreview(service, binding, "READER-READY");
+      await service.sendKeys(binding, codexInterruptSteps());
+      let events: { bytes: number[]; at: number }[] = [];
+      await vi.waitFor(async () => {
+        events = JSON.parse(await readFile(output, "utf8"));
+        expect(events.flatMap((event) => event.bytes)).toEqual([27, 91, 52, 126, 27]);
+      });
+      const end = events.find((event) => event.bytes.includes(126))!;
+      const escape = events.at(-1)!;
+      expect(escape.bytes).toEqual([27]);
+      expect(escape.at - end.at).toBeGreaterThanOrEqual(80);
+    } finally {
+      spawnSync("tmux", ["-S", socketPath, "kill-server"]);
+    }
+  });
+
   it("validates and captures only the current real tmux pane as bounded plain text", async () => {
     const directory = await createTempDirectory("codex-real-tmux-");
     const socketPath = join(directory, "server.sock");
@@ -56,7 +110,9 @@ describe("tmux interaction integration", () => {
         paneId,
       });
       expect(binding.paneId).toBe(paneId);
-      await service.sendKeys(binding, ["Up", "Down", "Left", "Right", "BTab"]);
+      await service.sendKeys(binding, [
+        { keys: ["Up", "Down", "Left", "Right", "BTab"], delayMs: 0 },
+      ]);
       const preview = await waitForPreview(service, binding, "TAIL-世界");
       expect(preview.truncated).toBe(false);
       expect(Buffer.byteLength(preview.content, "utf8")).toBeLessThanOrEqual(
@@ -72,7 +128,9 @@ describe("tmux interaction integration", () => {
       await expect(service.captureTerminal(binding)).rejects.toMatchObject({
         code: "disconnected",
       });
-      await expect(service.sendKeys(binding, ["Enter"])).rejects.toMatchObject({
+      await expect(
+        service.sendKeys(binding, [{ keys: ["Enter"], delayMs: 0 }]),
+      ).rejects.toMatchObject({
         code: "disconnected",
       });
     } finally {
@@ -135,7 +193,8 @@ it("forces only the transferred pane closed when its outer shell ignores interru
     const exit = new SessionExitService(
       {
         inspectTarget: (pane) => transport.inspect(pane),
-        sendExitKeys: (pane, _id, keys, check) => transport.sendKeys(pane, keys, check),
+        sendExitKeys: (pane, _id, keys, check) =>
+          transport.sendKeys(pane, [{ keys, delayMs: 0 }], check),
         killTarget,
       },
       () => now,

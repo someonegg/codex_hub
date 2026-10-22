@@ -242,7 +242,7 @@ it.each(["create", "archive", "delete"] as const)(
     const { SessionManagerRegistry } = await import(
       "../../src/server/management/session-manager.js"
     );
-    const { CODEX_INTERACTION_KEY_BINDINGS } = await import(
+    const { CODEX_INTERACTION_KEY_BINDINGS, codexInterruptSteps } = await import(
       "../../src/server/adapters/codex/interaction-parser.js"
     );
     const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
@@ -290,6 +290,7 @@ it.each(["create", "archive", "delete"] as const)(
                 transport: "tmux",
                 bindingCommand: "! bind",
                 keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+                interruptSteps: codexInterruptSteps,
               },
             },
           },

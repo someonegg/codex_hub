@@ -1,9 +1,11 @@
+import { setTimeout as delay } from "node:timers/promises";
+
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { createConnection } from "node:net";
 
-import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
+import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
 import {
   type InteractionTransport,
@@ -165,13 +167,16 @@ export class TmuxInteractionService implements InteractionTransport {
 
   sendKeys(
     binding: TmuxBinding,
-    keys: readonly TmuxKey[],
+    steps: readonly InteractionKeyStep[],
     assertAvailable: () => void = () => {},
   ): Promise<void> {
     return this.#serialize(binding, async () => {
-      await this.#revalidate(binding);
-      assertAvailable();
-      await this.#run(binding, ["send-keys", "-t", binding.paneId, ...keys]);
+      for (const step of steps) {
+        if (step.delayMs > 0) await delay(step.delayMs);
+        await this.#revalidate(binding);
+        assertAvailable();
+        await this.#run(binding, ["send-keys", "-t", binding.paneId, ...step.keys]);
+      }
     });
   }
 

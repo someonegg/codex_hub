@@ -1,4 +1,4 @@
-import type { InteractionBindingAttempt, TmuxKey } from "../domain/session-domain.js";
+import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
 
 export interface TmuxBinding {
   readonly socketPath: string;
@@ -14,7 +14,7 @@ export interface InteractionTransport {
   sendMessage(target: TmuxBinding, message: string, assertAvailable?: () => void): Promise<void>;
   sendKeys(
     target: TmuxBinding,
-    keys: readonly TmuxKey[],
+    steps: readonly InteractionKeyStep[],
     assertAvailable?: () => void,
   ): Promise<void>;
   captureTerminal(

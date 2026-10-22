@@ -15,15 +15,24 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   down: "Down",
   left: "Left",
   right: "Right",
-  interrupt: "C-c",
   plan: "BTab",
 } as const satisfies InteractionKeyBindings;
+
+// Clear the previous Esc state with a bounded cursor move before interrupting.
+// End targets the line end without editing the draft.
+export function codexInterruptSteps() {
+  return [
+    { keys: ["End"], delayMs: 0 },
+    { keys: ["Escape"], delayMs: 100 },
+  ] as const;
+}
 
 export function codexInteraction(projectDirectory?: string | null): DomainAgentInteraction {
   return {
     transport: "tmux",
     bindingCommand: codexBindingCommand(undefined, projectDirectory),
     keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
+    interruptSteps: codexInterruptSteps,
   };
 }
 
