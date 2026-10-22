@@ -80,7 +80,7 @@
   padding-inline-start: 1.4rem;
 }
 .trace-event :is(h1, h2, h3, h4, h5, h6, strong, b, th) {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 .message-body :is(p, h1, h2, h3, h4, h5, h6, li, a, code) {
   min-width: 0;
@@ -179,7 +179,7 @@
 .markdown-scroll-code pre,
 .event-detail pre,
 .directive-block {
-  font-size: 0.86rem;
+  font-size: var(--text-control);
 }
 .message-body a {
   color: var(--current);
@@ -246,7 +246,7 @@
 .detail-summary strong,
 .internal-event-body > p > strong,
 .user-input-options strong {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 .character-count {
   display: inline-flex;
@@ -285,6 +285,7 @@
   margin: 0;
 }
 .user-input-status {
+  border-radius: 999px;
   flex: 0 0 auto;
   padding: 0.12rem 0.4rem;
   color: var(--ink-soft);
@@ -292,7 +293,7 @@
   border: 1px solid var(--mist);
   font-family: var(--body-font);
   font-size: var(--text-status);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   letter-spacing: normal;
   text-transform: none;
 }
@@ -317,7 +318,7 @@
 .user-input-question h3 {
   margin: 0.25rem 0 0.75rem;
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   line-height: 1.45;
 }
 .user-input-header {
@@ -384,7 +385,7 @@
 .event-detail h4 {
   font-family: var(--body-font);
   font-size: var(--text-small);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   text-transform: none;
   margin: 1rem 0 0.35rem;
 }
@@ -430,7 +431,7 @@
 }
 .event-label time {
   color: var(--ink-soft);
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 .trace-event .plan-toggle > .event-label {
   margin-bottom: 0;
@@ -468,7 +469,4 @@
 .markdown-scroll-code pre,
 .tool-call-id code {
   font-family: var(--mono-font);
-}
-.user-input-status {
-  border-radius: 999px;
 }

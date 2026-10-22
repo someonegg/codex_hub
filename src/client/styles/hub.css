@@ -8,14 +8,13 @@
   top: 0;
   align-self: start;
   height: 100dvh;
-  border-right: 1px solid #34464a;
+  border-right: 1px solid var(--mist);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 0;
   background: var(--paper-deep);
   color: var(--ink-soft);
-  border-color: var(--mist);
 }
 .hub-brand {
   display: flex;
@@ -27,12 +26,12 @@
 }
 .hub-brand a {
   text-decoration: none;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   display: flex;
   align-items: center;
   gap: 10px;
   color: var(--ink);
-  font-size: 1.05rem;
+  font-size: 1rem;
   letter-spacing: -0.5px;
 }
 .hub-sidebar button {
@@ -89,7 +88,7 @@
   gap: 0.5rem;
   text-align: left;
   min-width: 0;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   padding: 9px 7px;
   font-size: 0.875rem;
 }
@@ -100,7 +99,7 @@
   flex: 1;
 }
 .project-heading small {
-  font-weight: normal;
+  font-weight: var(--weight-regular);
   color: var(--ink-soft);
   font-size: var(--text-small);
 }
@@ -127,8 +126,10 @@
   line-height: 1.5;
   align-items: center;
 }
-.hub-project a small {
-  margin-left: auto;
+.session-nav-home {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--text-small);
 }
@@ -141,7 +142,7 @@
 .hub-welcome h1 {
   font-family: var(--title-font);
   font-size: clamp(1.75rem, 3vw, 2rem);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 .hub-welcome p {
   color: var(--ink-soft);
@@ -246,10 +247,10 @@
 }
 .session-nav-copy time {
   display: block;
-  font-family: var(--mono-font);
+  font-family: var(--body-font);
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: var(--text-small);
+  font-size: var(--text-status);
 }
 .hub-topbar {
   min-height: 66px;
@@ -266,14 +267,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--ink-soft);
 }
 .creation-notice button {
   margin-left: auto;
 }
 .creation-notice strong {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .creation-notice {
   display: flex;

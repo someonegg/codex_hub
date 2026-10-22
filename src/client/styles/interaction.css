@@ -21,10 +21,11 @@
   border: 1px solid var(--notice-border);
   font-family: var(--body-font);
   font-size: var(--text-status);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
   letter-spacing: normal;
   line-height: 1;
   text-transform: none;
+  border-radius: 999px;
 }
 .interaction-status-warning {
   color: var(--warning-ink);
@@ -84,6 +85,7 @@
   display: flex;
   margin-left: auto;
   gap: 0.3rem;
+  flex-wrap: wrap;
 }
 .interaction-actions button {
   min-height: var(--control-height);
@@ -128,6 +130,8 @@
   margin-top: 0.75rem;
   border: 1px solid var(--terminal-border);
   background: var(--terminal-surface);
+  overflow: hidden;
+  border-radius: var(--radius-panel);
 }
 .terminal-preview-header {
   display: flex;
@@ -278,7 +282,7 @@
   border-radius: var(--radius-control);
   cursor: pointer;
   font-family: var(--mono-font);
-  font-size: 0.92rem;
+  font-size: var(--text-control);
   line-height: 1;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
@@ -286,7 +290,7 @@
 .terminal-key-enter,
 .terminal-key-plan {
   font-size: var(--text-small);
-  font-weight: 650;
+  font-weight: var(--weight-semibold);
 }
 .terminal-preview-interrupt:focus-visible,
 .terminal-key:focus-visible {
@@ -327,16 +331,6 @@
   }
 }
 
-.terminal-preview {
-  overflow: hidden;
-  border-radius: var(--radius-panel);
-}
-.interaction-status {
-  border-radius: 999px;
-}
-.interaction-primary-actions {
-  flex-wrap: wrap;
-}
 @media (width < 768px) {
   .interaction-actions {
     flex-wrap: wrap;
@@ -370,11 +364,6 @@
 .resume-reason {
   color: var(--ink-soft);
   font-size: var(--text-small);
-}
-.live-label {
-  color: #15803d;
-  font-size: var(--text-status);
-  font-weight: 600;
 }
 
 .interaction-composer-dragging {

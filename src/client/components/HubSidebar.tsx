@@ -144,7 +144,7 @@ export function HubSidebar({
                           <span className="session-nav-copy">
                             <span>{session.title}</span>
                             {(catalog.list?.homes?.length ?? 0) > 1 ? (
-                              <small>
+                              <small className="session-nav-home">
                                 {
                                   catalog.list!.homes.find(
                                     (home) => home.sourceInstanceId === session.sourceInstanceId,

@@ -1,6 +1,9 @@
 const EVENT_DATE_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "medium",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  second: "2-digit",
 });
 
 export function EventTime({ timestamp }: { timestamp: string | null }) {

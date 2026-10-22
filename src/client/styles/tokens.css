@@ -18,6 +18,11 @@
   --warning-border: #dbc49d;
   --scrollbar-thumb: #8fa6ab;
 
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --live-ink: #15803d;
+
   --text-status: 0.75rem;
   --text-small: 0.8125rem;
   --text-control: 0.875rem;

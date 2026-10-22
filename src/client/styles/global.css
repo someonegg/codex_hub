@@ -34,7 +34,7 @@ p {
 }
 .error-state > strong,
 .continuity-notice strong {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .eyebrow {
   font-family: var(--body-font);
@@ -54,17 +54,22 @@ p {
   width: auto;
   accent-color: var(--current);
 }
-.archive-label {
+.session-status {
   display: inline-block;
   flex-shrink: 0;
   white-space: nowrap;
-  color: var(--archive-ink);
   font-family: var(--body-font);
   font-size: var(--text-status);
-  font-weight: 600;
+  font-weight: var(--weight-medium);
   letter-spacing: normal;
   line-height: 1.2;
   text-transform: none;
+}
+.archive-label {
+  color: var(--archive-ink);
+}
+.live-label {
+  color: var(--live-ink);
 }
 .detail-summary {
   display: flex;

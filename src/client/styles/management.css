@@ -6,7 +6,7 @@
 }
 .create-session h2 {
   font-size: 1rem;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   margin-top: 0;
   min-height: 36px;
   padding-right: 44px;
@@ -47,18 +47,25 @@
   margin-top: 0.8rem;
   border-left: 3px solid currentColor;
   overflow-wrap: anywhere;
+  background: var(--paper-deep);
+  border-radius: var(--radius-panel);
 }
 .operation-status small {
   display: block;
   font-size: var(--text-small);
 }
 .operation-status strong {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .attach-command pre {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   user-select: text;
+  padding: var(--space-medium);
+  background: var(--paper-deep);
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-panel);
+  font-family: var(--mono-font);
 }
 .session-management {
   position: static;
@@ -138,7 +145,7 @@ dialog::backdrop {
   min-height: 44px;
   display: flex;
   align-items: center;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 .dialog-close {
   position: absolute;
@@ -166,17 +173,6 @@ dialog::backdrop {
 .create-session button[type="submit"]:hover:not(:disabled) {
   background: var(--current-hover);
   border-color: var(--current-hover);
-}
-.attach-command pre {
-  padding: var(--space-medium);
-  background: var(--paper-deep);
-  border: 1px solid var(--mist);
-  border-radius: var(--radius-panel);
-  font-family: var(--mono-font);
-}
-.operation-status {
-  background: var(--paper-deep);
-  border-radius: var(--radius-panel);
 }
 
 .terminal-connection-dialog button {
