@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -11,7 +11,11 @@ import type { TimelineItem } from "../../src/shared/domain";
 
 import { api } from "../../src/client/api/client";
 import { SessionPage } from "../../src/client/SessionPage";
-import { installIntersectionObserver, intersectLatest } from "./intersection-observer";
+import {
+  installIntersectionObserver,
+  intersectLatest,
+  latestObserverOptions,
+} from "./intersection-observer";
 import { installMockWebSocket, MockWebSocket } from "./mock-websocket";
 import {
   baseSession,
@@ -290,6 +294,7 @@ describe("session automatic updates", () => {
     await flush();
     await flush();
     expect(document.querySelector(".infinite-scroll-sentinel")).toBeInTheDocument();
+    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
     intersectLatest();
     await flush(8);
     expect(screen.getByText("Two")).toBeInTheDocument();

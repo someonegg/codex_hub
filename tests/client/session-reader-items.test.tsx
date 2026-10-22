@@ -186,6 +186,7 @@ describe("session reader items", () => {
     render(<SessionPage sessionId={SESSION_ID} />);
 
     await screen.findByText("First");
+    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
     intersectLatest();
     expect(await screen.findByText("Second")).toBeInTheDocument();
     expect(screen.getAllByText("First")).toHaveLength(1);
@@ -239,8 +240,10 @@ describe("session reader items", () => {
     render(<SessionPage sessionId={SESSION_ID} />);
     await screen.findByText("First");
 
+    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
     intersectLatest();
     expect(await screen.findByText("Stop timeline")).toBeInTheDocument();
+    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
     intersectLatest();
     await flushMicrotasks();
     expect(fetchMock).toHaveBeenCalledTimes(2);
