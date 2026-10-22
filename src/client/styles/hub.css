@@ -32,7 +32,7 @@
   align-items: center;
   gap: 10px;
   color: var(--ink);
-  font-size: 1.05rem;
+  font-size: 1rem;
   letter-spacing: -0.5px;
 }
 .hub-sidebar button {

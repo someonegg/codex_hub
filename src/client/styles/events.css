@@ -179,7 +179,7 @@
 .markdown-scroll-code pre,
 .event-detail pre,
 .directive-block {
-  font-size: 0.86rem;
+  font-size: var(--text-control);
 }
 .message-body a {
   color: var(--current);

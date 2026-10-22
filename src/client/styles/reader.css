@@ -20,6 +20,7 @@
   margin: 0;
 }
 .empty-state h2 {
+  font-size: 1.5rem;
   line-height: 1.55;
   font-family: var(--title-font);
   font-weight: 500;
@@ -192,7 +193,7 @@
   box-shadow: 0 0.3rem 1rem rgb(33 49 56 / 12%);
   font-family: var(--body-font);
   font-size: var(--text-small);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: normal;
   text-transform: none;
   cursor: pointer;
