@@ -2,8 +2,8 @@ from PIL import Image, ImageDraw
 from pathlib import Path
 # Run with Python 3 and Pillow; no runtime dependency is added to the app.
 # All artwork stays inside the maskable icon's central safe circle.
-p = Path(__file__).resolve().parents[1] / "public"
-(p / "icons").mkdir(parents=True, exist_ok=True)
+public_directory = Path(__file__).resolve().parents[1] / "public"
+(public_directory / "icons").mkdir(parents=True, exist_ok=True)
 svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="112" fill="#18262d"/>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -13,7 +13,7 @@ svg = '''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <g fill="#7dd3c8"><circle cx="352" cy="176" r="20"/><circle cx="352" cy="256" r="20"/><circle cx="352" cy="336" r="20"/></g>
 </svg>
 '''
-(p / "favicon.svg").write_text(svg)
+(public_directory / "favicon.svg").write_text(svg)
 
 
 def render(size):
@@ -47,7 +47,7 @@ def render(size):
 
 
 for size in (192, 512):
-    render(size).save(p / f"icons/icon-{size}.png")
-render(512).save(p / "icons/icon-maskable-512.png")
-render(180).save(p / "apple-touch-icon.png")
-render(64).save(p / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
+    render(size).save(public_directory / f"icons/icon-{size}.png")
+render(512).save(public_directory / "icons/icon-maskable-512.png")
+render(180).save(public_directory / "apple-touch-icon.png")
+render(64).save(public_directory / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48), (64, 64)])
