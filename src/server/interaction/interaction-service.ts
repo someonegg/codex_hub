@@ -5,9 +5,9 @@ import type {
 } from "../../shared/api-contract.js";
 import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
 import type {
+  DomainAgentInteraction,
   InteractionBindingAttempt,
   InteractionKeyStep,
-  DomainAgentInteraction,
   TmuxKey,
 } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";

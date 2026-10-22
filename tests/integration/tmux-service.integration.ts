@@ -1,5 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
-import { writeFile, readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 

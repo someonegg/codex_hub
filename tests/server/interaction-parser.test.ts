@@ -2,10 +2,10 @@ import { expect, it } from "vitest";
 
 import {
   CODEX_INTERACTION_KEY_BINDINGS,
-  codexInterruptSteps,
   codexBindingAttemptsFrom,
   codexBindingCommand,
   codexInteraction,
+  codexInterruptSteps,
 } from "../../src/server/adapters/codex/interaction-parser.js";
 const operationId = "00000000-0000-4000-8000-000000000001";
 

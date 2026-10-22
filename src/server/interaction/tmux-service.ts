@@ -1,9 +1,8 @@
-import { setTimeout as delay } from "node:timers/promises";
-
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { createConnection } from "node:net";
+import { setTimeout as delay } from "node:timers/promises";
 
 import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
