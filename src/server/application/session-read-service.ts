@@ -89,8 +89,8 @@ export class SessionReadService implements SessionReader {
     const result = this.#queries.session(snapshot, id);
     if (result === null) return null;
     const response = this.#mapper.detail(result);
-    await this.#runtimeDetail(response.session, snapshot);
-    return response;
+    const interactionSession = await this.#runtimeDetail(response.session, snapshot);
+    return { ...response, interactionSession };
   }
 
   async getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null> {
@@ -98,8 +98,8 @@ export class SessionReadService implements SessionReader {
     const result = this.#queries.items(snapshot, id, query);
     if (result === null) return null;
     const response = this.#mapper.itemPage(result);
-    await this.#runtimeDetail(response.session, snapshot);
-    return response;
+    const interactionSession = await this.#runtimeDetail(response.session, snapshot);
+    return { ...response, interactionSession };
   }
 
   async getSessionUpdates(
@@ -109,17 +109,13 @@ export class SessionReadService implements SessionReader {
     const snapshot = await this.#store.current();
     const context = this.#queries.updates(snapshot, id, cursor);
     if (context === null) return null;
-    const normalized = snapshot.sessions.get(id)!.normalized;
     const session = this.#mapper.sessionDetail(context.session);
-    await this.#runtimeDetail(session, snapshot);
+    const interactionSession = await this.#runtimeDetail(session, snapshot);
     return {
       session,
       cursor: context.cursor as TimelineCursor,
       hasMore: context.hasMore,
-      interactionSession: {
-        archived: normalized.session.archived,
-        interaction: normalized.interaction ?? null,
-      },
+      interactionSession,
     };
   }
 
@@ -157,12 +153,21 @@ export class SessionReadService implements SessionReader {
     detail: SessionDetail,
     snapshot: Awaited<ReturnType<CatalogSnapshotStore["current"]>>,
   ) {
-    if (!this.runtime) return;
+    const normalized = snapshot.sessions.get(detail.id)!.normalized;
+    const interactionSession: InteractionSessionSnapshot = {
+      archived: normalized.session.archived,
+      interaction: normalized.interaction ?? null,
+    };
+    if (!this.runtime) return interactionSession;
+    const observation = normalized.session.archived
+      ? undefined
+      : await this.runtime.observe(detail.id);
     const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
     Object.assign(
       detail,
-      await this.runtime.evaluate(snapshot.sessions.get(detail.id)!.normalized.session, sessions),
+      await this.runtime.evaluate(normalized.session, sessions, true, observation),
     );
+    return { ...interactionSession, observation };
   }
 
   async getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null> {

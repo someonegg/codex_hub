@@ -32,3 +32,4 @@ without changing the record's status.
 | [0021: Long-poll session structure with best-effort timestamps](0021-split-catalog-structure-and-activity.md) | accepted; runtime status added by ADR-0023 |
 | [0022: Separate session exit from archive](0022-separate-session-exit-from-archive.md) | accepted |
 | [0023: Separate runtime status from resume permission](0023-separate-runtime-status-from-resume-permission.md) | accepted |
+| [0024: Share runtime observations within each reader response](0024-share-request-scoped-runtime-observations.md) | accepted |

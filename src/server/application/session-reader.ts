@@ -13,6 +13,7 @@ import type {
 } from "../../shared/api-contract.js";
 import type { SessionId } from "../../shared/domain.js";
 import type { DomainAgentInteraction } from "../domain/session-domain.js";
+import type { RuntimeObservation } from "../interaction/pane-observation.js";
 
 export interface SessionReader {
   list(): Promise<SessionListResponse>;
@@ -41,9 +42,11 @@ export interface SessionReader {
 export type SessionReadDetailResponse = Omit<
   SessionDetailResponse,
   "interaction" | "updateRevision"
->;
+> & { readonly interactionSession: InteractionSessionSnapshot };
 
-export type SessionItemPageResponse = Omit<ItemPageResponse, "interaction" | "updateRevision">;
+export type SessionItemPageResponse = Omit<ItemPageResponse, "interaction" | "updateRevision"> & {
+  readonly interactionSession: InteractionSessionSnapshot;
+};
 
 export interface SessionUpdatesSnapshot {
   readonly session: SessionDetailResponse["session"];
@@ -53,6 +56,7 @@ export interface SessionUpdatesSnapshot {
 }
 
 export interface InteractionSessionSnapshot {
+  readonly observation?: RuntimeObservation;
   readonly archived: boolean;
   readonly interaction: DomainAgentInteraction | null;
 }

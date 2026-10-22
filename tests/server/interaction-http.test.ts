@@ -55,7 +55,10 @@ async function start() {
   const unavailable = async () => null;
   const repository: SessionReader = {
     list: vi.fn(),
-    getSession: vi.fn().mockResolvedValue({ session: SESSION }),
+    getSession: vi.fn().mockResolvedValue({
+      session: SESSION,
+      interactionSession: { archived: false, interaction: null },
+    }),
     getItems: unavailable,
     getSessionUpdates: unavailable,
     getToolDetail: unavailable,
@@ -66,6 +69,12 @@ async function start() {
   };
   const interaction = {
     describe: vi.fn().mockResolvedValue({
+      supported: true,
+      supersededBySessionId: null,
+      attachCommand: null,
+      state: "connected",
+    }),
+    describeSnapshot: vi.fn().mockResolvedValue({
       supported: true,
       supersededBySessionId: null,
       attachCommand: null,
@@ -129,6 +138,11 @@ describe("interaction HTTP API", () => {
         }),
       }),
     );
+    expect(interaction.describeSnapshot).toHaveBeenCalledWith(SESSION_ID, {
+      archived: false,
+      interaction: null,
+    });
+    expect(interaction.describe).not.toHaveBeenCalled();
     const message = "first\r\nsecond 🌊";
     const sent = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/messages`, {
       method: "POST",
