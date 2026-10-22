@@ -205,6 +205,11 @@
   pointer-events: auto;
   transform: translateY(0);
 }
+@media (width < 768px) {
+  body:has(.interaction-composer textarea:focus) .page-jump-controls {
+    display: none;
+  }
+}
 .page-jump-control:hover {
   color: var(--paper);
   background: var(--current);

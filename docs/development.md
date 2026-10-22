@@ -104,6 +104,8 @@ Outputs in `docs/images/`:
   captured after verifying that the theme survives a reload.
 - `codex-hub-mobile-catalog.png` and `codex-hub-mobile-reader.png`: project navigation
   and the same answered card at 390 × 844.
+- `codex-hub-mobile-composer.png`: focused mobile input with page jump controls hidden.
+  The capture also checks blur restoration, a smaller viewport, and desktop focus behavior.
 
 Both scripts accept optional URL and output path arguments:
 
