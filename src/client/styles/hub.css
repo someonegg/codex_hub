@@ -246,10 +246,10 @@
 }
 .session-nav-copy time {
   display: block;
-  font-family: var(--mono-font);
+  font-family: var(--body-font);
   margin-top: 3px;
   color: var(--ink-soft);
-  font-size: var(--text-small);
+  font-size: var(--text-status);
 }
 .hub-topbar {
   min-height: 66px;

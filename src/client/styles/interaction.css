@@ -374,7 +374,7 @@
 .live-label {
   color: #15803d;
   font-size: var(--text-status);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .interaction-composer-dragging {

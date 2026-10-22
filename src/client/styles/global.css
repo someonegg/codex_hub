@@ -61,7 +61,7 @@ p {
   color: var(--archive-ink);
   font-family: var(--body-font);
   font-size: var(--text-status);
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: normal;
   line-height: 1.2;
   text-transform: none;
