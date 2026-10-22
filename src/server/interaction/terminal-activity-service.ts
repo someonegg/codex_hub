@@ -45,34 +45,38 @@ export class TerminalActivityService {
     if (!observation) {
       observation = { binding, expiresAt: this.now() + LEASE_MS, failed: false };
       this.#observations.set(sessionId, observation);
-      const current = observation;
-      const fail = () => {
-        current.failed = true;
-        current.readyAt = undefined;
-        current.outputAt = undefined;
-        current.subscription?.close();
-      };
-      try {
-        current.subscription = this.listen(
-          binding,
-          (pane) => {
-            if (!current.failed && pane === binding.paneId) current.outputAt = this.now();
-          },
-          fail,
-        );
-        if (current.failed) current.subscription.close();
-        void current.subscription.ready.then(() => {
-          if (!current.failed) current.readyAt = this.now();
-        }, fail);
-      } catch {
-        fail();
-      }
+      this.#subscribe(observation);
     }
     observation.expiresAt = this.now() + LEASE_MS;
     if (observation.failed || observation.readyAt === undefined) return "unknown";
     if (observation.outputAt !== undefined && this.now() - observation.outputAt < WINDOW_MS)
       return "working";
     return this.now() - observation.readyAt >= WINDOW_MS ? "idle" : "unknown";
+  }
+
+  #subscribe(observation: Observation): void {
+    const { binding } = observation;
+    const fail = () => {
+      observation.failed = true;
+      observation.readyAt = undefined;
+      observation.outputAt = undefined;
+      observation.subscription?.close();
+    };
+    try {
+      observation.subscription = this.listen(
+        binding,
+        (pane) => {
+          if (!observation.failed && pane === binding.paneId) observation.outputAt = this.now();
+        },
+        fail,
+      );
+      if (observation.failed) observation.subscription.close();
+      void observation.subscription.ready.then(() => {
+        if (!observation.failed) observation.readyAt = this.now();
+      }, fail);
+    } catch {
+      fail();
+    }
   }
 
   remove(sessionId: string): void {
