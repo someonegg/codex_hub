@@ -93,7 +93,8 @@ stays with Codex; the hub does not read or manage tokens, API keys, or credentia
 
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add
-authentication and restrict access. See the [security guidance](docs/usage.md#security).
+authentication, such as the built-in mTLS option, and restrict access. See the
+[security guidance](docs/usage.md#security).
 
 ## Documentation
 
