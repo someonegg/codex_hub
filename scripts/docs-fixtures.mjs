@@ -28,6 +28,7 @@ export const docsSession = {
 
 export const connectedInteraction = {
   supported: true,
+  activity: "working",
   state: "connected",
   supersededBySessionId: null,
   attachCommand: "tmux attach -t atlas-dashboard",

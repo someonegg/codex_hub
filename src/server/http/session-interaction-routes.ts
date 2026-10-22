@@ -42,7 +42,7 @@ export function createSessionInteractionRoutes(
           response,
           426,
           {
-            error: { code: "websocket_required", message: "Terminal preview requires WebSocket" },
+            error: { code: "websocket_required", message: "Terminal Preview requires WebSocket" },
           },
           request.method === "HEAD",
         );

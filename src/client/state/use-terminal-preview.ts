@@ -91,7 +91,7 @@ export function useTerminalPreview(
           failed,
         });
       } catch {
-        failed("Terminal preview connection failed", true);
+        failed("Terminal Preview connection failed", true);
       }
     };
     connect();

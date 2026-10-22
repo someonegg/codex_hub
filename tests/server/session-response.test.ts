@@ -97,7 +97,7 @@ describe("request-scoped session responses", () => {
         expect(f.resolveTarget).toHaveBeenCalledTimes(1);
         expect(response).toMatchObject({
           session: { status: "live", resume: { allowed: false } },
-          interaction: { supported: true, state: "connected" },
+          interaction: { supported: true, activity: "unknown", state: "connected" },
           updateRevision: expect.any(String),
         });
         expect(response).not.toHaveProperty("interactionSession");

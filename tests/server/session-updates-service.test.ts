@@ -45,6 +45,7 @@ describe("SessionUpdatesService", () => {
     expect(
       revision(SESSION, {
         supported: true,
+        activity: "unknown",
         supersededBySessionId: null,
         attachCommand: null,
         state: "connected",
@@ -309,6 +310,7 @@ it.each(["connected", "unknown", "disconnected", "superseded"] as const)(
       session,
       interaction: {
         supported: true as const,
+        activity: "unknown" as const,
         state,
         supersededBySessionId: null,
         attachCommand: null,
@@ -334,6 +336,7 @@ it("preserves archived and unsupported results during coordination", () => {
     session: { ...SESSION, status: "archived" as const },
     interaction: {
       supported: true as const,
+      activity: "unknown" as const,
       state: "connected" as const,
       supersededBySessionId: null,
       attachCommand: null,
@@ -345,4 +348,32 @@ it("preserves archived and unsupported results during coordination", () => {
     interaction: { supported: false as const, attachCommand: null },
   };
   expect(reconcileSessionState(unsupported)).toBe(unsupported);
+});
+
+it("returns a long-poll update when only activity changes", async () => {
+  const connected = {
+    supported: true as const,
+    state: "connected" as const,
+    activity: "working" as const,
+    supersededBySessionId: null,
+    attachCommand: null,
+  };
+  const describeSnapshot = vi
+    .fn()
+    .mockResolvedValueOnce(connected)
+    .mockResolvedValue({ ...connected, activity: "idle" });
+  const createRevision = createProcessUpdateRevisionFactory(Buffer.alloc(32, 3));
+  const after = withUpdateRevision(
+    reconcileSessionState({ session: SESSION, interaction: connected }),
+    createRevision,
+  ).updateRevision;
+  const service = createService(vi.fn().mockResolvedValue(snapshot(false, true)), {
+    createRevision,
+    interaction: { describeSnapshot },
+    probeIntervalMs: 1,
+    waitTimeoutMs: 100,
+  });
+  const result = await service.wait("session", { cursor: CURSOR, after });
+  expect(result?.interaction).toMatchObject({ activity: "idle" });
+  expect(result?.updateRevision).not.toBe(after);
 });

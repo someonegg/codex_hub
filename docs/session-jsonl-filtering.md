@@ -96,7 +96,7 @@ Truncation preserves an item but shortens its text; it is not filtering.
 Message text is capped at 1,000,000 JavaScript code units. Directive, tool, and
 formatted internal JSON details are capped at 256,000 code units. Directive and
 unavailable-user-input summaries and tool previews share a 256-code-unit limit.
-Terminal preview limits are separate from JSONL processing; see
+Terminal Preview limits are separate from JSONL processing; see
 [terminal preview](technical-reference.md#terminal-preview).
 Timeline pages default to 100 items and accept a `limit` from 1 to 300.
 Paging may defer items because of the approximately 4 MiB serialized item-array

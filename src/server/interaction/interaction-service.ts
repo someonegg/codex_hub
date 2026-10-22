@@ -14,9 +14,10 @@ import { normalizeMessage } from "./message.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
 import { isCurrentObservation, observePaneBinding } from "./pane-observation.js";
 import type { SessionRuntime } from "./session-runtime.js";
+import { TerminalActivityService } from "./terminal-activity-service.js";
 import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
-import type { PreviewListener } from "./tmux-preview-listener.js";
+import { createTmuxPreviewListener, type PreviewListener } from "./tmux-preview-listener.js";
 import {
   type InteractionTransport,
   InteractionTransportError,
@@ -55,12 +56,14 @@ type InteractionSessionReader = Pick<SessionReader, "getInteractionSession">;
 export class SessionInteractionService {
   runtime?: SessionRuntime;
   readonly #busy = new Set<string>();
+  readonly #activity: TerminalActivityService;
   readonly #previews: TerminalPreviewService;
   readonly #unsubscribe: () => void;
 
   close(): void {
     this.#unsubscribe();
     this.#previews.close();
+    this.#activity.close();
   }
 
   constructor(
@@ -68,15 +71,19 @@ export class SessionInteractionService {
     private readonly enabled: boolean,
     private readonly tmux: InteractionTransport,
     private readonly bindings: PaneBindingManager = paneBindings,
-    listener?: PreviewListener,
+    listener: PreviewListener = createTmuxPreviewListener(),
   ) {
+    this.#activity = new TerminalActivityService(listener);
     this.#previews = new TerminalPreviewService(
       (binding, assertOwner) =>
         this.#perform(() => this.tmux.captureTerminal(binding, assertOwner)),
       listener,
       (binding) => this.tmux.resolveTarget({ valid: true, ordinal: 0, ...binding }),
     );
-    this.#unsubscribe = bindings.subscribe(() => this.#previews.invalidate());
+    this.#unsubscribe = bindings.subscribe(() => {
+      this.#previews.invalidate();
+      this.#activity.invalidate((id, binding) => bindings.owns(id, binding));
+    });
   }
 
   setBusy(sessionId: string, busy: boolean) {
@@ -133,14 +140,21 @@ export class SessionInteractionService {
     sessionId: string,
     session: InteractionSessionSnapshot,
   ): Promise<InteractionResponse> {
-    if (!this.#supported(session)) return { supported: false, attachCommand: null };
+    if (!this.#supported(session)) {
+      this.#activity.remove(sessionId);
+      return { supported: false, attachCommand: null };
+    }
     const observed =
       session.observation ??
       (await observePaneBinding(sessionId, this.bindings, (attempt) =>
         this.#check(attempt).then((checked) => checked?.binding ?? null),
       ));
-    if (observed.sessionId !== sessionId || !isCurrentObservation(observed, this.bindings))
+    if (observed.state !== "alive" || observed.replacement !== null)
+      this.#activity.remove(sessionId);
+    if (observed.sessionId !== sessionId || !isCurrentObservation(observed, this.bindings)) {
+      this.#activity.remove(sessionId);
       return response("unknown");
+    }
     switch (observed.state) {
       case "unbound":
         return response("unbound");
@@ -151,7 +165,11 @@ export class SessionInteractionService {
       case "exited":
         return response("disconnected");
       case "alive": {
-        if (observed.replacement === null) return response("connected", observed.target);
+        if (observed.replacement === null)
+          return {
+            ...response("connected", observed.target),
+            activity: this.#activity.read(sessionId, observed.target),
+          };
         try {
           const replacement = await this.sessions.getInteractionSession(observed.replacement);
           if (!isCurrentObservation(observed, this.bindings)) return response("unknown");
@@ -341,6 +359,7 @@ function response(
   return {
     supported: true,
     state,
+    activity: null,
     supersededBySessionId: null,
     attachCommand: binding?.sessionName
       ? attachCommand(binding.socketPath, binding.sessionName)

@@ -70,12 +70,14 @@ async function start() {
   const interaction = {
     describe: vi.fn().mockResolvedValue({
       supported: true,
+      activity: "unknown",
       supersededBySessionId: null,
       attachCommand: null,
       state: "connected",
     }),
     describeSnapshot: vi.fn().mockResolvedValue({
       supported: true,
+      activity: "unknown",
       supersededBySessionId: null,
       attachCommand: null,
       state: "connected",
@@ -132,6 +134,7 @@ describe("interaction HTTP API", () => {
       expect.objectContaining({
         interaction: expect.objectContaining({
           supported: true,
+          activity: "unknown",
           supersededBySessionId: null,
           attachCommand: null,
           state: "connected",
