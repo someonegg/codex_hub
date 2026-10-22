@@ -152,37 +152,37 @@ export class SessionLaunchExecutor {
     if (matches.length > 1)
       throw new AssociationError("Multiple sessions claimed this operation ID");
     const match = matches[0];
-    if (match) {
-      if (
-        entry.metadata.mode === "resume" &&
-        (match.id !== entry.metadata.sessionId ||
-          match.archived ||
-          match.sourceId !== entry.resumeNativeId ||
-          !match.sourceId ||
-          this.#matches(snapshot, entry, match.sourceId).length !== 1)
-      )
-        throw new AssociationError("Resume did not bind the original unique session");
-      const attempt = this.bindings.latest(match.id);
-      if (
-        !attempt?.valid ||
-        attempt.socketPath !== context.target.socketPath ||
-        attempt.paneId !== context.target.paneId ||
-        match.projectDirectory !== context.project
-      ) {
-        throw new AssociationError("Binding does not match the launched target/project");
-      }
-      const binding = await this.interaction.describe(match.id);
-      if (!this.control.pending(entry)) return;
-      if (binding?.supported && binding.state === "unknown") return;
-      if (!binding?.supported || binding.state !== "connected")
-        throw new AssociationError("The new session binding failed validation");
-      const matchesTarget = await this.interaction.matchesTarget(match.id, context.target);
-      if (!this.control.pending(entry)) return;
-      if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
-      entry.metadata.sessionId = match.id;
-      this.control.finish(entry, "succeeded", null);
+    if (!match) return;
+    if (
+      entry.metadata.mode === "resume" &&
+      (match.id !== entry.metadata.sessionId ||
+        match.archived ||
+        match.sourceId !== entry.resumeNativeId ||
+        !match.sourceId ||
+        this.#matches(snapshot, entry, match.sourceId).length !== 1)
+    )
+      throw new AssociationError("Resume did not bind the original unique session");
+    const attempt = this.bindings.latest(match.id);
+    if (
+      !attempt?.valid ||
+      attempt.socketPath !== context.target.socketPath ||
+      attempt.paneId !== context.target.paneId ||
+      match.projectDirectory !== context.project
+    ) {
+      throw new AssociationError("Binding does not match the launched target/project");
     }
+    const binding = await this.interaction.describe(match.id);
+    if (!this.control.pending(entry)) return;
+    if (binding?.supported && binding.state === "unknown") return;
+    if (!binding?.supported || binding.state !== "connected")
+      throw new AssociationError("The new session binding failed validation");
+    const matchesTarget = await this.interaction.matchesTarget(match.id, context.target);
+    if (!this.control.pending(entry)) return;
+    if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
+    entry.metadata.sessionId = match.id;
+    this.control.finish(entry, "succeeded", null);
   }
+
   #matches(snapshot: ManagementSnapshot, entry: OperationEntry, nativeId: string) {
     return snapshot.sessions.filter(
       (session) =>

@@ -189,8 +189,8 @@ export class OperationService {
       if (
         (context.kind === "create" && context.phase === "observing") ||
         context.kind === "exiting" ||
-        (context.kind === "archive" && context.phase === "confirming") ||
-        (context.kind === "delete" && context.phase === "confirming")
+        ((context.kind === "archive" || context.kind === "delete") &&
+          context.phase === "confirming")
       ) {
         checks.push(this.#observe(entry));
       }
@@ -231,11 +231,11 @@ export class OperationService {
     deadline = entry.stage?.deadline ?? null,
   ) {
     if (!this.#pending(entry)) return;
-    const previous = this.#project(entry).phase;
+    const previous = operationPhase(entry.stage);
     entry.stage = { ...context, deadline };
     if (context.kind === "create" && context.phase === "observing")
       entry.metadata.target = context.target;
-    if (previous !== this.#project(entry).phase)
+    if (previous !== operationPhase(entry.stage))
       entry.metadata.updatedAt = new Date(this.now()).toISOString();
   }
   #lookup(id: string) {
@@ -246,18 +246,9 @@ export class OperationService {
     if (entry.result) return { ...entry.result };
     const context = entry.stage;
     if (!context) throw new Error("Pending operation has no execution stage");
-    const phase: HubOperation["phase"] =
-      context.kind === "exiting"
-        ? context.task.phase
-        : context.kind === "archive"
-          ? context.phase === "confirming"
-            ? "confirming_archive"
-            : context.phase === "resolving_target"
-              ? null
-              : context.phase
-          : null;
-    return { ...entry.metadata, phase, status: "pending", error: null };
+    return { ...entry.metadata, phase: operationPhase(context), status: "pending", error: null };
   }
+
   #attach(entry: OperationEntry, command: string | null) {
     if (!this.#pending(entry) || entry.metadata.attachCommand === command) return;
     entry.metadata.attachCommand = command;
@@ -368,5 +359,18 @@ export class OperationService {
         }
       }
     }
+  }
+}
+
+function operationPhase(context: OperationStage): HubOperation["phase"] {
+  if (context.kind === "exiting") return context.task.phase;
+  if (context.kind !== "archive") return null;
+  switch (context.phase) {
+    case "confirming":
+      return "confirming_archive";
+    case "resolving_target":
+      return null;
+    case "archiving":
+      return context.phase;
   }
 }
