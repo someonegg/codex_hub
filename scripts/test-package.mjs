@@ -9,18 +9,25 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const temporary = await mkdtemp(join(tmpdir(), "codex-hub-package-"));
+const suppliedTarball = process.argv[2];
 let server;
 try {
-  await exec("npm", ["run", "build"], { cwd: root });
-  const { stdout } = await exec(
-    "npm",
-    ["pack", "--json", "--ignore-scripts", "--pack-destination", temporary],
-    { cwd: root },
-  );
-  const result = JSON.parse(stdout);
-  const [packed] = Array.isArray(result) ? result : Object.values(result);
-  assert(packed.files.some((file) => file.path === "dist/client/index.html"));
-  assert(!packed.files.some((file) => /^(src|tests|tools)\//.test(file.path)));
+  let tarball;
+  if (suppliedTarball) {
+    tarball = resolve(suppliedTarball);
+  } else {
+    await exec("npm", ["run", "build"], { cwd: root });
+    const { stdout } = await exec(
+      "npm",
+      ["pack", "--json", "--ignore-scripts", "--pack-destination", temporary],
+      { cwd: root },
+    );
+    const result = JSON.parse(stdout);
+    const [packed] = Array.isArray(result) ? result : Object.values(result);
+    assert(packed.files.some((file) => file.path === "dist/client/index.html"));
+    assert(!packed.files.some((file) => /^(src|tests|tools)\//.test(file.path)));
+    tarball = join(temporary, packed.filename);
+  }
   await exec(
     "npm",
     [
@@ -28,10 +35,11 @@ try {
       "--prefix",
       temporary,
       "--omit=dev",
+      "--engine-strict",
       "--ignore-scripts",
       "--no-audit",
       "--no-fund",
-      join(temporary, packed.filename),
+      tarball,
     ],
     { cwd: temporary },
   );
@@ -82,7 +90,7 @@ try {
     await readFile(join(temporary, "node_modules/@someonegg/codex-hub/package.json"), "utf8"),
   );
   console.log(
-    `Package smoke test passed: ${manifest.name}@${manifest.version} (${assets.length} assets)`,
+    `Package smoke test passed: ${manifest.name}@${manifest.version} Node ${process.version}, ${assets.length} assets`,
   );
 } finally {
   if (server && server.exitCode === null) {
