@@ -17,12 +17,18 @@ Codex from desktop or mobile.
 
 ## Quick start
 
-Requirements:
+Runtime requirements:
 
-- macOS or Linux with Node.js 22.22.2+, 24.15.0+, or 26+ and npm
+- macOS or Linux with Node.js >=22.13 and npm
 - A local Codex home (usually `~/.codex`)
 - Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
+
+Use the latest security patch for your Node.js release line; security update
+recommendations are separate from the minimum supported runtime version.
+
+Development and full checks require Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`
+because of the test toolchain (including jsdom). See [Development](docs/development.md).
 
 Try it without a global installation:
 

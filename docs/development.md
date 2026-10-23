@@ -2,6 +2,9 @@
 
 ## Local workflow
 
+Development requires Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm
+for tools such as jsdom. The published package supports Node.js >=22.13.
+
 ```sh
 npm ci
 npm run build
@@ -33,13 +36,15 @@ Hooks coverage, and its separate TypeScript API dependency.
 
 GitHub Actions runs tests, type checking, linting, formatting, and an installed-package
 smoke test on Ubuntu with Node.js 22.22.2, 24.15.0, and 26. Native tmux and Codex CLI integration
-suites remain separate from this workflow.
+suites remain separate. An additional smoke test installs the built package with
+strict engine checks on Node.js 22.13.0, without development dependencies.
 
 ## Releases
 
 The public npm package is `@someonegg/codex-hub`; its executable is `codex-hub`.
 Run `npm run test:package` to build, pack, install into a temporary directory, and
-verify help, server startup, and web assets outside the repository.
+verify help, server startup, and web assets outside the repository. For an existing
+tarball, use `node scripts/test-package.mjs <package.tgz>` to skip the build.
 
 For a release, update the package and lockfile versions in a PR, run the checks,
 and merge it. Tag that commit as `v<package-version>` and push the tag. The

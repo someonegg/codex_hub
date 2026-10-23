@@ -36,13 +36,50 @@ jobs:
       - run: npm run format:check
       - run: npm run test:package
 
+  package-build:
+    name: Build runtime test package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm pack --ignore-scripts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: runtime-package
+          path: "*.tgz"
+          if-no-files-found: error
+
+  runtime-smoke:
+    name: Runtime smoke (Node 22.13.0)
+    needs: package-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22.13.0"
+      - uses: actions/download-artifact@v4
+        with:
+          name: runtime-package
+          path: runtime-package
+      - name: Install and smoke test the built package
+        run: node scripts/test-package.mjs runtime-package/*.tgz
+
   test-result:
     name: CI Passed
-    needs: test
+    needs: [test, runtime-smoke]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Require all matrix checks to pass
         env:
           CHECK_RESULT: ${{ needs.test.result }}
-        run: test "$CHECK_RESULT" = success
+          RUNTIME_RESULT: ${{ needs.runtime-smoke.result }}
+        run: test "$CHECK_RESULT" = success && test "$RUNTIME_RESULT" = success
