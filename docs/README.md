@@ -1,6 +1,6 @@
 # Documentation
 
-- [Usage and configuration](usage.md): server options, TLS, tmux, troubleshooting, and cleanup.
+- [Usage and configuration](usage.md): daily use, configuration, security, and troubleshooting.
 - [Technical reference](technical-reference.md): catalog, timeline, interaction, and management APIs.
 - [Session JSONL filtering](session-jsonl-filtering.md): supported records, visibility, and limits.
 - [Development](development.md): local workflow, checks, benchmarks, and screenshots.

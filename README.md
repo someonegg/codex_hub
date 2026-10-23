@@ -58,7 +58,7 @@ codex-hub \
   --codex-home 'work=/path/to/codex-work'
 ```
 
-See [home configuration and usage](docs/usage.md#multiple-homes) for detailed rules.
+See [home configuration and usage](docs/usage.md#multiple-homes) for configuration.
 
 To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
 For running from source, see [Development](docs/development.md).
@@ -84,12 +84,19 @@ See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API lim
 
 </details>
 
+### Terminal Preview
+
+Expand **Terminal Preview** to follow the live CLI. Use the on-screen controls,
+or focus the preview and press arrow keys and **Enter**, to navigate CLI prompts.
+Press **Esc** or click **Interrupt** to interrupt. **Working** and **Idle** reflect
+recent terminal output, not task completion.
+
 ### Continue with Handoff
 
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's page. Once it shows
 **Superseded**, follow **Go to bound session**. Your draft stays on the old page.
-See [tmux interaction](docs/usage.md#binding-an-existing-tmux-session) for details.
+See [tmux interaction](docs/usage.md#interacting-with-codex) for details.
 
 ## Security
 
