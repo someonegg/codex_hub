@@ -8,10 +8,10 @@
     "lint-client": "./cli.js"
   },
   "dependencies": {
-    "eslint": "^9.39.0",
+    "eslint": "^10.13.0",
     "typescript": "~6.0.0",
     "typescript-eslint": "^8.71.2",
-    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-simple-import-sort": "^12.1.1"
   }
 }

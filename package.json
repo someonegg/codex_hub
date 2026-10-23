@@ -29,7 +29,7 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "katex": "^0.18.1",
+    "katex": "^0.18.10",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
     "mdast-util-to-string": "^4.0.0",
@@ -41,6 +41,9 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "ws": "^8.22.0"
+  },
+  "overrides": {
+    "katex": "$katex"
   },
   "devDependencies": {
     "@codex-hub/client-lint": "file:tools/client-lint",
