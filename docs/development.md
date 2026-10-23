@@ -2,8 +2,8 @@
 
 ## Local workflow
 
-Development requires Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm
-for tools such as jsdom. The published package supports Node.js >=22.13.
+Use Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` and npm. Development tools require
+these versions; the published package supports Node.js >=22.13.
 
 ```sh
 npm ci
@@ -11,10 +11,34 @@ npm run build
 npm start
 ```
 
-`npm run dev` starts the client-only Vite server without the local session API.
-Use a built server when testing real or synthetic rollout data.
+Open <http://127.0.0.1:4173>. Rebuild and restart after changing application code.
+Server options are listed in [Usage](usage.md#server-options).
+
+For frontend work with hot reload, use `npm run dev`. It starts only Vite,
+without the session API. Use the built server for end-to-end behavior and real
+sessions. To explore with isolated demo data after building:
+
+```sh
+node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
+npm start -- --codex-home 'default=/tmp/codex-hub-docs-demo' --port 4187
+```
+
+Use a new demo directory. Session creation and interaction require
+[tmux and Codex CLI](../README.md#quick-start).
+
+### Code map
+
+- `src/client/`: UI and browser state.
+- `src/server/`: HTTP services, session repository, and source adapters.
+- `src/shared/`: public API contracts and shared types.
+- `tests/` and `scripts/`: automated checks, fixtures, and documentation tools.
+
+See the [technical reference](technical-reference.md) for runtime contracts and
+[JSONL filtering](session-jsonl-filtering.md) for record processing rules.
 
 ## Checks
+
+Before submitting a change:
 
 ```sh
 npm run typecheck
@@ -24,125 +48,96 @@ npm run build
 npm run format:check
 ```
 
-Use `npm run format` to format maintained files, and `npm run lint -- --fix` to
-fix import ordering and type imports. Prettier owns formatting: double quotes,
-semicolons, two-space indentation, 100 columns, trailing commas, and LF.
-Markdown preserves paragraph line breaks. `.prettierignore` excludes generated
-files, fixtures, images, lockfiles, and ADRs.
+Use `npm run format` for formatting and `npm run lint -- --fix` for fixable lint
+issues. Prettier owns formatting; ESLint covers application code, tests, and
+TypeScript scripts. See the [lint toolchain](../tools/client-lint/README.md) for
+rule details.
 
-ESLint checks client, server, shared code, tests, and TypeScript scripts. See the
-[isolated lint toolchain](../tools/client-lint/README.md) for import rules, React
-Hooks coverage, and its separate TypeScript API dependency.
-
-GitHub Actions runs tests, type checking, linting, formatting, and an installed-package
-smoke test on Ubuntu with Node.js 22.22.2, 24.15.0, and 26. Native tmux and Codex CLI integration
-suites remain separate. An additional smoke test installs the built package with
-strict engine checks on Node.js 22.13.0, without development dependencies.
-
-## Releases
-
-The public npm package is `@someonegg/codex-hub`; its executable is `codex-hub`.
-Run `npm run test:package` to build, pack, install into a temporary directory, and
-verify help, server startup, and web assets outside the repository. For an existing
-tarball, use `node scripts/test-package.mjs <package.tgz>` to skip the build.
-
-For a release, update the package and lockfile versions in a PR, run the checks,
-and merge it. Tag that commit as `v<package-version>` and push the tag. The
-`publish.yml` workflow validates the tag, runs the checks, and publishes to npm
-using trusted publishing, skipping versions already published during a workflow retry.
-Create a matching GitHub Release with English release notes after verifying
-installation from the registry. Never reuse a published
-version; fix release defects in a new patch version.
-
-### One-time publishing setup
-
-The initial package bootstrap uses a local authenticated `npm publish`. After that,
-configure npm trusted publishing for GitHub user `someonegg`, repository `codex_hub`,
-workflow `publish.yml`, without an environment, allowing direct publishing. This is
-one-time setup; routine releases use the workflow above without an npm token.
+CI runs checks and package smoke tests, including Node.js 22.13.0 runtime coverage.
+Native integration suites run separately. See [test.yml](../.github/workflows/test.yml)
+for the exact matrix.
 
 ## Integration tests and benchmarks
 
-Install tmux and Codex CLI, then run:
+With tmux and Codex CLI installed, run `npm run test:all` for unit and native
+integration suites. Run individual checks as needed:
 
-```sh
-npm run test:all
-```
-
-Individual suites and the optional scale benchmark:
-
-```sh
-npm run test:integration:tmux
-npm run test:integration:codex
-npm run benchmark:scale
-```
+| Command                          | Purpose                                                     |
+| -------------------------------- | ----------------------------------------------------------- |
+| `npm run test:integration:tmux`  | Native tmux interaction                                     |
+| `npm run test:integration:codex` | Native Codex lifecycle                                      |
+| `npm run benchmark:scale`        | Optional scale benchmark                                    |
+| `npm run test:package`           | Build, pack, install, and smoke-test outside the repository |
 
 Native lifecycle tests use temporary projects, an isolated Codex home, dummy
 credentials, and a separate tmux socket. They do not call a model or use existing
 user sessions.
 
+To test an existing tarball without rebuilding:
+
+```sh
+node scripts/test-package.mjs /path/to/package.tgz
+```
+
 ## Documentation screenshots
 
-Install `playwright-cli` and its browser; the GIF also requires Python 3 with Pillow.
-Start the client, then run the capture scripts in another terminal:
+UI changes must regenerate affected README screenshots and animations. Install
+`playwright-cli` and its browser; GIF generation also requires Python 3 with Pillow.
+
+Start the client:
 
 ```sh
 npm run dev -- --port 4187 --strictPort
 ```
+
+In another terminal:
 
 ```sh
 node scripts/record-docs-intro.mjs
 node scripts/capture-docs-interaction.mjs
 ```
 
-The scripts capture the real UI without DOM or style overrides, using shared
-fabricated English data and intercepted API requests, including terminal WebSocket
-snapshots. They do not start Codex or access the user's sessions.
+The scripts use the real UI with shared fabricated data and intercepted HTTP and
+WebSocket requests. They do not start Codex or read user sessions.
 
-Outputs in `docs/images/`:
+Outputs go to `docs/images/`: the intro GIF, desktop screenshots in both themes,
+and mobile catalog, reader, and composer screenshots.
 
-- `codex-hub-intro.gif`: session creation, prompt submission, reply, and an answered
-  **User input** card at 1440 × 1000. It loops with a 6.5-second final pause.
-- `codex-hub-session-interaction.png`: the answered card and full interaction panel,
-  including terminal output, at 1440 × 1500.
-- `codex-hub-session-interaction-warm.png`: the same desktop view in Paper,
-  captured after verifying that the theme survives a reload.
-- `codex-hub-mobile-catalog.png` and `codex-hub-mobile-reader.png`: project navigation
-  and the same answered card at 390 × 844.
-- `codex-hub-mobile-composer.png`: focused mobile input with page jump controls hidden.
-  The capture also checks blur restoration, a smaller viewport, and desktop focus behavior.
-
-Both scripts accept optional URL and output path arguments:
+Both accept optional URL and output-path arguments, for example:
 
 ```sh
-node scripts/record-docs-intro.mjs http://127.0.0.1:4187 /tmp/codex-hub-intro.gif
-node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/codex-hub-interaction.png
+node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/interaction.png
 ```
 
-The static script writes the mobile PNGs beside its output. GIF source frames remain
-in the printed temporary directory. Scripts check page errors and horizontal overflow
-and close their browsers. Inspect readability and clipping at README display widths,
-confirm the answered card and terminal output, and keep the GIF below 5 MiB.
+Related screenshots are saved beside the specified output. GIF source frames stay
+in the printed temporary directory. Scripts check page errors and horizontal
+overflow; also inspect readability and clipping at README display widths, the
+answered **User input** card, and terminal output. Keep the GIF below 5 MiB.
 Stop the client server after capture.
-
-For manual exploration with synthetic rollouts, create a new isolated demo home
-and serve it with a built application:
-
-```sh
-node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
-npm run build
-npm start -- --codex-home 'default=/tmp/codex-hub-docs-demo' --port 4187
-```
 
 ## Application icons
 
-Run `python3 scripts/generate-icons.py` (requires Pillow) to regenerate the SVG,
-ICO, Apple touch icon, and PNG icons in `public/`. The terminal prompt and session
-branches use the application's teal palette. Keep the artwork inside the central
-maskable safe circle; mobile platforms apply their own icon masks.
+Run `python3 scripts/generate-icons.py` with Pillow installed to regenerate SVG,
+ICO, Apple touch, and PNG icons in `public/`. Keep artwork within the central
+maskable safe circle.
 
-`index.html` links the browser and Apple icons and `manifest.webmanifest`. The
-manifest launches the project catalog in a standalone window, including when
-installed from a session page. For mobile installation, serve the app over HTTPS
-(localhost also works for development), then use the browser's install or Add to
-Home Screen action. This does not add offline session access.
+To check mobile installation, serve over HTTPS (or localhost) and use the browser's
+install or Add to Home Screen action. The installed app opens the catalog; it does
+not provide offline session access.
+
+## Releases
+
+The npm package is `@someonegg/codex-hub`; the executable is `codex-hub`.
+
+1. Update package and lockfile versions in a PR, run the checks and
+   `npm run test:package`, then merge.
+2. Tag the merged commit as `v<package-version>` and push the tag.
+3. Confirm [publish.yml](../.github/workflows/publish.yml) succeeds and verify
+   installation from npm.
+4. Create the matching GitHub Release with English release notes.
+
+The workflow validates the tag, runs checks, and uses npm trusted publishing.
+Retries skip versions already published. Never reuse a published version; release
+fixes as a new patch version.
+
+Routine releases require no npm token.
