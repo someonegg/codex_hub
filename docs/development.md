@@ -100,8 +100,6 @@ Outputs in `docs/images/`:
   **User input** card at 1440 × 1000. It loops with a 6.5-second final pause.
 - `codex-hub-session-interaction.png`: the answered card and full interaction panel,
   including terminal output, at 1440 × 1500.
-- `codex-hub-session-interaction-unbound.png`: unbound session with Resume and its
-  reminder beside Unbound; the capture also checks mobile overflow and the resume dialog.
 - `codex-hub-session-interaction-warm.png`: the same desktop view in Paper,
   captured after verifying that the theme survives a reload.
 - `codex-hub-mobile-catalog.png` and `codex-hub-mobile-reader.png`: project navigation
