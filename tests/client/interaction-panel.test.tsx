@@ -72,7 +72,7 @@ describe("interaction panel", () => {
       block: "nearest",
       behavior: "instant",
     });
-    await user.keyboard("{Escape}");
+    await user.click(toggle);
     expect(scrollIntoView).toHaveBeenCalledTimes(2);
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(toggle).toHaveFocus();
@@ -724,6 +724,7 @@ it("does not expand the preview after failed handoff delivery", async () => {
 });
 
 it.each([
+  ["Escape", "interrupt"],
   ["Enter", "enter"],
   ["ArrowUp", "up"],
   ["ArrowDown", "down"],
@@ -741,6 +742,8 @@ it.each([
   button.focus();
   expect(fireEvent.keyDown(button, { key: physical })).toBe(false);
   expect(handlers.onSendKeys).toHaveBeenCalledTimes(2);
+  expect(handlers.onTogglePreview).not.toHaveBeenCalled();
+  expect(button).toHaveFocus();
 });
 
 it("preserves editing and unrelated keyboard actions and blocks sends while busy or folded", () => {
@@ -748,7 +751,9 @@ it("preserves editing and unrelated keyboard actions and blocks sends while busy
   const view = render(<Panel {...handlers} previewExpanded />);
   const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
   for (const modifier of ["shiftKey", "ctrlKey", "altKey", "metaKey", "isComposing"]) {
-    expect(fireEvent.keyDown(body, { key: "Enter", [modifier]: true })).toBe(true);
+    for (const key of ["Enter", "Escape"]) {
+      expect(fireEvent.keyDown(body, { key, [modifier]: true })).toBe(true);
+    }
   }
   expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "ArrowUp" })).toBe(true);
   expect(
@@ -759,6 +764,7 @@ it("preserves editing and unrelated keyboard actions and blocks sends while busy
   expect(body).toHaveFocus();
   view.rerender(<Panel {...handlers} interactionBusy previewExpanded />);
   expect(fireEvent.keyDown(body, { key: "Enter" })).toBe(false);
+  expect(fireEvent.keyDown(body, { key: "Escape" })).toBe(false);
   expect(handlers.onSendKeys).not.toHaveBeenCalled();
   view.rerender(<Panel {...handlers} previewExpanded interaction={interaction("disconnected")} />);
   fireEvent.keyDown(body, { key: "Enter" });

@@ -122,6 +122,8 @@ completion. Activity continues updating while preview is collapsed; no badge is
 shown while observation is starting or unavailable. **Interrupt** sits beside
 **Handoff**, with **Send** on the right.
 
+Press **Esc** in the preview without modifiers to interrupt.
+
 Preview starts collapsed. These conversation events expand it automatically:
 
 - Successful delivery of a single-word English slash command, such as `/plan`

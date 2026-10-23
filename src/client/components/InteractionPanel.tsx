@@ -128,7 +128,6 @@ export function InteractionPanel({
   const hadPreviewContent = useRef(false);
   const previewContentId = useId();
   const previewBody = useRef<HTMLDivElement | null>(null);
-  const previewToggle = useRef<HTMLButtonElement | null>(null);
   const previewContent = useRef<HTMLPreElement | null>(null);
   const scrollOnExpand = useRef(true);
   const messageBytes = new TextEncoder().encode(message.replace(/\r\n?/g, "\n")).byteLength;
@@ -208,14 +207,6 @@ export function InteractionPanel({
       event.nativeEvent.isComposing
     )
       return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      if (!interactionBusy) {
-        onTogglePreview();
-        previewToggle.current?.focus({ preventScroll: true });
-      }
-      return;
-    }
     const key = PREVIEW_KEYS[event.key];
     if (!key) return;
     event.preventDefault();
@@ -295,7 +286,6 @@ export function InteractionPanel({
             <button
               type="button"
               className="terminal-preview-toggle"
-              ref={previewToggle}
               aria-expanded={previewExpanded}
               aria-label="Terminal Preview"
               aria-controls={previewContentId}
@@ -532,6 +522,7 @@ function interactionStatus(
 }
 
 const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
+  Escape: "interrupt",
   Enter: "enter",
   ArrowUp: "up",
   ArrowDown: "down",
