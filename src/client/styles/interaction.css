@@ -361,7 +361,20 @@
 .interaction-management-actions {
   margin-left: auto;
 }
+
+.interaction-connection-status {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+  min-width: 0;
+}
+
 .resume-reason {
+  max-width: 40ch;
+  line-height: 1.4;
+  text-align: right;
   color: var(--ink-soft);
   font-size: var(--text-small);
 }

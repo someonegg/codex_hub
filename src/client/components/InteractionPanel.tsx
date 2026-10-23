@@ -226,6 +226,18 @@ export function InteractionPanel({
     error,
     previewError,
   );
+  const statusLabel = (
+    <span className={`interaction-status interaction-status-${status.kind}`}>{status.label}</span>
+  );
+  const connectionStatus =
+    interaction?.supported && interaction.state === "unbound" ? (
+      <div className="interaction-connection-status">
+        {statusLabel}
+        <span className="resume-reason">Ensure the original session has exited.</span>
+      </div>
+    ) : (
+      statusLabel
+    );
   const togglePreview = () => {
     if (!previewExpanded) scrollOnExpand.current = true;
     onTogglePreview();
@@ -239,11 +251,7 @@ export function InteractionPanel({
             tmux access
           </button>
         ) : null}
-        {status.kind !== "connected" ? (
-          <span className={`interaction-status interaction-status-${status.kind}`}>
-            {status.label}
-          </span>
-        ) : null}
+        {status.kind !== "connected" ? connectionStatus : null}
         {interaction?.supported && interaction.state === "superseded" ? (
           interaction.supersededBySessionId ? (
             <InternalLink

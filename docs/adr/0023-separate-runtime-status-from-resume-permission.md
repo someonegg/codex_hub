@@ -28,7 +28,10 @@ status, resume capability and interaction participate in reader revisions.
 Resume extends the existing create request with an exclusive `resumeSessionId`
 form. Resolve its home, native identity and directory on the server. Require a
 valid latest binding with confirmed pane death or explicit ownership transfer,
-and a unique valid native identity and usable directory. Unknown checks fail
+or no binding record, and a unique valid native identity and usable directory.
+The 2026-10-22 refinement permits unbound sessions to resume and places a concise
+reminder beside Unbound to ensure the original session has exited. This accepts
+that the hub cannot establish whether an unbound session is already running. Unknown checks fail
 closed. Acquire the session management occupancy before asynchronous checks,
 refresh the source and repeat validation before launch. Observe operation marker,
 original identity, project, launched pane and ownership before success. Reuse
@@ -48,8 +51,10 @@ reuses ADR-0022 and never archives history.
 
 ## Consequences
 
-Normal deliberately gives no recovery guarantee. Previously unbound sessions need
-manual binding evidence before the hub can resume them. Runtime observations add
+Normal deliberately gives no recovery guarantee. Unbound sessions can resume
+without manual binding evidence; users must ensure the original session has exited
+to avoid concurrent processes for the same identity. Invalid bindings and uncertain
+runtime checks still deny resume. Runtime observations add
 bounded tmux work to catalog probes even when rollouts have not changed. Failures
 may temporarily remove Live and Resume; retaining optimistic stale results would
 weaken the safety boundary. This refines ADR-0017/0018 tracking and binding rules

@@ -70,7 +70,7 @@ function setup() {
 describe("session runtime evidence", () => {
   it("distinguishes live, confirmed death, takeover, absent/invalid bindings and archives", async () => {
     const f = setup();
-    expect(await f.evaluate()).toMatchObject({ status: "normal", resume: { allowed: false } });
+    expect(await f.evaluate()).toMatchObject({ status: "normal", resume: { allowed: true } });
     f.bind();
     f.resolveTarget.mockResolvedValue(pane);
     expect(await f.evaluate()).toMatchObject({ status: "live", resume: { allowed: false } });
@@ -111,7 +111,6 @@ describe("session runtime evidence", () => {
 
   it("rejects invalid identities, duplicate identities in one home and unavailable directories", async () => {
     const f = setup();
-    f.bind();
     expect((await f.evaluate({ ...f.session, sourceId: "" })).resume.allowed).toBe(false);
     expect((await f.evaluate({ ...f.session, sourceId: null })).resume.allowed).toBe(false);
     expect((await f.evaluate({ ...f.session, sourceId: "   " })).resume.allowed).toBe(false);
