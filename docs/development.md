@@ -32,7 +32,7 @@ ESLint checks client, server, shared code, tests, and TypeScript scripts. See th
 Hooks coverage, and its separate TypeScript API dependency.
 
 GitHub Actions runs tests, type checking, linting, formatting, and an installed-package
-smoke test on Ubuntu with Node.js 22.13 and 24. Native tmux and Codex CLI integration
+smoke test on Ubuntu with Node.js 22.22.2, 24.15.0, and 26. Native tmux and Codex CLI integration
 suites remain separate from this workflow.
 
 ## Releases

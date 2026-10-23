@@ -19,7 +19,7 @@ Codex from desktop or mobile.
 
 Requirements:
 
-- macOS or Linux with Node.js 22.13 or newer and npm
+- macOS or Linux with Node.js 22.22.2+, 24.15.0+, or 26+ and npm
 - A local Codex home (usually `~/.codex`)
 - Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
