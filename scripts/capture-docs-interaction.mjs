@@ -189,6 +189,37 @@ async function capture(
     await demo.setViewportSize({ width: 1440, height: 1000 });
     if (!(await demo.locator(".page-jump-controls").isVisible()))
       throw new Error("Desktop page jumps are hidden while composing");
+    session = { ...session, status: "normal", resume: { allowed: true, reason: null } };
+    snapshot.session = session;
+    snapshot.interaction = { ...interaction, state: "unbound", attachCommand: null };
+    await demo.reload();
+    const resume = demo.getByRole("button", { name: "Resume", exact: true });
+    await resume.waitFor();
+    const warning = demo.getByText("Ensure the original session has exited.");
+    await warning.scrollIntoViewIfNeeded();
+    const buttonBounds = await resume.boundingBox();
+    const warningBounds = await warning.boundingBox();
+    const statusBounds = await demo.locator(".interaction-status").boundingBox();
+    if (
+      !buttonBounds ||
+      !warningBounds ||
+      !statusBounds ||
+      warningBounds.x < statusBounds.x + statusBounds.width ||
+      warningBounds.x + warningBounds.width > buttonBounds.x ||
+      Math.abs(warningBounds.y - statusBounds.y) > 8
+    )
+      throw new Error("Unbound warning is not beside status and before Resume");
+    await demo.screenshot({
+      path: output.replace(/\.png$/, "-unbound.png"),
+      animations: "disabled",
+    });
+    await demo.setViewportSize({ width: 390, height: 844 });
+    await warning.scrollIntoViewIfNeeded();
+    if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+      throw new Error("Unbound mobile horizontal overflow");
+    await resume.click();
+    await demo.getByRole("dialog", { name: "Resume session" }).waitFor();
+    if (errors.length) throw new Error(errors.join("\n"));
   } finally {
     await context.close();
   }

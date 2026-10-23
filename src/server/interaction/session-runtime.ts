@@ -79,7 +79,6 @@ export class SessionRuntime {
     const observed = observation ?? (await this.observe(session.id));
     if (observed.sessionId !== session.id || !this.isCurrent(observed))
       return deny("Pane binding changed during validation");
-    if (observed.state === "unbound") return deny("No pane binding has been recorded");
     if (observed.state === "invalid") return deny("The latest pane binding is invalid");
     if (observed.state === "unknown") return deny("Runtime or working directory validation failed");
     try {

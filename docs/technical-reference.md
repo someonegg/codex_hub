@@ -240,8 +240,9 @@ The last two fields may be empty. V3 remains readable.
   selected real path while retaining the original project in the bind.
   Directory, source and worktree overrides are rejected. `yolo` defaults to false.
   Require an unarchived, unique valid identity, an available directory, and a valid
-  latest binding whose pane is confirmed dead/missing or explicitly transferred.
-  Missing/invalid bindings, timeouts and errors never authorize resume. Revalidate
+  latest binding whose pane is confirmed dead/missing or explicitly transferred,
+  or no binding record. Unbound sessions show a reminder to exit the original session.
+  Invalid bindings, timeouts and errors never authorize resume. Revalidate
   before launching `codex resume <UUID>` in a new pane. Confirmation requires the
   original identity, operation marker, matching project and a live owned launch target.
 - **Exit:** resolve the source and latest binding; no native ID is required.

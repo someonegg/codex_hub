@@ -93,7 +93,8 @@ Disconnected panels hide input and terminal controls while preserving unsent dra
 They show **Resume** when the server can establish safe recovery, or explain why it
 is unavailable. Resume opens a dialog with only an **Enable YOLO mode** switch, reset to off whenever it opens;
 it uses the original home and working directory and preserves session identity.
-No binding, invalid bindings, uncertain checks and archived sessions cannot resume.
+Unbound sessions can resume; first ensure the original session has exited.
+Invalid bindings, uncertain checks and archived sessions cannot resume.
 After an unknown launch result, inspect the attach target before trying again.
 The hub does not restore archived sessions or manage worktree cleanup.
 

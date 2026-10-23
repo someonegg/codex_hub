@@ -1009,6 +1009,21 @@ describe("safe resume operations", () => {
     expect(f.interaction.setBusy).toHaveBeenLastCalledWith("original", false);
   });
 
+  it("launches an unbound session through the existing resume operation", async () => {
+    const f = setup();
+    const original = session("original");
+    f.set({ sessions: [original] });
+    const op = f.service.create(request);
+    await flush();
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationId: op.operationId,
+        resumeNativeId: original.sourceId,
+        directory: "/project",
+      }),
+    );
+  });
+
   it("denies resume when the owning adapter rejects the native identity", async () => {
     const f = resumable();
     f.manager.isValidNativeId.mockReturnValue(false);

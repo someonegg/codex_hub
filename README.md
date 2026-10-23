@@ -78,6 +78,15 @@ See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API lim
 
 </details>
 
+Unbound sessions can also resume. Ensure the original session has exited first.
+
+<details>
+<summary>Show unbound session resume</summary>
+
+<img src="docs/images/codex-hub-session-interaction-unbound.png" alt="Unbound session with Resume and a reminder to exit the original session" width="900">
+
+</details>
+
 ### Continue with Handoff
 
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
