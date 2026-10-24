@@ -733,3 +733,120 @@ it.each(["working", "idle"] as const)(
     }
   },
 );
+
+describe("image attachments", () => {
+  it("navigates the menu, dismisses it and restores focus", async () => {
+    const user = userEvent.setup();
+    render(<InteractionPanel {...props(interaction("connected"))} />);
+    const trigger = screen.getByRole("button", { name: "Attach images" });
+    await user.click(trigger);
+    expect(screen.getByRole("menuitem", { name: "Take photo" })).toHaveFocus();
+    await user.keyboard("{ArrowUp}");
+    expect(screen.getByRole("menuitem", { name: "Choose images" })).toHaveFocus();
+    await user.keyboard("{Home}{ArrowDown}{End}{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Draft" } });
+    await user.click(trigger);
+    await user.keyboard("{Tab}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Send" })).toHaveFocus();
+  });
+
+  it("opens separate camera and gallery inputs and preserves the selection across repeated choices", async () => {
+    const { api } = await import("../../src/client/api/client");
+    const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/photo space.jpg" });
+    const user = userEvent.setup();
+    const handlers = props(interaction("connected"));
+    render(<InteractionPanel {...handlers} />);
+    const composer = screen.getByRole("textbox") as HTMLTextAreaElement;
+    const camera = screen.getByLabelText("Take photo") as HTMLInputElement;
+    const gallery = screen.getByLabelText("Choose images") as HTMLInputElement;
+    expect(camera).toHaveAttribute("capture", "environment");
+    expect(camera).not.toHaveAttribute("multiple");
+    expect(gallery).toHaveAttribute("multiple");
+    expect(gallery).not.toHaveAttribute("capture");
+    expect(camera).toHaveAttribute("accept", "image/*");
+    expect(gallery).toHaveAttribute("accept", "image/*");
+    fireEvent.change(composer, { target: { value: "before replace after" } });
+    composer.setSelectionRange(7, 14);
+    for (const [name, input] of [
+      ["Take photo", camera],
+      ["Choose images", gallery],
+    ] as const) {
+      const click = vi.spyOn(input, "click");
+      await user.click(screen.getByRole("button", { name: "Attach images" }));
+      await user.click(screen.getByRole("menuitem", { name }));
+      expect(click).toHaveBeenCalledOnce();
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      // A cancelled picker does not change the draft.
+      fireEvent.change(input, { target: { files: [] } });
+      expect(upload).not.toHaveBeenCalled();
+      click.mockRestore();
+    }
+    const file = new File(["pixels"], "photo", { type: "image/jpeg" });
+    await user.upload(gallery, [file, file]);
+    await vi.waitFor(() => expect(composer).toBeEnabled());
+    expect(composer.value).toBe('before "/tmp/photo space.jpg" "/tmp/photo space.jpg" after');
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload.mock.calls[0]![0].name).toBe("photo.jpg");
+    expect(gallery.value).toBe("");
+    await user.click(screen.getByRole("button", { name: "Attach images" }));
+    await user.click(screen.getByRole("menuitem", { name: "Take photo" }));
+    await user.upload(camera, file);
+    await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(3));
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    upload.mockRestore();
+  });
+
+  it("rejects picker returns while busy or disconnected and disables attachments", async () => {
+    const { api } = await import("../../src/client/api/client");
+    const upload = vi.spyOn(api, "upload");
+    const handlers = props(interaction("connected"));
+    const view = render(<InteractionPanel {...handlers} />);
+    const camera = screen.getByLabelText("Take photo");
+    view.rerender(<InteractionPanel {...handlers} interactionBusy />);
+    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Session is busy");
+    view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
+    fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("Reconnect");
+    expect(upload).not.toHaveBeenCalled();
+    upload.mockRestore();
+  });
+
+  it("shares limits, failures, upload locking and session aborts with other upload sources", async () => {
+    const { api } = await import("../../src/client/api/client");
+    const upload = vi.spyOn(api, "upload").mockRejectedValueOnce(new Error("Storage unavailable"));
+    const view = render(<InteractionPanel {...props(interaction("connected"))} key="first" />);
+    const camera = screen.getByLabelText("Take photo");
+    const file = new File(["x"], "a.jpg");
+    Object.defineProperty(file, "size", { value: 20 * 1024 * 1024 + 1 });
+    fireEvent.change(camera, { target: { files: [file] } });
+    expect(screen.getByRole("alert")).toHaveTextContent("20 MiB");
+    expect(upload).not.toHaveBeenCalled();
+    fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
+    await screen.findByText("Storage unavailable");
+    let finish!: (result: { path: string }) => void;
+    upload.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
+    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    const signal = upload.mock.calls[1]![1];
+    view.rerender(<InteractionPanel {...props(interaction("connected"))} key="second" />);
+    expect(signal.aborted).toBe(true);
+    await act(async () => finish({ path: "/tmp/old.jpg" }));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    upload.mockRestore();
+  });
+});

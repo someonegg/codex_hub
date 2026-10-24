@@ -206,7 +206,7 @@
   transform: translateY(0);
 }
 @media (width < 768px) {
-  body:has(.interaction-composer textarea:focus) .page-jump-controls {
+  body:has(.interaction-composer:focus-within) .page-jump-controls {
     display: none;
   }
 }

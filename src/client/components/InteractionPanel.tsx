@@ -80,7 +80,92 @@ export function InteractionPanel({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   useEffect(() => () => upload.current?.abort(), []);
-  const uploadFiles = async (files: File[]) => {
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+  const attachmentButton = useRef<HTMLButtonElement | null>(null);
+  const attachmentMenu = useRef<HTMLDivElement | null>(null);
+  const photoInput = useRef<HTMLInputElement | null>(null);
+  const imagesInput = useRef<HTMLInputElement | null>(null);
+  const savedSelection = useRef<{ start: number; end: number } | null>(null);
+  const attachmentMenuId = useId();
+  const openAttachments = () => {
+    savedSelection.current = {
+      start: composer.current?.selectionStart ?? message.length,
+      end: composer.current?.selectionEnd ?? message.length,
+    };
+    setAttachmentsOpen(true);
+  };
+  const closeAttachments = (restoreFocus = true) => {
+    setAttachmentsOpen(false);
+    if (restoreFocus) attachmentButton.current?.focus();
+  };
+  const onAttachmentMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeAttachments();
+      return;
+    }
+    if (event.key === "Tab") {
+      event.preventDefault();
+      if (event.shiftKey) closeAttachments();
+      else {
+        attachmentButton.current?.parentElement
+          ?.querySelector<HTMLButtonElement>(".interaction-send")
+          ?.focus();
+        closeAttachments(false);
+      }
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const items = Array.from(event.currentTarget.querySelectorAll("button"));
+    let next: number;
+    if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else {
+      const index = items.indexOf(document.activeElement as HTMLButtonElement);
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      next = (index + direction + items.length) % items.length;
+    }
+    items[next]?.focus();
+  };
+  useEffect(() => {
+    if (!attachmentsOpen) return;
+    const outside = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        !attachmentMenu.current?.contains(event.target) &&
+        !attachmentButton.current?.contains(event.target)
+      )
+        closeAttachments();
+    };
+    document.addEventListener("pointerdown", outside);
+    return () => document.removeEventListener("pointerdown", outside);
+  }, [attachmentsOpen]);
+  useLayoutEffect(() => {
+    if (!attachmentsOpen) return;
+    const position = () => {
+      const button = attachmentButton.current?.getBoundingClientRect();
+      const menu = attachmentMenu.current;
+      if (!button || !menu) return;
+      const top = Math.min(window.innerHeight - 8, Math.max(12, button.top));
+      const right = Math.min(
+        Math.max(8, window.innerWidth - button.right),
+        Math.max(8, window.innerWidth - menu.offsetWidth - 8),
+      );
+      menu.style.right = `${right}px`;
+      menu.style.bottom = `${window.innerHeight - top + 4}px`;
+      menu.style.maxHeight = `${Math.max(0, top - 12)}px`;
+    };
+    position();
+    attachmentMenu.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => {
+      window.removeEventListener("resize", position);
+      window.removeEventListener("scroll", position, true);
+    };
+  }, [attachmentsOpen]);
+  const uploadFiles = async (files: File[], selection?: { start: number; end: number }) => {
     if (!files.length || upload.current || interactionBusy || !previewConnected) return;
     setDragging(false);
     setUploadError(null);
@@ -91,12 +176,12 @@ export function InteractionPanel({
     const controller = new AbortController();
     upload.current = controller;
     let text = message;
-    let caret = composer.current?.selectionStart ?? message.length;
-    let selectionEnd = composer.current?.selectionEnd ?? caret;
+    let caret = selection?.start ?? composer.current?.selectionStart ?? message.length;
+    let selectionEnd = selection?.end ?? composer.current?.selectionEnd ?? caret;
     try {
       for (const [index, file] of files.entries()) {
         setUploadProgress(`Uploading ${index + 1}/${files.length}…`);
-        const result = await api.upload(file, controller.signal);
+        const result = await api.upload(normalizeImageFile(file), controller.signal);
         if (controller.signal.aborted) return;
         const path = /[\s"'\\]/.test(result.path) ? JSON.stringify(result.path) : result.path;
         const before = text.slice(0, caret);
@@ -134,6 +219,23 @@ export function InteractionPanel({
   const messageTooLarge = messageBytes > MAX_INTERACTION_MESSAGE_BYTES;
   const messageIsBlank = message.trim().length === 0;
   const previewConnected = interaction?.supported === true && interaction.state === "connected";
+  useEffect(() => {
+    if (interactionBusy || !previewConnected) setAttachmentsOpen(false);
+  }, [interactionBusy, previewConnected]);
+  const chooseFiles = (input: HTMLInputElement) => {
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    if (!files.length) return;
+    if (!previewConnected || interactionBusy) {
+      setUploadError(
+        !previewConnected
+          ? "Reconnect before attaching images"
+          : "Session is busy; try again later",
+      );
+      return;
+    }
+    void uploadFiles(files, savedSelection.current ?? undefined);
+  };
   const previewHasContent = (preview?.content.length ?? 0) > 0;
   useLayoutEffect(() => {
     if (previewExpanded && previewConnected) previewBody.current?.focus({ preventScroll: true });
@@ -271,6 +373,25 @@ export function InteractionPanel({
             </button>
           </div>
         ) : null}
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          hidden
+          aria-label="Take photo"
+          onChange={(event) => chooseFiles(event.currentTarget)}
+        />
+        <input
+          ref={imagesInput}
+          type="file"
+          accept="image/*"
+          multiple
+          hidden
+          aria-label="Choose images"
+          onChange={(event) => chooseFiles(event.currentTarget)}
+        />
+        {!previewConnected && uploadError ? <p role="alert">{uploadError}</p> : null}
         {operationStatus}
         {previewConnected ? renderConnectedInteraction() : null}
         <p className="interaction-summary">{sessionSummary(itemCount, updatedAt)}</p>
@@ -429,7 +550,7 @@ export function InteractionPanel({
               const files = Array.from(event.clipboardData.files);
               if (!files.length) return;
               event.preventDefault();
-              void uploadFiles(files.map(normalizeClipboardFile));
+              void uploadFiles(files);
             }}
             aria-label="Message to agent"
             value={message}
@@ -469,6 +590,69 @@ export function InteractionPanel({
             </div>
             <div className="interaction-primary-actions">
               <button
+                ref={attachmentButton}
+                type="button"
+                className="interaction-attach"
+                aria-label="Attach images"
+                aria-haspopup="menu"
+                aria-expanded={attachmentsOpen}
+                aria-controls={attachmentsOpen ? attachmentMenuId : undefined}
+                disabled={!previewConnected || interactionBusy || !!uploadProgress}
+                onClick={() => {
+                  if (attachmentsOpen) closeAttachments();
+                  else openAttachments();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                    event.preventDefault();
+                    openAttachments();
+                  }
+                }}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  aria-hidden="true"
+                >
+                  <path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9M6 14l8-8" />
+                </svg>
+              </button>
+              {attachmentsOpen ? (
+                <div
+                  ref={attachmentMenu}
+                  id={attachmentMenuId}
+                  role="menu"
+                  aria-label="Attach images"
+                  className="interaction-attachment-menu"
+                  onKeyDown={onAttachmentMenuKeyDown}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      photoInput.current?.click();
+                      closeAttachments();
+                    }}
+                  >
+                    Take photo
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      imagesInput.current?.click();
+                      closeAttachments();
+                    }}
+                  >
+                    Choose images
+                  </button>
+                </div>
+              ) : null}
+              <button
                 type="button"
                 className="interaction-send"
                 disabled={
@@ -487,7 +671,7 @@ export function InteractionPanel({
   }
 }
 
-const CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
+const IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
@@ -501,8 +685,8 @@ const CLIPBOARD_IMAGE_EXTENSIONS: Readonly<Record<string, string>> = {
   "image/x-icon": "ico",
 };
 
-function normalizeClipboardFile(file: File): File {
-  const extension = CLIPBOARD_IMAGE_EXTENSIONS[file.type];
+function normalizeImageFile(file: File): File {
+  const extension = IMAGE_EXTENSIONS[file.type];
   if (/\.[a-zA-Z0-9]{1,16}$/.test(file.name) || !extension) return file;
   return new File([file], `${file.name || "clipboard"}.${extension}`, { type: file.type });
 }

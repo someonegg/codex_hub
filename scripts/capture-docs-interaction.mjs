@@ -49,9 +49,19 @@ async function capture(
     updateRevision: "demo-revision",
     hasMore: false,
   };
+  const sentMessages = [];
+  const uploadedNames = [];
   await context.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (path === "/api/v1/uploads" && route.request().method() === "POST") {
+      uploadedNames.push(url.searchParams.get("filename"));
+      return route.fulfill({ json: { path: "/tmp/camera uploads/photo.png" } });
+    }
+    if (path.endsWith("/messages") && route.request().method() === "POST") {
+      sentMessages.push(route.request().postDataJSON().message);
+      return route.fulfill({ status: 204 });
+    }
     if (route.request().method() !== "GET") return route.abort();
     if (path.endsWith("/updates") || url.searchParams.has("after")) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -102,6 +112,70 @@ async function capture(
     await demo.evaluate(() => document.fonts.ready);
   }
 
+  async function verifyAttachments() {
+    const trigger = demo.getByRole("button", { name: "Attach images", exact: true });
+    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await trigger.click();
+    const menu = demo.getByRole("menu", { name: "Attach images" });
+    const bounds = await menu.boundingBox();
+    const viewport = demo.viewportSize();
+    if (
+      !bounds ||
+      bounds.x < 0 ||
+      bounds.y < 0 ||
+      bounds.x + bounds.width > viewport.width ||
+      bounds.y + bounds.height > viewport.height
+    )
+      throw new Error("Attachment menu exceeds viewport");
+    await demo.keyboard.press("Escape");
+    await composer.fill("before replace after");
+    await composer.evaluate((input) => input.setSelectionRange(7, 14));
+    await trigger.click();
+    const chooserPromise = demo.waitForEvent("filechooser");
+    await demo.getByRole("menuitem", { name: "Choose images" }).click();
+    const chooser = await chooserPromise;
+    if (!chooser.isMultiple()) throw new Error("Gallery does not support multiple images");
+    await chooser.setFiles({
+      name: "photo.png",
+      mimeType: "image/png",
+      buffer: Buffer.from("pixels"),
+    });
+    const expected = 'before "/tmp/camera uploads/photo.png" after';
+    try {
+      await demo.waitForFunction(
+        (value) => document.querySelector("textarea")?.value === value,
+        expected,
+      );
+    } catch {
+      throw new Error(
+        `Upload insertion at ${viewport.width}px: ${await composer.inputValue()}; alerts: ${await demo.getByRole("alert").allTextContents()}`,
+      );
+    }
+    await demo.waitForFunction(() => document.activeElement === document.querySelector("textarea"));
+    if (sentMessages.length) throw new Error("Upload sent without user confirmation");
+    await demo.waitForFunction(
+      () => document.querySelector(".interaction-send")?.getAttribute("aria-disabled") !== "true",
+    );
+    await demo.getByRole("button", { name: "Send", exact: true }).click();
+    try {
+      await demo.waitForFunction(() => document.querySelector("textarea")?.value === "");
+    } catch {
+      throw new Error(
+        `Send failed at ${viewport.width}px: ${await composer.inputValue()}; sent: ${JSON.stringify(sentMessages)}; alerts: ${await demo.getByRole("alert").allTextContents()}`,
+      );
+    }
+    if (sentMessages.pop() !== expected || uploadedNames.pop() !== "photo.png")
+      throw new Error("Unexpected upload or message payload");
+    await trigger.click();
+    const cameraPromise = demo.waitForEvent("filechooser");
+    await demo.getByRole("menuitem", { name: "Take photo" }).click();
+    const camera = await cameraPromise;
+    if (camera.isMultiple()) throw new Error("Camera accepts multiple files");
+    await camera.setFiles([]);
+    if (await composer.inputValue()) throw new Error("Cancelled camera changed the draft");
+    await composer.fill("Suggest the next step.");
+  }
+
   async function assertDesktopCardsVisible(prefix = "") {
     for (const selector of [".user-input-card", ".interaction-panel"]) {
       const bounds = await demo.locator(selector).boundingBox();
@@ -114,6 +188,7 @@ async function capture(
   try {
     await demo.goto(`${origin}/sessions/${session.id}`);
     await prepareDesktopPreview();
+    await verifyAttachments();
     for (const name of ["Message to agent", "Terminal Preview content"]) {
       if (!(await demo.getByLabel(name, { exact: true }).isVisible()))
         throw new Error(`${name} is hidden`);
@@ -179,6 +254,11 @@ async function capture(
     if (await demo.getByRole("button", { name: "Back to top" }).count())
       throw new Error("Hidden page jumps remain accessible");
     await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
+    await verifyAttachments();
+    await demo.setViewportSize({ width: 320, height: 568 });
+    await verifyAttachments();
+    if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+      throw new Error("Narrow composer horizontal overflow");
     await demo.setViewportSize({ width: 390, height: 400 });
     if (await demo.locator(".page-jump-controls").isVisible())
       throw new Error("Page jumps reappear in a keyboard-sized viewport");
