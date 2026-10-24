@@ -5,6 +5,8 @@ date: 2026-08-01
 
 # Split the session catalog and reader into a multi-page application
 
+Superseded by [ADR-0020](0020-use-a-unified-project-hub.md).
+
 ## Context and Problem Statement
 
 The catalog and reader shared one React tree, URL state model, and combined hook even though they have independent loading and refresh lifecycles. Catalog refreshes could affect an open reader, direct reader URLs depended on SPA selection state, and browser refresh semantics were obscured by client-side navigation.
@@ -59,5 +61,3 @@ The automatic update preference lifecycle was later refined by [ADR-0014](0014-r
 
 - Good: Aligns URL documents, React roots, and state ownership.
 - Bad: Accepts full navigation cost and requires two build inputs.
-
-Superseded by the hub redesign; see [ADR-0020](0020-use-a-unified-project-hub.md).

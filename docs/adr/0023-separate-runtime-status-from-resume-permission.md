@@ -5,6 +5,10 @@ date: 2026-10-19
 
 # Separate runtime status from resume permission
 
+[ADR-0024](0024-share-request-scoped-runtime-observations.md) refines reader
+responses to share one request-scoped pane observation; effects still validate
+current ownership independently.
+
 ## Context and Problem Statement
 
 The public archive flag does not express whether a session owns a living pane.
