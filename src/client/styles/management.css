@@ -11,6 +11,10 @@
   min-height: 36px;
   padding-right: 44px;
 }
+/* The static heading receives initial dialog focus without acting as a control. */
+.create-session h2[tabindex="-1"]:focus {
+  outline: none;
+}
 .create-session form {
   display: grid;
   gap: 0.8rem;

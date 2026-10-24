@@ -119,7 +119,7 @@ export function CreateSession({
   useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
-      dialog.current?.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus();
+      dialog.current?.querySelector<HTMLElement>("h2")?.focus();
     } else dialog.current?.close?.();
   }, [open]);
   const [worktree, setWorktree] = useState(false);
@@ -153,7 +153,7 @@ export function CreateSession({
       >
         ×
       </button>
-      <h2>New session</h2>
+      <h2 tabIndex={-1}>New session</h2>
       <form
         onSubmit={(event) => {
           event.preventDefault();

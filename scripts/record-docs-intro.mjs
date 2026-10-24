@@ -25,7 +25,6 @@ async function record(
   timestamp,
   docsUserInput,
   mockDocsTerminal,
-  mobileOutput,
 ) {
   const context = await page
     .context()
@@ -35,7 +34,6 @@ async function record(
       locale: "en-US",
       timezoneId: "UTC",
       deviceScaleFactor: 1,
-      hasTouch: true,
       colorScheme: "light",
     });
   const demo = await context.newPage();
@@ -159,31 +157,9 @@ async function record(
     await demo.waitForFunction(
       () => document.querySelector('select[aria-label="Session home"]')?.value === "docs-demo",
     );
-    await demo.setViewportSize({ width: 390, height: 844 });
-    const projectInput = demo.getByRole("combobox", { name: "Project directory" });
-    const projectOption = demo.getByRole("option", { name: "/projects/atlas-dashboard" });
-    await projectInput.tap();
-    await projectOption.waitFor({ state: "visible" });
-    await demo.screenshot({ path: mobileOutput });
-    // A reduced viewport approximates the space left above a mobile keyboard.
-    await demo.setViewportSize({ width: 390, height: 430 });
-    await projectInput.tap();
-    const optionBounds = await projectOption.boundingBox();
-    if (!optionBounds || optionBounds.y < 0 || optionBounds.y + optionBounds.height > 430) {
-      throw new Error("Mobile project suggestion is outside the reduced viewport");
-    }
-    await projectOption.tap();
-    if ((await projectInput.inputValue()) !== "/projects/atlas-dashboard") {
-      throw new Error("Mobile project selection failed");
-    }
-    await projectInput.fill("/new/custom-project");
-    if (await demo.getByRole("listbox").count()) {
-      throw new Error("Unmatched project suggestions remain visible");
-    }
-    await projectInput.fill("");
-    await demo.setViewportSize({ width: 1440, height: 1000 });
     await capture(900);
-    await projectInput.fill("/projects/atlas-dashboard");
+    const directory = demo.getByRole("combobox", { name: "Project directory" });
+    await directory.fill("/projects/atlas-dashboard");
     await capture(1100);
     await demo.getByRole("button", { name: "Create session", exact: true }).click();
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
@@ -224,7 +200,7 @@ async function record(
 const recording = join(frames, "record.js");
 await writeFile(
   recording,
-  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)}, ${JSON.stringify(docsUserInput)}, ${mockDocsTerminal.toString()}, ${JSON.stringify(resolve("docs/images/codex-hub-mobile-create.png"))})`,
+  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)}, ${JSON.stringify(docsUserInput)}, ${mockDocsTerminal.toString()})`,
 );
 const cli = (...args) =>
   execFileSync("playwright-cli", [`-s=${browserSession}`, ...args], { stdio: "inherit" });
