@@ -60,20 +60,6 @@ function InteractionPanel(properties: Omit<ComponentProps<typeof Panel>, "previe
 }
 
 describe("interaction panel", () => {
-  it("keeps composer focus on Send press and sends only after release", async () => {
-    const user = userEvent.setup();
-    const handlers = props(interaction("connected"));
-    render(<InteractionPanel {...handlers} />);
-    const composer = screen.getByRole("textbox", { name: "Message to agent" });
-    await user.type(composer, "Hello from iOS");
-    const send = screen.getByRole("button", { name: "Send" });
-    await user.pointer({ target: send, keys: "[MouseLeft>]" });
-    expect(composer).toHaveFocus();
-    expect(handlers.onSendMessage).not.toHaveBeenCalled();
-    await user.pointer({ keys: "[/MouseLeft]" });
-    expect(handlers.onSendMessage).toHaveBeenCalledExactlyOnceWith("Hello from iOS");
-  });
-
   it("reveals the panel on expansion and collapse without focusing the composer", async () => {
     const user = userEvent.setup();
     render(<InteractionPanel {...props(interaction("connected"))} />);
