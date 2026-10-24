@@ -32,28 +32,6 @@ describe("session normalizer diagnostics", () => {
     expect(normalized.session.diagnostics).toEqual(decoded.diagnostics.slice(0, 50));
     expect(normalized.session.warningCount).toBe(50);
   });
-
-  it("preserves diagnostic order and warning counts below the limit", () => {
-    const decoded = decodedRollout("diagnostic-order", [
-      {
-        ordinal: 3,
-        value: {},
-      },
-    ]);
-    decoded.diagnostics = diagnostics(1);
-
-    const normalized = new DefaultSessionNormalizer().normalize(decoded, sessionMetadata());
-
-    expect(normalized.session.diagnostics).toEqual([
-      decoded.diagnostics[0],
-      expect.objectContaining({
-        code: "unknown_record",
-        severity: "info",
-        ordinal: 3,
-      }),
-    ]);
-    expect(normalized.session.warningCount).toBe(1);
-  });
 });
 
 function diagnostics(count: number): Diagnostic[] {

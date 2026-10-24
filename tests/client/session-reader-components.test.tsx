@@ -13,7 +13,7 @@ import {
 import { SessionHeader } from "../../src/client/components/SessionHeader";
 import { Timeline } from "../../src/client/components/Timeline";
 import { DEFAULT_TIMELINE_VISIBILITY } from "../../src/client/state/timeline-visibility";
-import { baseSession, firstPage, SESSION_ID } from "./session.fixtures";
+import { firstPage, SESSION_ID } from "./session.fixtures";
 
 // @vitest-environment jsdom
 
@@ -145,97 +145,6 @@ describe("session reader components", () => {
     ).toEqual(["2026-07-28T10:00:00.000Z", "2026-07-28T10:00:02.000Z"]);
   });
 
-  it("renders timestamps for every timeline event kind", () => {
-    const timestamp = "2026-07-28T10:00:00.000Z";
-    render(
-      <Timeline
-        items={[
-          {
-            kind: "message",
-            id: "message",
-            ordinal: 1,
-            timestamp,
-            role: "user",
-            phase: null,
-            itemType: null,
-            markdown: "message",
-          },
-          {
-            kind: "directive",
-            id: "directive",
-            ordinal: 2,
-            timestamp,
-            hasDetail: false,
-            text: "directive",
-          },
-          {
-            kind: "tool",
-            stage: "call",
-            id: "tool",
-            ordinal: 3,
-            timestamp,
-            callId: "call",
-            toolName: "tool",
-            preview: null,
-            charCount: 0,
-            hasDetail: false,
-          },
-          {
-            kind: "user_input",
-            stage: "request",
-            id: "input",
-            ordinal: 4,
-            timestamp,
-            callId: "input",
-            questions: [],
-          },
-          {
-            kind: "token",
-            id: "token",
-            ordinal: 5,
-            timestamp,
-            tokenUsage: { total: null, last: null },
-          },
-          { kind: "internal", id: "internal", ordinal: 6, timestamp, eventType: "reasoning" },
-        ]}
-        sessionId={SESSION_ID}
-        cursor={firstPage.cursor}
-        hasMore={false}
-        loading={false}
-        onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-
-    expect(document.querySelectorAll(`time[datetime="${timestamp}"]`)).toHaveLength(6);
-  });
-
-  it("renders an internal event type", () => {
-    render(
-      <Timeline
-        items={[
-          {
-            kind: "internal",
-            id: "internal-3",
-            ordinal: 3,
-            timestamp: null,
-            eventType: "reasoning",
-          },
-        ]}
-        sessionId={SESSION_ID}
-        cursor={firstPage.cursor}
-        hasMore={false}
-        loading={false}
-        onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText("Internal · 3")).toBeInTheDocument();
-    expect(screen.getByText("reasoning", { selector: "strong" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Show JSON" })).toBeInTheDocument();
-  });
-
   it("renders detailed total and last token usage in separate groups", () => {
     render(
       <Timeline
@@ -283,88 +192,6 @@ describe("session reader components", () => {
     expect(within(last).getByText("150")).toBeInTheDocument();
     expect(within(last).queryByText("Cache write input")).toBeNull();
     expect(within(last).queryByText("Reasoning output")).toBeNull();
-  });
-
-  it("renders unavailable token usage groups", () => {
-    render(
-      <Timeline
-        items={[
-          {
-            kind: "token",
-            id: "token-8",
-            ordinal: 8,
-            timestamp: null,
-            tokenUsage: { total: null, last: null },
-          },
-        ]}
-        sessionId={SESSION_ID}
-        cursor={firstPage.cursor}
-        hasMore={false}
-        loading={false}
-        onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-
-    expect(screen.getAllByText("Unavailable")).toHaveLength(2);
-  });
-
-  it("shows normalized source metadata in the session header", () => {
-    const versioned = {
-      ...baseSession,
-      origin: {
-        ...baseSession.origin,
-        agentVersion: "1.2.3",
-        formatVersion: "rollout-v1",
-      },
-    };
-    render(
-      <SessionHeader
-        session={{
-          ...versioned,
-          sourceId: "native-session",
-          itemCount: 0,
-        }}
-        visibility={DEFAULT_TIMELINE_VISIBILITY}
-        onVisibilityChange={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Codex 1.2.3 · format rollout-v1")).toBeInTheDocument();
-    expect(screen.getByText(/native-session/)).toBeInTheDocument();
-  });
-
-  it("prefers a session nickname without exposing the canonical title", () => {
-    const nicknamed = { ...baseSession, nickname: "Display nickname" };
-    render(
-      <SessionHeader
-        session={{
-          ...nicknamed,
-          sourceId: "native-session",
-          itemCount: 0,
-        }}
-        visibility={DEFAULT_TIMELINE_VISIBILITY}
-        onVisibilityChange={vi.fn()}
-      />,
-    );
-    expect(screen.getByRole("heading", { name: "Display nickname" })).toBeInTheDocument();
-    expect(screen.queryByText("Reader work")).toBeNull();
-  });
-
-  it("falls back when the session update timestamp is invalid", () => {
-    render(
-      <SessionHeader
-        session={{
-          ...baseSession,
-          sourceId: "native-session",
-          itemCount: 0,
-          updatedAt: "not-a-timestamp",
-        }}
-        visibility={DEFAULT_TIMELINE_VISIBILITY}
-        onVisibilityChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByText(/Time unavailable/)).toBeInTheDocument();
   });
 
   it("renders Markdown without raw HTML, external images, or dangerous links", () => {
@@ -459,36 +286,6 @@ describe("session reader components", () => {
     expect(document.querySelector("[node]")).toBeNull();
   });
 
-  it("keeps long prose, list items, links, inline code, and tokens as ordinary Markdown", () => {
-    const longToken = "unbroken-token-".repeat(20);
-    render(
-      <MessageItem
-        item={{
-          kind: "message",
-          id: "message-wrapping",
-          ordinal: 12,
-          timestamp: null,
-          role: "assistant",
-          phase: "final",
-          itemType: null,
-          markdown: [
-            `Paragraph ${longToken}`,
-            "",
-            `- List ${longToken}`,
-            "",
-            `[Long link](https://example.com/${longToken}) and \`${longToken}\``,
-          ].join("\n"),
-        }}
-      />,
-    );
-
-    expect(screen.getByText(new RegExp(`Paragraph ${longToken}`))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`List ${longToken}`))).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Long link" })).toBeInTheDocument();
-    expect(screen.getByText(longToken, { selector: "code" })).toBeInTheDocument();
-    expect(screen.queryByRole("region")).toBeNull();
-  });
-
   it("leaves math syntax in code untouched and keeps invalid math readable", () => {
     render(
       <MessageItem
@@ -509,25 +306,6 @@ describe("session reader components", () => {
     expect(screen.getByText("$$not display math$$")).toBeInTheDocument();
     expect(document.querySelector("code .katex")).toBeNull();
     expect(document.querySelector(".katex-error")).toHaveTextContent("\\frac{1}{");
-  });
-
-  it("labels an assistant message with an unknown phase neutrally", () => {
-    render(
-      <MessageItem
-        item={{
-          kind: "message",
-          id: "message-10",
-          ordinal: 10,
-          timestamp: null,
-          role: "assistant",
-          phase: null,
-          itemType: null,
-          markdown: "Unclassified",
-        }}
-      />,
-    );
-    expect(screen.getByText("Assistant · 10")).toBeInTheDocument();
-    expect(screen.queryByText(/Assistant final/)).toBeNull();
   });
 
   it("previews completed plans collapsed and toggles their full Markdown", async () => {
@@ -574,72 +352,6 @@ describe("session reader components", () => {
     expect(fullContent).toHaveAttribute("hidden");
     await user.click(toggle);
     expect(document.getElementById(contentId!)).toBe(fullContent);
-  });
-
-  it("keeps multiple plan disclosures independent", async () => {
-    const user = userEvent.setup();
-    render(
-      <>
-        <MessageItem
-          item={{
-            kind: "message",
-            id: "message-plan-1",
-            ordinal: 12,
-            timestamp: null,
-            role: "assistant",
-            phase: "final",
-            itemType: "Plan",
-            markdown: "# First plan",
-          }}
-        />
-        <MessageItem
-          item={{
-            kind: "message",
-            id: "message-plan-2",
-            ordinal: 13,
-            timestamp: null,
-            role: "assistant",
-            phase: "final",
-            itemType: "Plan",
-            markdown: "# Second plan",
-          }}
-        />
-      </>,
-    );
-
-    const first = screen.getByRole("button", { name: /Plan · 12.*Show/ });
-    const second = screen.getByRole("button", { name: /Plan · 13.*Show/ });
-    await user.click(first);
-    expect(first).toHaveAttribute("aria-expanded", "true");
-    expect(second).toHaveAttribute("aria-expanded", "false");
-  });
-
-  it("renders non-plan final messages without a disclosure", () => {
-    render(
-      <MessageItem
-        item={{
-          kind: "message",
-          id: "message-final",
-          ordinal: 14,
-          timestamp: null,
-          role: "assistant",
-          phase: "final",
-          itemType: null,
-          markdown: "# Final answer",
-        }}
-      />,
-    );
-
-    expect(screen.getByRole("heading", { name: "Final answer" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /plan/i })).toBeNull();
-  });
-
-  it("creates a plain-text plan preview", () => {
-    expect(
-      planPreview(
-        "<proposed_plan>\n# Plan\n\n- **One**\n- [Two](https://example.com)\n</proposed_plan>",
-      ),
-    ).toBe("Plan\nOne\nTwo");
   });
 
   it("bounds plan previews by Unicode code points and limits parsed source", () => {

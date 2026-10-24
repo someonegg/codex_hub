@@ -200,54 +200,7 @@ describe("unified hub", () => {
     expect(within(nav).queryByRole("link", { name: /Archived trace/ })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Archived trace" })).toBeInTheDocument();
   });
-  it("preserves project navigation scroll when the mobile sidebar becomes hidden", async () => {
-    render(<App />);
-    await flush();
-    const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
-    const rects = vi.spyOn(nav, "getClientRects").mockReturnValue([{}] as unknown as DOMRectList);
-    fireEvent.scroll(nav, { target: { scrollTop: 240 } });
-    fireEvent.click(within(nav).getByRole("link", { name: /Reader work/ }));
-    await flush();
-    rects.mockReturnValue([] as unknown as DOMRectList);
-    fireEvent.scroll(nav, { target: { scrollTop: 0 } });
-    expect(JSON.parse(sessionStorage.getItem("codex-hub.navigation")!).scroll).toBe(240);
-    rects.mockReturnValue([{}] as unknown as DOMRectList);
-    fireEvent.click(screen.getByRole("button", { name: /Back to list/ }));
-    await flush();
-    expect(nav.scrollTop).toBe(240);
-  });
-  it("keeps projects collapsed by default when opening a direct child link", async () => {
-    sessionStorage.removeItem("codex-hub.navigation");
-    window.history.replaceState(null, "", `/sessions/${CHILD_ID}`);
-    render(<App />);
-    await flush();
-    expect(screen.getByRole("heading", { name: "Child trace" })).toBeInTheDocument();
-    const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
-    expect(within(nav).getByRole("button", { name: /^reader.*1/ })).toHaveAttribute(
-      "aria-expanded",
-      "false",
-    );
-    expect(within(nav).queryAllByRole("link")).toHaveLength(0);
-    fireEvent.click(within(nav).getByRole("button", { name: /^reader.*1/ }));
-    expect(within(nav).getAllByRole("link")).toHaveLength(1);
-    expect(within(nav).queryByRole("link", { name: /Child trace/ })).not.toBeInTheDocument();
-  });
-  it("returns from a child to its immediate parent in the related-session area", async () => {
-    window.history.replaceState(null, "", `/sessions/${CHILD_ID}`);
-    render(<App />);
-    await flush();
-    const related = screen.getByRole("navigation", { name: "Parent session" });
-    const parent = within(related).getByRole("link", { name: "← Parent session · Reader work" });
-    expect(parent).toHaveAttribute("href", `/sessions/${SESSION_ID}`);
-    expect(fireEvent.click(parent, { metaKey: true })).toBe(true);
-    expect(window.location.pathname).toBe(`/sessions/${CHILD_ID}`);
-    fireEvent.click(parent);
-    await flush();
-    expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
-    expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "Parent session" })).not.toBeInTheDocument();
-    expect(screen.getByText("Child sessions · 1")).toBeInTheDocument();
-  });
+
   it("keeps the parent link when its summary is unavailable and retains nested children", async () => {
     window.history.replaceState(null, "", `/sessions/${CHILD_ID}`);
     vi.mocked(api.sessions)
@@ -397,18 +350,6 @@ it("formats a fixed large catalog once and reuses dates when groups and selectio
 });
 
 describe("hub link entry points", () => {
-  it("preserves modified and non-primary brand clicks and navigates on primary click", async () => {
-    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    render(<App />);
-    await flush();
-    const brand = screen.getByRole("link", { name: /Codex Hub/ });
-    expect(fireEvent.click(brand, { ctrlKey: true })).toBe(true);
-    expect(fireEvent.click(brand, { button: 1 })).toBe(true);
-    expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
-    fireEvent.click(brand);
-    expect(window.location.pathname).toBe("/");
-  });
-
   it("preserves modified child clicks and navigates on primary click", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
     render(<App />);

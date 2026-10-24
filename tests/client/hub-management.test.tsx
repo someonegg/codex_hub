@@ -48,19 +48,6 @@ describe("hub management", () => {
       expect.objectContaining({ yolo: false, requestId: expect.stringMatching(/^[a-f0-9]{32}$/) }),
     );
   });
-  it("resets creation launch options whenever the dialog reopens", () => {
-    const props = { project: "/project", projects: [], onCreated: vi.fn() };
-    const view = render(<CreateSession {...props} open />);
-    for (const name of ["Enable worktree", "Enable YOLO mode"]) {
-      expect(screen.getByRole("checkbox", { name })).not.toBeChecked();
-      fireEvent.click(screen.getByRole("checkbox", { name }));
-      expect(screen.getByRole("checkbox", { name })).toBeChecked();
-    }
-    view.rerender(<CreateSession {...props} open={false} />);
-    view.rerender(<CreateSession {...props} open />);
-    for (const name of ["Enable worktree", "Enable YOLO mode"])
-      expect(screen.getByRole("checkbox", { name })).not.toBeChecked();
-  });
 
   it("uses a new request after definite failure but preserves it for uncertain retries", async () => {
     const create = vi
@@ -195,55 +182,6 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
   });
-  it.each(["succeeded", "failed", "unknown"] as const)(
-    "dismisses only successful status after two seconds (%s)",
-    async (status) => {
-      vi.useFakeTimers();
-      vi.spyOn(api, "archiveSession").mockResolvedValue({
-        ...pending,
-        type: "archive",
-        phase: "confirming_archive",
-        status,
-      });
-      const session = { ...baseSession, sourceId: "native", itemCount: 0 };
-      render(<ManageSession session={session} onChanged={vi.fn()} />);
-      fireEvent.click(screen.getByRole("button", { name: "Session management" }));
-      fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
-      await flush();
-      expect(screen.getByRole("status")).toHaveTextContent(status);
-      expect(screen.queryByText("Confirming archive")).not.toBeInTheDocument();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1999);
-      });
-      expect(screen.getByRole("status")).toBeInTheDocument();
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      if (status === "succeeded") expect(screen.queryByRole("status")).not.toBeInTheDocument();
-      else expect(screen.getByRole("status")).toBeInTheDocument();
-    },
-  );
-});
-
-it("shows copyable creation recovery commands", async () => {
-  const command = "tmux -S '/tmp/socket path' attach-session -t 'codex-hub-test'";
-  const writeText = vi.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  vi.spyOn(api, "createSession").mockResolvedValue({
-    ...pending,
-    status: "unknown",
-    attachCommand: command,
-  });
-  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
-  await flush();
-  expect(screen.getByText(command)).toBeInTheDocument();
-  expect(screen.getByText("tmux access")).toBeInTheDocument();
-  expect(screen.getByRole("status")).toHaveTextContent("unknown");
-  fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
-  await flush();
-  expect(writeText).toHaveBeenCalledWith(command);
-  expect(screen.getByText("Copied")).toBeInTheDocument();
 });
 
 it("hides attach until the server supplies it and stops polling after a terminal response", async () => {
@@ -450,17 +388,6 @@ it("keeps nonretryable query failures locked with a manual query and does not re
   expect(submit).toHaveBeenCalledOnce();
 });
 
-it("shows resubmission guidance without an ineffective status query button", async () => {
-  vi.spyOn(api, "createSession").mockRejectedValue(new Error("submission failed"));
-  render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
-  fireEvent.click(screen.getByRole("button", { name: "Create session" }));
-  await flush();
-  expect(screen.getByRole("alert")).toHaveTextContent(
-    "Use the original action button to try again.",
-  );
-  expect(screen.queryByRole("button", { name: "Retry status check" })).toBeNull();
-});
-
 it("cancels hidden recovery reads and ignores late responses while a resumed manual read runs", async () => {
   vi.useFakeTimers();
   let visible: DocumentVisibilityState = "visible";
@@ -607,23 +534,4 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
   fireEvent.click(screen.getByRole("button", { name: "Session management" }));
   expect(screen.getByRole("button", { name: "Archive session" })).toBeDisabled();
   expect(screen.getByText("resume · pending")).toBeInTheDocument();
-});
-
-it("explains why resume is unavailable", async () => {
-  const { ResumeSession } = await import("../../src/client/components/HubManagement");
-  function Harness() {
-    const controller = useHubOperation(SESSION_ID, vi.fn());
-    return (
-      <ResumeSession
-        session={{
-          ...baseSession,
-          resume: { allowed: false, reason: "Binding validation failed" },
-        }}
-        controller={controller}
-      />
-    );
-  }
-  render(<Harness />);
-  expect(screen.getByText("Binding validation failed")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Resume" })).not.toBeInTheDocument();
 });

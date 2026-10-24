@@ -52,9 +52,12 @@ export async function startPreviewServer(
     },
     async close() {
       // Exercise the server's shutdown path before releasing test clients.
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+        // HTTP keep-alive sockets must not delay cleanup; upgraded sockets still
+        // exercise the production WebSocket close handshake above.
+        server.closeAllConnections();
+      });
       for (const socket of clients) socket.terminate();
     },
   };

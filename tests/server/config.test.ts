@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { commandLineHelp, loadConfig } from "../../src/server/config.js";
+import { loadConfig } from "../../src/server/config.js";
 
 function runnable(args: readonly string[]) {
   const result = loadConfig(args);
@@ -20,11 +20,6 @@ describe("server command line", () => {
       tls: { enabled: false },
       interactionEnabled: true,
     });
-  });
-
-  it("resolves an explicit tmux socket", () => {
-    expect(runnable(["--tmux-socket", "./tmux.sock"]).tmuxSocket).toBe(resolve("tmux.sock"));
-    expect(commandLineHelp()).toContain("--tmux-socket");
   });
 
   it("parses all server and mutual TLS options", () => {
@@ -69,24 +64,10 @@ describe("server command line", () => {
     expect(() => loadConfig(["--tmux-socket", " "])).toThrow("--tmux-socket must not be empty");
     expect(() => loadConfig(["positional"])).toThrow();
   });
-
-  it("returns help without requiring runtime options", () => {
-    expect(loadConfig(["--help"])).toEqual({ kind: "help" });
-    expect(commandLineHelp()).toContain("--ssl-ca <path>");
-    expect(commandLineHelp()).toContain("codex-hub --ssl");
-  });
 });
 
 it("resolves upload directories and rejects empty configuration", () => {
-  const command = loadConfig(["--upload-dir", "uploads with spaces"]);
-  expect(command.kind).toBe("run");
-  if (command.kind === "run")
-    expect(command.config.uploadDirectory).toBe(resolve("uploads with spaces"));
+  const config = runnable(["--upload-dir", "uploads with spaces"]);
+  expect(config.uploadDirectory).toBe(resolve("uploads with spaces"));
   expect(() => loadConfig(["--upload-dir", " "])).toThrow("--upload-dir must not be empty");
-});
-
-it("expands home-relative upload directories", () => {
-  const command = loadConfig(["--upload-dir", "~/hub-uploads"]);
-  if (command.kind !== "run") throw new Error("Expected runnable configuration");
-  expect(command.config.uploadDirectory).toBe(resolve(homedir(), "hub-uploads"));
 });

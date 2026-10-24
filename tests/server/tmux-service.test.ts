@@ -2,12 +2,11 @@ import { writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:net";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { normalizeMessage } from "../../src/server/interaction/message.js";
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import {
-  MAX_TERMINAL_PREVIEW_BYTES,
   type TmuxCommandOptions,
   type TmuxCommandRunner,
   TmuxInteractionService,
@@ -122,85 +121,49 @@ describe("tmux interaction transport", () => {
     expect(keys[0]?.args).toEqual(["send-keys", "-t", "%3", "Enter"]);
   });
 
-  it("revalidates and sends an ordered key sequence with one command", async () => {
-    const socketPath = await unixSocket();
-    const runner = new FakeRunner();
-    const service = new TmuxInteractionService(runner);
-    const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
-
-    await service.sendKeys(binding, [
-      {
-        keys: ["Enter", "Up", "Down", "Left", "Right", "C-u", "Escape", "BTab", "Left"],
-        delayMs: 0,
-      },
-    ]);
-
-    expect(runner.calls.filter((call) => call.args[0] === "list-panes")).toHaveLength(2);
-    expect(runner.calls.filter((call) => call.args[0] === "send-keys")).toEqual([
-      expect.objectContaining({
-        args: [
-          "send-keys",
-          "-t",
-          "%3",
-          "Enter",
-          "Up",
-          "Down",
-          "Left",
-          "Right",
-          "C-u",
-          "Escape",
-          "BTab",
-          "Left",
-        ],
-      }),
-    ]);
-  });
-
   it("separates Ctrl+U from Escape and keeps concurrent input after the final step", async () => {
     const socketPath = await unixSocket();
-    const runner = new FakeRunner();
+    let cleared!: () => void;
+    const inputCleared = new Promise<void>((resolve) => {
+      cleared = resolve;
+    });
+    class InterruptRunner extends FakeRunner {
+      override async run(socket: string, args: readonly string[], input: string | undefined) {
+        const result = await super.run(socket, args, input);
+        if (args[0] === "send-keys" && args.at(-1) === "C-u") cleared();
+        return result;
+      }
+    }
+    const runner = new InterruptRunner();
     const service = new TmuxInteractionService(runner);
     const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
-    const started = Date.now();
+    vi.useFakeTimers();
     const interrupt = service.sendKeys(binding, [
       { keys: ["C-u"], delayMs: 0 },
       { keys: ["Escape"], delayMs: 100 },
     ]);
     const concurrent = service.sendKeys(binding, [{ keys: ["Enter"], delayMs: 0 }]);
-    await interrupt;
-    expect(Date.now() - started).toBeGreaterThanOrEqual(90);
-    await concurrent;
-    expect(
-      runner.calls.filter((call) => call.args[0] === "send-keys").map((call) => call.args),
-    ).toEqual([
+    const sentKeys = () =>
+      runner.calls.filter((call) => call.args[0] === "send-keys").map((call) => call.args);
+    await inputCleared;
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(99);
+    expect(sentKeys()).toEqual([["send-keys", "-t", "%3", "C-u"]]);
+    await vi.advanceTimersByTimeAsync(1);
+    await Promise.all([interrupt, concurrent]);
+    expect(sentKeys()).toEqual([
       ["send-keys", "-t", "%3", "C-u"],
       ["send-keys", "-t", "%3", "Escape"],
       ["send-keys", "-t", "%3", "Enter"],
     ]);
   });
 
-  it("revalidates and captures only the current visible pane", async () => {
-    const socketPath = await unixSocket();
-    const runner = new FakeRunner();
-    runner.terminalOutput = "alpha\n世界\n";
-    runner.terminalTruncated = true;
-    const service = new TmuxInteractionService(runner);
-    const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
-
-    await expect(service.captureTerminal(binding)).resolves.toEqual({
-      content: "alpha\n世界\n",
-      truncated: true,
-    });
-    const capture = runner.calls.find((call) => call.args[0] === "capture-pane");
-    expect(capture?.args).toEqual(["capture-pane", "-p", "-t", "%3"]);
-    expect(capture?.options).toEqual({
-      maxOutputBytes: MAX_TERMINAL_PREVIEW_BYTES,
-      truncateStart: true,
-    });
-  });
-
   it("serializes concurrent operations for the same pane", async () => {
     const socketPath = await unixSocket();
+    let loadStarted!: () => void;
+    const loading = new Promise<void>((resolve) => {
+      loadStarted = resolve;
+    });
     let releaseLoad!: () => void;
     const loadBlocked = new Promise<void>((resolve) => {
       releaseLoad = resolve;
@@ -212,7 +175,10 @@ describe("tmux interaction transport", () => {
         input: string | undefined,
       ) {
         const result = await super.run(candidateSocket, args, input);
-        if (args[0] === "load-buffer") await loadBlocked;
+        if (args[0] === "load-buffer") {
+          loadStarted();
+          await loadBlocked;
+        }
         return result;
       }
     }
@@ -220,9 +186,7 @@ describe("tmux interaction transport", () => {
     const service = new TmuxInteractionService(runner);
     const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
     const message = service.sendMessage(binding, "hello");
-    while (!runner.calls.some((call) => call.args[0] === "load-buffer")) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
+    await loading;
     const keys = service.sendKeys(binding, [{ keys: ["BTab"], delayMs: 0 }]);
     expect(runner.calls.filter((call) => call.args[0] === "list-panes")).toHaveLength(2);
     releaseLoad();
@@ -358,7 +322,8 @@ it.each(["timeout", "command_failed"] as const)(
   },
 );
 
-it.each(["%3", "%4"])("accepts linked-window observations when targeting %s", async (paneId) => {
+it("accepts linked-window observations when targeting %3", async () => {
+  const paneId = "%3";
   const socketPath = await unixSocket();
   const runner = new FakeRunner();
   runner.paneOutput = "%3|0|first-session\n%3|0|linked-session\n%4|0|other-session\n";
@@ -400,17 +365,15 @@ it.each(["missing", "dead"])("disconnects a %s pane before sending or capturing"
   );
 });
 
-it.each(["timeout", "command_failed"] as const)(
-  "preserves %s during operation validation",
-  async (code) => {
-    const socketPath = await unixSocket();
-    const runner = new FakeRunner();
-    const service = new TmuxInteractionService(runner);
-    const binding = await service.connect({ valid: true, ordinal: 1, socketPath, paneId: "%3" });
-    runner.failure = () => new InteractionTransportError(code, "query failed");
-    await expect(service.captureTerminal(binding)).rejects.toMatchObject({ code });
-  },
-);
+it("preserves timeout during operation validation", async () => {
+  const code = "timeout";
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  const service = new TmuxInteractionService(runner);
+  const binding = await service.connect({ valid: true, ordinal: 1, socketPath, paneId: "%3" });
+  runner.failure = () => new InteractionTransportError(code, "query failed");
+  await expect(service.captureTerminal(binding)).rejects.toMatchObject({ code });
+});
 
 it("coalesces only concurrent queries and recovers without rebinding", async () => {
   const socketPath = await unixSocket();

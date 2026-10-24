@@ -290,6 +290,8 @@ describe("message and directive normalization", () => {
         type: "Extension",
         text: "EXTENSION_PAYLOAD_MUST_NOT_RENDER",
       }),
+      completedItem(8, { type: "FileChange", text: "SECRET_PATCH" }),
+      completedItem(9, { type: "CommandExecution", text: "SECRET_OUTPUT" }),
     ]);
 
     const subtypes = [
@@ -300,6 +302,8 @@ describe("message and directive normalization", () => {
       "Plan",
       "ReviewMode",
       "Extension",
+      "FileChange",
+      "CommandExecution",
     ];
     expect(normalized.timeline).toEqual(
       subtypes.map((subtype, index) => ({
@@ -317,17 +321,8 @@ describe("message and directive normalization", () => {
     expect(serialized).not.toContain("UNKNOWN_PAYLOAD_MUST_NOT_RENDER");
     expect(serialized).not.toContain("REVIEW_PAYLOAD_MUST_NOT_RENDER");
     expect(serialized).not.toContain("EXTENSION_PAYLOAD_MUST_NOT_RENDER");
-  });
-
-  it("does not turn arbitrary completed items with text fields into messages", () => {
-    const normalized = normalizeRecords("strict-completed-plan", [
-      completedItem(1, { type: "FileChange", text: "SECRET_PATCH" }),
-      completedItem(2, { type: "CommandExecution", text: "SECRET_OUTPUT" }),
-    ]);
-
-    expect(normalized.timeline.every((item) => item.kind === "internal")).toBe(true);
-    expect(JSON.stringify(normalized)).not.toContain("SECRET_PATCH");
-    expect(JSON.stringify(normalized)).not.toContain("SECRET_OUTPUT");
+    expect(serialized).not.toContain("SECRET_PATCH");
+    expect(serialized).not.toContain("SECRET_OUTPUT");
   });
 });
 

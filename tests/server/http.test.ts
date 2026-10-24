@@ -27,9 +27,13 @@ const servers: ReturnType<typeof createServer>[] = [];
 
 afterEach(async () => {
   await Promise.all(
-    servers
-      .splice(0)
-      .map((server) => new Promise<void>((resolve) => server.close(() => resolve()))),
+    servers.splice(0).map(
+      (server) =>
+        new Promise<void>((resolve) => {
+          server.close(() => resolve());
+          server.closeAllConnections();
+        }),
+    ),
   );
 });
 

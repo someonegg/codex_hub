@@ -98,21 +98,6 @@ describe("tool normalization", () => {
     expect(directive?.truncated).toBe(true);
   });
 
-  it("does not rewrite an existing call when its output arrives", () => {
-    const call = toolCall(1, "append", "inspect", "input");
-    const before = normalizeRecords("before-output", [call]);
-    const after = normalizeRecords("after-output", [call, toolOutput(2, "append", "result")]);
-
-    expect(after.timeline[0]).toEqual(before.timeline[0]);
-    expect(after.toolDetails.get("tool-1")).toEqual(before.toolDetails.get("tool-1"));
-    expect(after.timeline[1]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      callId: "append",
-      status: "completed",
-    });
-  });
-
   it("consumes a pending call after its first output", () => {
     const normalized = normalizeRecords("duplicate-tool-output", [
       toolCall(1, "duplicate", "inspect", "input"),

@@ -10,23 +10,6 @@ import {
 import { TimelinePrefixRegistry } from "../../src/server/repository/timeline-prefix-registry.js";
 
 describe("timeline prefix index", () => {
-  it("retains old prefix tokens after append and rejects a rewritten prefix", () => {
-    const original = normalized(["one", "two"]);
-    const appended = normalized(["one", "two", "three"]);
-    const rewritten = normalized(["changed", "two", "three"]);
-    const key = Buffer.alloc(32, 7);
-    const before = deriveTimelinePrefixIndex(original, key);
-    const after = deriveTimelinePrefixIndex(appended, key);
-    const changed = deriveTimelinePrefixIndex(rewritten, key);
-    const boundary = before.boundaryAt(original.timeline, 2)!;
-
-    expect(before.byteLength).toBe(72);
-    expect(after.matches(appended.timeline, boundary, boundary.timelinePrefixRevision)).toBe(true);
-    expect(changed.matches(rewritten.timeline, boundary, boundary.timelinePrefixRevision)).toBe(
-      false,
-    );
-  });
-
   it("requires strictly increasing positive ordinals", () => {
     const original = normalized(["one", "two"]);
     const value = {

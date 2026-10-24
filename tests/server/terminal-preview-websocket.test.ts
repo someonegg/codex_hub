@@ -132,6 +132,7 @@ it("accepts same-origin upgrades and advertises the exact WebSocket CSP source",
   await opened(client.socket);
   await vi.waitFor(() => expect(client.messages).toHaveLength(1));
   const response = await fetch(server.origin);
+  await response.arrayBuffer();
   expect(response.headers.get("content-security-policy")).toContain(
     `connect-src 'self' ${server.base}`,
   );

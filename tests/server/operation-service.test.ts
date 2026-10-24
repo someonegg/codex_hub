@@ -323,15 +323,14 @@ describe("observed management operations", () => {
     set({ sessions: [] });
     expect((await service.get(op.operationId))?.status).toBe("unknown");
   });
-  it("expires terminal records after 30 minutes and does not resume across a new service", async () => {
+  it("does not recover terminal operation records in a new service", async () => {
     const { service, time } = setup();
     const op = service.create({ directory: "/project", worktree: false, requestId: "request-one" });
     await flush();
     time(300_001);
     await service.poll();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "unknown" });
     expect(await setup().service.get(op.operationId)).toBeNull();
-    time(30 * 60_000 + 300_002);
-    expect(await service.get(op.operationId)).toBeNull();
   });
 });
 

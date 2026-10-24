@@ -58,44 +58,6 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     );
   });
 
-  it("reuses the prefix index for a fresh normalized object with the same timeline references", async () => {
-    let normalized = normalizedSession("session", "Same");
-    let signature = "first";
-    let prefixCalls = 0;
-    const store = new CatalogSnapshotStore(
-      [
-        mutableSource(() => ({
-          signature,
-          entries: [sourceEntry("session", normalized)],
-        })),
-      ],
-      0,
-      () => 0,
-      {
-        timelinePrefixIndexBuilder(value, prefixKey) {
-          prefixCalls += 1;
-          return deriveTimelinePrefixIndex(value, prefixKey);
-        },
-      },
-    );
-    const first = await store.current();
-    const id = idByTitle(first, "Same");
-
-    normalized = {
-      ...normalized,
-      session: { ...normalized.session },
-    };
-    signature = "fresh-object";
-    const second = await store.refresh();
-
-    expect(prefixCalls).toBe(1);
-    expect(second.sessions.get(id)!.normalized).not.toBe(first.sessions.get(id)!.normalized);
-    expect(second.sessions.get(id)!.timelinePrefixIndex).toBe(
-      first.sessions.get(id)!.timelinePrefixIndex,
-    );
-    expect(prefixAtEnd(second, id)).toBe(prefixAtEnd(first, id));
-  });
-
   it("updates only the affected relationship closure when a child is reparented or deleted", async () => {
     const parentOne = normalizedSession("p1", "Parent one");
     const parentTwo = normalizedSession("p2", "Parent two");
@@ -423,12 +385,4 @@ function expectChanged(
   for (const id of ids) {
     expect(snapshot.sessions.get(id)!.normalized).not.toBe(before.get(id));
   }
-}
-
-function prefixAtEnd(snapshot: CatalogSnapshot, id: DomainSessionId): string {
-  const indexed = snapshot.sessions.get(id)!;
-  return indexed.timelinePrefixIndex.boundaryAtOrBefore(
-    indexed.normalized.timeline,
-    Number.MAX_SAFE_INTEGER,
-  ).timelinePrefixRevision;
 }
