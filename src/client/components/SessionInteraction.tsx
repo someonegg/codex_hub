@@ -7,6 +7,7 @@ import { useTerminalPreview } from "../state/use-terminal-preview";
 import { InteractionPanel } from "./InteractionPanel";
 
 interface SessionInteractionProps {
+  onPanelElement?: (element: HTMLElement | null) => void;
   operationActions?: ReactNode;
   operationStatus?: ReactNode;
   managementBusy?: boolean;
@@ -19,6 +20,7 @@ interface SessionInteractionProps {
 }
 
 export function SessionInteraction({
+  onPanelElement,
   operationActions,
   operationStatus,
   managementBusy,
@@ -37,6 +39,7 @@ export function SessionInteraction({
   return (
     <InteractionPanel
       key={sessionId}
+      onPanelElement={onPanelElement}
       operationActions={operationActions}
       operationStatus={operationStatus}
       interaction={interaction}

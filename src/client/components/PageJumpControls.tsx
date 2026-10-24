@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const EDGE_DISTANCE_PX = 480;
+const PANEL_GAP_PX = 12;
 
 interface ControlVisibility {
   top: boolean;
@@ -9,13 +10,23 @@ interface ControlVisibility {
 
 const hiddenControls: ControlVisibility = { top: false, bottom: false };
 
-export function PageJumpControls() {
+export function PageJumpControls({
+  interactionPanel = null,
+}: {
+  interactionPanel?: HTMLElement | null;
+}) {
+  const controls = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(hiddenControls);
 
   useEffect(() => {
     let pageHeight = document.documentElement.scrollHeight;
     let animationFrame: number | null = null;
-    const updateVisibility = () => {
+    const updateControls = () => {
+      const panelTop = interactionPanel?.getBoundingClientRect().top;
+      // Allow controls to leave the viewport rather than overlap a tall panel.
+      const panelClearance =
+        panelTop === undefined ? 0 : Math.max(0, window.innerHeight - panelTop + PANEL_GAP_PX);
+      controls.current?.style.setProperty("--panel-clearance", `${panelClearance}px`);
       const viewportBottom = window.scrollY + window.innerHeight;
       const next = {
         top: window.scrollY > EDGE_DISTANCE_PX,
@@ -25,39 +36,40 @@ export function PageJumpControls() {
         current.top === next.top && current.bottom === next.bottom ? current : next,
       );
     };
-    const scheduleVisibilityUpdate = () => {
+    const scheduleControlsUpdate = () => {
       if (typeof window.requestAnimationFrame !== "function") {
-        updateVisibility();
+        updateControls();
         return;
       }
       if (animationFrame !== null) return;
       animationFrame = window.requestAnimationFrame(() => {
         animationFrame = null;
-        updateVisibility();
+        updateControls();
       });
     };
     const updatePageGeometry = () => {
       pageHeight = document.documentElement.scrollHeight;
-      scheduleVisibilityUpdate();
+      scheduleControlsUpdate();
     };
 
-    updateVisibility();
+    updateControls();
     const resizeObserver =
       typeof ResizeObserver === "undefined" ? null : new ResizeObserver(updatePageGeometry);
     const onScroll = () => {
       if (resizeObserver === null) pageHeight = document.documentElement.scrollHeight;
-      scheduleVisibilityUpdate();
+      scheduleControlsUpdate();
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", updatePageGeometry);
     resizeObserver?.observe(document.documentElement);
+    if (interactionPanel) resizeObserver?.observe(interactionPanel);
     return () => {
       window.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", updatePageGeometry);
       if (animationFrame !== null) window.cancelAnimationFrame(animationFrame);
       resizeObserver?.disconnect();
     };
-  }, []);
+  }, [interactionPanel]);
 
   const scrollTo = (top: number) => {
     const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -65,7 +77,7 @@ export function PageJumpControls() {
   };
 
   return (
-    <nav className="page-jump-controls" aria-label="Page position">
+    <nav ref={controls} className="page-jump-controls" aria-label="Page position">
       <button
         type="button"
         className={`page-jump-control${visible.top ? " is-visible" : ""}`}

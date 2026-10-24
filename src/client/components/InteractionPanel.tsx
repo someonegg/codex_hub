@@ -1,5 +1,13 @@
 import type { ReactNode } from "react";
-import { type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   InteractionKey,
@@ -14,6 +22,7 @@ import { InternalLink } from "./InternalLink";
 import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
 interface InteractionPanelProps {
+  onPanelElement?: (element: HTMLElement | null) => void;
   operationActions?: ReactNode;
   operationStatus?: ReactNode;
 
@@ -39,6 +48,7 @@ interface InteractionPanelProps {
 }
 
 export function InteractionPanel({
+  onPanelElement,
   operationActions,
   operationStatus,
   interaction,
@@ -209,6 +219,13 @@ export function InteractionPanel({
     }
   };
   const panel = useRef<HTMLElement | null>(null);
+  const setPanel = useCallback(
+    (element: HTMLElement | null) => {
+      panel.current = element;
+      onPanelElement?.(element);
+    },
+    [onPanelElement],
+  );
   const wasPreviewExpanded = useRef(false);
   const hadPreviewContent = useRef(false);
   const previewContentId = useId();
@@ -337,7 +354,7 @@ export function InteractionPanel({
   };
 
   return (
-    <section ref={panel} className="interaction-panel" aria-label="Session interaction">
+    <section ref={setPanel} className="interaction-panel" aria-label="Session interaction">
       <div className="interaction-heading">
         {attachCommand ? (
           <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>

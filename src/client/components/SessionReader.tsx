@@ -1,4 +1,4 @@
-import { type ReactNode, useMemo } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 
 import type { InteractionResponse } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
@@ -63,6 +63,7 @@ export function SessionReader({
   error,
   onDismissError,
 }: SessionReaderProps) {
+  const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
   const visibleItems = useMemo(
     () => filterVisibleTimelineItems(items, visibility),
     [items, visibility],
@@ -119,6 +120,7 @@ export function SessionReader({
       {context.session.status !== "archived" ? (
         <SessionInteraction
           key={context.session.id}
+          onPanelElement={setInteractionPanel}
           operationActions={operationActions}
           operationStatus={operationStatus}
           managementBusy={managementBusy}
@@ -147,7 +149,7 @@ export function SessionReader({
           </button>
         </aside>
       ) : null}
-      <PageJumpControls />
+      <PageJumpControls interactionPanel={interactionPanel} />
     </section>
   );
 }

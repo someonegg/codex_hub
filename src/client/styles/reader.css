@@ -177,7 +177,7 @@
   position: fixed;
   z-index: 30;
   right: clamp(0.9rem, 2.2vw, 1.75rem);
-  bottom: clamp(0.9rem, 2.2vw, 1.75rem);
+  bottom: max(clamp(0.9rem, 2.2vw, 1.75rem), var(--panel-clearance, 0px));
   display: grid;
   gap: 0.35rem;
 }
@@ -204,11 +204,6 @@
   opacity: 1;
   pointer-events: auto;
   transform: translateY(0);
-}
-@media (width < 768px) {
-  body:has(.interaction-composer:focus-within) .page-jump-controls {
-    display: none;
-  }
 }
 .page-jump-control:hover {
   color: var(--paper);
