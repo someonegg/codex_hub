@@ -3,9 +3,9 @@ status: superseded by ADR-0019
 date: 2026-08-20
 ---
 
-Superseded by [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md).
-
 # Remember automatic updates per browser tab
+
+Superseded by [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md).
 
 ## Context and Problem Statement
 

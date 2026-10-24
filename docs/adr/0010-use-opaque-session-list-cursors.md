@@ -5,6 +5,8 @@ date: 2026-08-01
 
 # Use opaque cursors for session-list pagination
 
+Superseded by [ADR-0021](0021-split-catalog-structure-and-activity.md).
+
 ## Context and Problem Statement
 
 Query-scoped revisions correctly prevented duplicates and omissions, but the API separately exposed an offset and revision. Clients had to preserve and combine those fields, even though both are implementation details of one pagination continuation.
@@ -64,5 +66,3 @@ This decision supersedes [ADR-0005](0005-use-query-scoped-revisions-for-session-
 
 - Good: Avoids hashing the complete match set.
 - Bad: Does not directly detect earlier membership changes and changes traversal semantics.
-
-Superseded by the hub redesign; see [ADR-0021](0021-split-catalog-structure-and-activity.md).

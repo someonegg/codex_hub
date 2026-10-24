@@ -22,7 +22,7 @@ Session reads report `unbound`, `disconnected`, `connected`, or `unknown`, witho
 inferring process activity. Input timeouts have unknown results and are not retried.
 
 Default management and interaction are covered by [ADR-0016](0016-enable-hub-management-by-default.md).
-V3-only bindings, current pane validation, and archive shutdown are covered by
+Historical V3 bindings, pane validation, and archive shutdown are covered by
 [ADR-0018](0018-cache-validation-per-binding-record.md).
 
 ## Consequences

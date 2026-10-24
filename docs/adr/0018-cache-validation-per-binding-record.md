@@ -14,6 +14,10 @@ The exit sequence and no-forced-kill policy below are historical; see
 runtime observations and explicit resume permission. See the
 [interaction reference](../technical-reference.md#tmux-interaction) for current behavior.
 
+[ADR-0024](0024-share-request-scoped-runtime-observations.md) refines reader
+responses to share one request-scoped pane observation; effects still validate
+current ownership independently.
+
 ## Context and Problem Statement
 
 Connection status, input, previews, and archive need consistent current availability.
@@ -67,22 +71,14 @@ unavailable; permission errors, timeouts, and malformed responses are query erro
 Input and previews revalidate inside the pane queue. Socket/pane reuse is allowed;
 PID and server start time are not inspected.
 
-Archive is exclusive per session and blocks ordinary hub input. The owning
-source snapshot must confirm a unique nonempty native `sourceId`; the Codex manager
-validates its UUID. Already archived sessions succeed immediately. Without a valid
-available target, invoke native archive once. Initial query errors send neither
-exit input nor archive: timeout yields `unknown`, other errors yield `failed`.
-
-For a live target, send `Ctrl+C` then `Ctrl+D` once: no `/exit`, Enter, or retry.
-Send errors yield `unknown`. Observe the fixed socket/pane, continuing after query
-errors; failure to confirm unavailability within 30 seconds yields `unknown`.
-Do not switch bindings or restrict direct terminal input.
-
-After confirmed unavailability, run `codex archive <sourceId>` once. Command
-timeout after 25 seconds yields `unknown`; explicit errors yield `failed`. On
-success, allow 30 seconds to confirm the owning source's unique native identity
-is archived. Confirmation timeout yields `unknown`. Operation IDs and native UUIDs
-serve different purposes.
+At introduction, archive held exclusive session occupancy, validated a unique
+native identity through the owning adapter, and shut down a live pane using
+`Ctrl+C` then `Ctrl+D` before invoking native archive once. Query errors did not
+prove pane death, and uncertain effects were not retried.
+[ADR-0022](0022-separate-session-exit-from-archive.md) replaces that shutdown
+sequence with an independent exit service and bounded whole-pane shutdown.
+See the [management reference](../technical-reference.md#asynchronous-management)
+for current archive phases, deadlines, and outcome rules.
 
 ## Consequences
 

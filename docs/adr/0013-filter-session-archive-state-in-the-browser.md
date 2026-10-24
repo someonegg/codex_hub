@@ -5,6 +5,8 @@ date: 2026-08-20
 
 # Filter session archive state in the browser
 
+Superseded by [ADR-0020](0020-use-a-unified-project-hub.md).
+
 ## Context and Problem Statement
 
 Archive state is presentation metadata already present on every session summary. Keeping it as a server query dimension made the API, project facets, pagination cursors, and client request lifecycle depend on a UI-only three-state control.
@@ -55,5 +57,3 @@ Chosen option: "Return mixed pages and incrementally filter accumulated sessions
 
 - Good: Produces complete state-specific results after loading finishes.
 - Bad: Increases startup requests and memory in proportion to the entire catalog.
-
-Superseded by the hub redesign; see [ADR-0020](0020-use-a-unified-project-hub.md).
