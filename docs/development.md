@@ -119,7 +119,9 @@ Stop the client server after capture.
 
 Run `python3 scripts/generate-icons.py` with Pillow installed to regenerate SVG,
 ICO, Apple touch, and PNG icons in `public/`. Keep artwork within the central
-maskable safe circle.
+maskable safe circle. Geometry and color stops are shared by the SVG and raster
+renderers. Only the mint frame has subtle shading; the prompt, endpoints, and
+background retain their flat colors.
 
 To check mobile installation, serve over HTTPS (or localhost) and use the browser's
 install or Add to Home Screen action. The installed app opens the catalog; it does
