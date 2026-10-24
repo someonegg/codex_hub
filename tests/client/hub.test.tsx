@@ -299,7 +299,6 @@ it("keeps archived content open while removing navigation, then returns to the p
     type: "delete",
     operationId: "delete-op",
   });
-  vi.spyOn(window, "confirm").mockReturnValue(true);
   render(<App />);
   await flush();
   fireEvent.click(screen.getByRole("button", { name: "Session management" }));
@@ -311,6 +310,7 @@ it("keeps archived content open while removing navigation, then returns to the p
   expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
   fireEvent.click(screen.getByRole("button", { name: "Session management" }));
   fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
   await flush();
   expect(window.location.pathname).toBe("/");
   expect(
