@@ -45,8 +45,14 @@ stays on the old page.
 
 ### File uploads
 
-Paste images or drop files into the message input, then review and send the
-inserted paths. Multiple files are supported; folders are not.
+Use the attachment button beside **Send** to **Take photo** or **Choose images**,
+or paste images or drop files into the input. Review the inserted server paths,
+then send. Multiple files are supported; folders are not.
+
+Camera behavior depends on the browser and may fall back to a file picker. Images
+are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
+support depends on the agent. If the session becomes disconnected or busy while
+taking a photo, reconnect or retry later.
 
 Uploads use temporary storage by default. To keep them in a known location:
 

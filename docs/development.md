@@ -115,6 +115,11 @@ overflow; also inspect readability and clipping at README display widths, the
 answered **User input** card, and terminal output. Keep the GIF below 5 MiB.
 Stop the client server after capture.
 
+Attachment checks use mocked uploads at desktop and narrow widths. Real-device
+camera checks remain pending: test photo confirmation, cancellation, repeat shots,
+and returning to the page in iOS Safari, Android Chrome, and available standalone
+home screen modes.
+
 ## Application icons
 
 Run `python3 scripts/generate-icons.py` with Pillow installed to regenerate SVG,
