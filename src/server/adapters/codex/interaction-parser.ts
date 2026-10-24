@@ -18,11 +18,10 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   plan: "BTab",
 } as const satisfies InteractionKeyBindings;
 
-// Clear the previous Esc state with a bounded cursor move before interrupting.
-// End targets the line end without editing the draft.
+// Clear terminal input and the previous Esc state before interrupting.
 export function codexInterruptSteps() {
   return [
-    { keys: ["End"], delayMs: 0 },
+    { keys: ["C-u"], delayMs: 0 },
     { keys: ["Escape"], delayMs: 100 },
   ] as const;
 }

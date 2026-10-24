@@ -29,7 +29,7 @@ beforeAll(() => {
 });
 
 describe("tmux interaction integration", () => {
-  it("delivers interrupt End then Escape separately through a real terminal", async () => {
+  it("delivers interrupt Ctrl+U then Escape separately through a real terminal", async () => {
     const directory = await createTempDirectory("codex-interrupt-tmux-");
     const socketPath = join(directory, "server.sock");
     const script = join(directory, "read.cjs");
@@ -70,12 +70,12 @@ describe("tmux interaction integration", () => {
       let events: { bytes: number[]; at: number }[] = [];
       await vi.waitFor(async () => {
         events = JSON.parse(await readFile(output, "utf8"));
-        expect(events.flatMap((event) => event.bytes)).toEqual([27, 91, 52, 126, 27]);
+        expect(events.flatMap((event) => event.bytes)).toEqual([21, 27]);
       });
-      const end = events.find((event) => event.bytes.includes(126))!;
+      const clearInput = events.find((event) => event.bytes.includes(21))!;
       const escape = events.at(-1)!;
       expect(escape.bytes).toEqual([27]);
-      expect(escape.at - end.at).toBeGreaterThanOrEqual(80);
+      expect(escape.at - clearInput.at).toBeGreaterThanOrEqual(80);
     } finally {
       spawnSync("tmux", ["-S", socketPath, "kill-server"]);
     }

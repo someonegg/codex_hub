@@ -5,6 +5,13 @@
 - Once a PR is open, automatically commit and push subsequent changes for that PR after validation, then confirm CI passes and fix any failures, unless the user says otherwise.
 - After confirming a PR has merged, update the local main branch and remove the temporary branches and worktrees associated with that PR. Preserve uncommitted work; do not force cleanup or remove unrelated branches or worktrees.
 
+## Documentation discipline
+
+- Keep `docs/usage.md` and `docs/development.md` concise, task-oriented guides for users and contributors respectively; link to technical details rather than embedding them.
+- Keep valuable implementation details, contracts, and runtime guarantees in `docs/technical-reference.md`; avoid duplicating them across guides.
+- Change the root `README.md` sparingly, only when needed for the project overview, quick start, or essential user-facing information. Prefer links to focused documentation.
+- Update existing documentation when behavior changes; do not add documentation for every code change.
+
 ## Session adapter boundaries
 
 - Shared services treat native session IDs as opaque strings: check presence and source-local uniqueness, but delegate format validation to the owning adapter. Never impose Codex UUID formats, CLI arguments, or storage conventions on shared runtime or management code. Adapter preflight and execution must reuse the same native identity rules.
