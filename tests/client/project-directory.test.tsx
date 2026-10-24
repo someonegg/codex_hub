@@ -25,6 +25,9 @@ describe("project directory suggestions", () => {
   it("shows full paths in the page, filters and selects without submitting", () => {
     render(<Field />);
     const input = screen.getByRole("combobox");
+    expect(input).not.toHaveFocus();
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    fireEvent.focus(input);
     expect(input).not.toHaveAttribute("list");
     expect(screen.getAllByRole("option")).toHaveLength(2);
     fireEvent.change(input, { target: { value: "reader" } });

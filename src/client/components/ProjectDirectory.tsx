@@ -43,7 +43,6 @@ export function ProjectDirectory({
       <label htmlFor={id}>Project directory</label>
       <input
         id={id}
-        autoFocus
         required
         role="combobox"
         aria-autocomplete="list"

@@ -9,7 +9,6 @@ Codex from desktop or mobile.
 <details>
 <summary>Mobile screenshots</summary>
 
-<img src="docs/images/codex-hub-mobile-create.png" alt="Mobile new session with project suggestions below the directory input" width="260">
 <img src="docs/images/codex-hub-mobile-catalog.png" alt="Mobile project navigation" width="260">
 <img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
 <img src="docs/images/codex-hub-mobile-composer.png" alt="Focused mobile message input with page jump controls hidden" width="260">
