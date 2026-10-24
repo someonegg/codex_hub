@@ -38,6 +38,20 @@ async function capture(
       colorScheme: "light",
     });
   const demo = await context.newPage();
+  const verifyPageJumps = async () => {
+    await demo.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    const valid = await demo.evaluate(() => {
+      const controls = document.querySelector(".page-jump-controls");
+      const panel = document.querySelector(".interaction-panel");
+      return (
+        getComputedStyle(controls).display !== "none" &&
+        controls.getBoundingClientRect().bottom <= panel.getBoundingClientRect().top - 11
+      );
+    });
+    if (!valid) throw new Error("Page jumps hide or overlap the interaction panel");
+  };
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
   session = { ...session, messageCount: 2, itemCount: items.length };
@@ -249,26 +263,32 @@ async function capture(
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
     await composer.fill("Suggest the next step.");
     await composer.scrollIntoViewIfNeeded();
-    if (await demo.locator(".page-jump-controls").isVisible())
-      throw new Error("Page jumps overlap the focused mobile composer");
-    if (await demo.getByRole("button", { name: "Back to top" }).count())
-      throw new Error("Hidden page jumps remain accessible");
+    await verifyPageJumps();
     await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
     await verifyAttachments();
     await demo.setViewportSize({ width: 320, height: 568 });
     await verifyAttachments();
+    await verifyPageJumps();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Narrow composer horizontal overflow");
     await demo.setViewportSize({ width: 390, height: 400 });
-    if (await demo.locator(".page-jump-controls").isVisible())
-      throw new Error("Page jumps reappear in a keyboard-sized viewport");
+    await verifyPageJumps();
     await composer.blur();
-    if (!(await demo.locator(".page-jump-controls").isVisible()))
-      throw new Error("Page jumps do not return after blur");
+    await verifyPageJumps();
     await composer.focus();
     await demo.setViewportSize({ width: 1440, height: 1000 });
-    if (!(await demo.locator(".page-jump-controls").isVisible()))
-      throw new Error("Desktop page jumps are hidden while composing");
+    await verifyPageJumps();
+    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
+    await verifyPageJumps();
+    await demo.setViewportSize({ width: 1440, height: 400 });
+    await demo.evaluate(() => window.scrollTo(0, 0));
+    await verifyPageJumps();
+    const clearance = await demo
+      .locator(".page-jump-controls")
+      .evaluate((controls) =>
+        Number.parseFloat(controls.style.getPropertyValue("--panel-clearance")),
+      );
+    if (clearance !== 0) throw new Error("Page jumps do not return to the viewport corner");
   } finally {
     await context.close();
   }
