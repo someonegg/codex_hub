@@ -475,6 +475,11 @@ export function InteractionPanel({
                   !previewConnected || !!uploadProgress || messageIsBlank || messageTooLarge
                 }
                 aria-disabled={interactionBusy}
+                onPointerDown={(event) => {
+                  // Keep the iOS keyboard from moving the button before click completes.
+                  if (event.button === 0 && document.activeElement === composer.current)
+                    event.preventDefault();
+                }}
                 onClick={() => void send().catch(() => undefined)}
               >
                 Send
