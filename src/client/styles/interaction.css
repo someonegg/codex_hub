@@ -57,7 +57,6 @@
 .interaction-composer textarea {
   display: block;
   width: 100%;
-  min-height: 10.4rem;
   margin: 0;
   padding: 0.7rem 0.75rem;
   resize: vertical;
@@ -127,8 +126,10 @@
   font-size: 1.2rem;
   cursor: pointer;
 }
-.terminal-preview {
+.interaction-heading + .interaction-panel-content .terminal-preview {
   margin-top: 0.75rem;
+}
+.terminal-preview {
   border: 1px solid var(--terminal-border);
   background: var(--terminal-surface);
   overflow: hidden;
@@ -348,7 +349,6 @@
   }
 }
 
-.tmux-access-trigger,
 .interaction-management-trigger {
   min-height: var(--control-height);
   padding: 0.25rem 0.6rem;

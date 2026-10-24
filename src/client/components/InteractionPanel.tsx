@@ -19,11 +19,10 @@ import { MAX_UPLOAD_BYTES } from "../../shared/uploads";
 
 import { api } from "../api/client";
 import { InternalLink } from "./InternalLink";
-import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
 interface InteractionPanelProps {
   onPanelElement?: (element: HTMLElement | null) => void;
-  operationActions?: ReactNode;
+  recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
 
   interaction: InteractionResponse | null;
@@ -49,7 +48,7 @@ interface InteractionPanelProps {
 
 export function InteractionPanel({
   onPanelElement,
-  operationActions,
+  recoveryActions,
   operationStatus,
   interaction,
   onNavigate,
@@ -78,11 +77,6 @@ export function InteractionPanel({
       mounted.current = false;
     };
   }, []);
-  const [accessOpen, setAccessOpen] = useState(false);
-  const attachCommand = interaction?.attachCommand;
-  useEffect(() => {
-    if (!attachCommand) setAccessOpen(false);
-  }, [attachCommand]);
   const [message, setMessage] = useState("");
   const composer = useRef<HTMLTextAreaElement | null>(null);
   const upload = useRef<AbortController | null>(null);
@@ -355,31 +349,25 @@ export function InteractionPanel({
 
   return (
     <section ref={setPanel} className="interaction-panel" aria-label="Session interaction">
-      <div className="interaction-heading">
-        {attachCommand ? (
-          <button type="button" className="tmux-access-trigger" onClick={() => setAccessOpen(true)}>
-            tmux access
-          </button>
-        ) : null}
-        {status.kind !== "connected" ? connectionStatus : null}
-        {interaction?.supported && interaction.state === "superseded" ? (
-          interaction.supersededBySessionId ? (
-            <InternalLink
-              href={`/sessions/${encodeURIComponent(interaction.supersededBySessionId)}`}
-              onNavigate={
-                onNavigate ? () => onNavigate(interaction.supersededBySessionId!) : undefined
-              }
-            >
-              Go to bound session
-            </InternalLink>
-          ) : (
-            <span>Replacement session unavailable</span>
-          )
-        ) : null}
-        <div className="interaction-management-actions">{operationActions}</div>
-      </div>
-      {accessOpen && attachCommand ? (
-        <TmuxAccessDialog command={attachCommand} onClose={() => setAccessOpen(false)} />
+      {status.kind !== "connected" || recoveryActions ? (
+        <div className="interaction-heading">
+          {status.kind !== "connected" ? connectionStatus : null}
+          {interaction?.supported && interaction.state === "superseded" ? (
+            interaction.supersededBySessionId ? (
+              <InternalLink
+                href={`/sessions/${encodeURIComponent(interaction.supersededBySessionId)}`}
+                onNavigate={
+                  onNavigate ? () => onNavigate(interaction.supersededBySessionId!) : undefined
+                }
+              >
+                Go to bound session
+              </InternalLink>
+            ) : (
+              <span>Replacement session unavailable</span>
+            )
+          ) : null}
+          <div className="interaction-management-actions">{recoveryActions}</div>
+        </div>
       ) : null}
       <div className="interaction-panel-content">
         {error ? (
@@ -572,7 +560,7 @@ export function InteractionPanel({
             aria-label="Message to agent"
             value={message}
             disabled={interactionBusy || !!uploadProgress || !previewConnected}
-            rows={5}
+            rows={4}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
             placeholder="Send a prompt… Paste images or drop files. Shift+Enter to send"
             onChange={(event) => setMessage(event.target.value)}

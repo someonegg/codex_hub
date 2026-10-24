@@ -1,7 +1,7 @@
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { HubOperation } from "../../src/shared/api-contract";
+import type { HubOperation, InteractionResponse } from "../../src/shared/api-contract";
 
 import { api, ApiClientError } from "../../src/client/api/client";
 import { CreateSession, ManageSession } from "../../src/client/components/HubManagement";
@@ -27,6 +27,71 @@ const flush = async () => {
   });
 };
 describe("hub management", () => {
+  it("uses current interaction state for ordered access and exit actions", async () => {
+    const command = "tmux attach-session -t test";
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const exit = vi.spyOn(api, "exitSession").mockResolvedValue({ ...pending, type: "exit" });
+    const session = { ...baseSession, sourceId: "native", itemCount: 0 };
+    const connected: InteractionResponse = {
+      supported: true,
+      state: "connected",
+      activity: null,
+      supersededBySessionId: null,
+      attachCommand: command,
+    };
+    const { result } = renderHook(() => useHubOperation(session.id, vi.fn()));
+    const controller = {
+      ...result.current,
+      busy: false,
+      start: vi.fn(async (request: () => Promise<HubOperation>) => {
+        await request();
+      }),
+    };
+    const renderControls = (interaction: InteractionResponse | null, busy = false) => (
+      <ManageSession
+        session={session}
+        interaction={interaction}
+        controller={{ ...controller, busy }}
+        onChanged={vi.fn()}
+      />
+    );
+    const view = render(renderControls(connected));
+    const open = () => fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    open();
+    expect(
+      Array.from(
+        document.querySelectorAll(".session-action-menu button"),
+        (button) => button.textContent,
+      ),
+    ).toEqual(["Tmux access", "Archive session", "Exit session"]);
+    fireEvent.click(screen.getByRole("button", { name: "Tmux access" }));
+    expect(document.querySelector(".session-action-menu")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
+    await flush();
+    expect(writeText).toHaveBeenCalledWith(command);
+    fireEvent(
+      screen.getByRole("dialog", { name: "tmux access" }),
+      new Event("cancel", { cancelable: true }),
+    );
+    expect(screen.getByRole("button", { name: "Session management" })).toHaveFocus();
+    open();
+    view.rerender(renderControls(connected, true));
+    expect(screen.getByRole("button", { name: "Exit session" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Archive session" })).toBeDisabled();
+    view.rerender(renderControls({ ...connected, state: "disconnected", attachCommand: null }));
+    expect(screen.queryByRole("button", { name: "Exit session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Tmux access" })).not.toBeInTheDocument();
+    view.rerender(renderControls(connected));
+    fireEvent.click(screen.getByRole("button", { name: "Exit session" }));
+    await flush();
+    expect(exit).toHaveBeenCalledWith(session.id);
+    expect(document.querySelector(".session-action-menu")).toBeNull();
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Tmux access" }));
+    view.rerender(renderControls(null));
+    expect(screen.queryByRole("dialog", { name: "tmux access" })).not.toBeInTheDocument();
+  });
   it("renders management and creates requests without randomUUID in an HTTP context", async () => {
     vi.stubGlobal("crypto", { getRandomValues: crypto.getRandomValues.bind(crypto) });
     const create = vi.spyOn(api, "createSession").mockResolvedValue(pending);

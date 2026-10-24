@@ -190,7 +190,8 @@ describe("session automatic updates", () => {
     expect(MockWebSocket.instances).toHaveLength(1);
     const previewSocket = MockWebSocket.instances[0]!;
     expect(previewSocket.close).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "tmux access" }));
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    fireEvent.click(screen.getByRole("button", { name: "Tmux access" }));
     expect(screen.getByRole("dialog", { name: "tmux access" })).toBeVisible();
     await act(async () => {
       const archived = updates(false, NEXT_REVISION);
