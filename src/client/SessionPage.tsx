@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import type { SessionHome } from "../shared/api-contract";
 import type { SessionSummary } from "../shared/domain";
 
-import { api } from "./api/client";
 import { ErrorState } from "./components/ErrorState";
 import { ManageSession, OperationStatus, ResumeSession } from "./components/HubManagement";
 import { InternalLink } from "./components/InternalLink";
@@ -94,30 +93,20 @@ export function SessionPage({
           operationStatus={
             !showManagementStatus ? <OperationStatus controller={operation} /> : null
           }
-          operationActions={
-            reader.interaction?.supported && reader.interaction.state === "connected" ? (
-              <button
-                type="button"
-                className="interaction-management-trigger"
-                disabled={operation.busy}
-                onClick={() => {
-                  setManagementOperation(false);
-                  void operation.start(() => api.exitSession(sessionId));
-                }}
-              >
-                Exit
-              </button>
-            ) : (
+          recoveryActions={
+            !(reader.interaction?.supported && reader.interaction.state === "connected") ? (
               <ResumeSession
                 key={sessionId}
                 session={reader.context.session}
                 controller={operation}
                 onStart={() => setManagementOperation(false)}
               />
-            )
+            ) : null
           }
           management={
             <ManageSession
+              key={sessionId}
+              interaction={reader.interaction}
               controller={operation}
               showStatus={showManagementStatus}
               onStart={() => setManagementOperation(true)}

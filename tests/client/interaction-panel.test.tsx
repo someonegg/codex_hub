@@ -312,33 +312,10 @@ describe("interaction panel", () => {
   });
 });
 
-it("copies commands and closes on Escape, command withdrawal, and session replacement", async () => {
-  const command = "tmux attach-session -t test";
-  const writeText = vi.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-  const connected = props({ ...interaction("connected"), attachCommand: command });
-  const view = render(<InteractionPanel key="first" {...connected} />);
-  const open = () => {
-    const trigger = screen.getByRole("button", { name: "tmux access" });
-    trigger.focus();
-    fireEvent.click(trigger);
-  };
-  open();
-  fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
-  await act(async () => {});
-  expect(writeText).toHaveBeenCalledWith(command);
-  expect(screen.getByRole("status")).toHaveTextContent("Copied");
-  fireEvent(screen.getByRole("dialog"), new Event("cancel", { cancelable: true }));
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "tmux access" })).toHaveFocus();
-  open();
-  view.rerender(<InteractionPanel key="first" {...props(interaction("disconnected"))} />);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  view.rerender(<InteractionPanel key="first" {...connected} />);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  open();
-  view.rerender(<InteractionPanel key="second" {...connected} />);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+it("uses four composer rows without an empty connected heading", () => {
+  render(<InteractionPanel {...props(interaction("connected"))} />);
+  expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveAttribute("rows", "4");
+  expect(document.querySelector(".interaction-heading")).toBeNull();
 });
 
 it.each([

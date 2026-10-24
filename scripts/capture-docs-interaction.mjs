@@ -52,6 +52,61 @@ async function capture(
     });
     if (!valid) throw new Error("Page jumps hide or overlap the interaction panel");
   };
+  const verifyCompactInteraction = async () => {
+    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    const original = await composer.inputValue();
+    await composer.fill("One\nTwo\nThree\nFour");
+    const metrics = await composer.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        rows: element.rows,
+        textHeight:
+          element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+        lineHeight: parseFloat(style.lineHeight),
+        fits: element.scrollHeight <= element.clientHeight,
+        resize: style.resize,
+      };
+    });
+    if (
+      metrics.rows !== 4 ||
+      Math.abs(metrics.textHeight - 4 * metrics.lineHeight) > 1 ||
+      !metrics.fits ||
+      metrics.resize !== "vertical"
+    )
+      throw new Error("Composer must fit four visible text lines and allow vertical resize");
+    await composer.fill("One\nTwo\nThree\nFour\nFive");
+    if (!(await composer.evaluate((element) => element.scrollHeight > element.clientHeight)))
+      throw new Error("Fifth composer line must scroll");
+    await composer.scrollIntoViewIfNeeded();
+    const box = await composer.boundingBox();
+    await demo.mouse.move(box.x + box.width - 3, box.y + box.height - 3);
+    await demo.mouse.down();
+    await demo.mouse.move(box.x + box.width - 3, box.y + box.height + 45, { steps: 5 });
+    await demo.mouse.up();
+    if ((await composer.boundingBox()).height <= box.height)
+      throw new Error("Composer resize handle did not increase height");
+    await composer.evaluate((element) => element.style.removeProperty("height"));
+    await composer.fill(original);
+    if (await demo.locator(".interaction-heading").count())
+      throw new Error("Empty interaction heading");
+    await demo.getByRole("button", { name: "Session management", exact: true }).click();
+    const menu = demo.locator(".session-action-menu");
+    const labels = await menu.locator("button").allTextContents();
+    if (labels.join("|") !== "Tmux access|Archive session|Exit session")
+      throw new Error("Unexpected session menu order");
+    const bounds = await menu.boundingBox();
+    const viewport = demo.viewportSize();
+    if (
+      bounds.x < 0 ||
+      bounds.x + bounds.width > viewport.width ||
+      bounds.y < 0 ||
+      bounds.y + bounds.height > viewport.height
+    )
+      throw new Error("Session menu clipped");
+    await demo.getByRole("button", { name: "Tmux access", exact: true }).click();
+    await demo.getByRole("dialog", { name: "tmux access", exact: true }).waitFor();
+    await demo.getByRole("button", { name: "Close tmux access", exact: true }).click();
+  };
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
   session = { ...session, messageCount: 2, itemCount: items.length };
@@ -202,6 +257,7 @@ async function capture(
   try {
     await demo.goto(`${origin}/sessions/${session.id}`);
     await prepareDesktopPreview();
+    await verifyCompactInteraction();
     await verifyAttachments();
     for (const name of ["Message to agent", "Terminal Preview content"]) {
       if (!(await demo.getByLabel(name, { exact: true }).isVisible()))
@@ -261,12 +317,14 @@ async function capture(
     await demo.screenshot({ path: resolveMobile("reader"), animations: "disabled" });
     await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await verifyCompactInteraction();
     await composer.fill("Suggest the next step.");
     await composer.scrollIntoViewIfNeeded();
     await verifyPageJumps();
     await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
     await verifyAttachments();
     await demo.setViewportSize({ width: 320, height: 568 });
+    await verifyCompactInteraction();
     await verifyAttachments();
     await verifyPageJumps();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))

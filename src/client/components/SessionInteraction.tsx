@@ -8,7 +8,7 @@ import { InteractionPanel } from "./InteractionPanel";
 
 interface SessionInteractionProps {
   onPanelElement?: (element: HTMLElement | null) => void;
-  operationActions?: ReactNode;
+  recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
   managementBusy?: boolean;
   interaction: InteractionResponse | null;
@@ -21,7 +21,7 @@ interface SessionInteractionProps {
 
 export function SessionInteraction({
   onPanelElement,
-  operationActions,
+  recoveryActions,
   operationStatus,
   managementBusy,
   interaction,
@@ -40,7 +40,7 @@ export function SessionInteraction({
     <InteractionPanel
       key={sessionId}
       onPanelElement={onPanelElement}
-      operationActions={operationActions}
+      recoveryActions={recoveryActions}
       operationStatus={operationStatus}
       interaction={interaction}
       onNavigate={onNavigate}

@@ -18,7 +18,7 @@ import { Timeline } from "./Timeline";
 
 interface SessionReaderProps {
   homeNickname?: string;
-  operationActions?: ReactNode;
+  recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
   managementBusy?: boolean;
   management?: ReactNode;
@@ -42,7 +42,7 @@ interface SessionReaderProps {
 
 export function SessionReader({
   homeNickname,
-  operationActions,
+  recoveryActions,
   operationStatus,
   managementBusy,
   management,
@@ -121,7 +121,7 @@ export function SessionReader({
         <SessionInteraction
           key={context.session.id}
           onPanelElement={setInteractionPanel}
-          operationActions={operationActions}
+          recoveryActions={recoveryActions}
           operationStatus={operationStatus}
           managementBusy={managementBusy}
           interaction={interaction}

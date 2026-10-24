@@ -22,12 +22,14 @@ session URL with another device that can access the hub.
 - **Resume:** open an exited session and click **Resume** when available. It
   continues the same session using its original home and an available original
   working or project directory.
-- **Exit:** stop the connected terminal pane without archiving the conversation.
+- **Exit session:** use the session's **…** menu to stop the connected terminal
+  pane without archiving the conversation.
 - **Archive or delete:** use the session's **…** menu. Permanent deletion is
   available for archived sessions and requires confirmation.
 
 Creating and resuming sessions use tmux. If startup needs login, permission, or
-trust confirmation, use **tmux access** or the attach command shown by the hub to
+trust confirmation, use **Tmux access** in the session's **…** menu or the attach
+command shown by the hub to
 finish in the terminal. Before resuming a session started elsewhere, make sure
 its original process has exited.
 

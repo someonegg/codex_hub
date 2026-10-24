@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import type { HubOperation, SessionHome } from "../../shared/api-contract";
+import type { HubOperation, InteractionResponse, SessionHome } from "../../shared/api-contract";
 import type { SessionDetail } from "../../shared/domain";
 
 import { api } from "../api/client";
 import { useHubOperation } from "../state/use-hub-operation";
 import { AttachCommand } from "./AttachCommand";
 import { ProjectDirectory } from "./ProjectDirectory";
+import { TmuxAccessDialog } from "./TmuxAccessDialog";
 
 // getRandomValues is available over HTTP as well as in secure contexts.
 function newRequestId(): string {
@@ -232,6 +233,7 @@ export function CreateSession({
   );
 }
 interface ManageSessionProps {
+  interaction?: InteractionResponse | null;
   session: SessionDetail;
   onChanged: () => void;
   onDeleted?: () => void;
@@ -244,6 +246,7 @@ export function ManageSession(props: ManageSessionProps) {
   return props.controller ? (
     <ManageSessionControls
       session={props.session}
+      interaction={props.interaction}
       controller={props.controller}
       onStart={props.onStart}
       showStatus={
@@ -257,27 +260,46 @@ export function ManageSession(props: ManageSessionProps) {
   );
 }
 
-function StandaloneManageSession({ session, onChanged, onDeleted }: ManageSessionProps) {
+function StandaloneManageSession({
+  session,
+  interaction,
+  onChanged,
+  onDeleted,
+}: ManageSessionProps) {
   const controller = useHubOperation(session.id, (operation) => {
     if (operation.type === "delete") {
       if (onDeleted) onDeleted();
       else window.location.assign("/");
     } else onChanged();
   });
-  return <ManageSessionControls session={session} controller={controller} showStatus />;
+  return (
+    <ManageSessionControls
+      session={session}
+      interaction={interaction}
+      controller={controller}
+      showStatus
+    />
+  );
 }
 
 function ManageSessionControls({
+  interaction,
   session,
   controller,
   showStatus,
   onStart,
 }: {
   session: SessionDetail;
+  interaction?: InteractionResponse | null;
   controller: OperationController;
   showStatus: boolean;
   onStart?: () => void;
 }) {
+  const [accessOpen, setAccessOpen] = useState(false);
+  const attachCommand = interaction?.attachCommand;
+  useEffect(() => {
+    if (!attachCommand) setAccessOpen(false);
+  }, [attachCommand]);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteDialog = useRef<HTMLDialogElement>(null);
@@ -305,10 +327,7 @@ function ManageSessionControls({
       className="session-management"
       ref={menu}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
-          setMenuOpen(false);
-          menu.current?.querySelector<HTMLButtonElement>("button")?.focus();
-        }
+        if (event.key === "Escape") closeMenu();
       }}
     >
       <button
@@ -323,6 +342,17 @@ function ManageSessionControls({
       </button>
       {menuOpen ? (
         <div className="session-action-menu" id={menuId}>
+          {attachCommand ? (
+            <button
+              type="button"
+              onClick={() => {
+                closeMenu();
+                setAccessOpen(true);
+              }}
+            >
+              Tmux access
+            </button>
+          ) : null}
           {session.status === "archived" ? (
             <button
               type="button"
@@ -347,7 +377,23 @@ function ManageSessionControls({
               Archive session
             </button>
           )}
+          {interaction?.supported && interaction.state === "connected" ? (
+            <button
+              type="button"
+              disabled={controller.busy}
+              onClick={() => {
+                closeMenu();
+                onStart?.();
+                void controller.start(() => api.exitSession(session.id));
+              }}
+            >
+              Exit session
+            </button>
+          ) : null}
         </div>
+      ) : null}
+      {accessOpen && attachCommand ? (
+        <TmuxAccessDialog command={attachCommand} onClose={() => setAccessOpen(false)} />
       ) : null}
       <dialog
         ref={deleteDialog}
