@@ -173,10 +173,23 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
     expect(deletion).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
-    confirm.mockReturnValue(true);
+    expect(screen.getByRole("dialog", { name: "Delete archived session" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(deletion).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    fireEvent(
+      screen.getByRole("dialog", { name: "Delete archived session" }),
+      new Event("cancel", { cancelable: true }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(deletion).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
     await flush();
+    expect(confirm).not.toHaveBeenCalled();
     expect(deletion).toHaveBeenCalledOnce();
     expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));

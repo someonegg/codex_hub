@@ -279,6 +279,12 @@ function ManageSessionControls({
   onStart?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (deleteOpen) deleteDialog.current?.showModal();
+    else deleteDialog.current?.close();
+  }, [deleteOpen]);
   const menu = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const closeMenu = () => {
@@ -323,12 +329,7 @@ function ManageSessionControls({
               disabled={controller.busy}
               onClick={() => {
                 closeMenu();
-                if (
-                  window.confirm("Permanently delete this archived session? This cannot be undone.")
-                ) {
-                  onStart?.();
-                  void controller.start(() => api.deleteSession(session.id));
-                }
+                setDeleteOpen(true);
               }}
             >
               Delete session
@@ -348,6 +349,32 @@ function ManageSessionControls({
           )}
         </div>
       ) : null}
+      <dialog
+        ref={deleteDialog}
+        className="create-session"
+        aria-label="Delete archived session"
+        onCancel={() => setDeleteOpen(false)}
+        onClose={() => setDeleteOpen(false)}
+      >
+        <h2>Delete archived session?</h2>
+        <p>Permanently delete this archived session? This cannot be undone.</p>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (controller.busy || session.status !== "archived") return;
+            setDeleteOpen(false);
+            onStart?.();
+            void controller.start(() => api.deleteSession(session.id));
+          }}
+        >
+          <button type="button" autoFocus onClick={() => setDeleteOpen(false)}>
+            Cancel
+          </button>
+          <button type="submit" disabled={controller.busy || session.status !== "archived"}>
+            Confirm delete
+          </button>
+        </form>
+      </dialog>
       {showStatus ? (
         <div className="session-operation-details">
           <OperationStatus controller={controller} />
