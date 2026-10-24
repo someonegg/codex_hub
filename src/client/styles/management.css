@@ -19,7 +19,7 @@
   display: grid;
   gap: 0.4rem;
 }
-.create-session input[list],
+.project-directory input,
 .create-session select {
   padding: 0.65rem;
   width: 100%;
@@ -182,4 +182,36 @@ dialog::backdrop {
   background: var(--surface);
   color: var(--ink);
   border-radius: var(--radius-control);
+}
+
+.project-directory {
+  position: relative;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.project-directory [role="listbox"] {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  z-index: 2;
+  box-shadow: 0 8px 30px rgb(33 49 56 / 12%);
+  max-height: 10rem;
+  overflow-y: auto;
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+}
+.project-directory [role="option"] {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.project-directory [role="option"]:hover,
+.project-directory [role="option"][aria-selected="true"] {
+  background: var(--hover-surface);
 }

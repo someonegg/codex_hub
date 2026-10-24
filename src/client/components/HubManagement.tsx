@@ -6,6 +6,7 @@ import type { SessionDetail } from "../../shared/domain";
 import { api } from "../api/client";
 import { useHubOperation } from "../state/use-hub-operation";
 import { AttachCommand } from "./AttachCommand";
+import { ProjectDirectory } from "./ProjectDirectory";
 
 // getRandomValues is available over HTTP as well as in secure contexts.
 function newRequestId(): string {
@@ -118,7 +119,7 @@ export function CreateSession({
   useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
-      dialog.current?.querySelector<HTMLInputElement>("input[list]")?.focus();
+      dialog.current?.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus();
     } else dialog.current?.close?.();
   }, [open]);
   const [worktree, setWorktree] = useState(false);
@@ -191,23 +192,12 @@ export function CreateSession({
             </select>
           </label>
         ) : null}
-        <label>
-          Project directory
-          <input
-            autoFocus
-            required
-            list="project-directories"
-            placeholder="/absolute/project/directory"
-            value={directory}
-            onChange={(event) => setDirectory(event.target.value)}
-            disabled={controller.busy}
-          />
-        </label>
-        <datalist id="project-directories">
-          {projects.map((item) => (
-            <option key={item.project} value={item.project} />
-          ))}
-        </datalist>
+        <ProjectDirectory
+          value={directory}
+          projects={projects}
+          disabled={controller.busy}
+          onChange={setDirectory}
+        />
         <label className="check-row">
           <input
             type="checkbox"
