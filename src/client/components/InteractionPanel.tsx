@@ -616,9 +616,13 @@ export function InteractionPanel({
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                   aria-hidden="true"
                 >
-                  <path d="m8 12 6-6a3 3 0 0 1 4 4l-8 8a5 5 0 0 1-7-7l9-9M6 14l8-8" />
+                  <path d="M14 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-9M16 5h6M19 2v6" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <path d="m3 16 5-5 10 10m-5-5 3-3 5 5" />
                 </svg>
               </button>
               {attachmentsOpen ? (
