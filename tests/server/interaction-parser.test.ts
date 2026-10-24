@@ -227,9 +227,9 @@ it.each(["\n", "\r\n"])("normalizes V4 project line endings %j", (eol) => {
   ]);
 });
 
-it("interrupts with End then Escape after the configured delay", () => {
+it("interrupts with Ctrl+U then Escape after the configured delay", () => {
   expect(codexInterruptSteps()).toEqual([
-    { keys: ["End"], delayMs: 0 },
+    { keys: ["C-u"], delayMs: 0 },
     { keys: ["Escape"], delayMs: 100 },
   ]);
 });

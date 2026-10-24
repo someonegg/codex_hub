@@ -48,6 +48,7 @@ export type TmuxKey =
   | "Right"
   | "C-d"
   | "C-c"
+  | "C-u"
   | "BTab"
   | "End"
   | "Escape";

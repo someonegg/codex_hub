@@ -130,7 +130,7 @@ describe("tmux interaction transport", () => {
 
     await service.sendKeys(binding, [
       {
-        keys: ["Enter", "Up", "Down", "Left", "Right", "End", "Escape", "BTab", "Left"],
+        keys: ["Enter", "Up", "Down", "Left", "Right", "C-u", "Escape", "BTab", "Left"],
         delayMs: 0,
       },
     ]);
@@ -147,7 +147,7 @@ describe("tmux interaction transport", () => {
           "Down",
           "Left",
           "Right",
-          "End",
+          "C-u",
           "Escape",
           "BTab",
           "Left",
@@ -156,14 +156,14 @@ describe("tmux interaction transport", () => {
     ]);
   });
 
-  it("separates End from Escape and keeps concurrent input after the final step", async () => {
+  it("separates Ctrl+U from Escape and keeps concurrent input after the final step", async () => {
     const socketPath = await unixSocket();
     const runner = new FakeRunner();
     const service = new TmuxInteractionService(runner);
     const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId: "%3" });
     const started = Date.now();
     const interrupt = service.sendKeys(binding, [
-      { keys: ["End"], delayMs: 0 },
+      { keys: ["C-u"], delayMs: 0 },
       { keys: ["Escape"], delayMs: 100 },
     ]);
     const concurrent = service.sendKeys(binding, [{ keys: ["Enter"], delayMs: 0 }]);
@@ -173,7 +173,7 @@ describe("tmux interaction transport", () => {
     expect(
       runner.calls.filter((call) => call.args[0] === "send-keys").map((call) => call.args),
     ).toEqual([
-      ["send-keys", "-t", "%3", "End"],
+      ["send-keys", "-t", "%3", "C-u"],
       ["send-keys", "-t", "%3", "Escape"],
       ["send-keys", "-t", "%3", "Enter"],
     ]);
