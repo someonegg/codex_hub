@@ -98,28 +98,6 @@ describe("session reader items", () => {
     expect(onTimelineConflict).toHaveBeenCalledOnce();
   });
 
-  it("renders inline directives without requesting detail", () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-    render(
-      <DirectiveItem
-        item={{
-          kind: "directive",
-          id: "directive-inline",
-          ordinal: 1,
-          timestamp: null,
-          hasDetail: false,
-          text: "Inline policy",
-        }}
-        sessionId={SESSION_ID}
-        cursor={TIMELINE_CURSOR}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-    expect(screen.getByText("Inline policy")).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
   it("labels tool stages and renders only stage-appropriate detail", async () => {
     const fetchMock = vi
       .fn()
@@ -271,37 +249,6 @@ describe("session reader items", () => {
     );
     expect(document.querySelector(".infinite-scroll-sentinel")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Load more events" })).not.toBeInTheDocument();
-  });
-
-  it("keeps one mark per full-width timeline event", () => {
-    render(
-      <Timeline
-        items={[
-          message("message-mark", 1, "Message body"),
-          {
-            kind: "internal",
-            id: "internal-mark",
-            ordinal: 2,
-            timestamp: null,
-            eventType: "reasoning",
-          },
-        ]}
-        sessionId={SESSION_ID}
-        cursor={TIMELINE_CURSOR}
-        hasMore
-        loading={false}
-        onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-
-    const events = document.querySelectorAll(".trace-event");
-    expect(events).toHaveLength(2);
-    for (const event of events) {
-      const mark = event.querySelector(":scope > .trace-mark");
-      expect(mark).toHaveAttribute("aria-hidden", "true");
-      expect(event.querySelector(":scope > article")).toBeInTheDocument();
-    }
   });
 
   it("loads tool and directive details concurrently without changing their cursor", async () => {

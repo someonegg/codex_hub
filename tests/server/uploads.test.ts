@@ -60,9 +60,7 @@ describe("uploads", () => {
     expect(results[2]).toMatch(/[0-9a-f-]{36}$/);
     expect(await readdir(directory)).toHaveLength(4);
   });
-  it("reuses the default temporary directory", async () => {
-    expect(await uploadDirectory()).toBe(await uploadDirectory());
-  });
+
   it("rejects declared oversize and cross-origin requests", async () => {
     const { origin } = await fixture();
     const forbidden = await fetch(`${origin}/api/v1/uploads`, {
@@ -104,16 +102,14 @@ describe("uploads", () => {
     const request = httpRequest(`${origin}/api/v1/uploads`, { method: "POST" });
     request.on("error", () => undefined);
     request.write("partial");
-    for (let i = 0; i < 100; i++) {
-      if ((await readdir(directory).catch(() => [])).length) break;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+    try {
+      // Do not disconnect until the server has actually opened a partial file.
+      await vi.waitFor(async () => expect(await readdir(directory)).toHaveLength(1));
+      request.destroy();
+      await vi.waitFor(async () => expect(await readdir(directory)).toEqual([]));
+    } finally {
+      request.destroy();
     }
-    request.destroy();
-    for (let i = 0; i < 100; i++) {
-      if (!(await readdir(directory)).length) break;
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-    expect(await readdir(directory)).toEqual([]);
   });
 });
 

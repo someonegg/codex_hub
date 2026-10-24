@@ -1,11 +1,12 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PageJumpControls } from "../../src/client/components/PageJumpControls";
 
 // @vitest-environment jsdom
 
 describe("page jump controls", () => {
+  beforeEach(() => vi.useFakeTimers());
   afterEach(() => {
     setPageMetrics({ scrollY: 0, innerHeight: 768, scrollHeight: 768 });
   });
@@ -21,7 +22,8 @@ describe("page jump controls", () => {
       setPageMetrics({ scrollY: 1_100, innerHeight: 800, scrollHeight: 3_000 });
       fireEvent.scroll(window);
     });
-    expect(await screen.findByRole("button", { name: "Back to top" })).toBeVisible();
+    await act(async () => vi.advanceTimersToNextFrame());
+    expect(screen.getByRole("button", { name: "Back to top" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Jump to bottom" })).toBeVisible();
 
     act(() => {
@@ -29,35 +31,23 @@ describe("page jump controls", () => {
       fireEvent.scroll(window);
     });
     expect(screen.getByRole("button", { name: "Back to top" })).toBeVisible();
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Jump to bottom" })).toBeNull();
-    });
+    await act(async () => vi.advanceTimersToNextFrame());
+    expect(screen.queryByRole("button", { name: "Jump to bottom" })).toBeNull();
   });
 
-  it("jumps to either page edge", () => {
+  it.each([
+    [false, "smooth"],
+    [true, "auto"],
+  ] as const)("jumps to either edge with reduced motion=%s", (matches, behavior) => {
     const scrollTo = vi.fn();
     vi.stubGlobal("scrollTo", scrollTo);
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: false }));
+    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches }));
     setPageMetrics({ scrollY: 1_000, innerHeight: 800, scrollHeight: 3_000 });
     render(<PageJumpControls />);
 
     fireEvent.click(screen.getByRole("button", { name: "Back to top" }));
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
     fireEvent.click(screen.getByRole("button", { name: "Jump to bottom" }));
-    expect(scrollTo).toHaveBeenCalledWith({ top: 3_000, behavior: "smooth" });
-  });
-
-  it("avoids smooth scrolling when reduced motion is requested", () => {
-    const scrollTo = vi.fn();
-    vi.stubGlobal("scrollTo", scrollTo);
-    vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
-    setPageMetrics({ scrollY: 1_000, innerHeight: 800, scrollHeight: 3_000 });
-    render(<PageJumpControls />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Back to top" }));
-    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "auto" });
-    fireEvent.click(screen.getByRole("button", { name: "Jump to bottom" }));
-    expect(scrollTo).toHaveBeenCalledWith({ top: 3_000, behavior: "auto" });
+    expect(scrollTo.mock.calls).toEqual([[{ top: 0, behavior }], [{ top: 3_000, behavior }]]);
   });
 
   it("updates when the document height changes and disconnects its observer", async () => {
@@ -83,7 +73,8 @@ describe("page jump controls", () => {
       setPageMetrics({ scrollY: 0, innerHeight: 800, scrollHeight: 2_000 });
       notifyResize([], {} as ResizeObserver);
     });
-    expect(await screen.findByRole("button", { name: "Jump to bottom" })).toBeVisible();
+    await act(async () => vi.advanceTimersToNextFrame());
+    expect(screen.getByRole("button", { name: "Jump to bottom" })).toBeVisible();
 
     view.unmount();
     expect(disconnect).toHaveBeenCalledOnce();

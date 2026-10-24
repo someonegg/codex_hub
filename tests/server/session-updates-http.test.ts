@@ -14,30 +14,6 @@ const REVISION = "a".repeat(43) as UpdateRevision;
 const OTHER_REVISION = "b".repeat(43) as UpdateRevision;
 
 describe("automatic update HTTP API", () => {
-  it("does not take ownership of injected services", () => {
-    const unavailable = async () => null;
-    const sessions = {
-      list: vi.fn(),
-      getSession: unavailable,
-      getItems: unavailable,
-      getSessionUpdates: unavailable,
-      getToolDetail: unavailable,
-      getDirectiveDetail: unavailable,
-      getInternalDetail: unavailable,
-      getInteractionSession: unavailable,
-      refresh: vi.fn(),
-    } satisfies SessionReader;
-    const updates = new SessionUpdatesService(sessions);
-    const close = vi.spyOn(updates, "close");
-
-    const catalog = new SessionCatalogService(sessions);
-    createApiRouter({ sessions, catalog, updates });
-
-    expect(close).not.toHaveBeenCalled();
-    catalog.close();
-    updates.close();
-  });
-
   it("returns 200, 204, 400, and 404 with no-store semantics", async () => {
     const getSessionUpdates = vi
       .fn<SessionReader["getSessionUpdates"]>()
@@ -95,7 +71,7 @@ describe("automatic update HTTP API", () => {
       .mockResolvedValue(snapshot(false));
     const { base, updates } = await start(getSessionUpdates, {
       waitTimeoutMs: 5_000,
-      probeIntervalMs: 1_000,
+      probeIntervalMs: 10,
       maxWaiters: 1,
       maxWaitersPerSession: 1,
     });

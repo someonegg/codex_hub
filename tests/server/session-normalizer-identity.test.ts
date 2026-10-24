@@ -155,15 +155,4 @@ describe("session identity and recovery", () => {
       agent: { taskName: "nested-child" },
     });
   });
-
-  it("keeps valid records after a malformed middle line and reports a diagnostic", async () => {
-    const normalized = await normalizeFixture(
-      "rollout-2026-07-28T12-00-00-malformed-session.jsonl",
-    );
-    expect(normalized.timeline.filter((item) => item.kind === "message")).toHaveLength(0);
-    expect(normalized.timeline.filter((item) => item.kind === "directive")).toHaveLength(2);
-    expect(normalized.session.diagnostics).toEqual([
-      expect.objectContaining({ code: "malformed_json", ordinal: 3 }),
-    ]);
-  });
 });

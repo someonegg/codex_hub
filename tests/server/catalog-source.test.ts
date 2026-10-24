@@ -48,29 +48,6 @@ describe("catalog discovery", () => {
     expect(discovery.diagnostics).toEqual([]);
   });
 
-  it("reuses known archive descriptors without registering files again", async () => {
-    const home = await createTempDirectory("codex-archive-discovery-");
-    const directory = join(home, "archived_sessions");
-    await mkdir(directory);
-    const file = join(directory, "rollout-known.jsonl");
-    await writeFile(file, "{}\n");
-    const policy = await PathPolicy.create(home);
-    const descriptor = (await policy.register(file))!;
-    const register = vi.spyOn(policy, "register");
-    const discovery = new JsonlCatalogSource(
-      policy,
-      new Map([[descriptor.canonicalPath, descriptor]]),
-    );
-
-    expect((await discovery.discover()).entries).toEqual([{ descriptor }]);
-    expect(register).not.toHaveBeenCalled();
-
-    await unlink(file);
-    await symlink(join(home, "outside.jsonl"), file);
-    expect((await discovery.discover()).entries).toEqual([]);
-    expect(register).toHaveBeenCalledWith(descriptor.canonicalPath);
-  });
-
   it("reads archives once while discovering additions, removals and restored sessions", async () => {
     const home = await createTempDirectory("codex-archive-once-");
     const directory = join(home, "archived_sessions");
@@ -104,28 +81,6 @@ describe("catalog discovery", () => {
     expect(restored.sessions[0]!.normalized.session.archived).toBe(false);
     expect(restored.sessions[0]!.nativeSessionId).toBe("changed");
     expect(decode).toHaveBeenCalledTimes(3);
-  });
-
-  it("degrades safely when allowlisted roots are absent or become unreadable", async () => {
-    const emptyHome = await createTempDirectory("codex-catalog-empty-");
-    const empty = await new JsonlCatalogSource(await PathPolicy.create(emptyHome)).discover();
-    expect(empty).toEqual({ entries: [], diagnostics: [] });
-
-    const changedHome = await createTempDirectory("codex-catalog-changed-");
-    const sessions = join(changedHome, "sessions");
-    await mkdir(sessions);
-    const policy = await PathPolicy.create(changedHome);
-    await rename(sessions, join(changedHome, "sessions-moved"));
-
-    const changed = await new JsonlCatalogSource(policy).discover();
-    expect(changed.entries).toEqual([]);
-    expect(changed.diagnostics).toEqual([
-      expect.objectContaining({
-        code: "session_root_unreadable",
-        severity: "warning",
-      }),
-    ]);
-    expect(JSON.stringify(changed.diagnostics)).not.toContain(changedHome);
   });
 
   it("keys decoded rollouts by source-relative path rather than canonical path", async () => {

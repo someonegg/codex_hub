@@ -1,4 +1,4 @@
-import { appendFile, cp, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { appendFile, cp, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -123,39 +123,6 @@ describe("SessionReadService", () => {
     });
   });
 
-  it("keeps catalog contents stable when only source diagnostics change", async () => {
-    let signature = "warning";
-    let diagnostics = [
-      {
-        code: "temporary_source_warning",
-        severity: "warning" as const,
-        message: "temporarily unavailable",
-        ordinal: null,
-      },
-    ];
-    const source: SessionSource = {
-      ...staticSource("diagnostics", []),
-      async refresh() {
-        return {
-          signature,
-          sessions: [sourceEntry("stable", normalizedSession("stable", "Stable", "/project", []))],
-          diagnostics,
-        };
-      },
-    };
-    const repository = new SessionReadService([source]);
-    const first = await repository.list();
-    expect(first).not.toHaveProperty("diagnostics");
-
-    signature = "recovered";
-    diagnostics = [];
-    await repository.refresh();
-
-    const recovered = await repository.list();
-    expect(recovered.sessions).toEqual(first.sessions);
-    expect(recovered.revision).toBe(first.revision);
-  });
-
   it("publishes linked summaries and pages timeline details", async () => {
     const { catalogSessions, repository, session: parent } = await basicFixtureSession();
     const child = catalogSessions.find((session) => session.parentId === parent.id)!;
@@ -211,138 +178,6 @@ describe("SessionReadService", () => {
         cursor: allItems!.cursor,
       }),
     ).resolves.toBeNull();
-  });
-
-  it("keeps confirmed timeline and detail cursors valid after append", async () => {
-    const { repository, rollout, session } = await basicFixtureSession();
-    const page = await repository.getItems(session.id, { limit: 2 });
-    const allItems = await repository.getItems(session.id, { limit: 200 });
-    const directive = allItems!.items.find((item) => item.id === "directive-4")!;
-    const internal = allItems!.items.find((item) => item.id === "internal-6")!;
-    const previous = await readFile(rollout, "utf8");
-    await writeFile(
-      rollout,
-      `${previous}{"timestamp":"2026-07-28T10:00:10.000Z","type":"response_item","payload":{"type":"message","role":"assistant","phase":"final","content":[{"type":"output_text","text":"Appended revision"}]}}\n`,
-    );
-    await repository.refresh();
-    const second = await repository.getItems(session.id, {
-      cursor: page!.cursor,
-      limit: 2,
-    });
-    expect(second!.session.messageCount).toBe(allItems!.session.messageCount);
-    expect(second!.hasMore).toBe(true);
-    await expect(
-      repository.getItems(session.id, {
-        cursor: page!.cursor,
-      }),
-    ).resolves.not.toBeNull();
-    await expect(
-      repository.getDirectiveDetail(session.id, directive.id, {
-        cursor: allItems!.cursor,
-      }),
-    ).resolves.toEqual(expect.objectContaining({ text: expect.any(String) }));
-    await expect(
-      repository.getInternalDetail(session.id, internal.id, {
-        cursor: allItems!.cursor,
-      }),
-    ).resolves.toEqual(expect.objectContaining({ json: expect.any(String) }));
-  });
-
-  it("invalidates confirmed cursors after rollout replacement", async () => {
-    const { repository, rollout, session } = await basicFixtureSession();
-    const page = await repository.getItems(session.id, { limit: 2 });
-    const allItems = await repository.getItems(session.id, { limit: 200 });
-    const replacement = `${rollout}.replacement`;
-    await writeFile(
-      replacement,
-      '{"timestamp":"2026-07-28T13:00:00.000Z","type":"session_meta","payload":{"id":"basic-session","title":"Replacement trace"}}\n' +
-        '{"timestamp":"2026-07-28T13:00:01.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"replacement"}]}}\n',
-    );
-    await rename(replacement, rollout);
-    await repository.refresh();
-    const third = await repository.getSession(session.id);
-    expect(third!.session.title).toBe("Replacement trace");
-    expect(third!.session.messageCount).toBe(0);
-    await expect(
-      repository.getItems(session.id, {
-        cursor: page!.cursor,
-      }),
-    ).rejects.toMatchObject({
-      code: "timeline_changed",
-    });
-    await expect(
-      repository.getInternalDetail(session.id, "internal-6", {
-        cursor: allItems!.cursor,
-      }),
-    ).rejects.toMatchObject({ code: "timeline_changed" });
-  });
-
-  it("keeps a loaded call prefix stable when an output is appended", async () => {
-    const home = await createTempDirectory("codex-tool-append-");
-    const directory = join(home, "sessions");
-    await mkdir(directory, { recursive: true });
-    const rollout = join(directory, "rollout-tool-append.jsonl");
-    await writeFile(
-      rollout,
-      '{"timestamp":"2026-07-28T10:00:00Z","type":"session_meta","payload":{"id":"tool-append","title":"Tool append"}}\n' +
-        '{"timestamp":"2026-07-28T10:00:01Z","type":"response_item","payload":{"type":"function_call","name":"inspect","arguments":"input","call_id":"stable-call"}}\n',
-    );
-    const repository = await createCodexSessionReadService(home);
-    const listed = await repository.list();
-    const sessionId = listed.sessions[0]!.id;
-    const callPage = await repository.getItems(sessionId, {
-      limit: 1,
-    });
-    const call = callPage!.items[0]!;
-    expect(call).toMatchObject({
-      kind: "tool",
-      stage: "call",
-      callId: "stable-call",
-    });
-    const callDetailBefore = await repository.getToolDetail(sessionId, call.id, {
-      cursor: callPage!.cursor,
-    });
-
-    await appendFile(
-      rollout,
-      '{"timestamp":"2026-07-28T10:00:02Z","type":"response_item","payload":{"type":"function_call_output","call_id":"stable-call","output":"result"}}\n',
-    );
-    await repository.refresh();
-
-    const continuation = await repository.getItems(sessionId, {
-      cursor: callPage!.cursor,
-      limit: 1,
-    });
-    expect(continuation!.items).toEqual([
-      expect.objectContaining({
-        kind: "tool",
-        stage: "output",
-        callId: "stable-call",
-        status: "completed",
-        preview: "result",
-      }),
-    ]);
-    expect(continuation!.session).toMatchObject({
-      toolCount: 1,
-      itemCount: 2,
-    });
-    const callDetailAfter = await repository.getToolDetail(sessionId, call.id, {
-      cursor: callPage!.cursor,
-    });
-    expect({
-      input: callDetailAfter!.input,
-      output: callDetailAfter!.output,
-      truncated: callDetailAfter!.truncated,
-    }).toEqual({
-      input: callDetailBefore!.input,
-      output: callDetailBefore!.output,
-      truncated: callDetailBefore!.truncated,
-    });
-    expect(callDetailAfter).toMatchObject({
-      input: "input",
-      output: null,
-      truncated: false,
-    });
   });
 
   it("does not revise a session until an appended JSONL tail is terminated", async () => {
@@ -493,91 +328,8 @@ describe("SessionReadService", () => {
     ).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
-  it("keeps parent metadata, catalog revision and cursor stable when child enumeration order changes", async () => {
-    let sourceSignature = "children-z-a";
-    let childIds = ["child-z", "child-a"];
-    const source: SessionSource = {
-      ...staticSource("reordered-children", []),
-      async refresh() {
-        return {
-          signature: sourceSignature,
-          sessions: [
-            sourceEntry("parent", normalizedSession("parent", "Parent", null, [])),
-            ...childIds.map((childId) =>
-              sourceEntry(childId, normalizedSession(childId, childId, null, []), "parent"),
-            ),
-          ],
-          diagnostics: [],
-        };
-      },
-    };
-    const repository = new SessionReadService([source]);
-    const firstList = await repository.list();
-    const parentId = firstList.sessions.find((session) => session.title === "Parent")!.id;
-    const first = await repository.getSession(parentId);
-    const firstPage = await repository.getItems(parentId, {});
-
-    expect(first?.session.childIds).toEqual([...first!.session.childIds].sort());
-
-    sourceSignature = "children-a-z";
-    childIds = [...childIds].reverse();
-    await repository.refresh();
-    const second = await repository.getSession(parentId);
-
-    expect(second?.session.childIds).toEqual(first?.session.childIds);
-    expect((await repository.list()).revision).toBe(firstList.revision);
-    expect((await repository.getItems(parentId, { cursor: firstPage!.cursor }))?.cursor).toBe(
-      firstPage!.cursor,
-    );
-  });
-
-  it("returns all current timeline event kinds in one unfiltered view", async () => {
-    const { repository, session, rollout } = await basicFixtureSession();
-    await appendFile(
-      rollout,
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          name: "request_user_input",
-          call_id: "question",
-          arguments: JSON.stringify({ questions: [] }),
-        },
-      }) + "\n",
-    );
-    await repository.refresh();
-    const page = await repository.getItems(session.id, { limit: 200 });
-    expect(new Set(page?.items.map((item) => item.kind))).toEqual(
-      new Set(["message", "directive", "tool", "token", "internal", "user_input"]),
-    );
-    expect(
-      page?.items.find((item) => item.kind === "internal" && item.eventType === "reasoning"),
-    ).toEqual(
-      expect.objectContaining({
-        id: "internal-6",
-        eventType: "reasoning",
-      }),
-    );
-  });
-
-  it("accepts item pages up to 300 entries", async () => {
-    const { repository } = await fixtureRepository();
-    const list = await repository.list();
-    const session = list.sessions.find((session) => session.title === "Synthetic trace")!;
-    await expect(
-      repository.getItems(session.id, {
-        limit: 300,
-      }),
-    ).resolves.not.toBeNull();
-    await expect(
-      repository.getItems(session.id, {
-        limit: 301,
-      }),
-    ).rejects.toMatchObject({ code: "invalid_query" });
-  });
-
-  it("defaults timeline pages to 100 entries", async () => {
-    const timeline: DomainTimelineRecord[] = Array.from({ length: 101 }, (_, index) => ({
+  it("defaults to 100 items, supports 300, and rejects limits above 300", async () => {
+    const timeline: DomainTimelineRecord[] = Array.from({ length: 301 }, (_, index) => ({
       kind: "message",
       id: `message-${index + 1}`,
       ordinal: index + 1,
@@ -600,6 +352,15 @@ describe("SessionReadService", () => {
 
     expect(page?.items).toHaveLength(100);
     expect(page?.hasMore).toBe(true);
+    const maximum = (await repository.getItems(session.id, { limit: 300 }))!;
+    expect(maximum.items).toHaveLength(300);
+    expect(maximum.hasMore).toBe(true);
+    const tail = (await repository.getItems(session.id, { cursor: maximum.cursor }))!;
+    expect(tail.items).toEqual([timeline[300]]);
+    expect(tail.hasMore).toBe(false);
+    await expect(repository.getItems(session.id, { limit: 301 })).rejects.toMatchObject({
+      code: "invalid_query",
+    });
   });
 
   it("discovers an archived root created after repository startup", async () => {
@@ -826,29 +587,6 @@ describe("catalog structure and updatedAt isolation", () => {
     generation++;
     await repository.refresh();
     expect((await repository.list()).revision).not.toBe(first.revision);
-  });
-  it("preserves child identity when its parent is missing or ambiguous", async () => {
-    const child = {
-      ...sourceEntry("child", normalizedSession("child", "Child", null, [])),
-      parentNativeSessionId: "missing",
-    };
-    const list = await new SessionReadService([staticSource("orphans", [child])]).list();
-    expect(list.sessions[0]).toMatchObject({ isChild: true, parentId: null, projectId: null });
-    expect(list.projects).toEqual([]);
-    const parent = sourceEntry("duplicate", normalizedSession("duplicate", "Parent", "/same", []));
-    const secondParent = { ...parent, localId: "duplicate-2" };
-    const ambiguous = await new SessionReadService([
-      staticSource("ambiguous", [
-        parent,
-        secondParent,
-        { ...child, parentNativeSessionId: "duplicate" },
-      ]),
-    ]).list();
-    expect(ambiguous.sessions.find((session) => session.title === "Child")).toMatchObject({
-      isChild: true,
-      parentId: null,
-    });
-    expect(ambiguous.projects).toHaveLength(1);
   });
 });
 

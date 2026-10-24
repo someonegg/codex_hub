@@ -529,7 +529,8 @@ it.each([
     const frame = vi.fn();
     const fail = vi.fn();
     await service.subscribePreview("session", frame, fail, new AbortController().signal);
-    await vi.waitFor(() => expect(frame).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(frame).toHaveBeenCalledOnce();
     const submit = (time: number, { sessionId = "session", paneId = "%7", valid = true } = {}) =>
       bindings.submit({
         sessionId,
@@ -544,11 +545,13 @@ it.each([
     submit(2);
     const secondFrame = vi.fn();
     await service.subscribePreview("session", secondFrame, fail, new AbortController().signal);
-    await vi.waitFor(() => expect(secondFrame).toHaveBeenCalledOnce());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(secondFrame).toHaveBeenCalledOnce();
     expect(listen).toHaveBeenCalledOnce();
     content = "after duplicate";
     notify();
-    await vi.waitFor(() => expect(frame).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(350);
+    expect(frame).toHaveBeenCalledTimes(2);
     expect(secondFrame).toHaveBeenCalledTimes(2);
     expect(fail).not.toHaveBeenCalled();
     submit(3, target);
@@ -564,10 +567,9 @@ it.each([
     expect(secondFrame).toHaveBeenCalledTimes(2);
     const recovered = vi.fn();
     await service.subscribePreview("session", recovered, vi.fn(), new AbortController().signal);
-    await vi.waitFor(() =>
-      expect(recovered).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "snapshot", content: "returned" }),
-      ),
+    await vi.advanceTimersByTimeAsync(0);
+    expect(recovered).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "snapshot", content: "returned" }),
     );
     expect(listen).toHaveBeenCalledTimes(2);
   },

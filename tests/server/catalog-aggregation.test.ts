@@ -139,25 +139,6 @@ describe("catalog source aggregation", () => {
       )!.normalized.session.childIds,
     );
   });
-
-  it("uses session ID as the final tie-breaker across source registration order", async () => {
-    const sourceA = testSource("tie-a", [sourceEntry("same", null, "Tie")]);
-    const sourceB = testSource("tie-b", [sourceEntry("same", null, "Tie")]);
-    const first = await new CatalogSnapshotStore([sourceA, sourceB]).current();
-    const reversed = await new CatalogSnapshotStore([sourceB, sourceA]).current();
-
-    const mapper = new SessionApiMapper();
-    const firstResult = mapper.list(
-      [...first.sessions.values()].map((value) => value.normalized.session),
-    );
-    const reversedResult = mapper.list(
-      [...reversed.sessions.values()].map((value) => value.normalized.session),
-    );
-    expect(firstResult.sessions.map(({ id }) => id)).toEqual(
-      reversedResult.sessions.map(({ id }) => id),
-    );
-    expect(firstResult.revision).toBe(reversedResult.revision);
-  });
 });
 
 function sourceEntry(

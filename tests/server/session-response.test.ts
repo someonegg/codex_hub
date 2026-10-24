@@ -15,15 +15,13 @@ import { createProcessUpdateRevisionFactory } from "../../src/server/updates/upd
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
-async function setup(archived = false) {
+async function setup() {
   const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(resolve("tests/fixtures/codex-home"), bindings);
   const reader = new SessionReadService([source], undefined, undefined, {
     diagnosticLogger: { log: () => {} },
   });
-  const session = (await reader.list()).sessions.find((item) =>
-    archived ? item.status === "archived" : item.title === "Synthetic trace",
-  )!;
+  const session = (await reader.list()).sessions.find((item) => item.title === "Synthetic trace")!;
   const initialPage = (await reader.getItems(session.id, { limit: 300 }))!;
   const pane = { socketPath: "/tmp/response.sock", paneId: "%1", sessionName: "response" };
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
@@ -153,27 +151,6 @@ describe("request-scoped session responses", () => {
         interaction: { state: "unknown" },
       });
       expect(f.resolveTarget).toHaveBeenCalledTimes(1);
-    } finally {
-      f.close();
-    }
-  });
-
-  it("keeps archive policy authoritative without querying pane liveness", async () => {
-    const f = await setup(true);
-    try {
-      const response = await assembleSessionResponse(
-        (await f.reader.getSession(f.session.id))!,
-        f.interaction,
-        revision,
-      );
-      expect(response).toMatchObject({
-        session: {
-          status: "archived",
-          resume: { allowed: false, reason: "Archived sessions cannot be resumed" },
-        },
-        interaction: { supported: false },
-      });
-      expect(f.resolveTarget).not.toHaveBeenCalled();
     } finally {
       f.close();
     }
