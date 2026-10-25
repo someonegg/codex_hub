@@ -60,6 +60,14 @@ codex-hub \
 
 See [home configuration and usage](docs/usage.md#multiple-homes) for configuration.
 
+To host static web pages and review diffs, enable optional hosting:
+
+```sh
+codex-hub --hosting
+```
+
+See [Publish resources](docs/usage.md#publish-resources) for publishing and management.
+
 To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
 For running from source, see [Development](docs/development.md).
 
@@ -73,8 +81,8 @@ For running from source, see [Development](docs/development.md).
 
 ## Session interaction
 
-Send prompts and control the live terminal from the session page. Paste screenshots
-or drop files into the message input, then review and send the inserted paths.
+Send prompts and control the live terminal from the session page. Take photos,
+paste screenshots, or drop files into the message input, then review and send the inserted paths.
 See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API limits.
 
 <details>

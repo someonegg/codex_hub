@@ -91,6 +91,10 @@ publication. Storage defaults to `~/.codex-hub/hosting`; for a custom location,
 pass the same `--hosting-dir /path` to the commands and server. Add `--json`
 for structured output.
 
+For agent-assisted publishing, install the
+[`ahub-publish` skill](https://github.com/someonegg/devkit/tree/main/skills/ahub-publish)
+and request it by name to publish static pages or review diffs to an existing Hub.
+
 ### Publish web pages
 
 Hosted pages run as trusted code on the same origin as Hub; publish only
