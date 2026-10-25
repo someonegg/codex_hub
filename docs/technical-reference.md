@@ -260,8 +260,6 @@ subscriptions immediately; returning ownership does not revive a closed subscrip
 #### Browser behavior
 
 The browser connects only while the preview is expanded, connected, and visible.
-Successfully sending a standalone slash command automatically expands the preview,
-except for `/exit` and `/quit` (ignoring surrounding whitespace).
 Retryable failures use backoff; terminal errors wait for expansion, visibility,
 connection changes, or explicit retry. Failures retain the last frame and a
 stopped-updates notice until a valid snapshot arrives. Dismissing error details
