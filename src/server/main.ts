@@ -1,12 +1,47 @@
 #!/usr/bin/env node
+import { parseArgs } from "node:util";
+
 import { commandLineHelp, loadConfig } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
+import { HostingStore } from "./hosting/store.js";
 import { createApiRouter } from "./http/api-router.js";
 import { startServer } from "./http/create-server.js";
 import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
 import { uploadDirectory } from "./http/upload-routes.js";
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "publish") {
+    const { values, positionals } = parseArgs({
+      args: process.argv.slice(3),
+      allowPositionals: true,
+      options: {
+        project: { type: "string" },
+        name: { type: "string" },
+        title: { type: "string" },
+        "hosting-dir": { type: "string" },
+        json: { type: "boolean" },
+        help: { type: "boolean" },
+      },
+    });
+    if (values.help) {
+      console.log(commandLineHelp());
+      return;
+    }
+    if (positionals.length !== 1 || !values.project)
+      throw new Error("publish requires a source directory and --project");
+    const artifact = await new HostingStore(values["hosting-dir"]).publish(
+      positionals[0],
+      values.project,
+      values.name,
+      values.title,
+    );
+    console.log(
+      values.json
+        ? JSON.stringify(artifact)
+        : `${artifact.url}\n[${artifact.title.replace(/[\\[\]]/g, "\\$&").replace(/[\r\n]/g, " ")}](${artifact.url})`,
+    );
+    return;
+  }
   const command = loadConfig();
   if (command.kind === "help") {
     console.log(commandLineHelp());

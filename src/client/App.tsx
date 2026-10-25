@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { ArtifactsPage } from "./components/ArtifactsPage";
 import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
@@ -7,6 +8,10 @@ import { SessionPage } from "./SessionPage";
 import { useHubNavigation } from "./state/use-hub-navigation";
 import { useSessionList } from "./state/use-session-list";
 export function App() {
+  return location.pathname === "/artifacts" ? <ArtifactsPage /> : <SessionHub />;
+}
+
+function SessionHub() {
   const catalog = useSessionList();
   const [homeFilter, setHomeFilter] = useState(() => {
     try {

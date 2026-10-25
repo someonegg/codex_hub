@@ -29,6 +29,7 @@ export interface ServerConfig {
   interactionEnabled: boolean;
   tmuxSocket?: string;
   uploadDirectory?: string;
+  hostingDirectory?: string;
 }
 
 export type CommandLineResult =
@@ -69,11 +70,15 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       help: { type: "boolean" },
       "tmux-socket": { type: "string" },
       "upload-dir": { type: "string" },
+      hosting: { type: "boolean" },
+      "hosting-dir": { type: "string" },
     },
   });
 
   if (values.help) return { kind: "help" };
 
+  if (values["hosting-dir"] !== undefined && !values.hosting)
+    throw new Error("--hosting-dir requires --hosting");
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
   const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
@@ -109,8 +114,16 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       clientDirectory: fileURLToPath(new URL("../../client/", import.meta.url)),
       tls,
       interactionEnabled: true,
+      ...(values.hosting
+        ? {
+            hostingDirectory:
+              values["hosting-dir"] !== undefined
+                ? resolveDirectoryOption("hosting-dir", values["hosting-dir"])
+                : resolve(homedir(), ".codex-hub/hosting"),
+          }
+        : {}),
       ...(values["upload-dir"] !== undefined
-        ? { uploadDirectory: resolveUploadDirectory(values["upload-dir"]) }
+        ? { uploadDirectory: resolveDirectoryOption("upload-dir", values["upload-dir"]) }
         : {}),
       ...(values["tmux-socket"] !== undefined
         ? { tmuxSocket: resolve(nonEmptyOption("tmux-socket", values["tmux-socket"])!) }
@@ -122,7 +135,11 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 export function commandLineHelp(): string {
   return `Usage: codex-hub [options]
 
+Publish: codex-hub publish <directory> --project <directory> [--name <name>] [--title <title>] [--hosting-dir <directory>] [--json]
+
 Options:
+  --hosting            Enable trusted same-origin static web hosting
+  --hosting-dir <path> Hosting storage (requires --hosting; default: ~/.codex-hub/hosting)
   --codex-home <nickname=path>
                        Codex home; repeat for multiple homes (default: default=~/.codex)
   --host <host>        Listen host (default: 127.0.0.1)
@@ -177,7 +194,7 @@ function parseHomes(values: readonly string[]): CodexHomeConfig[] {
   });
 }
 
-function resolveUploadDirectory(value: string): string {
-  const path = nonEmptyOption("upload-dir", value)!;
+function resolveDirectoryOption(name: string, value: string): string {
+  const path = nonEmptyOption(name, value)!;
   return resolve(path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : path);
 }

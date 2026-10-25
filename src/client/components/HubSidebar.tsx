@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { catalogGroups } from "../state/catalog-groups";
 import type { useHubNavigation } from "../state/use-hub-navigation";
@@ -21,6 +21,13 @@ export function HubSidebar({
   homeFilter = "",
   onHomeFilter,
 }: HubSidebarProps) {
+  const [hosting, setHosting] = useState(false);
+  useEffect(() => {
+    void fetch("/api/v1/capabilities")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { hosting?: boolean } | null) => setHosting(data?.hosting === true))
+      .catch(() => {});
+  }, []);
   const {
     sessionId,
     navigation,
@@ -174,6 +181,11 @@ export function HubSidebar({
         ) : null}
       </nav>
       <footer className="hub-sidebar-footer">
+        {hosting ? (
+          <a href="/artifacts" target="_blank" rel="noopener noreferrer">
+            Pages
+          </a>
+        ) : null}
         <ThemeSelect />
       </footer>
     </aside>

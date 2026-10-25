@@ -10,7 +10,10 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((request, _response, next) => {
           const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-          if (/^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(pathname)) {
+          if (
+            pathname === "/artifacts" ||
+            /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(pathname)
+          ) {
             request.url = `/index.html${(request.url ?? "").slice(pathname.length)}`;
           }
           next();

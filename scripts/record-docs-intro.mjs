@@ -37,6 +37,7 @@ async function record(
       colorScheme: "light",
     });
   const demo = await context.newPage();
+  await demo.route("**/api/v1/capabilities", (route) => route.fulfill({ json: { hosting: true } }));
   demo.setDefaultTimeout(10000);
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));

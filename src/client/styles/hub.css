@@ -193,12 +193,27 @@
 .hub-sidebar-footer {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   padding: 16px 22px;
   border-top: 1px solid var(--mist);
   color: var(--ink-soft);
   font-size: var(--text-small);
   flex-shrink: 0;
+}
+.hub-sidebar-footer > a {
+  flex-shrink: 0;
+  color: var(--current);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.hub-sidebar-footer > a:hover,
+.hub-sidebar-footer > a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.hub-sidebar-footer > a:focus-visible {
+  outline: none;
+  text-decoration-thickness: 2px;
 }
 .theme-select {
   display: flex;
