@@ -12,7 +12,9 @@ For setup and everyday workflows, see [Usage](usage.md).
 - [Catalog](#catalog): list snapshots, revisions, and long polling.
 - [Reader](#reader-and-automatic-updates): timeline pages, lazy details, and updates.
 - [Uploads](#file-uploads): binary upload contract.
-- [Hosting](#optional-static-hosting): static publication, snapshots, and page routes.
+- [Hosting](#optional-hosting): shared publication and access guarantees.
+- [Web pages](#web-pages): static snapshots and page routes.
+- [Diffs](#temporary-diffs): temporary diff storage and routes.
 - [Tmux interaction](#tmux-interaction): bindings, activity, and preview protocol.
 - [Management](#asynchronous-management): launch, exit, archive, delete, and recovery.
 
@@ -386,11 +388,24 @@ All terminal states and `404` clear recovery markers; nonretryable query errors
 require manual retry. Network retries of create reuse its request ID until a
 terminal result, after which the ID is discarded.
 
-## Optional static hosting
+## Optional hosting
 
 Hosting is independent of session adapters and is enabled only by `--hosting`.
 `GET /api/v1/capabilities` reports `{ hosting: boolean }`. Disabled hosting does
-not initialize storage and returns 404 for management and page routes.
+not initialize storage and returns 404 for hosting pages and APIs. Resource
+commands work offline and accept `--hosting-dir` and `--json`. Existing
+HTTPS/mTLS or reverse-proxy authentication applies to both resource types;
+hosting adds no application login.
+
+Publish/delete share a process-aware filesystem lock. Complete owner directories
+are installed by atomic rename; dead owners are reclaimed only after the OS
+reports their PID absent. Permanent tombstones prevent competing reclaimers from
+moving a newly acquired lock. A separate service lock permits one Hub process per
+hosting root. A PID reused by another live process conservatively blocks recovery.
+Manual storage changes should be performed without concurrent publication.
+
+### Web pages
+
 `GET /api/v1/artifacts` rescans disk and returns `projects`, each with a
 `directory` and `artifacts`; `DELETE /api/v1/artifacts/:id` removes every snapshot.
 Malformed metadata is skipped with a diagnostic. Projects are not filtered by
@@ -417,13 +432,6 @@ are inert and disappear when their artifact is deleted. Previous snapshots stay
 available until deletion, keeping old documents and their relative assets
 consistent. No expiry or history management is provided.
 
-Publish/delete share a process-aware filesystem lock. Complete owner directories
-are installed by atomic rename; dead owners are reclaimed only after the OS
-reports their PID absent. Permanent tombstones prevent competing reclaimers from
-moving a newly acquired lock. A separate service lock permits one Hub process per
-hosting root. A PID reused by another live process conservatively blocks recovery.
-Manual storage changes should be performed without concurrent publication.
-
 `/web/:id/` redirects with 302 to `/web/:id/:snapshotId/`. GET and HEAD support
 files and directory `index.html`, without directory listing, traversal, metadata
 access or SPA fallback. Every request reads disk metadata, so refresh and unknown
@@ -436,7 +444,26 @@ provider's cross-origin policies.
 Hosted pages are trusted same-origin code, with the same authority as Hub. Their
 responses omit the Hub UI's restrictive CSP so inline scripts/styles, modules,
 fonts, JSON and external HTTPS resources can load. Hub's own CSP is unchanged.
-Existing HTTPS/mTLS or reverse-proxy authentication applies to every page and
-resource; hosting adds no application login or proxy service. Markdown permits
-only `/web/<32 lowercase hex digits>/` as a relative hosted-page link, preserving
+Session Markdown permits `/web/<32 lowercase hex digits>/` as a relative hosted-page link, preserving
 existing absolute protocol rules. Copy link uses the current browser origin.
+
+### Temporary diffs
+
+Each `diff publish <file>` creates an independent UUID v4 resource at
+`<hosting>/diffs/<uuid>/`: `raw.diff` stores the original bytes and
+`metadata.json` stores `id`, `title`, `createdAt`, and `url`. Publication uses
+atomic directory rename under the shared hosting write lock; deletion uses the
+same lock. `diff list` reads metadata only; CLI deletion is idempotent. Cleanup
+is explicit and leaves the source file intact; diffs have no project or session
+association.
+
+With `--hosting`, `/diffs/<uuid>` serves the viewer,
+`GET /api/v1/diffs/:uuid` returns metadata plus `raw`, and
+`DELETE /api/v1/diffs/:uuid` returns 204 on deletion. Missing resources and
+disabled hosting return 404; there is no HTTP list endpoint. Pages and data use
+`private, no-store`, retain Hub CSP, and render content as
+text. Session Markdown opens canonical `/diffs/<uuid>` links in a new tab.
+
+The viewer supports Git unified diffs, including renames, mode changes, binary
+markers, and C-quoted paths. Unsupported or incomplete input shows a warning;
+the original text is available when parsing is incomplete.

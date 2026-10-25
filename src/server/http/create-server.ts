@@ -10,6 +10,7 @@ import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
 import type { ServerConfig } from "../config.js";
+import { DiffStore } from "../hosting/diff-store.js";
 import { HostingLock } from "../hosting/lock.js";
 import { hostingRoutes } from "../hosting/routes.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
@@ -43,11 +44,12 @@ async function serveFile(
   response: ServerResponse,
   filePath: string,
   headOnly: boolean,
+  status = 200,
 ): Promise<boolean> {
   try {
     const info = await stat(filePath);
     if (!info.isFile()) return false;
-    response.statusCode = 200;
+    response.statusCode = status;
     response.setHeader(
       "Content-Type",
       CONTENT_TYPES[extname(filePath)] ?? "application/octet-stream",
@@ -91,6 +93,7 @@ export function createServer(
     return attachLifecycle(server, closeServices, upgrades);
   };
   const hosting = hostingRoutes(config.hostingDirectory);
+  const diffs = config.hostingDirectory ? new DiffStore(config.hostingDirectory) : undefined;
   const clientRootPrefix = `${clientRoot}${sep}`;
   const requestListener: RequestListener = async (request, response) => {
     applySecurityHeaders(response, request);
@@ -109,10 +112,13 @@ export function createServer(
       const url = new URL(request.url ?? "/", "http://localhost");
       const decodedPath = decodeURIComponent(url.pathname);
       const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(decodedPath);
+      const diffPage = /^\/diffs\/([a-f0-9-]{36})$/.exec(decodedPath);
       const appPage =
         decodedPath === "/" ||
         sessionPage ||
-        (decodedPath === "/artifacts" && config.hostingDirectory);
+        ((decodedPath === "/artifacts" || diffPage) && config.hostingDirectory);
+      const pageStatus = diffPage && diffs && !(await diffs.exists(diffPage[1])) ? 404 : 200;
+      if (diffPage) response.setHeader("Cache-Control", "private, no-store");
       const relativePath = appPage ? "index.html" : decodedPath.slice(1);
       const requestedPath = resolve(clientRoot, relativePath);
       let canonicalPath: string;
@@ -125,7 +131,7 @@ export function createServer(
 
       if (
         canonicalPath.startsWith(clientRootPrefix) &&
-        (await serveFile(response, canonicalPath, headOnly))
+        (await serveFile(response, canonicalPath, headOnly, pageStatus))
       ) {
         return;
       }

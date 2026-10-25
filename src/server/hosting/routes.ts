@@ -3,6 +3,7 @@ import { realpath, stat } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 
 import { type ApiRouter, sendJson } from "../http/router.js";
+import { DiffStore } from "./diff-store.js";
 import { HostingStore } from "./store.js";
 
 const types: Record<string, string> = {
@@ -35,12 +36,30 @@ const types: Record<string, string> = {
 };
 export function hostingRoutes(directory?: string): ApiRouter {
   const store = directory === undefined ? undefined : new HostingStore(directory);
+  const diffs = directory === undefined ? undefined : new DiffStore(directory);
   return async (request, response) => {
     const url = new URL(request.url ?? "/", "http://localhost");
     const path = url.pathname;
     const head = request.method === "HEAD";
     if (path === "/api/v1/capabilities" && request.method === "GET") {
       sendJson(response, 200, { hosting: !!store });
+      return true;
+    }
+    if (path.startsWith("/api/v1/diffs")) {
+      response.setHeader("Cache-Control", "private, no-store");
+      const match = /^\/api\/v1\/diffs\/([^/]+)$/.exec(path);
+      const entry = diffs && match && request.method === "GET" ? await diffs.get(match[1]) : null;
+      if (entry) {
+        sendJson(response, 200, entry);
+      } else if (diffs && match && request.method === "DELETE" && (await diffs.exists(match[1]))) {
+        await diffs.delete(match[1]);
+        response.statusCode = 204;
+        response.end();
+      } else {
+        sendJson(response, 404, {
+          error: { code: "not_found", message: "Diff not found or already cleaned up" },
+        });
+      }
       return true;
     }
     if (!path.startsWith("/web/") && !path.startsWith("/api/v1/artifacts")) return false;

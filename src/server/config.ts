@@ -135,7 +135,14 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 export function commandLineHelp(): string {
   return `Usage: codex-hub [options]
 
-Publish: codex-hub publish <directory> --project <directory> [--name <name>] [--title <title>] [--hosting-dir <directory>] [--json]
+Resources:
+  codex-hub page list
+  codex-hub page delete <id>
+  codex-hub diff list
+  codex-hub diff delete <uuid>
+  All resource commands accept --hosting-dir <directory> and --json.
+Diff: codex-hub diff publish <file> [--title <title>] [--hosting-dir <directory>] [--json]
+Pages: codex-hub page publish <directory> --project <directory> [--name <name>] [--title <title>] [--hosting-dir <directory>] [--json]
 
 Options:
   --hosting            Enable trusted same-origin static web hosting

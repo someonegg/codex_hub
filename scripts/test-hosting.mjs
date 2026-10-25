@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { DiffStore } from "../dist/server/server/hosting/diff-store.js";
 import { HostingStore } from "../dist/server/server/hosting/store.js";
 import { createServer, listenServer } from "../dist/server/server/http/create-server.js";
 import {
@@ -52,6 +53,28 @@ try {
   const hosting = join(directory, "hosting");
   const store = new HostingStore(hosting);
   const artifact = await store.publish(source, directory, "demo", "Design comparison");
+  const diffFile = join(directory, "review.diff");
+  await writeFile(
+    diffFile,
+    `diff --git a/src/greeting.ts b/src/greeting.ts
+--- a/src/greeting.ts
++++ b/src/greeting.ts
+@@ -1,3 +1,4 @@
+ export function greeting(name: string) {
+-  return "Hello " + name;
++  const label = name.trim() || "world";
++  return \`Hello \${label}!\`;
+ }
+ diff --git a/README.md b/README.md
+`.replace(" diff --git", "diff --git") +
+      `--- a/README.md
++++ b/README.md
+@@ -1 +1,2 @@
+ # Greetings
++Safe text: <script>window.diffUnsafe = true</script>
+`,
+  );
+  const diff = await new DiffStore(hosting).publish(diffFile, "Review · Friendlier greetings");
   const config = {
     homes: [],
     host: "127.0.0.1",
@@ -86,6 +109,8 @@ try {
   servers.push(cookieProxy);
   const proxyOrigin = `http://127.0.0.1:${cookieProxy.address().port}`;
   assert.equal((await fetch(proxyOrigin + artifact.url)).status, 401);
+  assert.equal((await fetch(proxyOrigin + diff.url)).status, 401);
+  assert.equal((await fetch(proxyOrigin + "/api/v1/diffs/" + diff.id)).status, 401);
   for (const [name, content] of Object.entries({
     "ca.crt": TEST_CA,
     "server.crt": TEST_SERVER_CERTIFICATE,
@@ -96,6 +121,7 @@ try {
     await writeFile(join(directory, name), content);
   const secureHosting = join(directory, "secure-hosting");
   const secureArtifact = await new HostingStore(secureHosting).publish(source, directory);
+  const secureDiff = await new DiffStore(secureHosting).publish(diffFile, "Secure review");
   const secure = createServer({
     ...config,
     hostingDirectory: secureHosting,
@@ -151,6 +177,49 @@ try {
       await route.fulfill({ response, json: data });
     });
     await verifyAssets(context, settings.origin, settings.url);
+    const review = await context.newPage();
+    await review.goto(settings.origin + settings.diffUrl);
+    await review.getByRole("heading", { name: "Review · Friendlier greetings" }).waitFor();
+    if (
+      (await review.getByRole("link", { name: "Codex Hub", exact: true }).count()) ||
+      (await review.getByRole("combobox").count())
+    )
+      throw new Error("Diff should not show Hub navigation or theme controls");
+    const lightBackground = await review
+      .locator(".diff-page")
+      .evaluate((element) => getComputedStyle(element).backgroundColor);
+    await review.evaluate(() => (document.documentElement.dataset.theme = "warm"));
+    if (
+      (await review
+        .locator(".diff-page")
+        .evaluate((element) => getComputedStyle(element).backgroundColor)) !== lightBackground
+    )
+      throw new Error("Hub theme leaked into diff styling");
+    if (await review.locator('[role="status"]').count())
+      throw new Error("Valid diff was not parsed");
+    if (await review.evaluate(() => window.diffUnsafe)) throw new Error("Diff HTML executed");
+    await review.getByRole("link", { name: "README.md", exact: true }).click();
+    if (!review.url().endsWith("#file-1")) throw new Error("File navigation failed");
+    await review.locator("#file-1 summary").click();
+    if ((await review.locator("#file-1").getAttribute("open")) !== null)
+      throw new Error("Collapse failed");
+    await review.locator("#file-1 summary").click();
+    await review.screenshot({ path: settings.diffScreenshot, fullPage: true });
+    await review.setViewportSize({ width: 390, height: 844 });
+    if (await review.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+      throw new Error("Diff mobile overflow");
+    await review.screenshot({ path: settings.diffMobileScreenshot, fullPage: true });
+    if (await review.getByText("View original diff", { exact: true }).count())
+      throw new Error("Valid diff should hide raw text controls");
+    const folder = review
+      .locator(".diff-tree details")
+      .filter({ has: review.getByText("src", { exact: true }) });
+    await folder.locator("summary").first().click();
+    if (await review.getByRole("link", { name: "greeting.ts", exact: true }).isVisible())
+      throw new Error("Directory did not collapse");
+    await folder.locator("summary").first().click();
+    await review.getByRole("link", { name: "greeting.ts", exact: true }).click();
+    if (!review.url().endsWith("#file-0")) throw new Error("Tree file navigation failed");
     const hub = await context.newPage();
     await hub.goto(settings.origin + "/");
     const originalUrl = hub.url();
@@ -207,7 +276,7 @@ try {
                   role: "assistant",
                   phase: "final",
                   itemType: null,
-                  markdown: `[Published page](${settings.url})`,
+                  markdown: `[Published page](${settings.url})\n[Review diff](${settings.diffUrl})`,
                 },
               ],
             }
@@ -219,17 +288,25 @@ try {
     await link.waitFor();
     if ((await link.getAttribute("href")) !== settings.url)
       throw new Error("Markdown link was filtered");
+    const diffLink = demo.getByRole("link", { name: "Review diff", exact: true });
+    if (
+      (await diffLink.getAttribute("target")) !== "_blank" ||
+      (await diffLink.getAttribute("href")) !== settings.diffUrl
+    )
+      throw new Error("Diff session link was filtered");
     await demo.goto(settings.origin + "/artifacts");
     demo.once("dialog", (dialog) => dialog.accept());
     await design.getByRole("button", { name: "Delete" }).click();
     await demo.getByRole("heading", { name: "Design comparison" }).waitFor({ state: "detached" });
     if ((await context.request.get(settings.origin + settings.url)).status() !== 404)
       throw new Error("Deleted page is still available");
-    await context.close();
     const proxy = await browser.newContext();
     await proxy.addCookies([{ name: "hub-test", value: "allowed", url: settings.proxyOrigin }]);
     // The proxy artifact remains available after management deletes the first artifact.
     await verifyAssets(proxy, settings.proxyOrigin, settings.proxyUrl);
+    const proxyReview = await proxy.newPage();
+    await proxyReview.goto(settings.proxyOrigin + settings.diffUrl);
+    await proxyReview.getByRole("heading", { name: "Review · Friendlier greetings" }).waitFor();
     await proxy.close();
     const mtls = await browser.newContext({
       ignoreHTTPSErrors: true,
@@ -242,13 +319,31 @@ try {
       ],
     });
     await verifyAssets(mtls, settings.secureOrigin, settings.secureUrl);
+    const secureReview = await mtls.newPage();
+    await secureReview.goto(settings.secureOrigin + settings.secureDiffUrl);
+    await secureReview.getByRole("heading", { name: "Secure review" }).waitFor();
     await mtls.close();
+    if (
+      (await review.request.delete(settings.origin + "/api/v1" + settings.diffUrl)).status() !== 204
+    )
+      throw new Error("Diff delete failed");
+    const refreshed = await review.reload();
+    if (refreshed.status() !== 404) throw new Error("Deleted diff page should return 404");
+    await review
+      .getByRole("alert")
+      .filter({ hasText: "Diff not found or already cleaned up." })
+      .waitFor();
+    await context.close();
   };
   // Keep a separate artifact for the proxy after the management deletion.
   const proxyArtifact = await store.publish(source, directory, "proxy-demo", "Proxy demo");
   const code = join(directory, "browser.js");
   const settings = {
     origin,
+    diffUrl: diff.url,
+    secureDiffUrl: secureDiff.url,
+    diffScreenshot: resolve("docs/images/codex-hub-diff.png"),
+    diffMobileScreenshot: resolve("docs/images/codex-hub-diff-mobile.png"),
     proxyOrigin,
     secureOrigin,
     url: artifact.url,

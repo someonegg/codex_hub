@@ -52,7 +52,7 @@ try {
   await writeFile(join(source, "index.html"), "<h1>Package hosting</h1>");
   const published = await exec(
     binary,
-    ["publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+    ["page", "publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
     { cwd: temporary },
   );
   const artifact = JSON.parse(published.stdout);
@@ -60,13 +60,40 @@ try {
     Array.from({ length: 4 }, () =>
       exec(
         binary,
-        ["publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+        ["page", "publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
         { cwd: temporary },
       ),
     ),
   );
   assert(concurrent.every(({ stdout }) => JSON.parse(stdout).id === artifact.id));
   assert.match(artifact.url, /^\/web\/[a-f0-9]{32}\/$/);
+  await assert.rejects(exec(binary, ["publish", source, "--project", temporary]));
+  const resource = (kind, action, ...args) =>
+    exec(binary, [kind, action, ...args, "--hosting-dir", hosting, "--json"], { cwd: temporary });
+  assert.equal(JSON.parse((await resource("page", "list")).stdout).length, 1);
+  const diffFile = join(temporary, "review.diff");
+  await writeFile(
+    diffFile,
+    "diff --git a/test b/test\n--- a/test\n+++ b/test\n@@ -1 +1 @@\n-old\n+new\n",
+  );
+  const plainDiff = await exec(binary, ["diff", "publish", diffFile, "--hosting-dir", hosting]);
+  const plainUrl = plainDiff.stdout.split("\n")[0];
+  assert.match(plainDiff.stdout, /\[review\.diff\]\(\/diffs\/[a-f0-9-]{36}\)/);
+  await resource("diff", "delete", plainUrl.split("/").at(-1));
+  assert.match((await exec(binary, ["diff", "--help"])).stdout, /diff publish/);
+  const diffEntries = await Promise.all(
+    Array.from({ length: 4 }, async () =>
+      JSON.parse((await resource("diff", "publish", diffFile, "--title", "Review")).stdout),
+    ),
+  );
+  assert.equal(new Set(diffEntries.map((entry) => entry.id)).size, 4);
+  assert.equal(JSON.parse((await resource("diff", "list")).stdout).length, 4);
+  await writeFile(diffFile, "independent source");
+  for (const entry of diffEntries) {
+    await resource("diff", "delete", entry.id);
+    await resource("diff", "delete", entry.id);
+  }
+  assert.equal(JSON.parse((await resource("diff", "list")).stdout).length, 0);
   const home = join(temporary, "empty-home");
   await mkdir(home);
   await mkdir(join(home, "sessions"));
@@ -113,6 +140,9 @@ try {
     await (await fetch(new URL(artifact.url, address))).text(),
     "<h1>Package hosting</h1>",
   );
+  await resource("page", "delete", artifact.id);
+  await resource("page", "delete", artifact.id);
+  assert.equal((await fetch(new URL(artifact.url, address))).status, 404);
   const response = await fetch(address);
   assert.equal(response.status, 200);
   const html = await response.text();
