@@ -83,36 +83,55 @@ Explicit homes replace the default `~/.codex`. Give each home a unique nickname
 and directory. Use the sidebar home filter to narrow the session list, and choose
 the destination home when creating a session.
 
-## Publish web pages
+## Publish resources
 
-Start `codex-hub --hosting` to enable **Pages** at `/artifacts` (disabled by
-default). Hosted pages run as trusted code on the same origin as Hub; publish
-only content you trust.
+Start `codex-hub --hosting` to view published pages and diffs. Resource commands
+work while the server is stopped and print a relative URL and Markdown link on
+publication. Storage defaults to `~/.codex-hub/hosting`; for a custom location,
+pass the same `--hosting-dir /path` to the commands and server. Add `--json`
+for structured output.
+
+### Publish web pages
+
+Hosted pages run as trusted code on the same origin as Hub; publish only
+content you trust. Open **Pages** at `/artifacts` to manage them.
 
 Publish an already built directory containing `index.html` on the Hub machine:
 
 ```sh
-codex-hub publish ./demo --project /absolute/path/to/project --title "Design comparison"
+codex-hub page publish ./demo --project /absolute/path/to/project --title "Design comparison"
 ```
 
-Both directories must exist. Publication works while Hub is stopped, needs no
-session or TLS credentials, and prints a stable relative URL and Markdown link.
-Use relative asset paths; Hub does not build sites or accept remote uploads.
+Both directories must exist. Use relative asset paths; Hub does not build sites
+or accept remote uploads.
 
 To update a page, publish with the same project and name. The name defaults to
 the source directory name after resolving symlinks. Use `--name` to keep a name
 across different source directories. Updates retain the URL; the title is kept
 unless `--title` is supplied. For worktrees, pass the original project to `--project`.
 
-Storage defaults to `~/.codex-hub/hosting`. For a custom location, pass the same
-`--hosting-dir /path` to `publish` and `codex-hub --hosting`. Add `--json` to
-publish for structured output.
-
 The **Pages** link opens management in a new tab. Open pages, copy absolute
-links, refresh the list, or confirm
-deletion of a page and all its snapshots. Removing the source or worktree does
-not remove published pages. See the [hosting reference](technical-reference.md#optional-static-hosting)
+links, refresh the list, or confirm deletion of a page and all its snapshots. Removing the source or worktree does
+not remove published pages. The CLI also supports `page list` and `page delete <id>`.
+See the [hosting reference](technical-reference.md#optional-hosting)
 for resource loading limits, project identity, and snapshot guarantees.
+
+### Share a temporary diff
+
+Generate a diff file for the intended comparison, then publish it:
+
+```sh
+git diff HEAD > /tmp/review.diff
+codex-hub diff publish /tmp/review.diff --title "Review changes"
+codex-hub diff list
+codex-hub diff delete <uuid>
+```
+
+Open the returned `/diffs/<uuid>` link to review the diff. The agent chooses the
+comparison and deletes the publication when finished; there is no automatic
+cleanup. The source file is unchanged.
+See the [diff reference](technical-reference.md#temporary-diffs) and
+[desktop](images/codex-hub-diff.png) / [mobile](images/codex-hub-diff-mobile.png) previews.
 
 ## Server options
 
