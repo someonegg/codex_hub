@@ -18,9 +18,11 @@ import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 import { MAX_UPLOAD_BYTES } from "../../shared/uploads";
 
 import { api } from "../api/client";
+import { useSessionDraft } from "../state/session-drafts";
 import { InternalLink } from "./InternalLink";
 
 interface InteractionPanelProps {
+  sessionId: string;
   onPanelElement?: (element: HTMLElement | null) => void;
   recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
@@ -47,6 +49,7 @@ interface InteractionPanelProps {
 }
 
 export function InteractionPanel({
+  sessionId,
   onPanelElement,
   recoveryActions,
   operationStatus,
@@ -77,7 +80,7 @@ export function InteractionPanel({
       mounted.current = false;
     };
   }, []);
-  const [message, setMessage] = useState("");
+  const { message, setMessage, clearSentMessage } = useSessionDraft(sessionId);
   const composer = useRef<HTMLTextAreaElement | null>(null);
   const upload = useRef<AbortController | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -282,12 +285,12 @@ export function InteractionPanel({
       return;
     const isCommand = /^\/[A-Za-z]+$/.test(message.trim());
     await onSendMessage(message);
+    clearSentMessage();
     if (!mounted.current) return;
     if (isCommand) {
       if (!previewExpanded) scrollOnExpand.current = true;
       onExpandPreview();
     }
-    setMessage("");
   };
   const handoff = async () => {
     if (!previewConnected || interactionBusy || upload.current) return;

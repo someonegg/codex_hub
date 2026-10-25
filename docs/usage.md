@@ -40,6 +40,10 @@ message input and expand **Terminal Preview** to inspect the CLI. Use
 **Interrupt**, or press **Esc** in the preview, to interrupt.
 **Working** and **Idle** reflect terminal output, not whether a task is complete.
 
+Unsent drafts are kept separately for each session while the page stays open.
+Switching back restores the draft; successful sends clear it, failed sends keep it.
+Reloading or closing the page discards drafts.
+
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's connected page.
 When it shows **Superseded**, follow **Go to bound session**. Your unsent draft

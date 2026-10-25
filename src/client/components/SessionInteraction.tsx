@@ -39,6 +39,7 @@ export function SessionInteraction({
   return (
     <InteractionPanel
       key={sessionId}
+      sessionId={sessionId}
       onPanelElement={onPanelElement}
       recoveryActions={recoveryActions}
       operationStatus={operationStatus}

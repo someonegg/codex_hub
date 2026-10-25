@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { InteractionResponse } from "../../src/shared/api-contract";
 
 import { InteractionPanel as Panel } from "../../src/client/components/InteractionPanel";
+import { SessionDraftProvider } from "../../src/client/state/session-drafts";
 
 // @vitest-environment jsdom
 
@@ -21,6 +22,7 @@ function interaction(state: "unbound" | "disconnected" | "connected"): Interacti
 
 function props(value: InteractionResponse | null) {
   return {
+    sessionId: "session-a",
     interaction: value,
     itemCount: 12,
     updatedAt: "2026-08-08T12:00:00.000Z",
@@ -826,4 +828,58 @@ describe("image attachments", () => {
     expect(screen.getByRole("textbox")).toHaveValue("");
     upload.mockRestore();
   });
+});
+
+describe("session drafts", () => {
+  function session(id: string, handlers = props(interaction("connected"))) {
+    return (
+      <SessionDraftProvider>
+        <InteractionPanel {...handlers} sessionId={id} key={id} />
+      </SessionDraftProvider>
+    );
+  }
+
+  it("restores independent drafts after session remounts and clears only successful sends", async () => {
+    const view = render(session("a"));
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft a" } });
+    view.rerender(session("b"));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft b" } });
+    view.rerender(session("a"));
+    expect(screen.getByRole("textbox")).toHaveValue("draft a");
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: /^Send$/ })));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+    view.rerender(session("b"));
+    expect(screen.getByRole("textbox")).toHaveValue("draft b");
+    view.rerender(session("a"));
+    expect(screen.getByRole("textbox")).toHaveValue("");
+  });
+
+  it.each([false, true])(
+    "handles send completion after switching away (new edits: %s)",
+    async (edit) => {
+      let finish!: () => void;
+      const handlers = props(interaction("connected"));
+      handlers.onSendMessage.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          }),
+      );
+      const view = render(session("a", handlers));
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "sent draft" } });
+      fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
+      view.rerender(session("b"));
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft b" } });
+      if (edit) {
+        view.rerender(session("a"));
+        fireEvent.change(screen.getByRole("textbox"), { target: { value: "new draft" } });
+        view.rerender(session("b"));
+      }
+      await act(async () => finish());
+      expect(screen.getByRole("textbox")).toHaveValue("draft b");
+      view.rerender(session("a"));
+      expect(screen.getByRole("textbox")).toHaveValue(edit ? "new draft" : "");
+    },
+  );
 });
