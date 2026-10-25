@@ -6,11 +6,17 @@ import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
 import { SessionPage } from "./SessionPage";
+import { SessionDraftProvider } from "./state/session-drafts";
 import { useHubNavigation } from "./state/use-hub-navigation";
 import { useSessionList } from "./state/use-session-list";
 export function App() {
   if (location.pathname.startsWith("/diffs/")) return <DiffPage />;
-  return location.pathname === "/artifacts" ? <ArtifactsPage /> : <SessionHub />;
+  if (location.pathname === "/artifacts") return <ArtifactsPage />;
+  return (
+    <SessionDraftProvider>
+      <SessionHub />
+    </SessionDraftProvider>
+  );
 }
 
 function SessionHub() {
