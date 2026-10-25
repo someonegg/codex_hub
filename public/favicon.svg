@@ -3,5 +3,5 @@
   <rect width="512" height="512" fill="#16262d"/>
   <rect x="110" y="100" width="290" height="310" rx="60" fill="none" stroke="url(#frame)" stroke-width="34"/>
   <g fill="none" stroke="#f7faf8" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"><polyline points="202,207 153,256 202,305"/><polyline points="250,318 305,318"/></g>
-  <g fill="#80d5c8"><circle cx="348" cy="188" r="29"/><circle cx="348" cy="264" r="29"/><circle cx="348" cy="340" r="29"/></g>
+  <g fill="#80d5c8"><circle cx="350" cy="183" r="23"/><circle cx="350" cy="255" r="23"/><circle cx="350" cy="327" r="23"/></g>
 </svg>

@@ -14,7 +14,7 @@ SCALE = 4
 FRAME = ((110, 100, 400, 410), 60, 34)
 PROMPT_WIDTH = 28
 PROMPT = [((202, 207), (153, 256), (202, 305)), ((250, 318), (305, 318))]
-ENDPOINTS = [(348, y, 29) for y in (188, 264, 340)]
+ENDPOINTS = [(350, y, 23) for y in (183, 255, 327)]
 FRAME_STOPS = [(0, '#8bdace'), (0.45, MINT), (1, '#76c8bc')]
 
 
