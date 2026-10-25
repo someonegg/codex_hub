@@ -29,6 +29,10 @@ export interface Artifact {
   updatedAt: string;
   url: string;
 }
+interface ArtifactEntry {
+  artifact: Artifact;
+  directory: string;
+}
 function parseArtifact(json: string): Artifact {
   const value = JSON.parse(json) as Artifact;
   if (
@@ -45,19 +49,6 @@ function parseArtifact(json: string): Artifact {
   )
     throw new Error("Invalid artifact metadata");
   return value;
-}
-function segment(value: string): string {
-  return encodeURIComponent(value).replaceAll(".", "%2E");
-}
-function projectPath(project: string): string {
-  return project
-    .split(sep)
-    .filter(Boolean)
-    .map((part) => part.replaceAll("%", "%25").replace(/^\.hub$/, "%2Ehub"))
-    .join(sep);
-}
-function artifactDirectory(root: string, project: string, name: string): string {
-  return join(root, "projects", projectPath(project), ".hub", "artifacts", segment(name));
 }
 async function copySnapshot(from: string, to: string): Promise<void> {
   const info = await lstat(from);
@@ -90,51 +81,39 @@ export class HostingStore {
       lock.close();
     }
   }
-  async entries(): Promise<{ artifact: Artifact; directory: string }[]> {
-    let root: string;
+  async get(id: string): Promise<ArtifactEntry | undefined> {
+    if (!ID.test(id)) return undefined;
+    const directory = join(this.root, "artifacts", id);
+    let directoryExists = false;
     try {
-      root = await realpath(this.root);
+      const canonicalDirectory = join(await realpath(this.root), "artifacts", id);
+      if ((await realpath(directory)) !== canonicalDirectory)
+        throw new Error("Artifact aliases are not allowed");
+      if (!(await lstat(directory)).isDirectory()) throw new Error("Invalid artifact directory");
+      directoryExists = true;
+      const artifact = parseArtifact(await readFile(join(directory, "artifact.json"), "utf8"));
+      if (artifact.id !== id) throw new Error("Artifact identity does not match directory");
+      return { artifact, directory: canonicalDirectory };
+    } catch (error) {
+      if (directoryExists || (error as NodeJS.ErrnoException).code !== "ENOENT")
+        console.warn(`Skipping damaged hosting entry ${directory}: ${String(error)}`);
+      return undefined;
+    }
+  }
+  async entries(): Promise<ArtifactEntry[]> {
+    let children;
+    try {
+      children = await readdir(join(this.root, "artifacts"), { withFileTypes: true });
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
       throw error;
     }
-    const results: { artifact: Artifact; directory: string }[] = [];
-    const walk = async (directory: string): Promise<void> => {
-      let children;
-      try {
-        children = await readdir(directory, { withFileTypes: true });
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-        throw error;
-      }
-      for (const child of children) {
-        if (!child.isDirectory()) continue;
-        const path = join(directory, child.name);
-        if (child.name !== ".hub") {
-          await walk(path);
-          continue;
-        }
-        let names;
-        try {
-          names = await readdir(join(path, "artifacts"));
-        } catch {
-          continue;
-        }
-        for (const name of names) {
-          const entry = join(path, "artifacts", name);
-          try {
-            if (!(await lstat(entry)).isDirectory()) continue;
-            const artifact = parseArtifact(await readFile(join(entry, "artifact.json"), "utf8"));
-            if (artifactDirectory(root, artifact.project, artifact.name) !== entry)
-              throw new Error("Artifact path does not match metadata");
-            results.push({ artifact, directory: entry });
-          } catch (error) {
-            console.warn(`Skipping damaged hosting entry ${entry}: ${String(error)}`);
-          }
-        }
-      }
-    };
-    await walk(join(root, "projects"));
+    const results: ArtifactEntry[] = [];
+    for (const child of children) {
+      if (!child.isDirectory() || !ID.test(child.name)) continue;
+      const entry = await this.get(child.name);
+      if (entry) results.push(entry);
+    }
     return results;
   }
   async publish(
@@ -156,23 +135,18 @@ export class HostingStore {
     if (!(await lstat(join(source, "index.html"))).isFile())
       throw new Error("Source requires index.html");
     return this.locked(async () => {
-      const directory = artifactDirectory(root, project, name);
+      const previous = (await this.entries()).find(
+        ({ artifact }) => artifact.project === project && artifact.name === name,
+      )?.artifact;
+      const id = previous?.id ?? randomUUID().replaceAll("-", "");
+      const directory = join(root, "artifacts", id);
       await mkdir(join(directory, "snapshots"), { recursive: true });
-      let previous: Artifact | undefined;
-      try {
-        previous = parseArtifact(await readFile(join(directory, "artifact.json"), "utf8"));
-        if (previous.project !== project || previous.name !== name)
-          throw new Error("Artifact identity does not match metadata");
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      }
       const snapshotId = randomUUID().replaceAll("-", "");
       const temp = join(directory, "snapshots", `.tmp-${snapshotId}`);
       const metadataTemp = join(directory, `.artifact-${snapshotId}.json`);
       try {
         await copySnapshot(source, temp);
         await rename(temp, join(directory, "snapshots", snapshotId));
-        const id = previous?.id ?? randomUUID().replaceAll("-", "");
         const now = new Date().toISOString();
         const artifact: Artifact = {
           id,
@@ -196,7 +170,7 @@ export class HostingStore {
   }
   async delete(id: string): Promise<boolean> {
     return this.locked(async () => {
-      const entry = (await this.entries()).find((entry) => entry.artifact.id === id);
+      const entry = await this.get(id);
       if (!entry) return false;
       await rm(entry.directory, { recursive: true });
       return true;

@@ -101,7 +101,7 @@ export function hostingRoutes(directory?: string): ApiRouter {
     }
     response.removeHeader("Content-Security-Policy");
     response.setHeader("Cache-Control", "private, no-store");
-    const entry = (await store.entries()).find(({ artifact }) => artifact.id === match[1]);
+    const entry = await store.get(match[1]);
     if (!entry) {
       missing();
       return true;

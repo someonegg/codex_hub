@@ -413,12 +413,10 @@ Codex home or session availability.
 
 Project ownership uses `realpath` of the explicitly supplied project directory.
 Moving a project creates a new association; existing snapshots remain accessible.
-Under `<hosting>/projects`, absolute project path segments mirror the original
-path, escaping `%` as `%25` and the reserved `.hub` segment as `%2Ehub`.
-Artifact directories live at
-`<hosting>/projects/<encoded-project-path>/.hub/artifacts/<encoded-name>/`,
-containing `artifact.json` and `snapshots/<snapshot-id>/`. Names are URI encoded
-into one segment, including dots. Artifact and snapshot IDs are random 32-character lowercase
+Pages live at `<hosting>/artifacts/<id>/`, containing `artifact.json` and
+`snapshots/<snapshot-id>/`. Publication matches the canonical project path and
+name under the write lock to reuse the page identity, title and snapshot history.
+Artifact and snapshot IDs are random 32-character lowercase
 hexadecimal strings. Metadata stores identity, title, project, source, current
 snapshot, creation/update times and relative URL; it contains no session identity
 or server address.
