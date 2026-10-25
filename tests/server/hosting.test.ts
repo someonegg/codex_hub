@@ -41,8 +41,7 @@ it("canonicalizes project aliases, updates stable identities and retains snapsho
   expect(second.title).toBe("演示");
   expect(second.snapshotId).not.toBe(first.snapshotId);
   const [entry] = await store.entries();
-  expect(entry.directory).toContain("%2Ehub");
-  expect(entry.directory).toContain("100%25 space");
+  expect(entry.directory).toBe(join(await realpath(store.root), "artifacts", first.id));
   expect(
     await readFile(join(entry.directory, "snapshots", first.snapshotId, "main.js"), "utf8"),
   ).toContain("dataset.loaded");
@@ -99,6 +98,12 @@ it("serves immutable snapshot paths, MIME and HEAD with independent headers and 
   if (!address || typeof address === "string") throw new Error("No address");
   const base = `http://127.0.0.1:${address.port}`;
   expect(await (await fetch(base + "/api/v1/capabilities")).json()).toEqual({ hosting: true });
+  const damaged = join(store.root, "artifacts", "d".repeat(32));
+  await mkdir(damaged);
+  await writeFile(join(damaged, "artifact.json"), "broken");
+  const scan = vi
+    .spyOn(HostingStore.prototype, "entries")
+    .mockRejectedValue(new Error("Unexpected scan"));
   const stable = await fetch(base + artifact.url, { redirect: "manual" });
   expect(stable.status).toBe(302);
   const snapshot = stable.headers.get("location")!;
@@ -133,9 +138,11 @@ it("serves immutable snapshot paths, MIME and HEAD with independent headers and 
     (await fetch(base + "/api/v1/artifacts/" + artifact.id, { method: "DELETE" })).status,
   ).toBe(204);
   expect((await fetch(base + snapshot)).status).toBe(404);
+  expect((await fetch(base + artifact.url)).status).toBe(404);
+  expect(scan).not.toHaveBeenCalled();
 });
 
-it("separates same-named projects, resolves relative paths and encodes arbitrary names", async () => {
+it("separates same-named projects, resolves relative paths and preserves arbitrary names", async () => {
   const { root, source, project, store } = await fixture();
   const other = join(root, "other", "100% space");
   await mkdir(other, { recursive: true });
@@ -150,9 +157,11 @@ it("separates same-named projects, resolves relative paths and encodes arbitrary
   expect((await store.entries()).map(({ artifact }) => artifact.project)).toContain(
     await realpath(other),
   );
-  expect((await store.entries()).every(({ directory }) => directory.includes("%2E%2E%2F"))).toBe(
-    true,
-  );
+  const storage = await realpath(store.root);
+  for (const { artifact, directory } of await store.entries()) {
+    expect(directory).toBe(join(storage, "artifacts", artifact.id));
+    expect(artifact.name).toBe("../中文 %/name");
+  }
 });
 it("ignores interrupted temporary snapshots and damaged entries on restart", async () => {
   const { source, project, store } = await fixture();
@@ -213,4 +222,23 @@ it("keeps all hosting routes disabled without touching existing snapshots", asyn
   for (const path of ["/artifacts", "/api/v1/artifacts", artifact.url])
     expect((await fetch(base + path)).status).toBe(404);
   expect((await store.entries())[0].artifact.id).toBe(artifact.id);
+});
+
+it("validates IDs, directory identity and metadata without following aliases", async () => {
+  const { source, project, store } = await fixture();
+  const artifact = await store.publish(source, project);
+  expect(await store.get("../artifacts")).toBeUndefined();
+  expect(await store.get("f".repeat(32))).toBeUndefined();
+  const entry = (await store.get(artifact.id))!;
+  const diagnostics = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const aliasId = "a".repeat(32);
+  await symlink(entry.directory, join(store.root, "artifacts", aliasId));
+  expect(await store.get(aliasId)).toBeUndefined();
+  await writeFile(
+    join(entry.directory, "artifact.json"),
+    JSON.stringify({ ...artifact, id: aliasId, url: `/web/${aliasId}/` }),
+  );
+  expect(await store.get(artifact.id)).toBeUndefined();
+  expect(await store.entries()).toEqual([]);
+  expect(diagnostics).toHaveBeenCalled();
 });

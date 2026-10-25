@@ -12,6 +12,7 @@ export default defineConfig({
           const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
           if (
             pathname === "/artifacts" ||
+            /^\/diffs\/[a-f0-9-]{36}$/.test(pathname) ||
             /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(pathname)
           ) {
             request.url = `/index.html${(request.url ?? "").slice(pathname.length)}`;
@@ -25,7 +26,7 @@ export default defineConfig({
   build: {
     outDir: "dist/client",
     emptyOutDir: true,
-    chunkSizeWarningLimit: 700,
+    chunkSizeWarningLimit: 800,
     rollupOptions: {
       input: {
         index: resolve(import.meta.dirname, "index.html"),
