@@ -283,11 +283,13 @@ export function InteractionPanel({
   const send = async () => {
     if (!previewConnected || interactionBusy || upload.current || messageIsBlank || messageTooLarge)
       return;
-    const isCommand = /^\/[A-Za-z]+$/.test(message.trim());
+    const command = message.trim();
+    const shouldExpandPreview =
+      /^\/[A-Za-z]+$/.test(command) && command !== "/exit" && command !== "/quit";
     await onSendMessage(message);
     clearSentMessage();
     if (!mounted.current) return;
-    if (isCommand) {
+    if (shouldExpandPreview) {
       if (!previewExpanded) scrollOnExpand.current = true;
       onExpandPreview();
     }

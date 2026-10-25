@@ -322,6 +322,11 @@ it("uses four composer rows without an empty connected heading", () => {
 
 it.each([
   ["/plan", true],
+  ["/status", true],
+  ["/exit", false],
+  ["/quit", false],
+  ["  /exit\n", false],
+  ["\t/quit  ", false],
   ["/plan now", false],
   ["hello", false],
 ])("expands the preview after successfully sending %s: %s", async (message, expands) => {
@@ -332,6 +337,7 @@ it.each([
   await act(async () => {
     await Promise.resolve();
   });
+  expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
     "aria-expanded",
     String(expands),
