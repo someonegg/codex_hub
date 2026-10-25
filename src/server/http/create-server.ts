@@ -10,6 +10,8 @@ import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
 import type { ServerConfig } from "../config.js";
+import { HostingLock } from "../hosting/lock.js";
+import { hostingRoutes } from "../hosting/routes.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
 import { applySecurityHeaders } from "./security.js";
 import type { ServerUpgradeHandler } from "./terminal-preview-websocket.js";
@@ -71,12 +73,31 @@ export function createServer(
   upgrades?: ServerUpgradeHandler,
 ) {
   const clientRoot = realpathSync(config.clientDirectory);
+  const finish = <T extends ReturnType<typeof createHttpServer>>(server: T): T => {
+    const lock = config.hostingDirectory
+      ? new HostingLock(config.hostingDirectory, ".server-lock")
+      : undefined;
+    try {
+      if (lock && !lock.acquire())
+        throw new Error("Hosting directory is already used by another Hub server");
+    } catch (error) {
+      lock?.close();
+      throw error;
+    }
+    server.once("close", () => lock?.close());
+    server.once("error", () => {
+      if (!server.listening) lock?.close();
+    });
+    return attachLifecycle(server, closeServices, upgrades);
+  };
+  const hosting = hostingRoutes(config.hostingDirectory);
   const clientRootPrefix = `${clientRoot}${sep}`;
   const requestListener: RequestListener = async (request, response) => {
     applySecurityHeaders(response, request);
     const headOnly = request.method === "HEAD";
 
     try {
+      if (await hosting(request, response)) return;
       if (await apiRouter(request, response)) return;
       if (request.method !== "GET" && !headOnly) {
         response.setHeader("Allow", "GET, HEAD");
@@ -88,8 +109,11 @@ export function createServer(
       const url = new URL(request.url ?? "/", "http://localhost");
       const decodedPath = decodeURIComponent(url.pathname);
       const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(decodedPath);
-      const relativePath =
-        decodedPath === "/" ? "index.html" : sessionPage ? "index.html" : decodedPath.slice(1);
+      const appPage =
+        decodedPath === "/" ||
+        sessionPage ||
+        (decodedPath === "/artifacts" && config.hostingDirectory);
+      const relativePath = appPage ? "index.html" : decodedPath.slice(1);
       const requestedPath = resolve(clientRoot, relativePath);
       let canonicalPath: string;
       try {
@@ -118,7 +142,7 @@ export function createServer(
 
   if (!config.tls.enabled) {
     const server = createHttpServer(requestListener);
-    return attachLifecycle(server, closeServices, upgrades);
+    return finish(server);
   }
 
   const requireClientCertificate = config.tls.certificateAuthorityPath !== undefined;
@@ -135,7 +159,7 @@ export function createServer(
     },
     requestListener,
   );
-  return attachLifecycle(server, closeServices, upgrades);
+  return finish(server);
 }
 
 /** Own startup cleanup as well as the server's pre-drain shutdown hook. */

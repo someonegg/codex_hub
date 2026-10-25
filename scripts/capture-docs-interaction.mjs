@@ -38,6 +38,7 @@ async function capture(
       colorScheme: "light",
     });
   const demo = await context.newPage();
+  await demo.route("**/api/v1/capabilities", (route) => route.fulfill({ json: { hosting: true } }));
   const verifyPageJumps = async () => {
     await demo.evaluate(
       () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),

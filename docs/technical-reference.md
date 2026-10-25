@@ -12,6 +12,7 @@ For setup and everyday workflows, see [Usage](usage.md).
 - [Catalog](#catalog): list snapshots, revisions, and long polling.
 - [Reader](#reader-and-automatic-updates): timeline pages, lazy details, and updates.
 - [Uploads](#file-uploads): binary upload contract.
+- [Hosting](#optional-static-hosting): static publication, snapshots, and page routes.
 - [Tmux interaction](#tmux-interaction): bindings, activity, and preview protocol.
 - [Management](#asynchronous-management): launch, exit, archive, delete, and recovery.
 
@@ -384,3 +385,58 @@ and returned operation IDs retain recovery markers. Reload can resume polling.
 All terminal states and `404` clear recovery markers; nonretryable query errors
 require manual retry. Network retries of create reuse its request ID until a
 terminal result, after which the ID is discarded.
+
+## Optional static hosting
+
+Hosting is independent of session adapters and is enabled only by `--hosting`.
+`GET /api/v1/capabilities` reports `{ hosting: boolean }`. Disabled hosting does
+not initialize storage and returns 404 for management and page routes.
+`GET /api/v1/artifacts` rescans disk and returns `projects`, each with a
+`directory` and `artifacts`; `DELETE /api/v1/artifacts/:id` removes every snapshot.
+Malformed metadata is skipped with a diagnostic. Projects are not filtered by
+Codex home or session availability.
+
+Project ownership uses `realpath` of the explicitly supplied project directory.
+Moving a project creates a new association; existing snapshots remain accessible.
+Under `<hosting>/projects`, absolute project path segments mirror the original
+path, escaping `%` as `%25` and the reserved `.hub` segment as `%2Ehub`.
+Artifact directories live at
+`<hosting>/projects/<encoded-project-path>/.hub/artifacts/<encoded-name>/`,
+containing `artifact.json` and `snapshots/<snapshot-id>/`. Names are URI encoded
+into one segment, including dots. Artifact and snapshot IDs are random 32-character lowercase
+hexadecimal strings. Metadata stores identity, title, project, source, current
+snapshot, creation/update times and relative URL; it contains no session identity
+or server address.
+
+Publication copies regular files/directories into a temporary snapshot, rejects
+nested symlinks and special files, and rejects overlap with hosting storage.
+The source root itself may be a symlink alias and is canonicalized first.
+Snapshot rename precedes atomic metadata replacement. A failed publication
+preserves the previous metadata; interrupted temporary/unreferenced snapshots
+are inert and disappear when their artifact is deleted. Previous snapshots stay
+available until deletion, keeping old documents and their relative assets
+consistent. No expiry or history management is provided.
+
+Publish/delete share a process-aware filesystem lock. Complete owner directories
+are installed by atomic rename; dead owners are reclaimed only after the OS
+reports their PID absent. Permanent tombstones prevent competing reclaimers from
+moving a newly acquired lock. A separate service lock permits one Hub process per
+hosting root. A PID reused by another live process conservatively blocks recovery.
+Manual storage changes should be performed without concurrent publication.
+
+`/web/:id/` redirects with 302 to `/web/:id/:snapshotId/`. GET and HEAD support
+files and directory `index.html`, without directory listing, traversal, metadata
+access or SPA fallback. Every request reads disk metadata, so refresh and unknown
+IDs also observe offline publications/deletions. Responses use
+`Cache-Control: private, no-store`. Entry and directory redirects preserve query
+parameters. Local resources should use relative paths; root-relative paths are
+not rewritten. External resources depend on the viewer's network and the
+provider's cross-origin policies.
+
+Hosted pages are trusted same-origin code, with the same authority as Hub. Their
+responses omit the Hub UI's restrictive CSP so inline scripts/styles, modules,
+fonts, JSON and external HTTPS resources can load. Hub's own CSP is unchanged.
+Existing HTTPS/mTLS or reverse-proxy authentication applies to every page and
+resource; hosting adds no application login or proxy service. Markdown permits
+only `/web/<32 lowercase hex digits>/` as a relative hosted-page link, preserving
+existing absolute protocol rules. Copy link uses the current browser origin.

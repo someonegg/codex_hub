@@ -71,3 +71,12 @@ it("resolves upload directories and rejects empty configuration", () => {
   expect(config.uploadDirectory).toBe(resolve("uploads with spaces"));
   expect(() => loadConfig(["--upload-dir", " "])).toThrow("--upload-dir must not be empty");
 });
+
+it("resolves hosting directories and reports their own option name for empty values", () => {
+  expect(runnable(["--hosting", "--hosting-dir", "web pages"]).hostingDirectory).toBe(
+    resolve("web pages"),
+  );
+  expect(() => loadConfig(["--hosting", "--hosting-dir", " "])).toThrow(
+    "--hosting-dir must not be empty",
+  );
+});

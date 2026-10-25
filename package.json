@@ -20,7 +20,8 @@
     "format:check": "prettier --check .",
     "lint": "lint-client",
     "prepack": "npm run build",
-    "test:package": "node scripts/test-package.mjs"
+    "test:package": "node scripts/test-package.mjs",
+    "test:hosting": "npm run build && node --import tsx scripts/test-hosting.mjs"
   },
   "keywords": [
     "codex",

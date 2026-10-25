@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, mkdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -46,13 +46,44 @@ try {
   const binary = join(temporary, "node_modules", ".bin", "codex-hub");
   const help = await exec(binary, ["--help"], { cwd: temporary });
   assert.match(help.stdout, /Usage: codex-hub/);
+  const source = join(temporary, "web-source");
+  const hosting = join(temporary, "hosting");
+  await mkdir(source);
+  await writeFile(join(source, "index.html"), "<h1>Package hosting</h1>");
+  const published = await exec(
+    binary,
+    ["publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+    { cwd: temporary },
+  );
+  const artifact = JSON.parse(published.stdout);
+  const concurrent = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      exec(
+        binary,
+        ["publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+        { cwd: temporary },
+      ),
+    ),
+  );
+  assert(concurrent.every(({ stdout }) => JSON.parse(stdout).id === artifact.id));
+  assert.match(artifact.url, /^\/web\/[a-f0-9]{32}\/$/);
   const home = join(temporary, "empty-home");
   await mkdir(home);
   await mkdir(join(home, "sessions"));
   await mkdir(join(home, "archived_sessions"));
   server = spawn(
     binary,
-    ["--codex-home", `smoke=${home}`, "--port", "0", "--upload-dir", join(temporary, "uploads")],
+    [
+      "--codex-home",
+      `smoke=${home}`,
+      "--port",
+      "0",
+      "--upload-dir",
+      join(temporary, "uploads"),
+      "--hosting",
+      "--hosting-dir",
+      hosting,
+    ],
     { cwd: temporary, stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";
@@ -78,6 +109,10 @@ try {
       }
     });
   });
+  assert.equal(
+    await (await fetch(new URL(artifact.url, address))).text(),
+    "<h1>Package hosting</h1>",
+  );
   const response = await fetch(address);
   assert.equal(response.status, 200);
   const html = await response.text();

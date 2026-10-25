@@ -219,3 +219,69 @@ dialog::backdrop {
 .project-directory [role="option"][aria-selected="true"] {
   background: var(--hover-surface);
 }
+
+.artifacts-page {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 20px;
+  overflow-wrap: anywhere;
+}
+.artifacts-page article {
+  border: 1px solid var(--mist);
+  padding: 20px;
+  margin: 12px 0;
+  border-radius: 8px;
+  background: var(--surface);
+}
+.artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: var(--text-control);
+}
+
+.artifacts-page a {
+  color: var(--current);
+  text-underline-offset: 3px;
+}
+.artifacts-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin: 32px 0;
+}
+.artifacts-heading h1 {
+  margin: 4px 0 0;
+  font-family: var(--title-font);
+}
+.artifacts-heading .eyebrow {
+  margin: 0;
+  color: var(--ink-soft);
+}
+.artifacts-page h2 {
+  margin-top: 32px;
+  font-family: var(--mono-font);
+  font-size: var(--text-control);
+  font-weight: var(--weight-medium);
+  color: var(--ink-soft);
+}
+.artifacts-page h3 {
+  margin: 0 0 8px;
+  font-size: 1.125rem;
+}
+.artifacts-page time {
+  font-size: var(--text-small);
+  color: var(--ink-soft);
+}
+.artifacts-page button {
+  padding: 8px 14px;
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: var(--text-control);
+}

@@ -83,22 +83,55 @@ Explicit homes replace the default `~/.codex`. Give each home a unique nickname
 and directory. Use the sidebar home filter to narrow the session list, and choose
 the destination home when creating a session.
 
+## Publish web pages
+
+Start `codex-hub --hosting` to enable **Pages** at `/artifacts` (disabled by
+default). Hosted pages run as trusted code on the same origin as Hub; publish
+only content you trust.
+
+Publish an already built directory containing `index.html` on the Hub machine:
+
+```sh
+codex-hub publish ./demo --project /absolute/path/to/project --title "Design comparison"
+```
+
+Both directories must exist. Publication works while Hub is stopped, needs no
+session or TLS credentials, and prints a stable relative URL and Markdown link.
+Use relative asset paths; Hub does not build sites or accept remote uploads.
+
+To update a page, publish with the same project and name. The name defaults to
+the source directory name after resolving symlinks. Use `--name` to keep a name
+across different source directories. Updates retain the URL; the title is kept
+unless `--title` is supplied. For worktrees, pass the original project to `--project`.
+
+Storage defaults to `~/.codex-hub/hosting`. For a custom location, pass the same
+`--hosting-dir /path` to `publish` and `codex-hub --hosting`. Add `--json` to
+publish for structured output.
+
+The **Pages** link opens management in a new tab. Open pages, copy absolute
+links, refresh the list, or confirm
+deletion of a page and all its snapshots. Removing the source or worktree does
+not remove published pages. See the [hosting reference](technical-reference.md#optional-static-hosting)
+for resource loading limits, project identity, and snapshot guarantees.
+
 ## Server options
 
 Pass options to `codex-hub`; restart after changing them. Run `codex-hub --help`
 for the full command-line help.
 
-| Option                         | Default             | Purpose                                             |
-| ------------------------------ | ------------------- | --------------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex`  | Choose one or more Codex homes                      |
-| `--host <host>`                | `127.0.0.1`         | Listen address                                      |
-| `--port <port>`                | `4173`              | Listen port; `0` selects a free port                |
-| `--upload-dir <path>`          | Temporary directory | Store uploaded files                                |
-| `--tmux-socket <path>`         | tmux default        | Use a custom tmux socket                            |
-| `--ssl`                        | Disabled            | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
-| `--ssl-cert <path>`            | None                | PEM server certificate or chain                     |
-| `--ssl-key <path>`             | None                | PEM private key                                     |
-| `--ssl-ca <path>`              | None                | Require client certificates signed by this CA       |
+| Option                         | Default                | Purpose                                             |
+| ------------------------------ | ---------------------- | --------------------------------------------------- |
+| `--codex-home <nickname=path>` | `default=~/.codex`     | Choose one or more Codex homes                      |
+| `--host <host>`                | `127.0.0.1`            | Listen address                                      |
+| `--port <port>`                | `4173`                 | Listen port; `0` selects a free port                |
+| `--upload-dir <path>`          | Temporary directory    | Store uploaded files                                |
+| `--hosting`                    | Disabled               | Enable static web hosting                           |
+| `--hosting-dir <path>`         | `~/.codex-hub/hosting` | Hosting storage; requires `--hosting` at startup    |
+| `--tmux-socket <path>`         | tmux default           | Use a custom tmux socket                            |
+| `--ssl`                        | Disabled               | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
+| `--ssl-cert <path>`            | None                   | PEM server certificate or chain                     |
+| `--ssl-key <path>`             | None                   | PEM private key                                     |
+| `--ssl-ca <path>`              | None                   | Require client certificates signed by this CA       |
 
 ## Security
 
@@ -145,4 +178,4 @@ npm uninstall -g @someonegg/codex-hub
 ```
 
 An `npx` run needs no global uninstall. Sessions, worktrees, running tmux sessions,
-and uploaded files remain; clean them up separately as needed.
+uploaded files, and hosted snapshots remain; clean them up separately as needed.
