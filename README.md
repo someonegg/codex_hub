@@ -11,7 +11,7 @@ Codex from desktop or mobile.
 
 <img src="docs/images/codex-hub-mobile-catalog.png" alt="Mobile project navigation" width="260">
 <img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
-<img src="docs/images/codex-hub-mobile-composer.png" alt="Focused mobile message input with page jump controls positioned above the interaction panel" width="260">
+<img src="docs/images/codex-hub-mobile-composer.png" alt="Mobile message input with image attachment preview and send controls" width="260">
 
 </details>
 
@@ -82,7 +82,7 @@ For running from source, see [Development](docs/development.md).
 ## Session interaction
 
 Send prompts and control the live terminal from the session page. Take photos,
-paste screenshots, or drop files into the message input, then review and send the inserted paths.
+paste images, or drop files, then preview and send.
 See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API limits.
 
 <details>

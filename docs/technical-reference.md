@@ -140,6 +140,13 @@ The filename supplies only a safe extension. Oversize uploads return `413`;
 storage failures return `500`, using the standard API error envelope.
 Failed or interrupted uploads remove incomplete files.
 
+Drafts are stored in memory per session; leaving aborts unfinished uploads.
+Previews use local files and release their URLs on removal or unmount.
+Sending prefixes the text with one server path per line (quoted when needed)
+and a blank line; attachment-only messages contain just paths. The byte limit
+applies to the complete message. Failed sends retain drafts; successful sends
+clear them only if unchanged. Removing attachments leaves server files intact.
+
 See [file uploads](usage.md#file-uploads) for composer behavior, storage configuration,
 and cleanup.
 

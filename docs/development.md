@@ -124,10 +124,10 @@ overflow; also inspect readability and clipping at README display widths, the
 answered **User input** card, and terminal output. Keep the GIF below 5 MiB.
 Stop the client server after capture.
 
-Attachment checks use mocked uploads at desktop and narrow widths. Real-device
-camera checks remain pending: test photo confirmation, cancellation, repeat shots,
-and returning to the page in iOS Safari, Android Chrome, and available standalone
-home screen modes.
+Attachment checks mock uploads at desktop and narrow widths. Run the capture script
+against the built server too, to check CSP compatibility. Verify camera confirmation,
+cancellation, and repeat shots on real iOS Safari and Android Chrome devices,
+including standalone modes where available.
 
 ## Application icons
 

@@ -1,7 +1,7 @@
 import { type ComponentProps, useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InteractionResponse } from "../../src/shared/api-contract";
 
@@ -9,6 +9,20 @@ import { InteractionPanel as Panel } from "../../src/client/components/Interacti
 import { SessionDraftProvider } from "../../src/client/state/session-drafts";
 
 // @vitest-environment jsdom
+
+beforeEach(() => {
+  Object.defineProperty(URL, "createObjectURL", {
+    configurable: true,
+    value: vi.fn(() => "blob:preview"),
+  });
+  Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+  HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  });
+  HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) {
+    this.removeAttribute("open");
+  });
+});
 
 function interaction(state: "unbound" | "disconnected" | "connected"): InteractionResponse {
   return {
@@ -579,7 +593,7 @@ it("ignores Interrupt and Plan while busy, including preview expansion", () => {
 });
 
 describe("composer uploads", () => {
-  it("inserts files in order at the selection, freezes controls and restores the caret", async () => {
+  it("keeps files outside the text and sends paths in order before the original text", async () => {
     const { api } = await import("../../src/client/api/client");
     let finish!: (value: { path: string }) => void;
     const upload = vi
@@ -604,11 +618,21 @@ describe("composer uploads", () => {
     expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
     expect(screen.getByText("Uploading 1/2…")).toBeInTheDocument();
     await act(async () => finish({ path: "/tmp/space dir/one.png" }));
-    expect(input.value).toBe('before "/tmp/space dir/one.png" /tmp/two.txt after');
+    expect(input.value).toBe("before replace after");
+    expect(screen.getByText("one.png")).toBeInTheDocument();
+    expect(screen.getByText("two.txt")).toBeInTheDocument();
     expect(input).toBeEnabled();
     await vi.waitFor(() => expect(input).toHaveFocus());
-    expect(input.selectionStart).toBe(input.value.indexOf(" after"));
+    expect(input.selectionStart).toBe(7);
+    expect(input.selectionEnd).toBe(14);
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    await vi.waitFor(() =>
+      expect(handlers.onSendMessage).toHaveBeenCalledWith(
+        '"/tmp/space dir/one.png"\n/tmp/two.txt\n\nbefore replace after',
+      ),
+    );
+    await vi.waitFor(() => expect(screen.queryByText("two.txt")).not.toBeInTheDocument());
     upload.mockRestore();
   });
 
@@ -624,7 +648,8 @@ describe("composer uploads", () => {
       dataTransfer: { files: [1, 2, 3].map((n) => new File(["x"], `${n}.txt`)), items: [] },
     });
     await screen.findByText("Disk full");
-    expect(input).toHaveValue("/tmp/one.txt");
+    expect(input).toHaveValue("");
+    expect(screen.getByText("1.txt")).toBeInTheDocument();
     expect(input).toBeEnabled();
     expect(upload).toHaveBeenCalledTimes(2);
     upload.mockRestore();
@@ -723,11 +748,11 @@ describe("image attachments", () => {
   it("navigates the menu, dismisses it and restores focus", async () => {
     const user = userEvent.setup();
     render(<InteractionPanel {...props(interaction("connected"))} />);
-    const trigger = screen.getByRole("button", { name: "Attach images" });
+    const trigger = screen.getByRole("button", { name: "Attach files" });
     await user.click(trigger);
     expect(screen.getByRole("menuitem", { name: "Take photo" })).toHaveFocus();
     await user.keyboard("{ArrowUp}");
-    expect(screen.getByRole("menuitem", { name: "Choose images" })).toHaveFocus();
+    expect(screen.getByRole("menuitem", { name: "Choose files" })).toHaveFocus();
     await user.keyboard("{Home}{ArrowDown}{End}{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
@@ -752,6 +777,9 @@ describe("image attachments", () => {
     const composer = screen.getByRole("textbox") as HTMLTextAreaElement;
     const camera = screen.getByLabelText("Take photo") as HTMLInputElement;
     const gallery = screen.getByLabelText("Choose images") as HTMLInputElement;
+    const files = screen.getByLabelText("Choose files") as HTMLInputElement;
+    expect(files).toHaveAttribute("multiple");
+    expect(files).not.toHaveAttribute("accept");
     expect(camera).toHaveAttribute("capture", "environment");
     expect(camera).not.toHaveAttribute("multiple");
     expect(gallery).toHaveAttribute("multiple");
@@ -763,9 +791,10 @@ describe("image attachments", () => {
     for (const [name, input] of [
       ["Take photo", camera],
       ["Choose images", gallery],
+      ["Choose files", files],
     ] as const) {
       const click = vi.spyOn(input, "click");
-      await user.click(screen.getByRole("button", { name: "Attach images" }));
+      await user.click(screen.getByRole("button", { name: "Attach files" }));
       await user.click(screen.getByRole("menuitem", { name }));
       expect(click).toHaveBeenCalledOnce();
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();
@@ -777,11 +806,12 @@ describe("image attachments", () => {
     const file = new File(["pixels"], "photo", { type: "image/jpeg" });
     await user.upload(gallery, [file, file]);
     await vi.waitFor(() => expect(composer).toBeEnabled());
-    expect(composer.value).toBe('before "/tmp/photo space.jpg" "/tmp/photo space.jpg" after');
+    expect(composer.value).toBe("before replace after");
+    expect(screen.getAllByText("photo")).toHaveLength(2);
     expect(upload).toHaveBeenCalledTimes(2);
     expect(upload.mock.calls[0]![0].name).toBe("photo.jpg");
     expect(gallery.value).toBe("");
-    await user.click(screen.getByRole("button", { name: "Attach images" }));
+    await user.click(screen.getByRole("button", { name: "Attach files" }));
     await user.click(screen.getByRole("menuitem", { name: "Take photo" }));
     await user.upload(camera, file);
     await vi.waitFor(() => expect(upload).toHaveBeenCalledTimes(3));
@@ -796,7 +826,7 @@ describe("image attachments", () => {
     const view = render(<InteractionPanel {...handlers} />);
     const camera = screen.getByLabelText("Take photo");
     view.rerender(<InteractionPanel {...handlers} interactionBusy />);
-    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
     fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
     expect(screen.getByRole("alert")).toHaveTextContent("Session is busy");
     view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
@@ -826,7 +856,7 @@ describe("image attachments", () => {
         }),
     );
     fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
-    expect(screen.getByRole("button", { name: "Attach images" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
     const signal = upload.mock.calls[1]![1];
     view.rerender(<InteractionPanel {...props(interaction("connected"))} key="second" />);
     expect(signal.aborted).toBe(true);
@@ -888,4 +918,73 @@ describe("session drafts", () => {
       expect(screen.getByRole("textbox")).toHaveValue(edit ? "new draft" : "");
     },
   );
+});
+
+it("previews, removes and releases image resources, falling back for undecodable images", async () => {
+  const { api } = await import("../../src/client/api/client");
+  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/photo.png" });
+  const view = render(<InteractionPanel {...props(interaction("connected"))} />);
+  fireEvent.change(screen.getByLabelText("Take photo"), {
+    target: { files: [new File(["pixels"], "photo.png", { type: "image/png" })] },
+  });
+  const preview = await screen.findByRole("button", { name: "Preview photo.png" });
+  fireEvent.click(preview);
+  expect(screen.getByRole("dialog")).toHaveAttribute("open");
+  fireEvent.click(screen.getByRole("button", { name: "Close image preview" }));
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  fireEvent.error(screen.getByRole("img"));
+  expect(screen.getByText("Preview unavailable")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Remove photo.png" }));
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  view.unmount();
+  upload.mockRestore();
+});
+
+it("retains attachment drafts across sessions and failed sends, then sends without text", async () => {
+  const { api } = await import("../../src/client/api/client");
+  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/report.txt" });
+  const handlers = props(interaction("connected"));
+  handlers.onSendMessage.mockRejectedValueOnce(new Error("Disconnected"));
+  const session = (id: string) => (
+    <SessionDraftProvider>
+      <InteractionPanel {...handlers} sessionId={id} key={id} />
+    </SessionDraftProvider>
+  );
+  const view = render(session("a"));
+  fireEvent.change(screen.getByLabelText("Choose files"), {
+    target: { files: [new File(["report"], "report.txt")] },
+  });
+  await screen.findByRole("button", { name: "Remove report.txt" });
+  view.rerender(session("b"));
+  expect(screen.queryByRole("button", { name: "Remove report.txt" })).not.toBeInTheDocument();
+  view.rerender(session("a"));
+  expect(screen.getByRole("button", { name: "Remove report.txt" })).toBeEnabled();
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
+  expect(screen.getByRole("button", { name: "Remove report.txt" })).toBeEnabled();
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
+  expect(handlers.onSendMessage).toHaveBeenLastCalledWith("/tmp/report.txt");
+  expect(screen.queryByRole("button", { name: "Remove report.txt" })).not.toBeInTheDocument();
+  upload.mockRestore();
+});
+
+it("counts attachment paths in the message limit and does not expand slash commands with attachments", async () => {
+  const { api } = await import("../../src/client/api/client");
+  const { MAX_INTERACTION_MESSAGE_BYTES } = await import("../../src/shared/api-contract");
+  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/report.txt" });
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  fireEvent.change(screen.getByLabelText("Choose files"), {
+    target: { files: [new File(["x"], "report.txt")] },
+  });
+  await screen.findByRole("button", { name: "Remove report.txt" });
+  fireEvent.change(screen.getByRole("textbox"), {
+    target: { value: "a".repeat(MAX_INTERACTION_MESSAGE_BYTES) },
+  });
+  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
+  await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
+  expect(handlers.onSendMessage).toHaveBeenCalledWith("/tmp/report.txt\n\n/help");
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+  upload.mockRestore();
 });
