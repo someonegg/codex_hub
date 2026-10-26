@@ -230,6 +230,7 @@ describe("secure HTTP foundation", () => {
     const contentSecurityPolicy = response.headers.get("content-security-policy");
     expect(contentSecurityPolicy).toContain("default-src 'self'");
     expect(contentSecurityPolicy).toContain("font-src 'self' data:");
+    expect(contentSecurityPolicy).toContain("img-src 'self' data: blob:");
     expect(contentSecurityPolicy).toContain("style-src 'self'");
     expect(contentSecurityPolicy).toContain("style-src-attr 'unsafe-inline'");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");

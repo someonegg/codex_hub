@@ -19,6 +19,7 @@ import { MAX_UPLOAD_BYTES } from "../../shared/uploads";
 
 import { api } from "../api/client";
 import { useSessionDraft } from "../state/session-drafts";
+import { AttachmentList } from "./AttachmentList";
 import { InternalLink } from "./InternalLink";
 
 interface InteractionPanelProps {
@@ -80,9 +81,12 @@ export function InteractionPanel({
       mounted.current = false;
     };
   }, []);
-  const { message, setMessage, clearSentMessage } = useSessionDraft(sessionId);
+  const { message, setMessage, attachments, addAttachment, removeAttachment, clearSentMessage } =
+    useSessionDraft(sessionId);
   const composer = useRef<HTMLTextAreaElement | null>(null);
   const upload = useRef<AbortController | null>(null);
+  const attachmentIdPrefix = useId();
+  const nextAttachmentId = useRef(0);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -92,13 +96,14 @@ export function InteractionPanel({
   const attachmentMenu = useRef<HTMLDivElement | null>(null);
   const photoInput = useRef<HTMLInputElement | null>(null);
   const imagesInput = useRef<HTMLInputElement | null>(null);
-  const savedSelection = useRef<{ start: number; end: number } | null>(null);
+  const filesInput = useRef<HTMLInputElement | null>(null);
+  const attachmentPickers = [
+    { label: "Take photo", input: photoInput, accept: "image/*", capture: "environment" },
+    { label: "Choose images", input: imagesInput, accept: "image/*", multiple: true },
+    { label: "Choose files", input: filesInput, multiple: true },
+  ] as const;
   const attachmentMenuId = useId();
   const openAttachments = () => {
-    savedSelection.current = {
-      start: composer.current?.selectionStart ?? message.length,
-      end: composer.current?.selectionEnd ?? message.length,
-    };
     setAttachmentsOpen(true);
   };
   const closeAttachments = (restoreFocus = true) => {
@@ -172,7 +177,7 @@ export function InteractionPanel({
       window.removeEventListener("scroll", position, true);
     };
   }, [attachmentsOpen]);
-  const uploadFiles = async (files: File[], selection?: { start: number; end: number }) => {
+  const uploadFiles = async (files: File[]) => {
     if (!files.length || upload.current || interactionBusy || !previewConnected) return;
     setDragging(false);
     setUploadError(null);
@@ -182,23 +187,16 @@ export function InteractionPanel({
     }
     const controller = new AbortController();
     upload.current = controller;
-    let text = message;
-    let caret = selection?.start ?? composer.current?.selectionStart ?? message.length;
-    let selectionEnd = selection?.end ?? composer.current?.selectionEnd ?? caret;
     try {
       for (const [index, file] of files.entries()) {
         setUploadProgress(`Uploading ${index + 1}/${files.length}…`);
         const result = await api.upload(normalizeImageFile(file), controller.signal);
         if (controller.signal.aborted) return;
-        const path = /[\s"'\\]/.test(result.path) ? JSON.stringify(result.path) : result.path;
-        const before = text.slice(0, caret);
-        const after = text.slice(selectionEnd);
-        const insertion = (before && !/\s$/.test(before) ? " " : "") + path;
-        const suffix = after && !/^\s/.test(after) ? " " : "";
-        text = before + insertion + suffix + after;
-        caret = before.length + insertion.length;
-        selectionEnd = caret;
-        setMessage(text);
+        addAttachment({
+          id: `${attachmentIdPrefix}-${nextAttachmentId.current++}`,
+          file,
+          path: result.path,
+        });
       }
     } catch (error) {
       if (!controller.signal.aborted)
@@ -210,7 +208,6 @@ export function InteractionPanel({
         requestAnimationFrame(() => {
           if (!mounted.current) return;
           composer.current?.focus();
-          composer.current?.setSelectionRange(caret, caret);
         });
       }
     }
@@ -229,9 +226,15 @@ export function InteractionPanel({
   const previewBody = useRef<HTMLDivElement | null>(null);
   const previewContent = useRef<HTMLPreElement | null>(null);
   const scrollOnExpand = useRef(true);
-  const messageBytes = new TextEncoder().encode(message.replace(/\r\n?/g, "\n")).byteLength;
+  const paths = attachments.map(({ path }) =>
+    /[\s"'\\]/.test(path) ? JSON.stringify(path) : path,
+  );
+  const outgoingMessage = paths.length
+    ? paths.join("\n") + (message.length ? "\n\n" + message : "")
+    : message;
+  const messageBytes = new TextEncoder().encode(outgoingMessage.replace(/\r\n?/g, "\n")).byteLength;
   const messageTooLarge = messageBytes > MAX_INTERACTION_MESSAGE_BYTES;
-  const messageIsBlank = message.trim().length === 0;
+  const messageIsBlank = !attachments.length && message.trim().length === 0;
   const previewConnected = interaction?.supported === true && interaction.state === "connected";
   useEffect(() => {
     if (interactionBusy || !previewConnected) setAttachmentsOpen(false);
@@ -242,13 +245,11 @@ export function InteractionPanel({
     if (!files.length) return;
     if (!previewConnected || interactionBusy) {
       setUploadError(
-        !previewConnected
-          ? "Reconnect before attaching images"
-          : "Session is busy; try again later",
+        !previewConnected ? "Reconnect before attaching files" : "Session is busy; try again later",
       );
       return;
     }
-    void uploadFiles(files, savedSelection.current ?? undefined);
+    void uploadFiles(files);
   };
   const previewHasContent = (preview?.content.length ?? 0) > 0;
   useLayoutEffect(() => {
@@ -285,8 +286,11 @@ export function InteractionPanel({
       return;
     const command = message.trim();
     const shouldExpandPreview =
-      /^\/[A-Za-z]+$/.test(command) && command !== "/exit" && command !== "/quit";
-    await onSendMessage(message);
+      !attachments.length &&
+      /^\/[A-Za-z]+$/.test(command) &&
+      command !== "/exit" &&
+      command !== "/quit";
+    await onSendMessage(outgoingMessage);
     clearSentMessage();
     if (!mounted.current) return;
     if (shouldExpandPreview) {
@@ -383,24 +387,17 @@ export function InteractionPanel({
             </button>
           </div>
         ) : null}
-        <input
-          ref={photoInput}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          hidden
-          aria-label="Take photo"
-          onChange={(event) => chooseFiles(event.currentTarget)}
-        />
-        <input
-          ref={imagesInput}
-          type="file"
-          accept="image/*"
-          multiple
-          hidden
-          aria-label="Choose images"
-          onChange={(event) => chooseFiles(event.currentTarget)}
-        />
+        {attachmentPickers.map(({ label, input, ...options }) => (
+          <input
+            key={label}
+            ref={input}
+            type="file"
+            {...options}
+            hidden
+            aria-label={label}
+            onChange={(event) => chooseFiles(event.currentTarget)}
+          />
+        ))}
         {!previewConnected && uploadError ? <p role="alert">{uploadError}</p> : null}
         {operationStatus}
         {previewConnected ? renderConnectedInteraction() : null}
@@ -554,6 +551,11 @@ export function InteractionPanel({
               </button>
             </div>
           ) : null}
+          <AttachmentList
+            attachments={attachments}
+            disabled={interactionBusy || !!uploadProgress}
+            onRemove={removeAttachment}
+          />
           <textarea
             ref={composer}
             onPaste={(event) => {
@@ -603,7 +605,7 @@ export function InteractionPanel({
                 ref={attachmentButton}
                 type="button"
                 className="interaction-attach"
-                aria-label="Attach images"
+                aria-label="Attach files"
                 aria-haspopup="menu"
                 aria-expanded={attachmentsOpen}
                 aria-controls={attachmentsOpen ? attachmentMenuId : undefined}
@@ -640,30 +642,23 @@ export function InteractionPanel({
                   ref={attachmentMenu}
                   id={attachmentMenuId}
                   role="menu"
-                  aria-label="Attach images"
+                  aria-label="Attach files"
                   className="interaction-attachment-menu"
                   onKeyDown={onAttachmentMenuKeyDown}
                 >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      photoInput.current?.click();
-                      closeAttachments();
-                    }}
-                  >
-                    Take photo
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      imagesInput.current?.click();
-                      closeAttachments();
-                    }}
-                  >
-                    Choose images
-                  </button>
+                  {attachmentPickers.map(({ label, input }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        input.current?.click();
+                        closeAttachments();
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
               ) : null}
               <button

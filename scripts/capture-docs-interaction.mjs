@@ -183,10 +183,10 @@ async function capture(
   }
 
   async function verifyAttachments() {
-    const trigger = demo.getByRole("button", { name: "Attach images", exact: true });
+    const trigger = demo.getByRole("button", { name: "Attach files", exact: true });
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
     await trigger.click();
-    const menu = demo.getByRole("menu", { name: "Attach images" });
+    const menu = demo.getByRole("menu", { name: "Attach files" });
     const bounds = await menu.boundingBox();
     const viewport = demo.viewportSize();
     if (
@@ -208,13 +208,16 @@ async function capture(
     await chooser.setFiles({
       name: "photo.png",
       mimeType: "image/png",
-      buffer: Buffer.from("pixels"),
+      buffer: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=",
+        "base64",
+      ),
     });
-    const expected = 'before "/tmp/camera uploads/photo.png" after';
+    const expected = '"/tmp/camera uploads/photo.png"\n\nbefore replace after';
     try {
       await demo.waitForFunction(
         (value) => document.querySelector("textarea")?.value === value,
-        expected,
+        "before replace after",
       );
     } catch {
       throw new Error(
@@ -222,6 +225,12 @@ async function capture(
       );
     }
     await demo.waitForFunction(() => document.activeElement === document.querySelector("textarea"));
+    const thumbnail = demo.getByRole("button", { name: "Preview photo.png", exact: true });
+    await thumbnail.click();
+    await demo.getByRole("dialog", { name: "Preview photo.png", exact: true }).waitFor();
+    await demo.keyboard.press("Escape");
+    if (!(await thumbnail.evaluate((element) => document.activeElement === element)))
+      throw new Error("Image preview did not restore thumbnail focus");
     if (sentMessages.length) throw new Error("Upload sent without user confirmation");
     await demo.waitForFunction(
       () => document.querySelector(".interaction-send")?.getAttribute("aria-disabled") !== "true",
@@ -244,6 +253,18 @@ async function capture(
     await camera.setFiles([]);
     if (await composer.inputValue()) throw new Error("Cancelled camera changed the draft");
     await composer.fill("Suggest the next step.");
+  }
+
+  async function stageAttachment() {
+    const buffer = await demo.locator(".user-input-card").screenshot();
+    await demo.getByLabel("Choose files", { exact: true }).setInputFiles({
+      name: "dashboard.png",
+      mimeType: "image/png",
+      buffer,
+    });
+    const image = demo.getByRole("img", { name: "dashboard.png", exact: true });
+    await image.waitFor();
+    await image.evaluate((element) => element.decode());
   }
 
   async function assertDesktopCardsVisible(prefix = "") {
@@ -274,6 +295,7 @@ async function capture(
       .getByText("Project health selected. Ready for the next step.", { exact: false })
       .waitFor();
     if (await demo.getByRole("alert").count()) throw new Error("Desktop error alert");
+    await stageAttachment();
     await demo.evaluate(() => window.scrollTo(0, 0));
     await assertDesktopCardsVisible();
     await demo.screenshot({
@@ -286,6 +308,8 @@ async function capture(
     if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
       throw new Error("Theme was not restored after reload");
     await prepareDesktopPreview();
+    await stageAttachment();
+    await demo.evaluate(() => window.scrollTo(0, 0));
     await assertDesktopCardsVisible("Paper ");
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Paper horizontal overflow");
@@ -320,9 +344,19 @@ async function capture(
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
     await verifyCompactInteraction();
     await composer.fill("Suggest the next step.");
-    await composer.scrollIntoViewIfNeeded();
+    await stageAttachment();
+    await demo.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+    );
+    await demo
+      .locator(".interaction-panel")
+      .evaluate((element) => element.scrollIntoView({ block: "center", behavior: "instant" }));
+    const panelBounds = await demo.locator(".interaction-panel").boundingBox();
+    if (panelBounds.y < 0 || panelBounds.y + panelBounds.height > 845)
+      throw new Error(`Mobile attachment composer is clipped: ${JSON.stringify(panelBounds)}`);
     await verifyPageJumps();
     await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
+    await demo.getByRole("button", { name: "Remove dashboard.png", exact: true }).click();
     await verifyAttachments();
     await demo.setViewportSize({ width: 320, height: 568 });
     await verifyCompactInteraction();

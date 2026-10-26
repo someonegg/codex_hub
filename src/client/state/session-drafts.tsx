@@ -1,7 +1,18 @@
 import { createContext, type ReactNode, useContext, useState } from "react";
 
+export interface DraftAttachment {
+  id: string;
+  file: File;
+  path: string;
+}
+
+interface SessionDraft {
+  text: string;
+  attachments: DraftAttachment[];
+}
+
 function useDraftStore() {
-  return useState(() => new Map<string, { text: string }>());
+  return useState(() => new Map<string, SessionDraft>());
 }
 
 const SessionDraftContext = createContext<ReturnType<typeof useDraftStore> | null>(null);
@@ -16,14 +27,24 @@ export function useSessionDraft(sessionId: string) {
   const [drafts, setDrafts] = useContext(SessionDraftContext) ?? localStore;
   const draft = drafts.get(sessionId);
   const message = draft?.text ?? "";
-  const setMessage = (text: string) => {
+  const attachments = draft?.attachments ?? [];
+  const updateDraft = (update: (current: SessionDraft) => SessionDraft) => {
     setDrafts((current) => {
       const next = new Map(current);
-      if (text) next.set(sessionId, { text });
+      const updated = update(current.get(sessionId) ?? { text: "", attachments: [] });
+      if (updated.text || updated.attachments.length) next.set(sessionId, updated);
       else next.delete(sessionId);
       return next;
     });
   };
+  const setMessage = (text: string) => updateDraft((current) => ({ ...current, text }));
+  const addAttachment = (attachment: DraftAttachment) =>
+    updateDraft((current) => ({ ...current, attachments: [...current.attachments, attachment] }));
+  const removeAttachment = (id: string) =>
+    updateDraft((current) => ({
+      ...current,
+      attachments: current.attachments.filter((attachment) => attachment.id !== id),
+    }));
   const clearSentMessage = () => {
     setDrafts((current) => {
       // Compare edit identity, not text: a newer draft may contain the same text.
@@ -33,5 +54,5 @@ export function useSessionDraft(sessionId: string) {
       return next;
     });
   };
-  return { message, setMessage, clearSentMessage };
+  return { message, setMessage, attachments, addAttachment, removeAttachment, clearSentMessage };
 }

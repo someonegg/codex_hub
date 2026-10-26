@@ -47,9 +47,11 @@ stays on the old page.
 
 ### File uploads
 
-Use the attachment button beside **Send** to **Take photo** or **Choose images**,
-or paste images or drop files into the input. Review the inserted server paths,
-then send. Multiple files are supported; folders are not.
+Use the attachment button to **Take photo**, **Choose images**, or **Choose files**;
+you can also paste images or drop files. Preview images or remove attachments
+before sending, with or without text. Multiple files are supported; folders are not.
+
+Unsent text and attachments stay with each session until the page is refreshed.
 
 Camera behavior depends on the browser and may fall back to a file picker. Images
 are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
