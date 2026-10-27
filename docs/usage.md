@@ -43,6 +43,9 @@ message input and expand **Terminal Preview** to inspect the CLI. Use
 **Interrupt**, or press **Esc** in the preview, to interrupt.
 **Working** and **Idle** reflect terminal output, not whether a task is complete.
 
+Press **Shift+Enter** to send; **Enter** inserts a newline, or sends a standalone
+command (such as `/help`) when no files are attached.
+
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's connected page.
 When it shows **Superseded**, follow **Go to bound session**. Your unsent draft

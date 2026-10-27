@@ -154,15 +154,12 @@ export function InteractionPanel({
       scrollOnExpand.current = false;
     }
   }, [preview, previewExpanded]);
+  const isStrictSlashCommand = !attachments.length && /^\/[A-Za-z]+$/.test(message.trim());
   const send = async () => {
     if (!previewConnected || interactionBusy || isUploading() || messageIsBlank || messageTooLarge)
       return;
     const command = message.trim();
-    const shouldExpandPreview =
-      !attachments.length &&
-      /^\/[A-Za-z]+$/.test(command) &&
-      command !== "/exit" &&
-      command !== "/quit";
+    const shouldExpandPreview = isStrictSlashCommand && command !== "/exit" && command !== "/quit";
     await onSendMessage(outgoingMessage);
     clearSentMessage();
     if (!mounted.current) return;
@@ -184,8 +181,14 @@ export function InteractionPanel({
     void onSendKeys(keys).catch(() => undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key !== "Enter" || !event.shiftKey || event.nativeEvent.isComposing) return;
+    if (
+      event.key !== "Enter" ||
+      event.nativeEvent.isComposing ||
+      (!event.shiftKey && !isStrictSlashCommand)
+    )
+      return;
     event.preventDefault();
+    if (event.repeat) return;
     void send().catch(() => undefined);
   };
   const onPreviewKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
