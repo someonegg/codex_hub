@@ -4,7 +4,6 @@ import { parseArgs } from "node:util";
 
 import { commandLineHelp, loadConfig, resolveHomeDirectory } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
-import { DirectoryLock } from "./directory-lock.js";
 import { DiffStore } from "./hosting/diff-store.js";
 import { HostingStore } from "./hosting/store.js";
 import { createApiRouter } from "./http/api-router.js";
@@ -79,53 +78,40 @@ async function main(): Promise<void> {
 
   const { config } = command;
   const uploads = new UploadStore(await uploadDirectory(config.uploadDirectory));
-  const lock = new DirectoryLock(uploads.directory, ".server-lock");
-  const release = () => lock.close();
-  try {
-    if (!lock.acquire())
-      throw new Error(
-        `Uploads directory ${uploads.directory} is already used by another Hub; choose another --home-dir`,
-      );
-    process.once("exit", release);
-    await uploads.initialize();
-    const hub = await createCodexHub(
-      config.homes,
-      config.tmuxSocket,
-      config.interactionEnabled,
-      uploads,
-    );
-    const server = await startServer(
-      config,
-      createApiRouter({ ...hub, uploads }),
-      hub.close,
-      createTerminalPreviewWebSocket(hub.interaction),
-    );
-    const address = server.address();
-    const port = typeof address === "object" && address ? address.port : config.port;
-    const host = config.host.includes(":") ? `[${config.host}]` : config.host;
-    const protocol = config.tls.enabled ? "https" : "http";
-    const mutualTls =
-      config.tls.enabled && config.tls.certificateAuthorityPath
-        ? " (client certificates required)"
-        : "";
-    console.log(`Codex Hub listening on ${protocol}://${host}:${port}${mutualTls}`);
+  await uploads.initialize();
+  const hub = await createCodexHub(
+    config.homes,
+    config.tmuxSocket,
+    config.interactionEnabled,
+    uploads,
+  );
+  const server = await startServer(
+    config,
+    createApiRouter({ ...hub, uploads }),
+    hub.close,
+    createTerminalPreviewWebSocket(hub.interaction),
+  );
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : config.port;
+  const host = config.host.includes(":") ? `[${config.host}]` : config.host;
+  const protocol = config.tls.enabled ? "https" : "http";
+  const mutualTls =
+    config.tls.enabled && config.tls.certificateAuthorityPath
+      ? " (client certificates required)"
+      : "";
+  console.log(`Codex Hub listening on ${protocol}://${host}:${port}${mutualTls}`);
 
-    function close(): void {
-      server.close((error) => {
-        if (error) {
-          console.error("Failed to stop Codex Hub");
-          process.exitCode = 1;
-        }
-      });
-    }
-
-    process.once("SIGINT", close);
-    process.once("SIGTERM", close);
-  } catch (error) {
-    process.removeListener("exit", release);
-    release();
-    throw error;
+  function close(): void {
+    server.close((error) => {
+      if (error) {
+        console.error("Failed to stop Codex Hub");
+        process.exitCode = 1;
+      }
+    });
   }
+
+  process.once("SIGINT", close);
+  process.once("SIGTERM", close);
 }
 
 main().catch((error: unknown) => {

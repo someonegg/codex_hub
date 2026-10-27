@@ -69,8 +69,7 @@ and exit retain uploads. [Preview upload history](images/codex-hub-uploads.png).
 
 Uploads persist under `uploads/` in the [Hub data root](#server-options), which
 must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
-for API and storage guarantees. Only one Hub can use an uploads directory at a time;
-stop the other Hub or choose another `--home-dir` if it is already in use.
+for API and storage guarantees.
 
 ## Multiple homes
 
