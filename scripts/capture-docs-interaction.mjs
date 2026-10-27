@@ -305,8 +305,7 @@ async function capture(
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
     await composer.fill("Keep this draft while browsing uploads");
     await stageAttachment();
-    await demo.getByRole("button", { name: "Attach files", exact: true }).click();
-    await demo.getByRole("menuitem", { name: "Upload history", exact: true }).click();
+    await demo.getByRole("link", { name: "Upload history", exact: true }).click();
     await demo.getByRole("heading", { name: "Upload history", exact: true }).waitFor();
     await demo.getByRole("button", { name: "Expand dashboard.png", exact: true }).click();
     await demo.getByRole("button", { name: "Collapse dashboard.png", exact: true }).waitFor();
@@ -458,6 +457,33 @@ async function capture(
         Number.parseFloat(controls.style.getPropertyValue("--panel-clearance")),
       );
     if (clearance !== 0) throw new Error("Page jumps do not return to the viewport corner");
+    items = [1, 2].map((ordinal) => ({
+      kind: "message",
+      id: `plan-${ordinal}`,
+      ordinal,
+      timestamp,
+      role: "assistant",
+      phase: "final",
+      itemType: "Plan",
+      markdown: `# Plan ${ordinal}`,
+    }));
+    await demo.reload();
+    const plans = demo.locator(".plan-toggle");
+    await plans.nth(1).waitFor();
+    if (
+      (await plans.nth(0).getAttribute("aria-expanded")) !== "false" ||
+      (await plans.nth(1).getAttribute("aria-expanded")) !== "true"
+    )
+      throw new Error("Latest plan must be the only plan initially expanded");
+    await demo.getByRole("heading", { name: "Plan 2", exact: true }).waitFor();
+    await plans.nth(0).click();
+    await demo.getByRole("heading", { name: "Plan 1", exact: true }).waitFor();
+    if ((await plans.nth(1).getAttribute("aria-expanded")) !== "true")
+      throw new Error("Manually opening an older plan closed the latest plan");
+    await plans.nth(1).click();
+    if ((await plans.nth(1).getAttribute("aria-expanded")) !== "false")
+      throw new Error("Latest plan cannot be manually hidden");
+    if (errors.length) throw new Error(errors.join("\n"));
   } catch (error) {
     await demo.screenshot({ path: "/tmp/codex-hub-capture-failure.png" });
     throw new Error(

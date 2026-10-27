@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo, useState } from "react";
 
 import type { TimelineCursor } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
@@ -8,7 +8,7 @@ import { DirectiveItem } from "./DirectiveItem";
 import { EventMark } from "./EventMark";
 import { InfiniteScrollSentinel } from "./InfiniteScrollSentinel";
 import { InternalEventItem } from "./InternalEventItem";
-import { MessageItem } from "./MessageItem";
+import { isPlan, MessageItem } from "./MessageItem";
 import { TokenItem } from "./TokenItem";
 import { ToolItem } from "./ToolItem";
 import { type UserInputCardEntry, UserInputItem } from "./UserInputItem";
@@ -38,6 +38,33 @@ export const Timeline = memo(function Timeline({
   onLoadMore,
   onTimelineConflict,
 }: TimelineProps) {
+  const latestPlanId = useMemo(() => {
+    for (let index = items.length - 1; index >= 0; index--) {
+      const item = items[index]!;
+      if (item.kind === "message" && isPlan(item)) return item.id;
+    }
+    return null;
+  }, [items]);
+  const [plans, setPlans] = useState(() => ({
+    sessionId,
+    latestPlanId,
+    openIds: new Set(latestPlanId === null ? [] : [latestPlanId]),
+  }));
+  if (plans.sessionId !== sessionId || plans.latestPlanId !== latestPlanId) {
+    setPlans({
+      sessionId,
+      latestPlanId,
+      openIds: new Set(latestPlanId === null ? [] : [latestPlanId]),
+    });
+  }
+  const togglePlan = useCallback((id: string) => {
+    setPlans((current) => {
+      const openIds = new Set(current.openIds);
+      if (openIds.has(id)) openIds.delete(id);
+      else openIds.add(id);
+      return { ...current, openIds };
+    });
+  }, []);
   const entries = useMemo(() => projectUserInputCards(items), [items]);
   return (
     <>
@@ -47,6 +74,8 @@ export const Timeline = memo(function Timeline({
             <EventMark item={item} />
             <TimelineContent
               item={item}
+              planOpen={plans.openIds.has(item.id)}
+              onTogglePlan={togglePlan}
               sessionId={sessionId}
               cursor={cursor}
               onTimelineConflict={onTimelineConflict}
@@ -72,12 +101,16 @@ function TimelineContent({
   sessionId,
   cursor,
   onTimelineConflict,
+  planOpen,
+  onTogglePlan,
 }: Pick<TimelineProps, "sessionId" | "cursor" | "onTimelineConflict"> & {
   item: TimelineEntry;
+  planOpen: boolean;
+  onTogglePlan: (id: string) => void;
 }) {
   switch (item.kind) {
     case "message":
-      return <MessageItem item={item} />;
+      return <MessageItem item={item} planOpen={planOpen} onTogglePlan={onTogglePlan} />;
     case "directive":
       return (
         <DirectiveItem
