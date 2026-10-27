@@ -21,7 +21,6 @@ import { api } from "../api/client";
 import { useSessionDraft } from "../state/session-drafts";
 import { AttachmentList } from "./AttachmentList";
 import { InternalLink } from "./InternalLink";
-import { UploadHistoryLink } from "./UploadHistoryLink";
 
 interface InteractionPanelProps {
   sessionId: string;
@@ -302,9 +301,6 @@ export function InteractionPanel({
   const handoff = async () => {
     if (!previewConnected || interactionBusy || upload.current) return;
     await onHandoffPaneBinding();
-    if (!mounted.current) return;
-    if (!previewExpanded) scrollOnExpand.current = true;
-    onExpandPreview();
   };
   const sendKeys = (keys: readonly InteractionKey[]) => {
     if (!previewConnected || interactionBusy) return;
@@ -646,11 +642,6 @@ export function InteractionPanel({
                   className="interaction-attachment-menu"
                   onKeyDown={onAttachmentMenuKeyDown}
                 >
-                  <UploadHistoryLink
-                    sessionId={sessionId}
-                    role="menuitem"
-                    onNavigate={closeAttachments}
-                  />
                   {attachmentPickers.map(({ label, input }) => (
                     <button
                       key={label}

@@ -399,7 +399,7 @@ it("does not expand on failed command delivery", async () => {
   expect(screen.getByRole("textbox")).toHaveValue("/plan");
 });
 
-it("expands the preview after handoff without changing the draft and disables Handoff while busy or disconnected", async () => {
+it("preserves the collapsed preview and draft after handoff and disables Handoff while busy or disconnected", async () => {
   const handlers = props(interaction("connected"));
   const view = render(<InteractionPanel {...handlers} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft" } });
@@ -415,7 +415,7 @@ it("expands the preview after handoff without changing the draft and disables Ha
   expect(screen.getByRole("textbox")).toHaveValue("draft");
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
     "aria-expanded",
-    "true",
+    "false",
   );
   view.rerender(<InteractionPanel {...handlers} interactionBusy />);
   expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
@@ -492,22 +492,27 @@ it("shows the takeover even on first load, with no link when its session is miss
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
 
-it("waits for successful handoff delivery before expanding the preview", async () => {
-  let resolve!: () => void;
-  const handlers = props(interaction("connected"));
-  handlers.onHandoffPaneBinding.mockImplementationOnce(
-    () =>
-      new Promise<void>((done) => {
-        resolve = done;
-      }),
-  );
-  render(<InteractionPanel {...handlers} />);
-  const toggle = screen.getByRole("button", { name: "Terminal Preview" });
-  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await act(async () => resolve());
-  expect(toggle).toHaveAttribute("aria-expanded", "true");
-});
+it.each([false, true])(
+  "preserves preview expansion %s during and after handoff delivery",
+  async (expanded) => {
+    let resolve!: () => void;
+    const handlers = props(interaction("connected"));
+    handlers.onHandoffPaneBinding.mockImplementationOnce(
+      () =>
+        new Promise<void>((done) => {
+          resolve = done;
+        }),
+    );
+    render(<Panel {...handlers} previewExpanded={expanded} />);
+    const toggle = screen.getByRole("button", { name: "Terminal Preview" });
+    fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+    expect(toggle).toHaveAttribute("aria-expanded", String(expanded));
+    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+    await act(async () => resolve());
+    expect(toggle).toHaveAttribute("aria-expanded", String(expanded));
+    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+  },
+);
 
 it("does not expand the preview after failed handoff delivery", async () => {
   const handlers = props(interaction("connected"));
@@ -751,7 +756,8 @@ describe("image attachments", () => {
     render(<InteractionPanel {...props(interaction("connected"))} />);
     const trigger = screen.getByRole("button", { name: "Attach files" });
     await user.click(trigger);
-    expect(screen.getByRole("menuitem", { name: "Upload history" })).toHaveFocus();
+    expect(screen.queryByRole("menuitem", { name: "Upload history" })).not.toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Take photo" })).toHaveFocus();
     await user.keyboard("{ArrowUp}");
     expect(screen.getByRole("menuitem", { name: "Choose files" })).toHaveFocus();
     await user.keyboard("{Home}{ArrowDown}{End}{Escape}");

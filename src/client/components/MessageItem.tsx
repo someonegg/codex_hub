@@ -93,9 +93,20 @@ export function safeUrlTransform(url: string): string {
   }
 }
 
-export const MessageItem = memo(function MessageItem({ item }: { item: Message }) {
+interface MessageItemProps {
+  item: Message;
+  planOpen?: boolean;
+  onTogglePlan?: (id: string) => void;
+}
+
+export const MessageItem = memo(function MessageItem({
+  item,
+  planOpen,
+  onTogglePlan,
+}: MessageItemProps) {
   const itemType = item.itemType === null ? "" : ` · ${item.itemType}`;
-  if (isPlan(item)) return <PlanMessage item={item} />;
+  if (isPlan(item))
+    return <PlanMessage item={item} planOpen={planOpen} onTogglePlan={onTogglePlan} />;
   return (
     <article
       className={`message-body ${item.role === "user" ? "user-message" : "assistant-message"}`}
@@ -112,9 +123,11 @@ export const MessageItem = memo(function MessageItem({ item }: { item: Message }
   );
 });
 
-function PlanMessage({ item }: { item: Message }) {
-  const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
+function PlanMessage({ item, planOpen, onTogglePlan }: MessageItemProps) {
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = planOpen ?? localOpen;
+  const [mounted, setMounted] = useState(open);
+  if (open && !mounted) setMounted(true);
   const contentId = useId();
   const preview = useMemo(() => planPreview(item.markdown), [item.markdown]);
   return (
@@ -126,7 +139,8 @@ function PlanMessage({ item }: { item: Message }) {
         aria-controls={contentId}
         onClick={() => {
           setMounted(true);
-          setOpen((value) => !value);
+          if (onTogglePlan) onTogglePlan(item.id);
+          else setLocalOpen((value) => !value);
         }}
       >
         <span className="event-label">
@@ -173,7 +187,7 @@ function messageLabel(item: Message): string {
   return "Assistant";
 }
 
-function isPlan(item: Message): boolean {
+export function isPlan(item: Message): boolean {
   return item.role === "assistant" && item.phase === "final" && item.itemType === "Plan";
 }
 

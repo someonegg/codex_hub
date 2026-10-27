@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { SessionDetail } from "../../src/shared/domain";
+import type { MessageItem as Message, SessionDetail } from "../../src/shared/domain";
 
 import { EventTime } from "../../src/client/components/EventTime";
 import {
@@ -352,6 +352,70 @@ describe("session reader components", () => {
     expect(fullContent).toHaveAttribute("hidden");
     await user.click(toggle);
     expect(document.getElementById(contentId!)).toBe(fullContent);
+  });
+
+  it("opens the latest plan, preserves manual choices, and resets only for a new plan or session", async () => {
+    const user = userEvent.setup();
+    const plan = (ordinal: number): Message => ({
+      kind: "message",
+      id: `plan-${ordinal}`,
+      ordinal,
+      timestamp: null,
+      role: "assistant",
+      phase: "final",
+      itemType: "Plan",
+      markdown: `# Plan ${ordinal}`,
+    });
+    const timeline = (items: Message[], sessionId = SESSION_ID) => (
+      <Timeline
+        items={items}
+        sessionId={sessionId}
+        cursor={firstPage.cursor}
+        hasMore={true}
+        loading={false}
+        paginationEnabled={false}
+        onLoadMore={vi.fn()}
+        onTimelineConflict={vi.fn()}
+      />
+    );
+    const toggle = (ordinal: number) =>
+      screen.getByRole("button", { name: new RegExp(`Assistant final · Plan · ${ordinal}`) });
+    const view = render(timeline([plan(1), plan(2)]));
+    expect(toggle(1)).toHaveAttribute("aria-expanded", "false");
+    expect(toggle(2)).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("heading", { name: "Plan 2" })).toBeVisible();
+    const content = document.getElementById(toggle(2).getAttribute("aria-controls")!);
+    await user.click(toggle(1));
+    expect(toggle(1)).toHaveAttribute("aria-expanded", "true");
+    expect(toggle(2)).toHaveAttribute("aria-expanded", "true");
+    view.rerender(
+      timeline([
+        plan(1),
+        { ...plan(2), markdown: "# Updated plan" },
+        {
+          ...plan(3),
+          itemType: null,
+        },
+      ]),
+    );
+    expect(toggle(1)).toHaveAttribute("aria-expanded", "true");
+    expect(toggle(2)).toHaveAttribute("aria-expanded", "true");
+    await user.click(toggle(2));
+    view.rerender(timeline([plan(1), plan(2)]));
+    expect(toggle(2)).toHaveAttribute("aria-expanded", "false");
+    expect(content).toHaveAttribute("hidden");
+    view.rerender(timeline([plan(1), plan(2), plan(3)]));
+    expect(toggle(1)).toHaveAttribute("aria-expanded", "false");
+    expect(toggle(2)).toHaveAttribute("aria-expanded", "false");
+    expect(toggle(3)).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(toggle(2).getAttribute("aria-controls")!)).toBe(content);
+    expect(content).toHaveAttribute("hidden");
+    expect(screen.getByRole("heading", { name: "Plan 3" })).toBeVisible();
+    await user.click(toggle(1));
+    await user.click(toggle(3));
+    view.rerender(timeline([plan(1), plan(2), plan(3)], "another-session"));
+    expect(toggle(1)).toHaveAttribute("aria-expanded", "false");
+    expect(toggle(3)).toHaveAttribute("aria-expanded", "true");
   });
 
   it("bounds plan previews by Unicode code points and limits parsed source", () => {

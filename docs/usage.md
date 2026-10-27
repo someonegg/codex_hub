@@ -33,6 +33,9 @@ command shown by the hub to
 finish in the terminal. Before resuming a session started elsewhere, make sure
 its original process has exited.
 
+The latest loaded plan opens automatically and collapses earlier plans. Use
+**Show** or **Hide** to review plans individually; you can open several at once.
+
 ## Interacting with Codex
 
 A green **Live** badge indicates a connected terminal. Send prompts from the
@@ -58,7 +61,7 @@ are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
 support depends on the agent. If the session becomes disconnected or busy while
 taking a photo, reconnect or retry later.
 
-Open **Upload history** from the attachment menu or session header to browse,
+Open **Upload history** from the session header to browse,
 preview, download, or delete uploads, including unsent files and files removed
 from drafts. Deleting a file removes it from the current draft and breaks paths
 in existing messages. Attachment deletion and cleanup are best effort. Session
