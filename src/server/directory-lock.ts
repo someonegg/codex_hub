@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 /** A complete owner directory is atomically installed; stale owners move to permanent tombstones.
  * Keeping tombstones prevents a second reclaimer from renaming a new owner's lock. */
-export class HostingLock {
+export class DirectoryLock {
   private readonly token = randomUUID();
   private readonly attempt: string;
   private readonly target: string;
@@ -37,7 +37,7 @@ export class HostingLock {
         throw error;
       }
       if (!Number.isInteger(owner.pid) || owner.pid <= 0 || !/^[a-f0-9-]{36}$/.test(owner.token))
-        throw new Error("Invalid hosting lock owner");
+        throw new Error("Invalid directory lock owner");
       try {
         process.kill(owner.pid, 0);
         return false;

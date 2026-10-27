@@ -10,8 +10,8 @@ import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
 import type { ServerConfig } from "../config.js";
+import { DirectoryLock } from "../directory-lock.js";
 import { DiffStore } from "../hosting/diff-store.js";
-import { HostingLock } from "../hosting/lock.js";
 import { hostingRoutes } from "../hosting/routes.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
 import { applySecurityHeaders } from "./security.js";
@@ -77,7 +77,7 @@ export function createServer(
   const clientRoot = realpathSync(config.clientDirectory);
   const finish = <T extends ReturnType<typeof createHttpServer>>(server: T): T => {
     const lock = config.hostingDirectory
-      ? new HostingLock(config.hostingDirectory, ".server-lock")
+      ? new DirectoryLock(config.hostingDirectory, ".server-lock")
       : undefined;
     try {
       if (lock && !lock.acquire())

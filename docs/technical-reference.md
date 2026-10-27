@@ -157,6 +157,10 @@ history and content access. Failed cleanup retains the tombstone for repeat dele
 or startup recovery. Startup retries cleanup of interrupted uploads and deletion
 tombstones, logging failures without blocking service.
 
+The uploads `.server-lock` is acquired before recovery and held until process exit,
+including HTTP draining. Competing Hubs fail immediately; dead owners are reclaimed
+on the next startup.
+
 Attachment deletion and cleanup are best effort and do not block uploads.
 Confirmed session deletion triggers asynchronous cleanup; cleanup errors are logged
 without affecting the session operation result. Native failure or unconfirmed
