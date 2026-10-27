@@ -344,6 +344,44 @@ it.each([
   );
 });
 
+it.each([
+  ["/help", true],
+  ["  /MODEL  ", true],
+  ["/exit", true],
+  ["/quit", true],
+  ["/model xxx", false],
+  ["/help2", false],
+  ["/my-command", false],
+  ["hello", false],
+  ["/帮助", false],
+  ["/help\n/status", false],
+])("handles Enter for %s (sends: %s)", async (message, sends) => {
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  const textarea = screen.getByRole("textbox");
+  fireEvent.change(textarea, { target: { value: message } });
+  expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(!sends);
+  await act(async () => {
+    await Promise.resolve();
+  });
+  if (sends) expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
+  else expect(handlers.onSendMessage).not.toHaveBeenCalled();
+});
+
+it.each([
+  { isComposing: true },
+  { repeat: true },
+  { shiftKey: true, isComposing: true },
+  { shiftKey: true, repeat: true },
+])("does not send commands during composition or key repeat: %j", (options) => {
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  const textarea = screen.getByRole("textbox");
+  fireEvent.change(textarea, { target: { value: "/help" } });
+  fireEvent.keyDown(textarea, { key: "Enter", ...options });
+  expect(handlers.onSendMessage).not.toHaveBeenCalled();
+});
+
 it("waits for successful command delivery and keeps an expanded preview open", async () => {
   let resolve!: () => void;
   const handlers = props(interaction("connected"));
@@ -963,6 +1001,8 @@ it("counts attachment paths in the message limit and does not expand slash comma
   });
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
+  expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" })).toBe(true);
+  expect(handlers.onSendMessage).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
   expect(handlers.onSendMessage).toHaveBeenCalledWith("/tmp/report.txt\n\n/help");
   expect(handlers.onExpandPreview).not.toHaveBeenCalled();
