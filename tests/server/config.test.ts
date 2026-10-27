@@ -19,6 +19,7 @@ describe("server command line", () => {
       homes: [{ nickname: "default", path: resolve(homedir(), ".codex") }],
       tls: { enabled: false },
       interactionEnabled: true,
+      uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
     });
   });
 
@@ -67,16 +68,32 @@ describe("server command line", () => {
 });
 
 it("resolves upload directories and rejects empty configuration", () => {
-  const config = runnable(["--upload-dir", "uploads with spaces"]);
-  expect(config.uploadDirectory).toBe(resolve("uploads with spaces"));
-  expect(() => loadConfig(["--upload-dir", " "])).toThrow("--upload-dir must not be empty");
+  const config = runnable(["--home-dir", "uploads with spaces"]);
+  expect(config.uploadDirectory).toBe(resolve("uploads with spaces", "uploads"));
+  expect(() => loadConfig(["--home-dir", " "])).toThrow("--home-dir must not be empty");
 });
 
 it("resolves hosting directories and reports their own option name for empty values", () => {
-  expect(runnable(["--hosting", "--hosting-dir", "web pages"]).hostingDirectory).toBe(
-    resolve("web pages"),
+  expect(runnable(["--hosting", "--home-dir", "web pages"]).hostingDirectory).toBe(
+    resolve("web pages", "hosting"),
   );
-  expect(() => loadConfig(["--hosting", "--hosting-dir", " "])).toThrow(
-    "--hosting-dir must not be empty",
+  expect(() => loadConfig(["--hosting", "--home-dir", " "])).toThrow(
+    "--home-dir must not be empty",
   );
+});
+
+it("rejects removed storage options with migration guidance", () => {
+  for (const option of ["--upload-dir", "--hosting-dir"])
+    expect(() => loadConfig([option, "old"])).toThrow("use --home-dir");
+});
+
+it("shares the Hub root for uploads and hosting, expanding home-relative paths", () => {
+  expect(runnable(["--hosting"])).toMatchObject({
+    uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
+    hostingDirectory: resolve(homedir(), ".codex-hub/hosting"),
+  });
+  expect(runnable(["--hosting", "--home-dir", "~/hub-data"])).toMatchObject({
+    uploadDirectory: resolve(homedir(), "hub-data/uploads"),
+    hostingDirectory: resolve(homedir(), "hub-data/hosting"),
+  });
 });

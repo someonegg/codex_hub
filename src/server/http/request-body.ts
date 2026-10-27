@@ -7,7 +7,12 @@ const MAX_INTERACTION_JSON_BYTES = MAX_INTERACTION_MESSAGE_BYTES * 6 + 1_024;
 export class RequestBodyError extends Error {
   constructor(
     readonly status: number,
-    readonly code: "invalid_json" | "body_too_large",
+    readonly code:
+      | "invalid_json"
+      | "body_too_large"
+      | "invalid_session"
+      | "forbidden"
+      | "not_found",
     message: string,
   ) {
     super(message);

@@ -134,14 +134,36 @@ are independent of catalog revisions and include `updatedAt`. Session diagnostic
 
 ## File uploads
 
-`POST /api/v1/uploads?filename=<URL-encoded filename>` accepts raw binary (up to
-20 MiB per file) and returns `201 { "path": "/absolute/path/<uuid>.<ext>" }`.
-The filename supplies only a safe extension. Oversize uploads return `413`;
-storage failures return `500`, using the standard API error envelope.
-Failed or interrupted uploads remove incomplete files.
+`POST /api/v1/uploads?sessionId=<Hub ID>&filename=<URL-encoded filename>` accepts
+raw binary up to 20 MiB. The session must exist. The `201` response retains `path`
+and includes `id`, `sessionId`, `filename`, `size`, `type`, and `uploadedAt` metadata.
+Each upload gets a unique ID; names never overwrite files. Storage failures return
+`500`, oversize returns `413`, and mutations reject cross-origin access.
+
+`GET /api/v1/sessions/:id/uploads` returns `{items}` with all attachments
+ordered newest first, without pagination. `GET .../uploads/:attachmentId/content` previews
+supported raster images; `?download=1` forces download. Other types, including SVG
+and HTML, always download. All content responses use `nosniff` and a sandbox CSP.
+`DELETE .../uploads/:attachmentId` removes the file and registration, with repeat
+deletes succeeding. Content and delete access are scoped to the registered session.
+
+The [Hub data root](usage.md#server-options) is shared by the server and offline
+resource commands. `--home-dir` replaces `--upload-dir` and `--hosting-dir`;
+legacy files are not migrated. Upload directories use a digest of the opaque Hub
+session ID, independently of native adapter IDs. Metadata commits use atomic rename.
+Single-file deletion first atomically renames metadata to a deletion tombstone,
+then removes the content and tombstone. Once marked, the attachment is hidden from
+history and content access. Failed cleanup retains the tombstone for repeat deletion
+or startup recovery. Startup retries cleanup of interrupted uploads and deletion
+tombstones, logging failures without blocking service.
+
+Attachment deletion and cleanup are best effort and do not block uploads.
+Confirmed session deletion triggers asynchronous cleanup; cleanup errors are logged
+without affecting the session operation result. Native failure or unconfirmed
+results do not trigger cleanup. Archive and exit retain uploads.
 
 Drafts are stored in memory per session; leaving aborts unfinished uploads.
-Previews use local files and release their URLs on removal or unmount.
+Composer previews use object URLs, revoked on removal or unmount.
 Sending prefixes the text with one server path per line (quoted when needed)
 and a blank line; attachment-only messages contain just paths. The byte limit
 applies to the complete message. Failed sends retain drafts; successful sends
@@ -400,7 +422,7 @@ terminal result, after which the ID is discarded.
 Hosting is independent of session adapters and is enabled only by `--hosting`.
 `GET /api/v1/capabilities` reports `{ hosting: boolean }`. Disabled hosting does
 not initialize storage and returns 404 for hosting pages and APIs. Resource
-commands work offline and accept `--hosting-dir` and `--json`. Existing
+commands work offline and accept `--home-dir` and `--json`. Existing
 HTTPS/mTLS or reverse-proxy authentication applies to both resource types;
 hosting adds no application login.
 

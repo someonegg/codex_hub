@@ -13,7 +13,7 @@ export default defineConfig({
           if (
             pathname === "/artifacts" ||
             /^\/diffs\/[a-f0-9-]{36}$/.test(pathname) ||
-            /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(pathname)
+            /^\/sessions\/[A-Za-z0-9_-]{20,100}(?:\/uploads)?\/?$/.test(pathname)
           ) {
             request.url = `/index.html${(request.url ?? "").slice(pathname.length)}`;
           }

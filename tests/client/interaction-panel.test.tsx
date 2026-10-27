@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { InteractionResponse } from "../../src/shared/api-contract";
+import type { UploadAttachment } from "../../src/shared/uploads";
 
 import { InteractionPanel as Panel } from "../../src/client/components/InteractionPanel";
 import { SessionDraftProvider } from "../../src/client/state/session-drafts";
@@ -595,7 +596,7 @@ it("ignores Interrupt and Plan while busy, including preview expansion", () => {
 describe("composer uploads", () => {
   it("keeps files outside the text and sends paths in order before the original text", async () => {
     const { api } = await import("../../src/client/api/client");
-    let finish!: (value: { path: string }) => void;
+    let finish!: (value: UploadAttachment) => void;
     const upload = vi
       .spyOn(api, "upload")
       .mockImplementationOnce(
@@ -604,7 +605,7 @@ describe("composer uploads", () => {
             finish = resolve;
           }),
       )
-      .mockResolvedValueOnce({ path: "/tmp/two.txt" });
+      .mockResolvedValueOnce(uploadResult("/tmp/two.txt"));
     const handlers = props(interaction("connected"));
     render(<InteractionPanel {...handlers} />);
     const input = screen.getByRole("textbox") as HTMLTextAreaElement;
@@ -617,7 +618,7 @@ describe("composer uploads", () => {
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
     expect(screen.getByText("Uploading 1/2…")).toBeInTheDocument();
-    await act(async () => finish({ path: "/tmp/space dir/one.png" }));
+    await act(async () => finish(uploadResult("/tmp/space dir/one.png")));
     expect(input.value).toBe("before replace after");
     expect(screen.getByText("one.png")).toBeInTheDocument();
     expect(screen.getByText("two.txt")).toBeInTheDocument();
@@ -640,7 +641,7 @@ describe("composer uploads", () => {
     const { api } = await import("../../src/client/api/client");
     const upload = vi
       .spyOn(api, "upload")
-      .mockResolvedValueOnce({ path: "/tmp/one.txt" })
+      .mockResolvedValueOnce(uploadResult("/tmp/one.txt"))
       .mockRejectedValueOnce(new Error("Disk full"));
     render(<InteractionPanel {...props(interaction("connected"))} />);
     const input = screen.getByRole("textbox");
@@ -657,7 +658,7 @@ describe("composer uploads", () => {
 
   it("aborts on unmount and ignores late responses", async () => {
     const { api } = await import("../../src/client/api/client");
-    let finish!: (value: { path: string }) => void;
+    let finish!: (value: UploadAttachment) => void;
     const upload = vi.spyOn(api, "upload").mockImplementation(
       () =>
         new Promise((resolve) => {
@@ -672,7 +673,7 @@ describe("composer uploads", () => {
     view.unmount();
     expect(signal.aborted).toBe(true);
     render(<InteractionPanel {...props(interaction("connected"))} />);
-    await act(async () => finish({ path: "/tmp/old.txt" }));
+    await act(async () => finish(uploadResult("/tmp/old.txt")));
     expect(screen.getByRole("textbox")).toHaveValue("");
     upload.mockRestore();
   });
@@ -697,7 +698,7 @@ describe("composer uploads", () => {
 
 it("adds a MIME extension to clipboard images and refuses new uploads while busy", async () => {
   const { api } = await import("../../src/client/api/client");
-  let finish!: (value: { path: string }) => void;
+  let finish!: (value: UploadAttachment) => void;
   const upload = vi.spyOn(api, "upload").mockImplementation(
     () =>
       new Promise((resolve) => {
@@ -713,7 +714,7 @@ it("adds a MIME extension to clipboard images and refuses new uploads while busy
   expect(upload.mock.calls[0]![0].name).toBe("clipboard.png");
   fireEvent.paste(input, clipboard);
   expect(upload).toHaveBeenCalledTimes(1);
-  await act(async () => finish({ path: "/tmp/image.png" }));
+  await act(async () => finish(uploadResult("/tmp/image.png")));
   upload.mockRestore();
 });
 
@@ -750,7 +751,7 @@ describe("image attachments", () => {
     render(<InteractionPanel {...props(interaction("connected"))} />);
     const trigger = screen.getByRole("button", { name: "Attach files" });
     await user.click(trigger);
-    expect(screen.getByRole("menuitem", { name: "Take photo" })).toHaveFocus();
+    expect(screen.getByRole("menuitem", { name: "Upload history" })).toHaveFocus();
     await user.keyboard("{ArrowUp}");
     expect(screen.getByRole("menuitem", { name: "Choose files" })).toHaveFocus();
     await user.keyboard("{Home}{ArrowDown}{End}{Escape}");
@@ -770,7 +771,7 @@ describe("image attachments", () => {
 
   it("opens separate camera and gallery inputs and preserves the selection across repeated choices", async () => {
     const { api } = await import("../../src/client/api/client");
-    const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/photo space.jpg" });
+    const upload = vi.spyOn(api, "upload").mockResolvedValue(uploadResult("/tmp/photo space.jpg"));
     const user = userEvent.setup();
     const handlers = props(interaction("connected"));
     render(<InteractionPanel {...handlers} />);
@@ -826,7 +827,7 @@ describe("image attachments", () => {
     const view = render(<InteractionPanel {...handlers} />);
     const camera = screen.getByLabelText("Take photo");
     view.rerender(<InteractionPanel {...handlers} interactionBusy />);
-    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach files" })).not.toBeDisabled();
     fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
     expect(screen.getByRole("alert")).toHaveTextContent("Session is busy");
     view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
@@ -848,7 +849,7 @@ describe("image attachments", () => {
     expect(upload).not.toHaveBeenCalled();
     fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
     await screen.findByText("Storage unavailable");
-    let finish!: (result: { path: string }) => void;
+    let finish!: (result: UploadAttachment) => void;
     upload.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -856,11 +857,11 @@ describe("image attachments", () => {
         }),
     );
     fireEvent.change(camera, { target: { files: [new File(["x"], "a.jpg")] } });
-    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach files" })).not.toBeDisabled();
     const signal = upload.mock.calls[1]![1];
     view.rerender(<InteractionPanel {...props(interaction("connected"))} key="second" />);
     expect(signal.aborted).toBe(true);
-    await act(async () => finish({ path: "/tmp/old.jpg" }));
+    await act(async () => finish(uploadResult("/tmp/old.jpg")));
     expect(screen.getByRole("textbox")).toHaveValue("");
     upload.mockRestore();
   });
@@ -922,7 +923,7 @@ describe("session drafts", () => {
 
 it("previews, removes and releases image resources, falling back for undecodable images", async () => {
   const { api } = await import("../../src/client/api/client");
-  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/photo.png" });
+  const upload = vi.spyOn(api, "upload").mockResolvedValue(uploadResult("/tmp/photo.png"));
   const view = render(<InteractionPanel {...props(interaction("connected"))} />);
   fireEvent.change(screen.getByLabelText("Take photo"), {
     target: { files: [new File(["pixels"], "photo.png", { type: "image/png" })] },
@@ -943,7 +944,7 @@ it("previews, removes and releases image resources, falling back for undecodable
 
 it("retains attachment drafts across sessions and failed sends, then sends without text", async () => {
   const { api } = await import("../../src/client/api/client");
-  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/report.txt" });
+  const upload = vi.spyOn(api, "upload").mockResolvedValue(uploadResult("/tmp/report.txt"));
   const handlers = props(interaction("connected"));
   handlers.onSendMessage.mockRejectedValueOnce(new Error("Disconnected"));
   const session = (id: string) => (
@@ -971,7 +972,7 @@ it("retains attachment drafts across sessions and failed sends, then sends witho
 it("counts attachment paths in the message limit and does not expand slash commands with attachments", async () => {
   const { api } = await import("../../src/client/api/client");
   const { MAX_INTERACTION_MESSAGE_BYTES } = await import("../../src/shared/api-contract");
-  const upload = vi.spyOn(api, "upload").mockResolvedValue({ path: "/tmp/report.txt" });
+  const upload = vi.spyOn(api, "upload").mockResolvedValue(uploadResult("/tmp/report.txt"));
   const handlers = props(interaction("connected"));
   render(<InteractionPanel {...handlers} />);
   fireEvent.change(screen.getByLabelText("Choose files"), {
@@ -988,3 +989,15 @@ it("counts attachment paths in the message limit and does not expand slash comma
   expect(handlers.onExpandPreview).not.toHaveBeenCalled();
   upload.mockRestore();
 });
+
+function uploadResult(path: string): UploadAttachment {
+  return {
+    path,
+    id: path,
+    sessionId: "test-session",
+    filename: path.split("/").at(-1)!,
+    size: 1,
+    type: "image/png",
+    uploadedAt: "2026-01-01T00:00:00.000Z",
+  };
+}

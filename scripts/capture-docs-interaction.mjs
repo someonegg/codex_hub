@@ -121,12 +121,44 @@ async function capture(
   };
   const sentMessages = [];
   const uploadedNames = [];
+  let historyDeleted = false;
+  let deletionAttempts = 0;
+  const historyAttachment = {
+    id: "docs-upload-1",
+    sessionId: session.id,
+    filename: "dashboard.png",
+    size: 68,
+    type: "image/png",
+    uploadedAt: timestamp,
+    path: "/tmp/camera uploads/photo.png",
+  };
+  let imageBuffer = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=",
+    "base64",
+  );
   await context.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
+    if (path.endsWith("/uploads/docs-upload-1/content"))
+      return route.fulfill({ contentType: "image/png", body: imageBuffer });
+    if (path.endsWith("/uploads/docs-upload-1") && route.request().method() === "DELETE") {
+      if (++deletionAttempts === 1)
+        return route.fulfill({
+          status: 500,
+          json: { error: { message: "Deletion failed; retry" } },
+        });
+      historyDeleted = true;
+      return route.fulfill({ json: { deleted: true } });
+    }
+    if (path.endsWith("/uploads") && route.request().method() === "GET")
+      return route.fulfill({
+        json: { items: historyDeleted ? [] : [historyAttachment] },
+      });
     if (path === "/api/v1/uploads" && route.request().method() === "POST") {
       uploadedNames.push(url.searchParams.get("filename"));
-      return route.fulfill({ json: { path: "/tmp/camera uploads/photo.png" } });
+      return route.fulfill({
+        json: historyAttachment,
+      });
     }
     if (path.endsWith("/messages") && route.request().method() === "POST") {
       sentMessages.push(route.request().postDataJSON().message);
@@ -176,7 +208,8 @@ async function capture(
     return route.abort();
   });
   async function prepareDesktopPreview() {
-    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
+    const previewToggle = demo.getByRole("button", { name: "Terminal Preview", exact: true });
+    if ((await previewToggle.getAttribute("aria-expanded")) !== "true") await previewToggle.click();
     await demo.getByLabel("Terminal Preview content", { exact: true }).waitFor();
     await demo.getByRole("textbox", { name: "Message to agent" }).fill("Suggest the next step.");
     await demo.evaluate(() => document.fonts.ready);
@@ -257,6 +290,7 @@ async function capture(
 
   async function stageAttachment() {
     const buffer = await demo.locator(".user-input-card").screenshot();
+    imageBuffer = buffer;
     await demo.getByLabel("Choose files", { exact: true }).setInputFiles({
       name: "dashboard.png",
       mimeType: "image/png",
@@ -265,6 +299,45 @@ async function capture(
     const image = demo.getByRole("img", { name: "dashboard.png", exact: true });
     await image.waitFor();
     await image.evaluate((element) => element.decode());
+  }
+
+  async function verifyUploadHistory() {
+    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await composer.fill("Keep this draft while browsing uploads");
+    await stageAttachment();
+    await demo.getByRole("button", { name: "Attach files", exact: true }).click();
+    await demo.getByRole("menuitem", { name: "Upload history", exact: true }).click();
+    await demo.getByRole("heading", { name: "Upload history", exact: true }).waitFor();
+    await demo.getByRole("button", { name: "Expand dashboard.png", exact: true }).click();
+    await demo.getByRole("button", { name: "Collapse dashboard.png", exact: true }).waitFor();
+    if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
+      throw new Error("Upload history horizontal overflow");
+    await demo.screenshot({
+      path: output.replace(
+        /[^/]+$/,
+        demo.viewportSize().width > 600 ? "codex-hub-uploads.png" : "codex-hub-uploads-mobile.png",
+      ),
+      animations: "disabled",
+    });
+    await demo.goBack();
+    await composer.waitFor();
+    if ((await composer.inputValue()) !== "Keep this draft while browsing uploads")
+      throw new Error("History lost draft text");
+    await demo.getByRole("button", { name: "Remove dashboard.png", exact: true }).waitFor();
+    await demo.goForward();
+    await demo.getByRole("heading", { name: "Upload history", exact: true }).waitFor();
+    await demo.reload();
+    await demo.getByRole("button", { name: "Delete", exact: true }).click();
+    await demo.getByRole("button", { name: "Cancel", exact: true }).click();
+    await demo.getByRole("button", { name: "Delete", exact: true }).click();
+    await demo.getByRole("button", { name: "Confirm delete", exact: true }).click();
+    await demo.getByRole("alert").waitFor();
+    await demo.getByRole("button", { name: "Confirm delete", exact: true }).click();
+    await demo.getByText("No uploads yet.", { exact: true }).waitFor();
+    await demo.getByRole("link", { name: "← Back to session", exact: true }).click();
+    await composer.waitFor();
+    historyDeleted = false;
+    await prepareDesktopPreview();
   }
 
   async function assertDesktopCardsVisible(prefix = "") {
@@ -295,6 +368,7 @@ async function capture(
       .getByText("Project health selected. Ready for the next step.", { exact: false })
       .waitFor();
     if (await demo.getByRole("alert").count()) throw new Error("Desktop error alert");
+    await verifyUploadHistory();
     await stageAttachment();
     await demo.evaluate(() => window.scrollTo(0, 0));
     await assertDesktopCardsVisible();
@@ -360,6 +434,8 @@ async function capture(
     await verifyAttachments();
     await demo.setViewportSize({ width: 320, height: 568 });
     await verifyCompactInteraction();
+    deletionAttempts = 0;
+    await verifyUploadHistory();
     await verifyAttachments();
     await verifyPageJumps();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
@@ -382,6 +458,11 @@ async function capture(
         Number.parseFloat(controls.style.getPropertyValue("--panel-clearance")),
       );
     if (clearance !== 0) throw new Error("Page jumps do not return to the viewport corner");
+  } catch (error) {
+    await demo.screenshot({ path: "/tmp/codex-hub-capture-failure.png" });
+    throw new Error(
+      `${error.message}\nPage: ${demo.url()}\n${await demo.locator("body").innerText()}\n${errors.join("\n")}`,
+    );
   } finally {
     await context.close();
   }

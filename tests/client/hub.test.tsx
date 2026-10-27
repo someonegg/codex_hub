@@ -100,6 +100,7 @@ describe("unified hub", () => {
     expect(error.nextElementSibling).toBe(link);
     expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
     expect(screen.queryByRole("button", { name: "Retry opening session" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Retry session deletion/ })).toBeNull();
 
     fireEvent.click(link);
     await flush();

@@ -26,7 +26,7 @@ async function fixture() {
   return { root, source, project, store };
 }
 it("requires explicit hosting and never initializes disabled storage", async () => {
-  expect(() => loadConfig(["--hosting-dir", "/tmp/hosting"])).toThrow(/requires/);
+  expect(() => loadConfig(["--hosting-dir", "/tmp/hosting"])).toThrow(/use --home-dir/);
   const disabled = loadConfig([]);
   expect(disabled.kind === "run" && disabled.config.hostingDirectory).toBeUndefined();
   expect(hostingRoutes()).toBeTypeOf("function");

@@ -1,4 +1,5 @@
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
+import type { UploadCleanup } from "../uploads/store.js";
 import {
   type OperationControl,
   type OperationEntry,
@@ -20,6 +21,7 @@ export class SessionLifecycleExecutor {
     private readonly control: OperationControl,
     private readonly now: () => number,
     private readonly waitMs: OperationTimeouts,
+    private readonly uploads?: UploadCleanup,
   ) {
     this.#exit = new SessionExitService(interaction, now);
   }
@@ -31,6 +33,7 @@ export class SessionLifecycleExecutor {
       if (!session) {
         if (type === "delete") {
           this.control.finish(entry, "succeeded", null);
+          this.#cleanup(sessionId);
           return;
         }
         throw new Error("Session not found");
@@ -105,9 +108,19 @@ export class SessionLifecycleExecutor {
       if (
         (context.kind === "archive" && matches.length === 1 && matches[0]?.archived) ||
         (context.kind === "delete" && matches.length === 0)
-      )
+      ) {
         this.control.finish(entry, "succeeded", null);
+        if (context.kind === "delete" && entry.metadata.sessionId)
+          this.#cleanup(entry.metadata.sessionId);
+      }
     }
+  }
+  #cleanup(id: string) {
+    void Promise.resolve()
+      .then(() => this.uploads?.cleanup(id))
+      .catch((error) => {
+        console.error("Session attachment cleanup failed", { sessionId: id, error });
+      });
   }
   async #startExit(entry: OperationEntry, sessionId: string, nativeId: string | null) {
     const target = await this.interaction.resolveTarget(sessionId);

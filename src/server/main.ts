@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import { join } from "node:path";
 import { parseArgs } from "node:util";
 
-import { commandLineHelp, loadConfig } from "./config.js";
+import { commandLineHelp, loadConfig, resolveHomeDirectory } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
 import { DiffStore } from "./hosting/diff-store.js";
 import { HostingStore } from "./hosting/store.js";
@@ -9,6 +10,7 @@ import { createApiRouter } from "./http/api-router.js";
 import { startServer } from "./http/create-server.js";
 import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
 import { uploadDirectory } from "./http/upload-routes.js";
+import { UploadStore } from "./uploads/store.js";
 
 async function runResourceCommand(resource: string, action: string, args: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
@@ -18,7 +20,9 @@ async function runResourceCommand(resource: string, action: string, args: string
       project: { type: "string" },
       name: { type: "string" },
       title: { type: "string" },
+      "home-dir": { type: "string" },
       "hosting-dir": { type: "string" },
+      "upload-dir": { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean" },
     },
@@ -32,8 +36,11 @@ async function runResourceCommand(resource: string, action: string, args: string
     positionals.length !== (action === "list" ? 0 : 1)
   )
     throw new Error("Expected page/diff publish <source>, list, or delete <id>");
-  const pages = new HostingStore(values["hosting-dir"]);
-  const diffs = new DiffStore(values["hosting-dir"]);
+  if (values["hosting-dir"] !== undefined || values["upload-dir"] !== undefined)
+    throw new Error("Use --home-dir instead of --hosting-dir or --upload-dir");
+  const directory = join(resolveHomeDirectory(values["home-dir"]), "hosting");
+  const pages = new HostingStore(directory);
+  const diffs = new DiffStore(directory);
   let result: object;
   if (action === "publish") {
     if (resource === "page" && !values.project) throw new Error("page publish requires --project");
@@ -70,11 +77,17 @@ async function main(): Promise<void> {
   }
 
   const { config } = command;
-  await uploadDirectory(config.uploadDirectory);
-  const hub = await createCodexHub(config.homes, config.tmuxSocket, config.interactionEnabled);
+  const uploads = new UploadStore(await uploadDirectory(config.uploadDirectory));
+  await uploads.initialize();
+  const hub = await createCodexHub(
+    config.homes,
+    config.tmuxSocket,
+    config.interactionEnabled,
+    uploads,
+  );
   const server = await startServer(
     config,
-    createApiRouter({ ...hub, uploadDirectory: config.uploadDirectory }),
+    createApiRouter({ ...hub, uploads }),
     hub.close,
     createTerminalPreviewWebSocket(hub.interaction),
   );

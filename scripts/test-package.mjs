@@ -52,7 +52,7 @@ try {
   await writeFile(join(source, "index.html"), "<h1>Package hosting</h1>");
   const published = await exec(
     binary,
-    ["page", "publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+    ["page", "publish", source, "--project", temporary, "--home-dir", hosting, "--json"],
     { cwd: temporary },
   );
   const artifact = JSON.parse(published.stdout);
@@ -60,7 +60,7 @@ try {
     Array.from({ length: 4 }, () =>
       exec(
         binary,
-        ["page", "publish", source, "--project", temporary, "--hosting-dir", hosting, "--json"],
+        ["page", "publish", source, "--project", temporary, "--home-dir", hosting, "--json"],
         { cwd: temporary },
       ),
     ),
@@ -69,14 +69,14 @@ try {
   assert.match(artifact.url, /^\/web\/[a-f0-9]{32}\/$/);
   await assert.rejects(exec(binary, ["publish", source, "--project", temporary]));
   const resource = (kind, action, ...args) =>
-    exec(binary, [kind, action, ...args, "--hosting-dir", hosting, "--json"], { cwd: temporary });
+    exec(binary, [kind, action, ...args, "--home-dir", hosting, "--json"], { cwd: temporary });
   assert.equal(JSON.parse((await resource("page", "list")).stdout).length, 1);
   const diffFile = join(temporary, "review.diff");
   await writeFile(
     diffFile,
     "diff --git a/test b/test\n--- a/test\n+++ b/test\n@@ -1 +1 @@\n-old\n+new\n",
   );
-  const plainDiff = await exec(binary, ["diff", "publish", diffFile, "--hosting-dir", hosting]);
+  const plainDiff = await exec(binary, ["diff", "publish", diffFile, "--home-dir", hosting]);
   const plainUrl = plainDiff.stdout.split("\n")[0];
   assert.match(plainDiff.stdout, /\[review\.diff\]\(\/diffs\/[a-f0-9-]{36}\)/);
   await resource("diff", "delete", plainUrl.split("/").at(-1));
@@ -100,17 +100,7 @@ try {
   await mkdir(join(home, "archived_sessions"));
   server = spawn(
     binary,
-    [
-      "--codex-home",
-      `smoke=${home}`,
-      "--port",
-      "0",
-      "--upload-dir",
-      join(temporary, "uploads"),
-      "--hosting",
-      "--hosting-dir",
-      hosting,
-    ],
+    ["--codex-home", `smoke=${home}`, "--port", "0", "--hosting", "--home-dir", hosting],
     { cwd: temporary, stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";

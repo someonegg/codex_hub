@@ -13,6 +13,7 @@ import {
   SessionLaunchError,
   SessionManagerRegistry,
 } from "../../src/server/management/session-manager.js";
+import type { UploadCleanup } from "../../src/server/uploads/store.js";
 
 const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
 const services: OperationService[] = [];
@@ -54,7 +55,7 @@ function session(id = "session", operationId?: string): DomainSession {
     },
   };
 }
-function setup(managementWaitMs = 30) {
+function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
   bindings = new PaneBindingManager();
   let snapshot: ManagementSnapshot = { sessions: [] };
   let now = 0;
@@ -97,6 +98,7 @@ function setup(managementWaitMs = 30) {
     },
     bindings,
     runtime,
+    uploads,
   );
   services.push(service);
   return {
@@ -1136,5 +1138,73 @@ describe("safe resume operations", () => {
       projectDirectory: f.original.projectDirectory,
     });
     expect(() => f.service.create({ ...request, directory: "/other" } as never)).toThrow(/only/);
+  });
+});
+
+describe("session upload cleanup", () => {
+  function cleanup() {
+    return {
+      cleanup: vi.fn(async () => {}),
+    };
+  }
+  it("succeeds before asynchronous cleanup completes and logs cleanup failure", async () => {
+    const uploads = cleanup();
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    let rejectCleanup!: (error: Error) => void;
+    uploads.cleanup.mockImplementationOnce(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectCleanup = reject;
+        }),
+    );
+    const { service, manager, set } = setup(30000, uploads);
+    set({ sessions: [{ ...session(), archived: true }] });
+    const op = service.manage("delete", "session");
+    await flush();
+    expect(manager.delete).toHaveBeenCalledOnce();
+    expect(uploads.cleanup).not.toHaveBeenCalled();
+    set({ sessions: [] });
+    await service.poll();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded", error: null });
+    expect(uploads.cleanup).toHaveBeenCalledWith("session");
+    rejectCleanup(new Error("disk failure"));
+    await flush();
+    expect(log).toHaveBeenCalledWith(
+      "Session attachment cleanup failed",
+      expect.objectContaining({ sessionId: "session", error: expect.any(Error) }),
+    );
+    expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded", error: null });
+    const repeated = service.manage("delete", "session");
+    await flush();
+    expect(await service.get(repeated.operationId)).toMatchObject({ status: "succeeded" });
+    expect(manager.delete).toHaveBeenCalledOnce();
+    expect(uploads.cleanup).toHaveBeenCalledTimes(2);
+    log.mockRestore();
+  });
+  it("does not trigger cleanup after an unconfirmed deletion times out", async () => {
+    const uploads = cleanup();
+    const { service, manager, set, time } = setup(30000, uploads);
+    set({ sessions: [{ ...session(), archived: true }] });
+    const op = service.manage("delete", "session");
+    await flush();
+    expect(manager.delete).toHaveBeenCalledOnce();
+    time(30001);
+    await service.poll();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "unknown" });
+    expect(uploads.cleanup).not.toHaveBeenCalled();
+  });
+  it("retains uploads after native failure, archive, and exit", async () => {
+    const uploads = cleanup();
+    const { service, manager, set } = setup(30000, uploads);
+    set({ sessions: [{ ...session(), archived: true }] });
+    manager.delete.mockRejectedValueOnce(new Error("native failure"));
+    const op = service.manage("delete", "session");
+    await flush();
+    expect(await service.get(op.operationId)).toMatchObject({ status: "failed" });
+    service.manage("archive", "session");
+    await flush();
+    service.manage("exit", "session");
+    await flush();
+    expect(uploads.cleanup).not.toHaveBeenCalled();
   });
 });
