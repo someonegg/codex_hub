@@ -8,7 +8,8 @@ date: 2026-10-16
 Current scope: the unified hub remains in force. Navigation storage now records
 `includeArchived`, `expanded` project IDs, and `scroll`; the `collapsed` field
 described below is historical. See [usage](../usage.md#reading-and-managing-sessions)
-for current navigation behavior.
+for current navigation behavior. The home filter is stored separately under
+`codex-hub.home`; a missing or removed home falls back to **All homes**.
 
 ## Context and Problem Statement
 
@@ -27,7 +28,7 @@ project/main-session sidebar beside the conversation.
 - Separate catalog and reader pages in an MPA.
 - A single HTML/React entry point with History API navigation.
 
-## Decision Outcome
+## Decision Outcome at Introduction
 
 Use one entry point. Development and production map `/` and `/sessions/:id` to
 the same HTML; History API handles selection and browser navigation. The catalog
@@ -35,9 +36,7 @@ stays mounted while the reader lifecycle follows session ID. CSS owns the single
 column transition below 768px.
 
 The tab navigation state contains only `includeArchived`, `collapsed`, and `scroll`;
-remove the old navigation filter format without migration. The current home filter
-is stored separately in tab storage under `codex-hub.home`, using the source instance
-ID; a missing or removed home falls back to **All homes**. Archived sessions support direct access
+remove the old navigation filter format without migration. Archived sessions support direct access
 and stay open after archive. The sidebar shows main sessions matching the archive
 filter, also used by direct child links. Unknown projects without a directory
 have no creation entry point.

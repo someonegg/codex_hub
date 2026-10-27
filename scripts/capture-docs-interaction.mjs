@@ -371,13 +371,12 @@ async function capture(
     await demo.getByRole("button", { name: "Collapse dashboard.png", exact: true }).waitFor();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Upload history horizontal overflow");
-    await demo.screenshot({
-      path: output.replace(
-        /[^/]+$/,
-        demo.viewportSize().width > 600 ? "codex-hub-uploads.png" : "codex-hub-uploads-mobile.png",
-      ),
-      animations: "disabled",
-    });
+    if (demo.viewportSize().width > 600) {
+      await demo.screenshot({
+        path: output.replace(/[^/]+$/, "codex-hub-uploads.png"),
+        animations: "disabled",
+      });
+    }
     await demo.goBack();
     await composer.waitFor();
     if ((await composer.inputValue()) !== "Keep this draft while browsing uploads")

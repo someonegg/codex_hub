@@ -31,59 +31,19 @@ a native session ID, and unloading the page must not interrupt execution.
 Writes return `202`. A shared server loop observes operations every second;
 GET requests only read results and never resume execution.
 
-### Identity and concurrency
+Operations coalesce identical requests, reject conflicting session work, and
+confirm effects from source observations rather than command completion alone.
+Identity validation and confirmation belong to the owning adapter. Uncertain
+external effects are not retried; tracking is process-local and time-bounded.
 
-Create retains `requestId`: identical IDs and arguments coalesce while pending
-and during terminal retention; changed arguments return `409`. Different IDs may
-create concurrently in one project. Archive/delete accept `{}` and coalesce the
-same operation on a session; conflicting operations return `409` without queuing.
+### Historical archive sequence
 
-Managers register by the read adapter's unique `sourceInstanceId`; composition
-selects the default creation source. Archive/delete use only the owning source's
-manager and fail without management support. Native identity uniqueness, binding
-correlation, and confirmation are source-local. Generic services accept nonempty
-native IDs; the Codex adapter validates UUIDs. Diagnostics are server-only and do
-not alter management policy; snapshots carry no completeness flag.
+At introduction, archive sent `Ctrl+C` and `Ctrl+D` once, waited for pane exit,
+then ran the native command. It did not force-close the pane. ADR-0022 replaces
+that sequence with an independent exit service and bounded whole-pane shutdown.
 
-### Execution and confirmation
-
-Create passes the binding shell instruction as Codex's initial CLI argument and
-matches `operationId`, launch target, project, and valid binding. Only tmux errors
-that confirm no launch are `failed`. A `new-session` timeout, malformed successful
-output, or post-launch setup, connection, or binding-correlation error is `unknown`;
-there is no automatic retry or teardown. Attach uses the known target, or the
-configured socket and deterministic `codex-hub-<operationId>` name if unknown.
-After launch, binding observation allows 300 seconds. Attach is hidden for the
-first 30 seconds, then shown and retained on timeout.
-
-Archive rereads the snapshot and succeeds immediately if already archived.
-Otherwise validate the target, send `Ctrl+C` and `Ctrl+D` once without Enter,
-wait for exit, run native archive, and confirm. Delete succeeds immediately if
-absent from a successful initial snapshot; otherwise require archive, run native
-delete, and confirm no same-source native identity remains. Thrown read errors
-do not prove deletion: startup applies existing failure/unknown rules, while
-observation keeps waiting until timeout. Successful snapshots that skip unreadable
-data remain valid confirmation evidence without a completeness gate.
-
-Delete allows 30 seconds; archive exit and archive confirmation each allow 30
-seconds, and native archive allows 25 seconds. Execution contexts are discriminated
-unions with phase-specific required fields, separate from results and create
-idempotency records. Every terminal state immediately clears execution context,
-concurrency indexes, and session occupancy. Immutable results remain for 30 minutes.
-Hung checks cannot block timeout cleanup; asynchronous continuations and subsequent
-commands verify operation validity so old tasks cannot affect newer operations.
-
-### Client recovery
-
-Only `pending` operations are polled, one second after each completed query.
-Reload resumes polling; all terminal states and `404` clear recovery markers.
-Create retries after network errors reuse the ID until a terminal result, then
-discard it. There is no separate result-reconciliation action; failed progress
-queries can be retried.
-
-Timeout ends tracking without undoing submitted external commands. After an
-uncertain create, attach or refresh before submitting again to avoid duplicates.
-Session discovery is independent of operation tracking; restarts do not recover it.
+The [management reference](../technical-reference.md#asynchronous-management)
+owns current endpoints, deadlines, retention, recovery, and executor boundaries.
 
 ### Positive Consequences
 
@@ -113,15 +73,7 @@ validation; see the [current binding format](../technical-reference.md#tmux-inte
 
 ## Execution responsibility refinement (2026-10-21)
 
-`OperationService` owns registration, request idempotency, session occupancy,
-tracking deadlines, result publication, and retention. `SessionLaunchExecutor`
-executes create/resume validation, adapter launch, and association observation.
-`SessionLifecycleExecutor` executes exit/archive/delete and confirms their effects,
-reusing `SessionExitService` for pane shutdown.
-
-Executors use an internal operation control contract to advance phases, request
-coalesced observations, and report outcomes. They do not own operation registries,
-idempotency records, or occupancy cleanup. This extraction preserves operation
-semantics, adapter-native identity boundaries, and cancellation checks after
-asynchronous work. The cost is an explicit internal state/control contract shared
-between the coordinator and executors.
+Separate operation coordination from launch/lifecycle execution while preserving
+idempotency, occupancy, adapter boundaries, and cancellation checks. This adds an
+explicit control contract between coordinator and executors; see the
+[current responsibility boundaries](../technical-reference.md#service-responsibilities).

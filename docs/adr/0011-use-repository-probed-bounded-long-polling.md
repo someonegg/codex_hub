@@ -31,7 +31,7 @@ The session reader needs to observe timeline appends, public session metadata, a
 - WebSockets with a server-side subscription protocol.
 - Filesystem watchers that push rollout changes directly to clients.
 
-## Decision Outcome
+## Decision Outcome at Introduction
 
 Chosen option: "Repository-probed bounded HTTP long polling", because it removes client refresh intervals while reusing immutable repository snapshots, ordinary HTTP cancellation, and the existing opaque timeline cursor validation.
 

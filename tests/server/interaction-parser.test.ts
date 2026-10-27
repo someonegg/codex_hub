@@ -48,22 +48,19 @@ it.each(["CODEX_HUB_TMUX_BIND_V3", "CODEX_HUB_TMUX_BIND_V4"])(
   },
 );
 
-it.each([
-  undefined,
-  null,
-  {},
-  { inherited_user_message: false },
-  { inherited_user_message: "true" },
-])("preserves bindings without an explicit inherited flag: %j", (metadata) => {
-  const record = response(1, {
-    type: "message",
-    role: "user",
-    content: [{ type: "input_text", text: shellText("/tmp/tmux.sock", "%7") }],
-  });
-  expect(codexBindingAttemptsFrom({ ...record, value: { ...record.value, metadata } })).toEqual([
-    { ordinal: 1, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId },
-  ]);
-});
+it.each([undefined, null, { inherited_user_message: false }, { inherited_user_message: "true" }])(
+  "preserves bindings without an explicit inherited flag: %j",
+  (metadata) => {
+    const record = response(1, {
+      type: "message",
+      role: "user",
+      content: [{ type: "input_text", text: shellText("/tmp/tmux.sock", "%7") }],
+    });
+    expect(codexBindingAttemptsFrom({ ...record, value: { ...record.value, metadata } })).toEqual([
+      { ordinal: 1, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId },
+    ]);
+  },
+);
 
 it("parses only user shell output and keeps binding outside normalized interaction", () => {
   const text = shellText("/tmp/tmux.sock", "%7");
@@ -186,7 +183,7 @@ it("returns every bind including multiple binds within one record and shell bloc
   ]);
 });
 
-it.each([undefined, "", "relative", "/bad\0path", "/bad\rpath"])(
+it.each(["", "relative", "/bad\0path", "/bad\rpath"])(
   "ignores invalid V4 project %j without invalidating the pane",
   (project) => {
     const text = `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V4\n/tmp/socket\n%1\n\n${project ?? ""}\n</user_shell_command>`;

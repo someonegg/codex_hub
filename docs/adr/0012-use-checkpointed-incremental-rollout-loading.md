@@ -31,9 +31,16 @@ Codex rollout files are append-heavy JSONL streams, but the generation-based sou
 
 Chosen option: "Validate two bounded probes, incrementally decode and derive appended records, and rebuild the whole file on validation failure", because it removes historical-size I/O from ordinary append refreshes while keeping a simple recovery path and unchanged public contracts.
 
-Each in-memory rollout checkpoint stores the observed EOF, the byte position after the last committed newline, the consumed physical-line count, decoder diagnostics and version, normalizer version, and SHA-256 probes for the first 4 KiB and up to 4 KiB immediately before the old EOF. A strictly growing file may use the append path only when both probes and versions match. The decoder re-reads from the committed newline through the EOF observed on one open file handle, so an unfinished tail becomes visible once terminated and is committed once. Truncation, non-growth changes, probe mismatch, incompatible state, or derivation uncertainty triggers a full rebuild.
+Use bounded probe validation to reuse a decoded prefix and process only appended
+complete records. Rebuild the whole file whenever validation or derivation is
+uncertain. Publish copy-on-write snapshots so append optimization does not mutate
+previous generations or weaken timeline-prefix continuity.
 
-Identity and normalization use copy-on-write accumulators and publish only after the complete source snapshot succeeds. The repository extends an HMAC timeline prefix only when the old timeline is a reference prefix and all old encoded tool/directive detail references remain unchanged. Whole-file rebuilding, atomic generations, timeline paging, and existing cursor conflict behavior remain supported.
+The [current cache contract](../technical-reference.md#discovery-and-caching)
+defines probes and fallback conditions; the
+[Codex source](../../src/server/adapters/codex/codex-session-source.ts) and
+[prefix index](../../src/server/repository/timeline-prefix-index.ts) own checkpoint
+and reference-reuse details.
 
 ### Positive Consequences
 

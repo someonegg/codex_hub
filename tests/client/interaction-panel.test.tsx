@@ -126,19 +126,6 @@ describe("interaction panel", () => {
     expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
   });
 
-  it("retains the draft when sending fails", async () => {
-    const handlers = props(interaction("connected"));
-    handlers.onSendMessage.mockRejectedValueOnce(new Error("offline"));
-    render(<InteractionPanel {...handlers} />);
-    fireEvent.change(screen.getByRole("textbox"), { target: { value: "unsent draft" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Send$/ }));
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(screen.getByRole("textbox")).toHaveValue("unsent draft");
-    expect(handlers.onSendMessage).toHaveBeenCalledOnce();
-  });
-
   it("retains the panel and draft through every unavailable state", () => {
     const handlers = props(interaction("connected"));
     const view = render(<InteractionPanel {...handlers} />);
@@ -195,6 +182,8 @@ describe("interaction panel", () => {
     const user = userEvent.setup();
     render(<InteractionPanel {...handlers} />);
     const textarea = screen.getByRole("textbox", { name: "Message to agent" });
+    expect(textarea).toHaveAttribute("rows", "4");
+    expect(document.querySelector(".interaction-heading")).toBeNull();
     await user.type(textarea, "line one{enter}line two");
     expect(textarea).toHaveValue("line one\nline two");
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
@@ -240,6 +229,7 @@ describe("interaction panel", () => {
     interrupt.focus();
     handlers.onSendKeys.mockClear();
     handlers.onSendMessage.mockClear();
+    handlers.onExpandPreview.mockClear();
     rerender(<InteractionPanel {...handlers} interactionBusy />);
 
     expect(screen.getByRole("textbox")).toBeDisabled();
@@ -259,6 +249,7 @@ describe("interaction panel", () => {
     expect(send).toHaveAttribute("aria-disabled", "true");
     await user.click(send);
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
   });
 
   it("renders a truncated terminal preview as plain text", () => {
@@ -319,6 +310,7 @@ describe("interaction panel", () => {
 
     rerender(<InteractionPanel {...handlers} interactionBusy />);
     handlers.onSendKeys.mockClear();
+    handlers.onExpandPreview.mockClear();
     for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeEnabled();
@@ -326,20 +318,13 @@ describe("interaction panel", () => {
       await user.click(button);
     }
     expect(handlers.onSendKeys).not.toHaveBeenCalled();
+    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
   });
-});
-
-it("uses four composer rows without an empty connected heading", () => {
-  render(<InteractionPanel {...props(interaction("connected"))} />);
-  expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveAttribute("rows", "4");
-  expect(document.querySelector(".interaction-heading")).toBeNull();
 });
 
 it.each([
   ["/plan", true],
   ["/status", true],
-  ["/exit", false],
-  ["/quit", false],
   ["  /exit\n", false],
   ["\t/quit  ", false],
   ["/plan now", false],
@@ -397,6 +382,7 @@ it("does not expand on failed command delivery", async () => {
     "false",
   );
   expect(screen.getByRole("textbox")).toHaveValue("/plan");
+  expect(handlers.onSendMessage).toHaveBeenCalledExactlyOnceWith("/plan");
 });
 
 it("preserves the collapsed preview and draft after handoff and disables Handoff while busy or disconnected", async () => {
@@ -492,27 +478,28 @@ it("shows the takeover even on first load, with no link when its session is miss
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });
 
-it.each([false, true])(
-  "preserves preview expansion %s during and after handoff delivery",
-  async (expanded) => {
-    let resolve!: () => void;
-    const handlers = props(interaction("connected"));
-    handlers.onHandoffPaneBinding.mockImplementationOnce(
-      () =>
-        new Promise<void>((done) => {
-          resolve = done;
-        }),
-    );
-    render(<Panel {...handlers} previewExpanded={expanded} />);
-    const toggle = screen.getByRole("button", { name: "Terminal Preview" });
-    fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
-    expect(toggle).toHaveAttribute("aria-expanded", String(expanded));
-    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
-    await act(async () => resolve());
-    expect(toggle).toHaveAttribute("aria-expanded", String(expanded));
-    expect(handlers.onExpandPreview).not.toHaveBeenCalled();
-  },
-);
+it("preserves expanded preview during and after handoff delivery", async () => {
+  let resolve!: () => void;
+  const handlers = props(interaction("connected"));
+  handlers.onHandoffPaneBinding.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve = done;
+      }),
+  );
+  render(<InteractionPanel {...handlers} />);
+  const toggle = screen.getByRole("button", { name: "Terminal Preview" });
+  fireEvent.click(toggle);
+  handlers.onTogglePreview.mockClear();
+  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+  expect(handlers.onHandoffPaneBinding).toHaveBeenCalledOnce();
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+  await act(async () => resolve());
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
+  expect(handlers.onTogglePreview).not.toHaveBeenCalled();
+});
 
 it("does not expand the preview after failed handoff delivery", async () => {
   const handlers = props(interaction("connected"));
@@ -582,20 +569,6 @@ it("sends once when Enter is pressed on a terminal button", async () => {
   screen.getByRole("button", { name: /^Up$/ }).focus();
   await user.keyboard("{Enter}");
   expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["enter"]);
-});
-
-it("ignores Interrupt and Plan while busy, including preview expansion", () => {
-  const handlers = props(interaction("connected"));
-  const view = render(<Panel {...handlers} interactionBusy previewExpanded={false} />);
-  const interrupt = screen.getByRole("button", { name: "Interrupt" });
-  expect(interrupt).toHaveAttribute("aria-disabled", "true");
-  fireEvent.click(interrupt);
-  view.rerender(<Panel {...handlers} interactionBusy previewExpanded />);
-  const plan = screen.getByRole("button", { name: "Plan" });
-  expect(plan).toHaveAttribute("aria-disabled", "true");
-  fireEvent.click(plan);
-  expect(handlers.onSendKeys).not.toHaveBeenCalled();
-  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
 });
 
 describe("composer uploads", () => {

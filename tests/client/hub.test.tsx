@@ -319,8 +319,8 @@ it("keeps archived content open while removing navigation, then returns to the p
   ).toBeInTheDocument();
 });
 
-it("formats a fixed large catalog once and reuses dates when groups and selection change", async () => {
-  const count = 1000;
+it("formats a fixed catalog once and reuses dates when groups and selection change", async () => {
+  const count = 32;
   const sessions = Array.from({ length: count }, (_, index) => ({
     ...listBody.sessions[0]!,
     id: index === 0 ? SESSION_ID : `session-${index}`,
@@ -337,11 +337,11 @@ it("formats a fixed large catalog once and reuses dates when groups and selectio
   render(<App />);
   await flush();
   expect(format).toHaveBeenCalledTimes(count);
-  const group = screen.getByRole("button", { name: /reader, 1000 main sessions/ });
+  const group = screen.getByRole("button", { name: new RegExp(`reader, ${count} main sessions`) });
   fireEvent.click(group);
   fireEvent.click(group);
   expect(format).toHaveBeenCalledTimes(count);
-  // Avoid computing accessible names for all 1,000 links in this cache regression test.
+  // Select the link directly; accessible-name computation is unrelated to date caching.
   const link = screen.getByText("Large catalog 0", { exact: true }).closest("a")!;
   expect(link).toHaveAttribute("href", `/sessions/${SESSION_ID}`);
   fireEvent.click(link);

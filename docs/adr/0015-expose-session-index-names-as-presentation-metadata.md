@@ -29,7 +29,7 @@ Codex records user-facing thread names in `session_index.jsonl`, separately from
 - Return thread names as a new public API field and resolve title precedence in the browser.
 - Overlay thread names while mapping authoritative repository sessions to API responses.
 
-## Decision Outcome
+## Decision Outcome at Introduction
 
 Chosen option: "Return thread names as a public nickname field and resolve title precedence in the browser", because it keeps canonical rollout state explicit while isolating presentation policy from repository and update revision semantics.
 

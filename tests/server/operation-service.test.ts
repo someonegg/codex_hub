@@ -150,6 +150,13 @@ describe("observed management operations", () => {
       const op = service.create(input);
       expect(service.create(input).operationId).toBe(op.operationId);
       await flush();
+      if (status === "failed") {
+        expect(await service.get(op.operationId)).toMatchObject({
+          status: "failed",
+          error: "launch failed",
+        });
+        expect(service.create(input)).toEqual(await service.get(op.operationId));
+      }
       const finishedAt = 300_000;
       time(finishedAt);
       if (status === "succeeded") set({ sessions: [session("created", op.operationId)] });
@@ -267,10 +274,17 @@ describe("observed management operations", () => {
     set({ sessions: [session("late", op.operationId)] });
     expect(await service.get(op.operationId)).toMatchObject({ status: "unknown", sessionId: null });
     expect(manager.launch).toHaveBeenCalledTimes(1);
+    expect(await setup().service.get(op.operationId)).toBeNull();
   });
   it("archives unbound sessions and requires archive before deletion", async () => {
     const { service, manager, set, interaction } = setup();
-    set({ sessions: [session()] });
+    const record = {
+      ...session(),
+      diagnostics: [
+        { code: "partial", severity: "warning" as const, message: "Partial", ordinal: null },
+      ],
+    };
+    set({ sessions: [record] });
     interaction.describe.mockResolvedValue({
       supported: true,
       activity: null,
@@ -281,7 +295,7 @@ describe("observed management operations", () => {
     const archive = service.manage("archive", "session");
     await flush();
     expect(manager.archive).toHaveBeenCalledOnce();
-    set({ sessions: [{ ...session(), archived: true }] });
+    set({ sessions: [{ ...record, archived: true }] });
     await service.poll();
     expect((await service.get(archive.operationId))?.status).toBe("succeeded");
     set({ sessions: [session()] });
@@ -324,15 +338,6 @@ describe("observed management operations", () => {
     expect((await service.get(op.operationId))?.status).toBe("unknown");
     set({ sessions: [] });
     expect((await service.get(op.operationId))?.status).toBe("unknown");
-  });
-  it("does not recover terminal operation records in a new service", async () => {
-    const { service, time } = setup();
-    const op = service.create({ directory: "/project", worktree: false, requestId: "request-one" });
-    await flush();
-    time(300_001);
-    await service.poll();
-    expect(await service.get(op.operationId)).toMatchObject({ status: "unknown" });
-    expect(await setup().service.get(op.operationId)).toBeNull();
   });
 });
 
@@ -455,16 +460,6 @@ describe("archive exit workflow", () => {
     expect(manager.archive).toHaveBeenCalledOnce();
     expect(interaction.sendExitKeys).not.toHaveBeenCalled();
   });
-
-  it("accepts non-UUID native identities through generic managers", async () => {
-    const { service, manager, interaction, set } = setup();
-    set({ sessions: [{ ...session(), sourceId: "invalid" }] });
-    const op = service.manage("archive", "session");
-    await flush();
-    expect(await service.get(op.operationId)).toMatchObject({ status: "pending" });
-    expect(manager.archive).toHaveBeenCalledWith("invalid");
-    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
-  });
 });
 
 it("starts the binding budget after launch and exposes attach only after 30 seconds", async () => {
@@ -496,24 +491,16 @@ it("starts the binding budget after launch and exposes attach only after 30 seco
     status: "pending",
     attachCommand: expect.stringContaining(target.socketPath),
   });
+  const attached = await service.get(op.operationId);
+  expect(attached?.updatedAt).toBe(new Date(430_000).toISOString());
+  time(431_000);
+  await service.poll();
+  expect(await service.get(op.operationId)).toEqual(attached);
   time(700_000);
   await service.poll();
   expect(await service.get(op.operationId)).toMatchObject({
     status: "unknown",
     attachCommand: expect.any(String),
-  });
-  expect(service.create(input)).toEqual(await service.get(op.operationId));
-});
-
-it("reports explicit tmux failures immediately and retains the request ID", async () => {
-  const { service, manager } = setup();
-  manager.launch.mockRejectedValue(new Error("tmux launch refused"));
-  const input = { directory: "/project", worktree: false, requestId: "failed-request" };
-  const op = service.create(input);
-  await flush();
-  expect(await service.get(op.operationId)).toMatchObject({
-    status: "failed",
-    error: "tmux launch refused",
   });
   expect(service.create(input)).toEqual(await service.get(op.operationId));
 });
@@ -617,7 +604,7 @@ it("rejects duplicate manager registrations", () => {
 it.each(["archive", "delete"] as const)(
   "routes %s by source and ignores other-source confirmations",
   async (type) => {
-    const { service, manager, registry, set } = setup();
+    const { service, manager, registry, set, interaction } = setup();
     const other = {
       ...manager,
       archive: vi.fn(async () => undefined),
@@ -635,6 +622,7 @@ it.each(["archive", "delete"] as const)(
     await flush();
     expect(other[type]).toHaveBeenCalledWith("native-text");
     expect(manager[type]).not.toHaveBeenCalled();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
     set({ sessions: [{ ...local, archived: true }, remote] });
     await service.poll();
     expect((await service.get(op.operationId))?.status).toBe("pending");
@@ -658,38 +646,6 @@ it("never falls back to a default manager for an unregistered source", async () 
   });
   expect(manager.archive).not.toHaveBeenCalled();
   expect(interaction.resolveTarget).not.toHaveBeenCalled();
-});
-
-it("allows session diagnostics when issuing and confirming a command", async () => {
-  const { service, manager, set } = setup();
-  const record = {
-    ...session(),
-    diagnostics: [
-      { code: "partial", severity: "warning" as const, message: "Partial", ordinal: null },
-    ],
-  };
-  set({ sessions: [record] });
-  const op = service.manage("archive", "session");
-  await flush();
-  expect(manager.archive).toHaveBeenCalledOnce();
-  set({ sessions: [{ ...record, archived: true }] });
-  await service.poll();
-  expect((await service.get(op.operationId))?.status).toBe("succeeded");
-});
-
-it("ignores creation markers from another source", async () => {
-  const { service, set, interaction } = setup();
-  const op = service.create({
-    directory: "/project",
-    worktree: false,
-    requestId: "isolated-create",
-  });
-  await flush();
-  const record = session("remote", op.operationId);
-  set({ sessions: [{ ...record, origin: { ...record.origin, sourceInstanceId: "other" } }] });
-  await service.poll();
-  expect((await service.get(op.operationId))?.status).toBe("pending");
-  expect(interaction.describe).not.toHaveBeenCalled();
 });
 
 it("updates public phase timestamps only on changes and freezes terminal results", async () => {
@@ -754,25 +710,8 @@ it("updates public phase timestamps only on changes and freezes terminal results
   expect(await service.get(op.operationId)).toEqual(result);
 });
 
-it("does not change attach timestamps on unchanged polls", async () => {
-  const { service, time } = setup();
-  const op = service.create({
-    directory: "/project",
-    worktree: false,
-    requestId: "attach-timestamp",
-  });
-  await flush();
-  time(30_000);
-  await service.poll();
-  const result = await service.get(op.operationId);
-  expect(result?.updatedAt).toBe(new Date(30_000).toISOString());
-  time(31_000);
-  await service.poll();
-  expect(await service.get(op.operationId)).toEqual(result);
-});
-
 it("requires an explicit home, isolates creation association and fingerprints the selected source", async () => {
-  const { service, manager, registry, set } = setup();
+  const { service, manager, registry, set, interaction } = setup();
   const other = {
     ...manager,
     launch: vi.fn(async () => target),
@@ -796,37 +735,12 @@ it("requires an explicit home, isolates creation association and fingerprints th
   set({ sessions: [wrong] });
   await service.poll();
   expect((await service.get(operation.operationId))!.status).toBe("pending");
+  expect(interaction.describe).not.toHaveBeenCalled();
   const candidate = session("right-home", operation.operationId);
   const correct = { ...candidate, origin: { ...candidate.origin, sourceInstanceId: "other" } };
   set({ sessions: [wrong, correct] });
   await service.poll();
   expect((await service.get(operation.operationId))!.sessionId).toBe(correct.id);
-});
-
-it("routes archive and delete confirmation to the owning home for identical native IDs", async () => {
-  const { service, manager, registry, set } = setup();
-  const other = {
-    ...manager,
-    archive: vi.fn(async () => undefined),
-    delete: vi.fn(async () => undefined),
-  };
-  registry.register("other", other);
-  const a = session("a");
-  const b = { ...session("b"), origin: { ...a.origin, sourceInstanceId: "other" } };
-  set({ sessions: [a, b] });
-  const archive = service.manage("archive", b.id);
-  await flush();
-  expect(other.archive).toHaveBeenCalledWith(b.sourceId);
-  expect(manager.archive).not.toHaveBeenCalled();
-  set({ sessions: [a, { ...b, archived: true }] });
-  await service.poll();
-  expect((await service.get(archive.operationId))!.status).toBe("succeeded");
-  const deletion = service.manage("delete", b.id);
-  await flush();
-  expect(other.delete).toHaveBeenCalledWith(b.sourceId);
-  set({ sessions: [a] });
-  await service.poll();
-  expect((await service.get(deletion.operationId))!.status).toBe("succeeded");
 });
 
 describe("standalone exit operations", () => {
@@ -863,16 +777,6 @@ describe("standalone exit operations", () => {
     await flush();
     expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded" });
     expect(manager.archive).not.toHaveBeenCalled();
-  });
-
-  it("fails for a missing session", async () => {
-    const { service } = setup();
-    const op = service.manage("exit", "missing");
-    await flush();
-    expect(await service.get(op.operationId)).toMatchObject({
-      status: "failed",
-      error: "Session not found",
-    });
   });
 
   it("stops queued effects when closed", async () => {

@@ -1,500 +1,439 @@
 # Technical reference
 
-This reference covers public APIs, source identity, and runtime guarantees.
-See [JSONL filtering](session-jsonl-filtering.md) for record processing and
-[ADRs](adr/README.md) for decision history.
+Current API and runtime contracts. See [Usage](usage.md) for setup,
+[JSONL filtering](session-jsonl-filtering.md) for record processing, and
+[ADRs](adr/README.md) for decision history. Response types live in
+[api-contract.ts](../src/shared/api-contract.ts); IDs, cursors, and revisions are
+opaque values that clients must return unchanged.
 
-Public contracts are defined in [api-contract.ts](../src/shared/api-contract.ts).
-IDs, timeline cursors, and revisions are opaque; clients must use returned values.
-For setup and everyday workflows, see [Usage](usage.md).
-
-- [Sources and identity](#sources-and-identity): discovery, caching, homes, and routing.
-- [Catalog](#catalog): list snapshots, revisions, and long polling.
-- [Reader](#reader-and-automatic-updates): timeline pages, lazy details, and updates.
-- [Uploads](#file-uploads): binary upload contract.
-- [Hosting](#optional-hosting): shared publication and access guarantees.
-- [Web pages](#web-pages): static snapshots and page routes.
-- [Diffs](#temporary-diffs): temporary diff storage and routes.
-- [Tmux interaction](#tmux-interaction): bindings, activity, and preview protocol.
-- [Management](#asynchronous-management): launch, exit, archive, delete, and recovery.
+- [Sources and identity](#sources-and-identity)
+- [Catalog](#catalog)
+- [Reader and automatic updates](#reader-and-automatic-updates)
+- [File uploads](#file-uploads)
+- [Tmux interaction](#tmux-interaction) and [Terminal Preview](#terminal-preview)
+- [Asynchronous management](#asynchronous-management)
+- [Optional hosting](#optional-hosting): [pages](#web-pages) and [diffs](#temporary-diffs)
 
 ## Sources and identity
 
 ### Discovery and caching
 
-The Codex adapter reads `rollout-*.jsonl` and advisory `session_index.jsonl`
-metadata, without reading Codex databases. Source adapters normalize data into
-shared snapshots.
+Codex discovery reads `rollout-*.jsonl` under `sessions/` and `archived_sessions/`.
+`session_index.jsonl` supplies advisory names; Codex databases are not read.
 
-Successfully loaded archives reuse cached content until restart or restoration;
-in-place content and permission changes are not detected while cached. Discovery,
-removal, metadata refresh, and retries of failed loads continue normally.
+Unarchived rollouts use in-memory checkpoints. A growing file reuses its decoded
+prefix only when decoder/normalizer versions and SHA-256 probes match. Probes
+cover the first 4 KiB and up to 4 KiB before the previous EOF. Reads use one open
+handle and observed EOF, starting after the last committed newline. Truncation,
+same-size changes, probe mismatches, incompatible state, and restart require a
+full decode. These probes can miss a middle rewrite that preserves both regions
+and then appends; see [ADR-0012](adr/0012-use-checkpointed-incremental-rollout-loading.md).
+
+Loaded archives reuse cached content until restart or restoration. In-place edits
+and permission changes are not detected while cached; discovery, removal,
+advisory metadata refresh, and failed-load retries continue.
 
 ### Session identity
 
-Within each home, a native session ID determines stable identity. Duplicate rollouts
-produce one session: retain the accepted readable file, falling back to the first
-readable candidate when necessary. Rollouts without a native ID use path-based
-identity. See [ADR-0003](adr/0003-use-session-source-adapters.md) for duplicate-selection
-rules and [home identity and routing](#home-identity-and-routing) for source scoping.
+Native IDs identify sessions within a home. Duplicate rollouts produce one session:
+retain the accepted readable file, or fully read the first readable candidate in
+existing path order when initially selecting or replacing it. Ignored duplicates
+publish no sessions or binding events and retain no decode cache. Rollouts without
+native IDs use path-based identity.
+
+Shared services treat native IDs as opaque strings and check presence and
+source-local uniqueness. Format validation belongs to the adapter; Codex requires
+UUIDs. Parent relationships never cross homes.
+
+### Adapter publication and diagnostics
+
+Adapters publish immutable snapshots, including nested timeline and detail values.
+Reference reuse is optional and means unchanged content; equivalent fresh values
+are valid. Registration requires nonempty, independently unique `instanceKey` and
+`sourceInstanceId`. Adapters use server domain types.
+
+HTTP path IDs are decoded once after segment splitting. They must be nonempty,
+at most 1,024 UTF-8 bytes, and contain no controls, slashes, backslashes, or
+standalone `.` / `..`. Reads also validate item kind, ownership, and cursor bounds.
+
+Diagnostics stay in server logs, outside public responses, management policy, and
+revisions. Logging defaults to stderr and deduplicates by source, session, and
+content; cleared diagnostics may recur and vanished objects release logging state.
+Per-source limits prevent one source from hiding another's diagnostics. Unchanged
+cache hits do not traverse diagnostics; logging failures do not stop operations.
+
+`ENOENT`, `EACCES`, `EPERM`, `ESTALE`, `EISDIR`, and `ENOTDIR` cause unreadable
+portions to be skipped and diagnosed. Initially absent allowed directories are
+normal. Path/symlink restrictions still apply; unexpected exceptions propagate.
+Successful snapshots have no completeness gate.
 
 ### Home identity and routing
 
-See [Multiple homes](usage.md#multiple-homes) for command-line usage.
+Home identity follows its configured absolute path. Renaming or reordering homes
+preserves IDs; moving a home changes identity. Projects merge by directory across
+homes. Home paths remain private.
 
-Home identity follows its configured absolute path. Renaming, reordering, or adding
-homes preserves existing IDs; moving a home creates a new identity. Native IDs,
-relationships, and recoverable I/O errors are home-scoped. Projects merge by
-directory across homes.
-
-Creation requires `sourceInstanceId` with multiple homes; omission with a single home
-selects that home. Unknown IDs and ambiguous omission return `400`. The source is part
-of the idempotency fingerprint, so reuse of a request ID for another home returns
-`409`. Launch environment, association, exit, archive, deletion, and confirmation use the
-selected or owning home, with the same local `codex` executable.
+Creation requires `sourceInstanceId` when multiple homes are configured; a single
+home is selected implicitly. Unknown or ambiguous sources return `400`. The source
+is part of request idempotency, so reusing a request ID for another home returns
+`409`. Launch and lifecycle operations use the selected or owning home and its
+`CODEX_HOME`, with the same local `codex` executable. See [Multiple homes](usage.md#multiple-homes).
 
 ## Catalog
 
-### Snapshot
+`GET /api/v1/sessions` returns the complete `{ revision, homes, projects, sessions }`
+snapshot. There is no pagination or server-side filtering.
 
-`GET /api/v1/sessions` returns a complete `{ revision, homes, projects, sessions }` snapshot:
+| Collection | Fields                                                                                       |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| `homes`    | `sourceInstanceId`, `nickname`; includes empty homes                                         |
+| `projects` | `id`, `directory`                                                                            |
+| `sessions` | `id`, `sourceInstanceId`, `title`, `projectId`, `status`, `parentId`, `isChild`, `updatedAt` |
 
-- Homes: `{ sourceInstanceId, nickname }`, including empty homes; home paths are private.
-- Projects: `{ id, directory }`.
-- Sessions: `{ id, sourceInstanceId, title, projectId, status, parentId, isChild, updatedAt }`.
-- Titles are resolved display names. Missing directories produce `projectId: null`.
-  `isChild` preserves a declared parent relationship even if `parentId` cannot resolve.
+Titles are resolved display names. Missing directories yield `projectId: null`.
+`isChild` records a declared parent even when `parentId` cannot resolve.
 
-### Long polling and revisions
+The only query parameter is `after`, a 43-character base64url revision. Invalid or
+extra parameters return `400`.
 
-The only query parameter is `after`: 43 base64url characters. Invalid values or
-other parameters return `400`.
+| Condition                                   | Result                   |
+| ------------------------------------------- | ------------------------ |
+| No `after`, or revision differs             | Immediate `200` snapshot |
+| Matching revision changes within 25 seconds | `200` snapshot           |
+| Still unchanged after 25 seconds            | Bodyless `204`           |
+| More than 100 waiting requests              | `429`, `Retry-After: 2`  |
 
-| Request                                        | Response                               |
-| ---------------------------------------------- | -------------------------------------- |
-| No `after`, or a different revision            | Immediate `200` with the full snapshot |
-| Matching revision, then a change               | `200` with the full snapshot           |
-| Matching revision, no change within 25 seconds | Bodyless `204`                         |
-| More than 100 concurrent catalog waiters       | `429`, `Retry-After: 2`                |
+Waiters share a 1.5-second source probe that stops when idle. Disconnect and
+shutdown release waiters. Revisions cover home metadata, titles, projects,
+status, and relationships; timestamps, content, statistics, and diagnostics do
+not wake catalog requests.
 
-Waiters share a 1.5-second source probe that stops when idle. Disconnects and
-shutdown release waiters.
+The browser sorts by best-effort `updatedAt`, with projects ordered by their latest
+visible main session. It retains newer timestamps from snapshots and opened
+readers without extra requests or persistence. IDs break ties; invalid times sort
+last. Hidden pages pause requests and reconnect when visible.
 
-Catalog revisions track home metadata, titles, projects, status, and parent
-relationships, but exclude timestamps, content, statistics, and diagnostics.
-Catalog diagnostics are deduplicated in server logs rather than sent to clients.
-
-### Ordering and status
-
-`updatedAt` is best-effort metadata: timestamp-only changes do not wake catalog
-waiters. The browser sorts sessions by time and projects by their latest visible
-main session, retaining newer timestamps from list snapshots and opened readers
-without extra requests or persistence. Equal times use IDs; missing or invalid times
-sort last. Catalog requests pause while hidden and reconnect when visible.
-
-Session status is `normal | live | archived`. Archive takes precedence; Live requires
-an observed living pane currently owned by the session. Normal has no additional
-badge and does not imply that resume is safe. Runtime checks share concurrent pane
-observations and bound socket concurrency. Probe errors revoke Live and resume permission.
+Status is `normal | live | archived`. Archive wins; Live requires an observed
+living pane owned by the session. Normal does not authorize Resume. Runtime checks
+share concurrent observations and bound socket concurrency; errors revoke Live
+and resume permission.
 
 ## Reader and automatic updates
 
-| Endpoint                                           | Purpose                                                  |
-| -------------------------------------------------- | -------------------------------------------------------- |
-| `GET /api/v1/sessions/:id`                         | Session metadata, interaction state, and update revision |
-| `GET /api/v1/sessions/:id/items`                   | Timeline page; optional `limit` and `cursor`             |
-| `GET /api/v1/sessions/:id/items/:itemId/directive` | Lazy directive text; requires `cursor`                   |
-| `GET /api/v1/sessions/:id/items/:itemId/tool`      | Lazy tool input/output; requires `cursor`                |
-| `GET /api/v1/sessions/:id/items/:itemId/internal`  | Lazy internal JSON; requires `cursor`                    |
-| `GET /api/v1/sessions/:id/updates`                 | Long poll; requires `cursor` and `after` update revision |
+| GET endpoint                                   | Contract                                     |
+| ---------------------------------------------- | -------------------------------------------- |
+| `/api/v1/sessions/:id`                         | Session, interaction, and update revision    |
+| `/api/v1/sessions/:id/items`                   | Timeline page; optional `limit` and `cursor` |
+| `/api/v1/sessions/:id/items/:itemId/directive` | Directive text; requires `cursor`            |
+| `/api/v1/sessions/:id/items/:itemId/tool`      | Tool input/output; requires `cursor`         |
+| `/api/v1/sessions/:id/items/:itemId/internal`  | Internal JSON; requires `cursor`             |
+| `/api/v1/sessions/:id/updates`                 | Long poll; requires `cursor` and `after`     |
 
-### Paging and lazy details
+Pages contain session metadata, items, `cursor`, `hasMore`, interaction, and
+`updateRevision`. Only item reads advance the cursor. Lazy details must lie within
+its confirmed prefix. Changed prefixes or cursors from a previous process return
+`409 timeline_changed`; malformed cursors return `400 invalid_query`.
+See [paging limits](session-jsonl-filtering.md#truncation-and-paging).
 
-Timeline pages include session metadata, items, a cursor, `hasMore`, interaction
-state, and an update revision. Cursors validate timeline prefix continuity; incompatible
-changes or cursors from a previous server process return `409 timeline_changed`;
-malformed cursors return `400 invalid_query`. Lazy details must be within the
-cursor's confirmed prefix. See [paging limits](session-jsonl-filtering.md#truncation-and-paging).
+Update requests validate the cursor without advancing it or returning items;
+backlog loads through the items endpoint. Probes run every 1.5 seconds for up to
+25 seconds, then return `204` if unchanged. Capacity is 100 waiters per process
+and 10 per session; excess requests receive `429` with `Retry-After: 2`.
+Disconnect and shutdown release waiters.
 
-### Automatic updates
-
-Automatic updates validate but do not advance the cursor or return timeline items;
-the browser loads any reported backlog through the items endpoint. The server probes
-every 1.5 seconds and waits up to 25 seconds before returning `204` unchanged.
-Capacity is 100 waiters per process and 10 per session; excess waits receive `429`
-with `Retry-After: 2`. Disconnects and shutdown release waiters.
-
-Session metadata includes `status` and `resume: { allowed, reason }`. Resume is a
-detail capability; `reason` is null when allowed. Status, resume capability and
-interaction changes affect the detail update revision even without JSONL changes.
-
-Only the opened, unarchived session subscribes to automatic updates. History paging
-and automatic updates coexist while preserving the reading position. Reader revisions
-are independent of catalog revisions and include `updatedAt`. Session diagnostics stay in server logs.
+Reader metadata exposes `resume: { allowed, reason }`, with null `reason` when
+allowed. Status, resume, interaction, and `updatedAt` affect reader revisions,
+independently of catalog revisions. Each response shares one pane observation for
+runtime and interaction; effects validate ownership again at execution time.
+Only the opened, unarchived session subscribes. History paging coexists with
+updates while preserving reading position.
 
 ## File uploads
 
-`POST /api/v1/uploads?sessionId=<Hub ID>&filename=<URL-encoded filename>` accepts
-raw binary up to 20 MiB. The session must exist. The `201` response retains `path`
-and includes `id`, `sessionId`, `filename`, `size`, `type`, and `uploadedAt` metadata.
-Each upload gets a unique ID; names never overwrite files. Storage failures return
-`500`, oversize returns `413`, and mutations reject cross-origin access.
+| Endpoint                                                          | Contract                                                    |
+| ----------------------------------------------------------------- | ----------------------------------------------------------- |
+| `POST /api/v1/uploads?sessionId=<Hub ID>&filename=<encoded name>` | Raw binary, at most 20 MiB; existing session required       |
+| `GET /api/v1/sessions/:id/uploads`                                | `{ items }`, newest first, without pagination               |
+| `GET /api/v1/sessions/:id/uploads/:attachmentId/content`          | Raster preview; `?download=1` forces download               |
+| `DELETE /api/v1/sessions/:id/uploads/:attachmentId`               | Delete content and registration; repeated deletion succeeds |
 
-`GET /api/v1/sessions/:id/uploads` returns `{items}` with all attachments
-ordered newest first, without pagination. `GET .../uploads/:attachmentId/content` previews
-supported raster images; `?download=1` forces download. Other types, including SVG
-and HTML, always download. All content responses use `nosniff` and a sandbox CSP.
-`DELETE .../uploads/:attachmentId` removes the file and registration, with repeat
-deletes succeeding. Content and delete access are scoped to the registered session.
+Uploads return `201` with `path`, `id`, `sessionId`, `filename`, `size`, `type`,
+and `uploadedAt` (also grouped as `attachment`). IDs and paths are unique; names
+never overwrite files. Oversize returns `413`, storage errors `500`, and mutations
+reject cross-origin access. Content/delete access is session-scoped. HTML, SVG,
+and other non-preview types always download; all content uses `nosniff` and a
+sandbox CSP.
 
-The [Hub data root](usage.md#server-options) is shared by the server and offline
-resource commands. `--home-dir` replaces `--upload-dir` and `--hosting-dir`;
-legacy files are not migrated. Upload directories use a digest of the opaque Hub
-session ID, independently of native adapter IDs. Metadata commits use atomic rename.
-Single-file deletion first atomically renames metadata to a deletion tombstone,
-then removes the content and tombstone. Once marked, the attachment is hidden from
-history and content access. Failed cleanup retains the tombstone for repeat deletion
-or startup recovery. Startup retries cleanup of interrupted uploads and deletion
-tombstones, logging failures without blocking service.
+Storage is `<home-dir>/uploads/`, grouped by a digest of the opaque Hub session ID.
+Metadata commits use atomic rename and record absolute content paths. Removed
+`--upload-dir` / `--hosting-dir` options have no automatic migration; stop the Hub
+before changing storage, and preserve recorded upload paths.
 
-The uploads `.server-lock` is acquired before recovery and held until process exit,
-including HTTP draining. Competing Hubs fail immediately; dead owners are reclaimed
-on the next startup.
+Deletion first renames metadata to a tombstone, hiding the attachment, then removes
+content and tombstone. Failed cleanup retries on deletion or startup. Startup also
+cleans interrupted uploads, logging failures without blocking service. Cleanup
+does not block other uploads. Confirmed session deletion starts background cleanup;
+failed/unconfirmed deletion does not. Archive and exit retain uploads.
 
-Attachment deletion and cleanup are best effort and do not block uploads.
-Confirmed session deletion triggers asynchronous cleanup; cleanup errors are logged
-without affecting the session operation result. Native failure or unconfirmed
-results do not trigger cleanup. Archive and exit retain uploads.
+A `.server-lock` is held from before recovery through HTTP draining and process
+exit. Competing Hubs fail immediately; dead owners are reclaimed on next startup.
 
-Drafts are stored in memory per session; leaving aborts unfinished uploads.
-Composer previews use object URLs, revoked on removal or unmount.
-Sending prefixes the text with one server path per line (quoted when needed)
-and a blank line; attachment-only messages contain just paths. The byte limit
-applies to the complete message. Failed sends retain drafts; successful sends
-clear them only if unchanged. Removing attachments leaves server files intact.
-
-See [file uploads](usage.md#file-uploads) for composer behavior, storage configuration,
-and cleanup.
+Drafts are in memory per session; navigation aborts unfinished uploads. Preview
+object URLs are revoked on removal/unmount. Sending prefixes text with one server
+path per line and a blank line, quoting paths when needed; attachment-only messages
+contain paths only. Message limits apply to the complete result. Failed sends
+retain drafts; successful sends clear them only if unchanged. Removing a draft
+attachment leaves its file on disk. See [upload usage](usage.md#file-uploads).
 
 ## Tmux interaction
 
-| Endpoint                                         | Request or response                                                                                                                              |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `POST /api/v1/sessions/:id/messages`             | `{ message }`; success returns `204`                                                                                                             |
-| `POST /api/v1/sessions/:id/keys`                 | `{ keys }`; success returns `204`                                                                                                                |
-| `POST /api/v1/sessions/:id/handoff-pane-binding` | Empty object `{}`; returns `204` after sending the binding command to the connected pane; handoff is recognized from a subsequent binding record |
-| `WS /api/v1/sessions/:id/terminal-preview`       | JSON `snapshot`, `delta`, and `error` messages (see below)                                                                                       |
+| Endpoint                                         | Request / response                                    |
+| ------------------------------------------------ | ----------------------------------------------------- |
+| `POST /api/v1/sessions/:id/messages`             | `{ message }` → `204`                                 |
+| `POST /api/v1/sessions/:id/keys`                 | `{ keys }` → `204`                                    |
+| `POST /api/v1/sessions/:id/handoff-pane-binding` | `{}` → `204`; a later binding record confirms handoff |
+| `WS /api/v1/sessions/:id/terminal-preview`       | Snapshot, delta, or error frames                      |
 
-Supported keys and message limits are defined in
-[interaction.ts](../src/shared/interaction.ts). Supported responses include `state`,
-`activity`, nullable `supersededBySessionId`, and nullable `attachCommand`.
-Unsupported responses omit the state fields and retain `attachCommand`.
+Keys and message limits live in [interaction.ts](../src/shared/interaction.ts).
+Supported interaction responses contain `state`, `activity`,
+`supersededBySessionId`, and `attachCommand`; unsupported responses retain only
+`supported: false` and `attachCommand`.
 
-Interaction states are `unbound`, `disconnected`, `connected`, `unknown`, and
-`superseded`. Effects require validated socket ownership, pane liveness, and
-binding ownership. Concurrent checks are shared; completed results are not cached.
-Binding changes during validation may report `unknown` until the next refresh.
-Socket/pane reuse targets the current pane without comparing process identity.
-Uncertain input is not automatically resent.
+States are `unbound`, `disconnected`, `connected`, `unknown`, and `superseded`.
+Effects require current-user socket ownership, pane liveness, and binding ownership.
+Concurrent checks coalesce; completed results are not cached. Missing sockets,
+stopped servers, or dead/missing panes mean unavailable; permissions, timeouts,
+and malformed responses mean unknown. Binding changes during an await fail closed
+without recursive validation. Queued input and previews revalidate ownership;
+uncertain input is never automatically resent. Socket/pane reuse is allowed
+without process-identity checks.
 
 ### Binding format and ownership
 
-The Codex adapter recognizes `CODEX_HUB_TMUX_BIND_V4` declarations in user-message
-`<user_shell_command>` output. Successive lines contain an absolute socket path,
-a `%`-prefixed numeric pane ID, an optional operation UUID, and an optional project
-directory. New bindings use this five-line V4 format. Empty optional fields retain
-their lines. V3 remains supported without
-the project field. An invalid latest binding does not fall back to an older one;
-project-field handling is described under [Project directory](#project-directory).
+Codex reads `CODEX_HUB_TMUX_BIND_V4` in user-message `<user_shell_command>` output.
+Its five lines are the marker, absolute socket path, numeric `%` pane ID, optional
+operation UUID, and optional project directory. Empty optional fields keep their
+lines. V3 remains readable without the project field. An invalid latest attempt
+never falls back to an older bind.
 
-Bindings are shared across homes, retaining the latest attempt per session and the
-latest valid claim per socket/pane. Creation correlates its operation UUID with the
-recorded binding. See [ADR-0018](adr/0018-cache-validation-per-binding-record.md)
-for event ordering and ownership rules.
+One process-wide manager retains the latest attempt per session and latest valid
+claim per socket/pane across homes. Adapters submit accepted records, including
+appends. Ordering is timestamp (invalid → zero), global session ID, record ordinal,
+then position. New claims do not release older claims on other panes.
 
-When a later claim takes a pane, its former owner returns `superseded` and cannot
-send input, hand off the binding, preview, or shut down that pane during archive.
-`supersededBySessionId` names the replacing session only while it is readable,
-including when archived. Missing replacements leave the state `superseded` with
-a null ID.
-Takeover facts survive archive, deletion, and full rereads for the process lifetime;
-a later explicit binding can reclaim a pane. `attachCommand` is null for `superseded`.
+Takeover makes the former owner `superseded`, revoking input, handoff, preview,
+and shutdown authority. `supersededBySessionId` identifies the replacement only
+while readable, including archived sessions; otherwise it is null. Attach is null.
+Claims survive archive, deletion, rereads, and Hub close for the process lifetime;
+an explicit later bind can reclaim ownership. See
+[pane-binding-manager.ts](../src/server/interaction/pane-binding-manager.ts).
 
 ### Project directory
 
-Project Directory is the latest valid project path recorded in a pane bind, falling
-back to Working Directory. Paths must be absolute and contain no NUL, CR or LF;
-values are preserved without filesystem checks or Git discovery. Invalid or empty
-project fields do not invalidate the pane bind or erase an earlier project path.
+The latest valid bind project path overrides Working Directory. Paths must be
+absolute and exclude NUL, CR, and LF; no filesystem or Git checks are performed.
+Empty/invalid fields neither invalidate the pane bind nor erase an earlier project.
 
 ### Activity observation
 
-`activity` is `null` unless connected. Connected values are:
-
-| Value     | Meaning                                             |
-| --------- | --------------------------------------------------- |
-| `working` | Pane output within the monotonic five-second window |
-| `idle`    | No output within that window                        |
-| `unknown` | Initial or failed observation                       |
-
-Observation uses `%output` / `%extended-output` notifications. Failed subscriptions
-retry on the next read. Detail, timeline, updates, and interaction reads renew a
-60-second lease. Activity and preview share control clients; activity does not
-capture frames.
-
-Activity transitions affect `updateRevision` through the 1.5-second update checks;
-repeated output while already working does not. Catalog summaries omit activity.
+Activity is null unless connected. Output in the last monotonic five seconds means
+`working`; otherwise `idle`. Initial or failed observation means `unknown`.
+`%output` / `%extended-output` subscriptions retry on the next read after failure.
+Reader and interaction reads renew a 60-second lease. Activity shares control
+clients with preview without capturing frames. Transitions affect reader revisions;
+repeated output while already working does not. Catalog omits activity.
 
 ### Terminal Preview
 
-Preview captures the current pane screen as plain text, not scrollback or a terminal
-emulator stream. Captures retain the last 256,000 UTF-8 bytes without splitting a
-character and report `truncated` when the beginning was removed.
+Preview is the current screen as plain text, not scrollback or terminal emulation.
+It retains the last 256,000 UTF-8 bytes without splitting a character and marks
+removed prefixes as `truncated`.
 
-#### Transport and frames
+WebSocket upgrades inherit TLS/mTLS, accept no query parameters, and reject
+cross-origin browser requests. Ordinary HTTP receives `426`. Clients send no
+application messages.
 
-The preview endpoint uses `ws` or `wss`,
-inheriting the server's TLS and optional client certificate requirements. Upgrade
-requests accept no query parameters and reject cross-origin browser requests.
-Ordinary HTTP requests receive `426 Upgrade Required`. Clients send no application
-messages.
+| Frame `type` | Fields                                                              |
+| ------------ | ------------------------------------------------------------------- |
+| `snapshot`   | `revision`, `content`, `truncated`, `capturedAt`                    |
+| `delta`      | `baseRevision`, `revision`, `operations`, `truncated`, `capturedAt` |
+| `error`      | `code`, `message`, `retryable`                                      |
 
-Server messages are JSON text with a `type` discriminator:
+Every connection starts with a snapshot. Delta operations contain `startLine`,
+`deleteCount`, and `lines`, reference the preceding frame's line indices, and run
+in descending, nonoverlapping order. Split/join on `"\n"` preserves trailing and
+blank lines; truncation-only changes may have no operations. Oversized deltas,
+excessive diff work, or deltas no smaller than a full frame fall back to snapshots. Invalid frames
+preserve the display and require reconnection. Errors close with `1013` when
+retryable, otherwise `1008`.
 
-| `type`     | Fields                                                              |
-| ---------- | ------------------------------------------------------------------- |
-| `snapshot` | `revision`, `content`, `truncated`, `capturedAt`                    |
-| `delta`    | `baseRevision`, `revision`, `operations`, `truncated`, `capturedAt` |
-| `error`    | `code`, `message`, `retryable`                                      |
+Listeners/captures are shared without resizing terminals or changing their
+environment. Output merges over 350 ms; only content/truncation changes publish.
+Capacity is 100 connections globally and 10 per session, including initialization;
+excess gets retryable `preview_capacity_exceeded`. Repeated identical valid binds
+preserve subscriptions. Ownership loss, invalid binds, changed targets, and
+listener failures close affected subscriptions; returning ownership cannot revive them.
 
-An error closes the connection: `1013` if retryable, otherwise `1008`.
-
-Every connection starts with a full snapshot. Each delta applies to the preceding
-frame: operations contain `startLine`, `deleteCount`, and `lines`, refer to the
-original line indices, and run in strictly descending, nonoverlapping order.
-Splitting and joining on `"\n"` preserves blank lines and trailing newlines;
-truncation-only changes may use an empty operations array.
-
-The server falls back to a snapshot if diff computation exceeds its budget or a
-delta is too large or no smaller than full text. Clients validate frames before
-applying them; invalid updates preserve the display and require reconnection.
-Connections always restart from a full snapshot.
-
-#### Subscriptions and capacity
-
-Viewers share tmux listeners and captures without changing terminal size or session
-environment. Output events merge over 350 milliseconds; only content or truncation changes
-publish a frame. The server allows 100 connections globally and 10 per session,
-including initialization; excess connections receive retryable `preview_capacity_exceeded`.
-Repeated valid binds for the same session, socket and pane preserve subscriptions.
-Ownership loss, invalid binds, target changes and listener failures invalidate affected
-subscriptions immediately; returning ownership does not revive a closed subscription.
-
-#### Browser behavior
-
-The browser connects only while the preview is expanded, connected, and visible.
-Retryable failures use backoff; terminal errors wait for expansion, visibility,
-connection changes, or explicit retry. Failures retain the last frame and a
-stopped-updates notice until a valid snapshot arrives. Dismissing error details
-does not reconnect; explicit retry cancels pending retries and reconnects.
-See [preview service](../src/server/interaction/terminal-preview-service.ts) and
-[WebSocket transport](../src/server/http/terminal-preview-websocket.ts) for limits
-and cleanup.
+The browser connects only while expanded, connected, and visible. Retryable errors
+back off; terminal errors wait for a lifecycle change or explicit retry. Failures
+retain the last frame and stopped-updates notice. Dismissing details does not
+reconnect; explicit retry cancels backoff. See the
+[preview service](../src/server/interaction/terminal-preview-service.ts) and
+[WebSocket transport](../src/server/http/terminal-preview-websocket.ts).
 
 ## Asynchronous management
 
-| Endpoint                              | Body                                                                                                      | Result            |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------- | ----------------- |
-| `POST /api/v1/sessions`               | `{ sourceInstanceId?, directory, worktree, yolo?, requestId }` or `{ resumeSessionId, yolo?, requestId }` | `202` operation   |
-| `POST /api/v1/sessions/:id/exit`      | `{}`                                                                                                      | `202` operation   |
-| `POST /api/v1/sessions/:id/archive`   | `{}`                                                                                                      | `202` operation   |
-| `DELETE /api/v1/sessions/:id`         | `{}`                                                                                                      | `202` operation   |
-| `GET /api/v1/operations/:operationId` | —                                                                                                         | Current operation |
+| Endpoint                              | Body / result                                                                                                                          |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ sourceInstanceId?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                 |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                 |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                 |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                      |
+
+### Service responsibilities
+
+The coordinator owns idempotency, occupancy, deadlines, results, and retention.
+Launch/lifecycle executors own validation, adapter effects, and confirmation,
+reusing the exit service for shutdown. Executors check operation activity after
+asynchronous work; registry and occupancy cleanup remain coordinator-owned. See
+[operation service](../src/server/management/operation-service.ts),
+[launch executor](../src/server/management/session-launch-executor.ts), and
+[lifecycle executor](../src/server/management/session-lifecycle-executor.ts).
 
 ### Operation model
 
-Every operation includes `operationId`, `type`, `status`, `createdAt`, `updatedAt`,
-and nullable `sessionId`, `error`, `phase`, and `attachCommand`.
+Operations contain `operationId`, `type`, `status`, `createdAt`, `updatedAt`, and
+nullable `sessionId`, `error`, `phase`, `attachCommand`. Optional `target` is
+`{ socketPath, paneId }`; create uses `mode: new | resume`.
 
-| Field               | Values or condition                                               |
-| ------------------- | ----------------------------------------------------------------- |
-| `type`              | `create`, `exit`, `archive`, `delete`                             |
-| `status`            | `pending`, `succeeded`, `failed`, `unknown`                       |
-| `mode`              | Create only: `new` or `resume`                                    |
-| `target`            | Known launch target: `{ socketPath, paneId }`                     |
-| `phase` for exit    | `sending_exit`, `waiting_exit`                                    |
-| `phase` for archive | `sending_exit`, `waiting_exit`, `archiving`, `confirming_archive` |
+- Types: `create`, `exit`, `archive`, `delete`.
+- Statuses: `pending`, `succeeded`, `failed`, `unknown`.
+- Exit phases: `sending_exit`, `waiting_exit`; archive additionally uses
+  `archiving`, `confirming_archive`.
 
 ### Idempotency and conflicts
 
-Create request IDs contain 8–128 letters, digits, underscores, or hyphens. Identical
-IDs and arguments coalesce through execution and the 30-minute terminal retention
-period; changed arguments return `409`. Different IDs may create concurrently in
-the same project. Exit/archive/delete coalesce identical operations on a session;
-conflicting operations return `409` without queuing. Resume uses the same session
-occupancy as exit/archive/delete. Resume requests with different request IDs cannot
-launch concurrently for one session; identical request IDs retain create idempotency.
+Request IDs are 8–128 letters, digits, underscores, or hyphens. Identical launch
+IDs/arguments coalesce through execution and 30-minute terminal retention;
+changed arguments return `409`. Different IDs can create concurrently in a project.
+Resume, exit, archive, and delete share session occupancy: identical lifecycle
+operations coalesce; conflicting work returns `409` without queuing. Different
+request IDs cannot resume the same session concurrently.
 
 ### Execution and confirmation
 
 Create and resume share one launch operation. Worktree and YOLO are launch options.
-Native commands inherit the owning `CODEX_HOME`; the hub does not move or delete
-rollout files directly.
+Native commands use the owning `CODEX_HOME`; the Hub never moves or deletes rollout
+files directly.
 
-#### Create
+| Operation | Validation and confirmation                                                                                                                                                                                                                                                          |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create    | Resolve an existing directory to its real path for launch and project association, including worktrees. Match operation marker, launch target, project, and valid binding within 300 seconds after launch.                                                                           |
+| Resume    | Require an unarchived, unique valid native identity and no binding, confirmed pane death, or explicit transfer. Invalid bindings and uncertain checks deny resume. Revalidate before launch; confirm original identity, operation marker, project, and live owned target.            |
+| Exit      | Validate latest binding; send interrupts/EOF, then force-close the whole pane if needed. Confirm dead/missing within 30 seconds. Query errors or changed ownership end as `unknown`. Unbound succeeds without effects; missing session fails; archived sessions use the same checks. |
+| Archive   | Reread source; already archived succeeds. Validate unique native identity, complete exit, then run native archive once (25-second command limit) and confirm within 30 seconds.                                                                                                      |
+| Delete    | Require archive, run native delete, and confirm same-source native identity absent within 30 seconds. Already absent in a successful initial snapshot succeeds.                                                                                                                      |
 
-Validate an existing directory and use its real path for both launch
-and the bind project field, including when Codex creates a worktree.
-Launch Codex as the main pane process in a dedicated
-`codex-hub-<operationId>` tmux session with `--no-daemon --no-alt-screen`, optional
-`--worktree` and `--yolo` (both off by default). Confirm the operation marker,
-launch target, project, and valid binding within 300 seconds after launch.
-Show an attach command after 30 seconds and retain it on timeout.
+Codex launches its main pane in `codex-hub-<operationId>` with `--no-daemon
+--no-alt-screen`, plus optional `--worktree` and `--yolo` (default off). The initial
+CLI argument carries the binding shell instruction. Resume uses `codex resume
+<UUID>`, trying Working Directory then Project Directory; skip invalid paths and
+fall back only for missing/non-directory paths. Launch from the chosen real path
+while keeping the original project association. Resume rejects source, directory,
+and worktree overrides. Unbound sessions require the user to ensure the original
+process has exited.
 
-#### Resume
+Attach appears after 30 seconds and survives launch timeout, using the known
+target or configured socket and deterministic session name. Confirmed no-launch
+tmux errors are `failed`; launch timeouts, malformed successful output, and
+post-launch errors are `unknown`, with no automatic retry or teardown.
 
-Use the original session's owning source and opaque native ID. Format validation
-belongs to that adapter; only Codex requires a UUID.
-
-1. **Check eligibility:** require an unarchived, unique valid identity and either
-   no binding record, or a valid latest binding with a confirmed dead/missing or
-   explicitly transferred pane. Invalid bindings, timeouts, and errors never
-   authorize resume. Unbound sessions show a reminder to exit the original process.
-2. **Resolve launch directory:** try Working Directory, then Project Directory.
-   Skip empty or invalid paths; fall back if missing or not a directory. Use the
-   selected real path while retaining the original project in the bind. Reject
-   directory, source, and worktree overrides; `yolo` defaults to false.
-3. **Launch and confirm:** revalidate before launching `codex resume <UUID>` in a
-   new pane. Require the original identity, operation marker, matching project,
-   and a live owned launch target for confirmation.
-
-#### Exit
-
-Resolve the source and latest binding; no native ID is required.
-Binding transfers control of the whole pane, including manually bound panes.
-Send interrupts and EOF with grace periods, then force-close that pane if needed.
-Success requires a missing or dead pane within 30 seconds; query errors or
-changed ownership end tracking as `unknown`.
-Uncertain effects are not retried. An unbound session succeeds without effects;
-a missing session fails. Archived sessions use the same checks. Exit preserves
-session data. See [ADR-0022](adr/0022-separate-session-exit-from-archive.md)
-for the shutdown sequence and whole-pane tradeoffs.
-
-#### Archive
-
-Reread the source snapshot. Already archived sessions succeed
-immediately. Validate the unique native identity, then reuse the independent
-exit service. Only successful exit proceeds to native archive, once. The native
-command allows 25 seconds; archive confirmation allows 30 seconds. While exit,
-archive, or delete occupies the session, ordinary input and handoff requests
-return `409 session_busy`. Archive retains occupancy through confirmation.
-
-#### Delete
-
-Require an archived session, run the native command, and confirm its
-same-source native identity is absent, within 30 seconds. A session already absent
-from a successful initial snapshot succeeds immediately.
-
-Successful snapshots may skip unreadable data and still confirm results; thrown
-read errors do not prove deletion.
+Exit transfers control of the entire pane, including manual bindings, and retains
+session data. See [ADR-0022](adr/0022-separate-session-exit-from-archive.md) for
+shutdown timing and costs. Lifecycle occupancy blocks ordinary input/handoff with
+`409 session_busy`; archive holds occupancy through confirmation. Successful
+snapshots may skip unreadable data and still confirm absence; thrown read errors
+never prove deletion.
 
 ### Tracking and recovery
 
-#### Server lifecycle
+Server tracking continues without browser queries. Timeout yields `unknown`
+without undoing commands. Terminal results are immutable, release execution state
+and occupancy, and remain with launch deduplication records for 30 minutes.
+Hung observations cannot block timeout cleanup; late continuations check activity.
+Restart loses tracking and leaves tmux sessions running.
 
-Operations continue independently of browser queries. Timeout ends tracking as
-`unknown` without undoing submitted commands. Terminal states are immutable and
-release session occupancy; results and create deduplication records remain in
-memory for 30 minutes. Restart loses these records and leaves tmux sessions running.
+Unknown launches retain target/attach information. Reuse the same request ID during
+retention to retrieve the result. A new ID may launch again after normal checks,
+even while the previous launch still runs.
 
-Unknown Create and Resume outcomes retain known target/attach information. Reuse
-the same `requestId` to retrieve the original operation during retention. A new ID
-may launch another session after normal checks, even if the previous launch is
-still running; inspect tmux before submitting again.
-
-#### Browser recovery
-
-The browser polls pending operations one second after each completed query.
-Hidden pages pause queries and resume when visible; submitted writes continue,
-and returned operation IDs retain recovery markers. Reload can resume polling.
-All terminal states and `404` clear recovery markers; nonretryable query errors
-require manual retry. Network retries of create reuse its request ID until a
-terminal result, after which the ID is discarded.
+The browser polls pending operations one second after each query completes,
+pausing while hidden. Reload can resume from stored operation IDs. Terminal states
+and `404` clear recovery markers; nonretryable query errors require manual retry.
+Network retries of launch reuse the request ID until a terminal result, then
+discard it. Submitted writes continue independently of page visibility.
 
 ## Optional hosting
 
-Hosting is independent of session adapters and is enabled only by `--hosting`.
-`GET /api/v1/capabilities` reports `{ hosting: boolean }`. Disabled hosting does
-not initialize storage and returns 404 for hosting pages and APIs. Resource
-commands work offline and accept `--home-dir` and `--json`. Existing
-HTTPS/mTLS or reverse-proxy authentication applies to both resource types;
+Hosting is adapter-independent and enabled only by `--hosting`.
+`GET /api/v1/capabilities` returns `{ hosting: boolean }`. Disabled hosting creates
+no storage and returns `404` for hosting pages/APIs. Offline resource commands use
+`--home-dir` and `--json`. Existing HTTPS/mTLS or proxy authentication applies;
 hosting adds no application login.
 
-Publish/delete share a process-aware filesystem lock. Complete owner directories
-are installed by atomic rename; dead owners are reclaimed only after the OS
-reports their PID absent. Permanent tombstones prevent competing reclaimers from
-moving a newly acquired lock. A separate service lock permits one Hub process per
-hosting root. A PID reused by another live process conservatively blocks recovery.
-Manual storage changes should be performed without concurrent publication.
+Publish/delete share a process-aware filesystem lock installed by atomic rename.
+Dead owners are reclaimed only after the OS reports their PID absent; tombstones
+prevent reclaimers from disturbing newly acquired locks. PID reuse by a live
+process blocks recovery. A separate service lock permits one Hub per hosting root.
+Avoid manual storage changes during publication.
 
 ### Web pages
 
-`GET /api/v1/artifacts` rescans disk and returns `projects`, each with a
-`directory` and `artifacts`; `DELETE /api/v1/artifacts/:id` removes every snapshot.
-Malformed metadata is skipped with a diagnostic. Projects are not filtered by
-Codex home or session availability.
+`GET /api/v1/artifacts` rescans disk and returns projects with `directory` and
+`artifacts`; `DELETE /api/v1/artifacts/:id` removes all snapshots. Invalid metadata
+is skipped with diagnostics. Resources are independent of homes/session availability.
 
-Project ownership uses `realpath` of the explicitly supplied project directory.
-Moving a project creates a new association; existing snapshots remain accessible.
-Pages live at `<hosting>/artifacts/<id>/`, containing `artifact.json` and
-`snapshots/<snapshot-id>/`. Publication matches the canonical project path and
-name under the write lock to reuse the page identity, title and snapshot history.
-Artifact and snapshot IDs are random 32-character lowercase
-hexadecimal strings. Metadata stores identity, title, project, source, current
-snapshot, creation/update times and relative URL; it contains no session identity
-or server address.
+Pages match canonical project `realpath` plus name. Republishing retains identity,
+title unless overridden, and history; moving the project creates a new association.
+IDs and snapshot IDs are random 32-character lowercase hex strings. Storage is
+`<hosting>/artifacts/<id>/artifact.json` plus `snapshots/<snapshot-id>/`; metadata
+contains identity, title, project/source, current snapshot, timestamps, and relative
+URL, without session identity or server address.
 
-Publication copies regular files/directories into a temporary snapshot, rejects
-nested symlinks and special files, and rejects overlap with hosting storage.
-The source root itself may be a symlink alias and is canonicalized first.
-Snapshot rename precedes atomic metadata replacement. A failed publication
-preserves the previous metadata; interrupted temporary/unreferenced snapshots
-are inert and disappear when their artifact is deleted. Previous snapshots stay
-available until deletion, keeping old documents and their relative assets
-consistent. No expiry or history management is provided.
+Publication accepts regular files/directories, canonicalizes the source root, and
+rejects nested symlinks, special files, and hosting-storage overlap. Snapshot rename
+precedes atomic metadata replacement, preserving old metadata on failure. Old
+snapshots remain available until artifact deletion, which also removes inert
+interrupted/unreferenced snapshots. There is no expiry or history management.
 
-`/web/:id/` redirects with 302 to `/web/:id/:snapshotId/`. GET and HEAD support
-files and directory `index.html`, without directory listing, traversal, metadata
-access or SPA fallback. Every request reads disk metadata, so refresh and unknown
-IDs also observe offline publications/deletions. Responses use
-`Cache-Control: private, no-store`. Entry and directory redirects preserve query
-parameters. Local resources should use relative paths; root-relative paths are
-not rewritten. External resources depend on the viewer's network and the
-provider's cross-origin policies.
+`/web/:id/` redirects (`302`) to `/web/:id/:snapshotId/`. GET/HEAD serve files and
+directory `index.html`, with no listing, traversal, metadata access, or SPA fallback.
+Requests read disk metadata so offline changes are visible. Responses use
+`private, no-store`; entry/directory redirects preserve queries. Assets should use
+relative paths; root-relative paths are not rewritten. External resources depend
+on viewer connectivity and provider cross-origin policies.
 
-Hosted pages are trusted same-origin code, with the same authority as Hub. Their
-responses omit the Hub UI's restrictive CSP so inline scripts/styles, modules,
-fonts, JSON and external HTTPS resources can load. Hub's own CSP is unchanged.
-Session Markdown permits `/web/<32 lowercase hex digits>/` as a relative hosted-page link, preserving
-existing absolute protocol rules. Copy link uses the current browser origin.
+Pages are trusted same-origin code with Hub authority. They omit Hub UI's
+restrictive CSP so scripts, styles, modules, fonts, JSON, and external HTTPS
+resources can load; Hub CSP stays unchanged. Session Markdown permits canonical
+`/web/<id>/` links; copied links use the current browser origin.
 
 ### Temporary diffs
 
-Each `diff publish <file>` creates an independent UUID v4 resource at
-`<hosting>/diffs/<uuid>/`: `raw.diff` stores the original bytes and
-`metadata.json` stores `id`, `title`, `createdAt`, and `url`. Publication uses
-atomic directory rename under the shared hosting write lock; deletion uses the
-same lock. `diff list` reads metadata only; CLI deletion is idempotent. Cleanup
-is explicit and leaves the source file intact; diffs have no project or session
-association.
+Each `diff publish <file>` creates an independent UUID v4 at
+`<hosting>/diffs/<uuid>/`, with original bytes in `raw.diff` and identity, title,
+creation time, and URL in `metadata.json`. Publication atomically renames the
+directory under the hosting write lock; deletion shares that lock. CLI list reads
+metadata only; deletion is idempotent. Cleanup is explicit, preserves the source,
+and has no project/session association.
 
-With `--hosting`, `/diffs/<uuid>` serves the viewer,
-`GET /api/v1/diffs/:uuid` returns metadata plus `raw`, and
-`DELETE /api/v1/diffs/:uuid` returns 204 on deletion. Missing resources and
-disabled hosting return 404; there is no HTTP list endpoint. Pages and data use
-`private, no-store`, retain Hub CSP, and render content as
-text. Session Markdown opens canonical `/diffs/<uuid>` links in a new tab.
+With hosting enabled, `/diffs/<uuid>` serves the viewer;
+`GET /api/v1/diffs/:uuid` returns metadata and `raw`, and
+`DELETE /api/v1/diffs/:uuid` returns `204`. Missing/disabled resources return `404`;
+there is no HTTP list endpoint. Responses use `private, no-store`, retain Hub CSP,
+and render diff content as text. Canonical Markdown links open in a new tab.
 
-The viewer supports Git unified diffs, including renames, mode changes, binary
-markers, and C-quoted paths. Unsupported or incomplete input shows a warning;
-the original text is available when parsing is incomplete.
+The viewer supports Git unified diffs, renames, mode changes, binary markers, and
+C-quoted paths. Unsupported/incomplete input shows a warning and preserves access
+to the original text.

@@ -63,14 +63,12 @@ taking a photo, reconnect or retry later.
 
 Open **Upload history** from the session header to browse,
 preview, download, or delete uploads, including unsent files and files removed
-from drafts. Deleting a file removes it from the current draft and breaks paths
-in existing messages. Attachment deletion and cleanup are best effort. Session
-deletion triggers background cleanup; archive and exit retain uploads.
-[Preview upload history](images/codex-hub-uploads.png).
+from drafts. Deleting a file removes it from the current draft. Attachment deletion
+and cleanup are best effort. Session deletion triggers background cleanup; archive
+and exit retain uploads. [Preview upload history](images/codex-hub-uploads.png).
 
 Uploads persist under `uploads/` in the [Hub data root](#server-options), which
-must be accessible to the agent. Existing files are not migrated; manage old
-temporary uploads manually. See the [technical reference](technical-reference.md#file-uploads)
+must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
 for API and storage guarantees. Only one Hub can use an uploads directory at a time;
 stop the other Hub or choose another `--home-dir` if it is already in use.
 

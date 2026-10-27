@@ -27,7 +27,7 @@ The reader treated rollout JSONL as its correctness source while optionally usin
 - Keep the SQLite adapter but disable it by default.
 - Remove SQLite discovery and metadata enrichment completely.
 
-## Decision Outcome
+## Decision Outcome at Introduction
 
 Chosen option: "Remove SQLite discovery and metadata enrichment completely", because a JSONL-only catalog has one explicit source of truth and removes a compatibility surface that is not needed for session correctness.
 

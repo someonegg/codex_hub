@@ -25,60 +25,31 @@ Permanent caching prevents recovery; process identity checks reject deliberate p
 
 ## Decision Outcome
 
-Parse every `CODEX_HUB_TMUX_BIND_V3` declaration in user-message
-`<user_shell_command>` output. Read an absolute socket path, a `%`-prefixed numeric
-pane ID, and optional operation UUID on successive lines. An invalid latest
-declaration does not fall back. Created tmux sessions use `codex-hub-<operationId>`;
-manual bindings have no name restriction. Creation confirms the unique operation
-ID, project, and socket/pane pair.
+Use one process-wide binding authority and fresh pane validation. A later claim
+revokes the former owner's control; retain claims for the process lifetime so
+archive, deletion, or rereads cannot restore stale authority. Explicit later
+bindings can reclaim a pane. Missing replacement sessions affect navigation,
+not ownership.
 
-The process-wide pane binding manager is the sole binding source. Adapters
-submit all binding attempts from accepted decoded records, including incremental
-appends; normalized interaction values contain only transport capabilities.
-Order events by timestamp (invalid timestamps use zero), global session ID,
-record ordinal, then position within the record. Retain the latest attempt per
-session and the latest valid claim per socket/pane, across source instances.
-Invalid latest attempts do not fall back; a new claim does not release older
-claims on other panes. Creation queries this same manager for `operationId`.
-The Hub explicitly injects the same process-wide manager into the Codex adapter,
-interaction service, and operation service. Their default parameters retain this
-shared instance for standalone callers; tests may inject an isolated manager.
-Closing a Hub does not clear binding history. Management snapshots contain only
-domain sessions; interaction capabilities are read through interaction snapshots.
+Share concurrent checks without caching completed results. Validate socket
+ownership and pane liveness, without process-identity inference; deliberate
+socket/pane reuse is allowed. Binding changes during observation fail closed,
+and queued effects revalidate ownership before execution.
 
-A later pane claim revokes the former owner's control. Retaining claims for the
-process lifetime prevents archive, deletion, or a full reread from silently restoring
-stale authority; reclaiming control requires an explicit later binding. Replacement
-links depend on readability, while ownership does not. See the
-[interaction reference](../technical-reference.md#tmux-interaction) for the public
-`superseded` response fields and restrictions.
+Adapters own native binding syntax and semantic key mappings; generic transport
+owns tmux validation, serialized input, and capture. HTTP uses business services
+rather than depending on tmux implementation. Current protocol and publication
+rules live in the [interaction reference](../technical-reference.md#tmux-interaction).
 
-Status queries never recurse or restart validation when bindings change during
-an await. Return the currently determinable state, using `unknown` for a new
-binding that has not been validated, and wait for the next refresh. Operations
-still validate ownership after resolution and immediately before queued effects.
+### Historical binding and archive protocol
 
-Internal declarations use a `transport: "tmux"` discriminant whose branch owns
-tmux key mappings and the binding command. Semantic keys and limits live in a shared
-module re-exported by the API contract; domain types do not depend on the API.
-Application services inject transport and share message normalization/validation
-with it. HTTP does not depend on tmux implementation. Only tmux is provided.
+At introduction, commands emitted V3 bindings with socket, pane, and optional
+operation UUID. Creation correlated that marker with its launch target and
+project. V4 later added the project field while retaining V3 reads.
 
-All entry points share current pane validation of current-user Unix socket ownership and pane
-liveness. Coalesce concurrent checks for the same target without caching completed
-results. Missing sockets, confirmed stopped servers, and missing/dead panes are
-unavailable; permission errors, timeouts, and malformed responses are query errors.
-Input and previews revalidate inside the pane queue. Socket/pane reuse is allowed;
-PID and server start time are not inspected.
-
-At introduction, archive held exclusive session occupancy, validated a unique
-native identity through the owning adapter, and shut down a live pane using
-`Ctrl+C` then `Ctrl+D` before invoking native archive once. Query errors did not
-prove pane death, and uncertain effects were not retried.
-[ADR-0022](0022-separate-session-exit-from-archive.md) replaces that shutdown
-sequence with an independent exit service and bounded whole-pane shutdown.
-See the [management reference](../technical-reference.md#asynchronous-management)
-for current archive phases, deadlines, and outcome rules.
+Archive originally sent `Ctrl+C`, then `Ctrl+D`, without forced pane closure.
+ADR-0022 replaces only this shutdown strategy with the independent exit service;
+query errors still do not prove pane death, and uncertain effects are not retried.
 
 ## Consequences
 

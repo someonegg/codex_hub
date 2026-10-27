@@ -5,6 +5,10 @@ date: 2026-07-30
 
 # Use session source adapters
 
+Current scope: source adapters and immutable publication remain in force.
+Generation-scoped list APIs below describe the introduction context; the
+[current catalog](../technical-reference.md#catalog) uses complete structural snapshots.
+
 ## Context and Problem Statement
 
 The reader's normalized session domain, generation snapshot, and HTTP DTOs are intended to remain stable while Codex directory layouts and rollout formats evolve and while other agents are added. The repository previously orchestrated Codex-specific discovery, decoding, identity resolution, normalization, file fingerprints, and I/O recovery, so adding a source required coupling generic snapshot code to that source's storage model.
@@ -28,40 +32,11 @@ Chosen option: "Introduce high-level session source adapters that return normali
 
 Each source instance has a private stable instance key and a public opaque instance ID. Adapters return source-local stable session identities, native parent identities, normalized session content, a source signature, and diagnostics. The aggregate snapshot generates global opaque IDs from the source instance key and local identity, links parents only within a source instance, and publishes one immutable generation.
 
-Within a Codex source instance, a native session ID always determines the stable
-local identity. If multiple rollouts declare that ID, retain the previously
-accepted readable file; on first discovery choose the first readable file in the
-existing path order. Ignore the others: publish no additional session, submit no
-binding events, and retain no decode cache for them. Report duplicates only in
-server diagnostics, deduplicated by the diagnostic logger. If the retained file
-becomes unavailable, fully read the first remaining candidate. Rollouts without
-a native ID retain their path-based identity.
-
-Every normalized value returned by an adapter is a published immutable snapshot. An adapter must not mutate a previously returned `NormalizedSession`, timeline item, detail value, map, or other nested value in place when its source changes or a later refresh completes. It must instead publish new values for the changed path so earlier repository generations remain coherent.
-
-Adapters may preserve references for unchanged normalized sessions, timeline items, and tool or directive details. The repository treats such reference reuse only as an optimization hint: a reused reference must mean that value is unchanged, while a fresh reference may still contain equivalent content and remains valid at the cost of recomputing derived state. This permits copy-on-write adapters to extend timeline-prefix indexes cheaply without making reference reuse mandatory for other adapter implementations.
-
-Source registration requires nonempty, independently unique `instanceKey` and
-`sourceInstanceId`; conflicts fail construction. Adapters use server domain types.
-Item IDs are opaque, with no required naming pattern. HTTP splits path segments
-before decoding once, requires nonempty IDs of at most 1,024 UTF-8 bytes, and
-rejects control characters, slashes, backslashes, and standalone `.` or `..`.
-Queries still validate kind, session ownership, cursor signatures, and read bounds.
-
-Diagnostics belong only in server logs, not public `SessionDetail`, the UI,
-management decisions, or update revisions. Refresh reports source, session, and
-aggregate diagnostics through an injectable port defaulting to stderr. Deduplicate
-by source, session, and content; cleared diagnostics may recur, and vanished
-objects release state. Reuse unchanged snapshots and diagnostic references;
-cache hits do not traverse or serialize diagnostics. Logging failures do not
-interrupt operations. Apply per-source limits so aggregate truncation cannot
-hide other sources.
-
-Path checks, scanning, and rollout loading treat `ENOENT`, `EACCES`, `EPERM`,
-`ESTALE`, `EISDIR`, and `ENOTDIR` as recoverable I/O errors: skip and diagnose
-unreadable portions while serving the rest. Initially absent allowed directories
-are normal. Scope and symlink restrictions remain; unexpected exceptions propagate.
-Successful snapshots carry no completeness gate.
+Adapters publish immutable values; reference reuse is an optimization, never a
+requirement. Source-local identities and parent links remain scoped to their home.
+The [current adapter contract](../technical-reference.md#adapter-publication-and-diagnostics)
+and [identity rules](../technical-reference.md#session-identity) define publication,
+registration, duplicate selection, diagnostics, and recoverable I/O behavior.
 
 ### Positive Consequences
 
