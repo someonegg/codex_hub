@@ -25,7 +25,7 @@ preferences add steps and can block history paging.
 - Enable automatic updates by default for unarchived sessions.
 - Retain a tab-scoped automatic updates preference.
 
-## Decision Outcome
+## Decision Outcome at Introduction
 
 Enable automatic updates for unarchived sessions, remove its toggle and stored preference,
 and stop subscriptions on archive. History paging does not depend on disabling

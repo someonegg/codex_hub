@@ -23,16 +23,10 @@ For endpoint and cursor contracts, see the [reader reference](technical-referenc
 Archived rollouts are decoded once per cache lifetime; see
 [discovery and caching](technical-reference.md#discovery-and-caching).
 
-Unarchived rollouts keep an in-memory checkpoint. Growing files decode only new
-complete lines when decoder/normalizer versions and SHA-256 probes match. Probes
-cover the first 4 KiB and up to 4 KiB before the previous EOF. Truncation,
-same-size changes, probe mismatches, incompatible state, and process startup
-require a full decode.
-
-Reads resume after the last committed newline. Unterminated tails, including
-partial UTF-8 and oversized lines, are reread without decoding or diagnostics
-until terminated. Probes and decoding use the same open handle and observed EOF
-bound. See [ADR-0012](adr/0012-use-checkpointed-incremental-rollout-loading.md).
+Only complete lines are committed. Unterminated tails, including partial UTF-8
+and oversized lines, are reread without decoding or diagnostics until terminated.
+For checkpoint probes, fallback rules, and their limits, see
+[discovery and caching](technical-reference.md#discovery-and-caching).
 
 ### Invalid input and diagnostics
 

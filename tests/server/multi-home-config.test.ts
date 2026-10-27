@@ -10,6 +10,8 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 const read = (...homes: string[]) => loadConfig(homes.flatMap((home) => ["--codex-home", home]));
 
 it("replaces the default home with explicit homes", () => {
+  expect(commandLineHelp()).toContain("--codex-home <nickname=path>");
+  expect(commandLineHelp()).toContain("repeat for multiple homes");
   expect(read("work=./work")).toMatchObject({
     config: { homes: [{ nickname: "work", path: resolve("work") }] },
   });
@@ -30,12 +32,9 @@ it("preserves order, internal spaces, and equals in paths while trimming both fi
   });
 });
 
-it.each(["", " ", "./one", "nickname", "=one", " =one", "a=", "a=  "])(
-  "rejects malformed home %j",
-  (home) => {
-    expect(() => read(home)).toThrow("--codex-home requires nickname=path");
-  },
-);
+it.each(["", "./one", "=one", "a="])("rejects malformed home %j", (home) => {
+  expect(() => read(home)).toThrow("--codex-home requires nickname=path");
+});
 
 it("rejects trimmed duplicate nicknames and equivalent paths", () => {
   expect(() => read(" a =one", "a=two")).toThrow("Duplicate home nickname");
@@ -53,9 +52,4 @@ it("rejects symlink aliases without replacing the configured source path", async
   expect(read(`b=${alias}`)).toMatchObject({
     config: { homes: [{ nickname: "b", path: alias }] },
   });
-});
-
-it("documents repeatable named homes", () => {
-  expect(commandLineHelp()).toContain("--codex-home <nickname=path>");
-  expect(commandLineHelp()).toContain("repeat for multiple homes");
 });

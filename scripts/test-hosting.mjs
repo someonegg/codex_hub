@@ -240,7 +240,6 @@ try {
     await demo.getByRole("button", { name: "Refresh" }).click();
     await demo.waitForFunction(() => !document.querySelector(".artifacts-heading button").disabled);
     await demo.getByText("Loading pages…", { exact: true }).waitFor({ state: "hidden" });
-    await demo.screenshot({ path: settings.screenshot });
     await demo.setViewportSize({ width: 390, height: 844 });
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Mobile horizontal overflow");
@@ -248,7 +247,6 @@ try {
     demo.once("dialog", (dialog) => dialog.dismiss());
     await design.getByRole("button", { name: "Delete" }).click();
     await demo.getByRole("heading", { name: "Design comparison" }).waitFor();
-    await demo.screenshot({ path: settings.mobileScreenshot });
     // Read a hosted-page Markdown link through the actual session reader.
     await context.route("**/api/v1/sessions**", async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -351,8 +349,6 @@ try {
     secureUrl: secureArtifact.url,
     clientCert: join(directory, "client.crt"),
     clientKey: join(directory, "client.key"),
-    screenshot: resolve("docs/images/codex-hub-web-pages.png"),
-    mobileScreenshot: resolve("docs/images/codex-hub-web-pages-mobile.png"),
   };
   await writeFile(
     code,

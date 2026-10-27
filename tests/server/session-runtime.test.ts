@@ -155,10 +155,21 @@ describe("session runtime evidence", () => {
       let active = 0;
       let maximum = 0;
       const releases: (() => void)[] = [];
+      const started = Array.from({ length: 21 }, () => {
+        let resolve!: () => void;
+        const promise = new Promise<void>((done) => {
+          resolve = done;
+        });
+        return { promise, resolve };
+      });
+      let starts = 0;
       f.resolveTarget.mockImplementation(async () => {
         active++;
         maximum = Math.max(maximum, active);
-        await new Promise<void>((resolve) => releases.push(resolve));
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+          started[starts++]!.resolve();
+        });
         active--;
         return null;
       });
@@ -172,11 +183,12 @@ describe("session runtime evidence", () => {
           socketPath: sockets === "shared" ? shared.socketPath : `/socket-${i}`,
         }),
       );
-      await vi.waitFor(() => {
+      const width = sockets === "shared" ? 21 : 8;
+      for (let offset = 0; offset < 21; offset += width) {
+        await started[Math.min(offset + width, 21) - 1]!.promise;
+        expect(active).toBe(Math.min(width, 21 - offset));
         releases.splice(0).forEach((release) => release());
-        expect(f.resolveTarget).toHaveBeenCalledTimes(21);
-        expect(active).toBe(0);
-      });
+      }
       await Promise.all([first, ...batch]);
       expect(maximum).toBe(sockets === "shared" ? 21 : 8);
       expect(f.resolveTarget).toHaveBeenCalledTimes(21);

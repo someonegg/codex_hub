@@ -120,7 +120,7 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
           </button>
         ) : (
           <>
-            <p>Delete this file? File paths in existing messages will stop working.</p>
+            <p>Delete this file?</p>
             <button type="button" disabled={busy} onClick={deleteUpload}>
               {busy ? "Deleting…" : "Confirm delete"}
             </button>

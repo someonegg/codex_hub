@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
@@ -22,11 +23,15 @@ afterEach(async () => {
   vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
-async function fixture() {
+async function storeFixture() {
   const root = await mkdtemp(join(tmpdir(), "hub-upload-test-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   const directory = join(root, "space ' quote", "uploads");
   const store = new UploadStore(directory);
+  return { store, directory };
+}
+async function fixture() {
+  const { store, directory } = await storeFixture();
   const route = createUploadRoutes(store, {
     getSession: vi.fn().mockImplementation(async (id: string) => (id === "missing" ? null : {})),
   });
@@ -257,17 +262,34 @@ it.each([
 
 it("returns all uploads newest first and persists metadata across restarts", async () => {
   const { origin, directory, store } = await fixture();
-  for (let i = 0; i < 52; i++) {
-    expect(
-      (
-        await fetch(`${origin}/api/v1/uploads?sessionId=one&filename=same.png`, {
-          method: "POST",
-          headers: { "Content-Type": "image/png" },
-          body: "png",
-        })
-      ).status,
-    ).toBe(201);
-  }
+  // Seed persisted history; the final upload still exercises the HTTP write path.
+  const folder = join(directory, createHash("sha256").update("one").digest("hex"));
+  await fs.mkdir(folder, { recursive: true });
+  await Promise.all(
+    Array.from({ length: 51 }, async (_, i) => {
+      const id = randomUUID();
+      const attachment: UploadAttachment = {
+        id,
+        sessionId: "one",
+        filename: "same.png",
+        size: 3,
+        type: "image/png",
+        uploadedAt: new Date(Date.UTC(2026, 0, 1, 0, 0, Math.floor(i / 2))).toISOString(),
+        path: join(folder, `${id}.png`),
+      };
+      await fs.writeFile(attachment.path, "png");
+      await fs.writeFile(join(folder, `${id}.meta.json`), JSON.stringify(attachment));
+    }),
+  );
+  expect(
+    (
+      await fetch(`${origin}/api/v1/uploads?sessionId=one&filename=same.png`, {
+        method: "POST",
+        headers: { "Content-Type": "image/png" },
+        body: "png",
+      })
+    ).status,
+  ).toBe(201);
   const response = await fetch(`${origin}/api/v1/sessions/one/uploads`);
   const history = (await response.json()) as { items: UploadAttachment[] };
   expect(Object.keys(history)).toEqual(["items"]);
@@ -285,13 +307,15 @@ it("returns all uploads newest first and persists metadata across restarts", asy
 });
 
 it("preserves the registration when marking a deletion fails", async () => {
-  const { origin, store } = await fixture();
-  const { attachment } = (await (
-    await fetch(`${origin}/api/v1/uploads?sessionId=one`, {
-      method: "POST",
-      body: "data",
-    })
-  ).json()) as { attachment: UploadAttachment };
+  const { store } = await storeFixture();
+  const attachment = await store.upload(
+    "one",
+    "",
+    "",
+    (async function* () {
+      yield Buffer.from("data");
+    })(),
+  );
   const rename = vi.spyOn(fs, "rename").mockRejectedValueOnce(new Error("Disk unavailable"));
   await expect(store.delete("one", attachment.id)).rejects.toThrow("Disk unavailable");
   rename.mockRestore();
@@ -341,7 +365,7 @@ it.each([
 });
 
 it("accepts byte streams and recovers interrupted writes without HTTP dependencies", async () => {
-  const { store, directory } = await fixture();
+  const { store, directory } = await storeFixture();
   async function* chunks() {
     yield new Uint8Array([0, 1]);
     yield new Uint8Array([2, 3]);
@@ -419,12 +443,20 @@ it("accepts uploads while a single-file deletion is stalled", async () => {
   const stalled = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let started!: () => void;
+  const deleting = new Promise<void>((resolve) => {
+    started = resolve;
+  });
   const lookup = vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
-    if (path === attachment.path) await stalled;
+    if (path === attachment.path) {
+      started();
+      await stalled;
+    }
     return remove(path, options);
   });
   const deletion = store.delete("one", attachment.id);
   try {
+    await deleting;
     expect(
       (await fetch(`${origin}/api/v1/uploads?sessionId=one`, { method: "POST", body: "new" }))
         .status,

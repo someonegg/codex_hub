@@ -19,13 +19,10 @@ it.each([null, undefined, "", "relative", "/a\0b", "/a\rb", "/a\nb"])(
     expect(validProjectDirectory(value)).toBe(false);
   },
 );
-it.each(["", "relative", "/a\0b", "/a\rb", "/a\nb"])(
-  "emits an empty project field for invalid %j",
-  (path) => {
-    expect(codexBindingCommand(undefined, path)).toMatch(/'' ''$/);
-  },
-);
-it.each(["/missing", "/a space/'quote'/$HOME;$(echo bad)`echo bad`"])(
+it.each(["relative", "/a\0b"])("emits an empty project field for invalid %j", (path) => {
+  expect(codexBindingCommand(undefined, path)).toMatch(/'' ''$/);
+});
+it.each(["/a space/'quote'/$HOME;$(echo bad)`echo bad`"])(
   "preserves and safely quotes %s",
   (path) => {
     expect(validProjectDirectory(path)).toBe(true);

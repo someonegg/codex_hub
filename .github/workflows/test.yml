@@ -34,7 +34,8 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check
-      - run: npm run test:package
+      # uploads-lock.test.ts builds the shipped entry during npm test.
+      - run: npm run test:package -- --skip-build
 
   package-build:
     name: Build runtime test package

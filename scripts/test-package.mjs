@@ -9,14 +9,18 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const temporary = await mkdtemp(join(tmpdir(), "codex-hub-package-"));
-const suppliedTarball = process.argv[2];
+const args = process.argv.slice(2);
+assert(args.length <= 1, "Usage: test-package.mjs [--skip-build | package.tgz]");
+const skipBuild = args[0] === "--skip-build";
+const suppliedTarball = skipBuild ? undefined : args[0];
+assert(!suppliedTarball?.startsWith("--"), "Unknown package test option");
 let server;
 try {
   let tarball;
   if (suppliedTarball) {
     tarball = resolve(suppliedTarball);
   } else {
-    await exec("npm", ["run", "build"], { cwd: root });
+    if (!skipBuild) await exec("npm", ["run", "build"], { cwd: root });
     const { stdout } = await exec(
       "npm",
       ["pack", "--json", "--ignore-scripts", "--pack-destination", temporary],

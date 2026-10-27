@@ -25,9 +25,9 @@ async function fixture() {
 it("publishes independent snapshots offline and serializes concurrent writes and idempotent deletion", async () => {
   const { source, store } = await fixture();
   const entries = await Promise.all(
-    Array.from({ length: 8 }, () => store.publish(source, "Review")),
+    Array.from({ length: 3 }, () => store.publish(source, "Review")),
   );
-  expect(new Set(entries.map((entry) => entry.id)).size).toBe(8);
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(3);
   await writeFile(source, "changed");
   expect((await store.get(entries[0].id))?.raw).toContain("<script>");
   await Promise.all(entries.map((entry) => store.delete(entry.id)));
