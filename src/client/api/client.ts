@@ -1,6 +1,9 @@
 import type {
   ApiError,
+  ArtifactsResponse,
+  CapabilitiesResponse,
   CreateSessionRequest,
+  DiffResponse,
   DirectiveDetailQuery,
   DirectiveDetailResponse,
   HubOperation,
@@ -79,6 +82,13 @@ function queryString(values: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
+  capabilities: (signal?: AbortSignal) =>
+    request<CapabilitiesResponse>("/api/v1/capabilities", signal),
+  artifacts: (signal?: AbortSignal) => request<ArtifactsResponse>("/api/v1/artifacts", signal),
+  deleteArtifact: (id: string, signal?: AbortSignal) =>
+    request<void>(`/api/v1/artifacts/${encodeURIComponent(id)}`, signal, { method: "DELETE" }),
+  diff: (id: string, signal?: AbortSignal) =>
+    request<DiffResponse>(`/api/v1/diffs/${encodeURIComponent(id)}`, signal),
   upload: (file: File, signal: AbortSignal, sessionId: string) =>
     request<UploadAttachment>(
       `/api/v1/uploads?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(file.name)}`,

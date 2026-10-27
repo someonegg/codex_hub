@@ -2,8 +2,10 @@ import "../styles/diff.css";
 
 import { useEffect, useState } from "react";
 
+import type { DiffResponse } from "../../shared/api-contract";
 import { type DiffLine, parseDiff } from "../../shared/diff";
 
+import { api, ApiClientError } from "../api/client";
 import { DiffFileTree } from "./DiffFileTree";
 
 const lineSigns = { add: "+", remove: "−", context: " " };
@@ -34,23 +36,21 @@ function renderDiffLine(line: DiffLine, index: number) {
 }
 
 export function DiffPage() {
-  const [entry, setEntry] = useState<{ title: string; raw: string } | null>(null);
+  const [entry, setEntry] = useState<DiffResponse | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/v1${location.pathname}`, { signal: controller.signal })
-      .then(async (response) => {
-        if (!response.ok)
-          throw new Error(
-            response.status === 404
+    api
+      .diff(decodeURIComponent(location.pathname.slice("/diffs/".length)), controller.signal)
+      .then(setEntry)
+      .catch((error: Error) => {
+        if (error.name !== "AbortError") {
+          setError(
+            error instanceof ApiClientError && error.status === 404
               ? "Diff not found or already cleaned up."
               : "Unable to load diff.",
           );
-        return response.json();
-      })
-      .then(setEntry)
-      .catch((error: Error) => {
-        if (error.name !== "AbortError") setError(error.message);
+        }
       });
     return () => controller.abort();
   }, []);

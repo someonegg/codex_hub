@@ -1,17 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
-interface Artifact {
-  id: string;
-  title: string;
-  updatedAt: string;
-  url: string;
-}
-interface Project {
-  directory: string;
-  artifacts: Artifact[];
-}
+import type { ArtifactsResponse, ArtifactSummary } from "../../shared/api-contract";
+
+import { api } from "../api/client";
+
 export function ArtifactsPage() {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ArtifactsResponse["projects"]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(true);
@@ -24,9 +18,7 @@ export function ArtifactsPage() {
     }
   }
   const loadProjects = useCallback(async () => {
-    const response = await fetch("/api/v1/artifacts");
-    if (!response.ok) throw new Error("Could not load pages");
-    const data = (await response.json()) as { projects: Project[] };
+    const data = await api.artifacts();
     setProjects(data.projects);
   }, []);
   const runOperation = useCallback(async (action: () => Promise<void>) => {
@@ -44,11 +36,10 @@ export function ArtifactsPage() {
   function refresh() {
     return runOperation(loadProjects);
   }
-  async function deleteArtifact(artifact: Artifact) {
+  async function deleteArtifact(artifact: ArtifactSummary) {
     if (!confirm(`Delete “${artifact.title}” and all its snapshots?`)) return;
     await runOperation(async () => {
-      const response = await fetch(`/api/v1/artifacts/${artifact.id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Could not delete page");
+      await api.deleteArtifact(artifact.id);
       await loadProjects();
     });
   }
