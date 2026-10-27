@@ -172,3 +172,26 @@ export type CreateSessionRequest =
       yolo?: boolean;
       requestId: string;
     };
+
+export interface CapabilitiesResponse {
+  hosting: boolean;
+}
+
+export interface ArtifactSummary {
+  id: string;
+  title: string;
+  updatedAt: string;
+  url: string;
+}
+
+export interface ArtifactsResponse {
+  projects: { directory: string; artifacts: ArtifactSummary[] }[];
+}
+
+export interface DiffResponse {
+  id: string;
+  title: string;
+  createdAt: string;
+  url: string;
+  raw: string;
+}

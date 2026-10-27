@@ -76,7 +76,7 @@ export function createUploadRoutes(
           request.headers["content-type"] ?? "application/octet-stream",
           uploadChunks(request),
         );
-        sendJson(response, 201, { ...attachment, attachment });
+        sendJson(response, 201, attachment);
       } else if (!attachmentId) {
         if (!(await sessions.getSession(id)))
           throw new RequestBodyError(404, "not_found", "Session not found");

@@ -150,11 +150,14 @@ describe("unified hub", () => {
       await flush();
       fireEvent.click(screen.getByRole("button", { name: "New session in reader" }));
       fireEvent.click(screen.getByRole("button", { name: "Create session" }));
+      fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
       await flush();
       if (dismiss) {
         fireEvent.click(screen.getByRole("button", { name: "Close new session" }));
+        fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
         fireEvent.click(screen.getByRole("link", { name: /Reader work/ }));
         await flush();
+        fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
       }
       await act(async () => {
         await vi.advanceTimersByTimeAsync(1000);
@@ -165,11 +168,45 @@ describe("unified hub", () => {
         fireEvent.click(screen.getByRole("link", { name: "Open session" }));
         await flush();
       }
+      expect(screen.getByRole("button", { name: /^reader.*1/ })).toHaveAttribute(
+        "aria-expanded",
+        "true",
+      );
       expect(window.location.pathname).toBe(`/sessions/${CHILD_ID}`);
       expect(screen.getByRole("heading", { name: "Child trace" })).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: "Open session" })).toBeNull();
     },
   );
+  it("expands the destination project when following the bound-session link", async () => {
+    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
+    vi.mocked(api.items).mockImplementation(async (id) => ({
+      ...firstPage,
+      hasMore: false,
+      session: { ...baseSession, id },
+      interaction: {
+        supported: true,
+        state: "superseded",
+        activity: null,
+        supersededBySessionId: CHILD_ID,
+        attachCommand: null,
+      },
+    }));
+    render(<App />);
+    await flush();
+    fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
+    expect(screen.getByRole("button", { name: /^reader.*1/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    fireEvent.click(screen.getByRole("link", { name: "Go to bound session" }));
+    await flush();
+    expect(window.location.pathname).toBe(`/sessions/${CHILD_ID}`);
+    expect(screen.getByRole("button", { name: /^reader.*1/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+  });
+
   it("opens nothing on home, toggles archived records, and retains navigation through history", async () => {
     render(<App />);
     await flush();

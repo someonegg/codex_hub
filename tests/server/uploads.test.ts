@@ -73,7 +73,9 @@ describe("uploads", () => {
           { method: "POST", body: "hello\u0000world" },
         );
         expect(response.status).toBe(201);
-        const { path } = (await response.json()) as { path: string };
+        const body = (await response.json()) as UploadAttachment;
+        expect(body).not.toHaveProperty("attachment");
+        const { path } = body;
         expect(isAbsolute(path)).toBe(true);
         expect(await readFile(path, "utf8")).toBe("hello\u0000world");
         return path;
@@ -332,12 +334,12 @@ it.each([
   ["tombstone", "restart"],
 ])("recovers deletion interrupted at %s using %s", async (step, recovery) => {
   const { origin, directory, store } = await fixture();
-  const { attachment } = (await (
+  const attachment = (await (
     await fetch(`${origin}/api/v1/uploads?sessionId=one&filename=a.txt`, {
       method: "POST",
       body: "data",
     })
-  ).json()) as { attachment: UploadAttachment };
+  ).json()) as UploadAttachment;
   const folder = join(attachment.path, "..");
   const tombstone = join(folder, attachment.id + ".meta.deleting");
   const remove = fs.rm;

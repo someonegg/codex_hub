@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { api } from "../api/client";
 import { catalogGroups } from "../state/catalog-groups";
 import type { useHubNavigation } from "../state/use-hub-navigation";
 import type { useSessionList } from "../state/use-session-list";
@@ -23,9 +24,9 @@ export function HubSidebar({
 }: HubSidebarProps) {
   const [hosting, setHosting] = useState(false);
   useEffect(() => {
-    void fetch("/api/v1/capabilities")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { hosting?: boolean } | null) => setHosting(data?.hosting === true))
+    void api
+      .capabilities()
+      .then((data) => setHosting(data.hosting === true))
       .catch(() => {});
   }, []);
   const {

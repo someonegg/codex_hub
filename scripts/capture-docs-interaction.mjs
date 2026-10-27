@@ -410,6 +410,10 @@ async function capture(
   try {
     await demo.goto(`${origin}/sessions/${session.id}`);
     await prepareDesktopPreview();
+    const selectedProject = demo.getByRole("button", { name: /atlas-dashboard, .* main sessions/ });
+    await selectedProject.waitFor();
+    if ((await selectedProject.getAttribute("aria-expanded")) !== "true")
+      throw new Error("Opening a session must expand its project");
     await verifyCompactInteraction();
     await verifyAttachments();
     for (const name of ["Message to agent", "Terminal Preview content"]) {
@@ -454,10 +458,11 @@ async function capture(
     await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("mist");
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
-    await demo.getByRole("button", { name: /atlas-dashboard, .* main sessions/ }).click();
+    for (const project of ["atlas-dashboard", "harbor-api", "field-notes"]) {
+      const toggle = demo.getByRole("button", { name: new RegExp(`${project}, .* main sessions`) });
+      if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
+    }
     await demo.getByText(session.title, { exact: true }).waitFor();
-    await demo.getByRole("button", { name: /harbor-api, .* main sessions/ }).click();
-    await demo.getByRole("button", { name: /field-notes, .* main sessions/ }).click();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Catalog horizontal overflow");
     await demo.evaluate(() => document.fonts.ready);
