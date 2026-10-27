@@ -28,6 +28,9 @@ function saveNavigation(navigation: NavigationState) {
   }
 }
 export function useHubNavigation(list: SessionListResponse | null) {
+  const [uploadsOpen, setUploadsOpen] = useState(() =>
+    /\/uploads\/?$/.test(window.location.pathname),
+  );
   const [sessionId, setSessionId] = useState(() => sessionIdFromPath(window.location.pathname));
   const [navigation, setNavigation] = useState(readNavigation);
   const navigationRef = useRef(navigation);
@@ -37,6 +40,7 @@ export function useHubNavigation(list: SessionListResponse | null) {
   const navigate = (id: string | null) => {
     const path = id === null ? "/" : `/sessions/${id}`;
     if (window.location.pathname !== path) window.history.pushState(null, "", path);
+    setUploadsOpen(false);
     setSessionId(id);
     window.scrollTo(0, 0);
     if (id === null) {
@@ -47,7 +51,10 @@ export function useHubNavigation(list: SessionListResponse | null) {
     }
   };
   useEffect(() => {
-    const pop = () => setSessionId(sessionIdFromPath(window.location.pathname));
+    const pop = () => {
+      setSessionId(sessionIdFromPath(window.location.pathname));
+      setUploadsOpen(/\/uploads\/?$/.test(window.location.pathname));
+    };
     window.addEventListener("popstate", pop);
     return () => window.removeEventListener("popstate", pop);
   }, []);
@@ -81,6 +88,7 @@ export function useHubNavigation(list: SessionListResponse | null) {
   };
   return {
     sessionId,
+    uploadsOpen,
     navigation,
     setIncludeArchived,
     toggleProject,
@@ -93,6 +101,6 @@ export function useHubNavigation(list: SessionListResponse | null) {
 }
 
 function sessionIdFromPath(pathname: string): string | null {
-  const match = /^\/sessions\/([A-Za-z0-9_-]{20,100})\/?$/.exec(pathname);
+  const match = /^\/sessions\/([A-Za-z0-9_-]{20,100})(?:\/uploads)?\/?$/.exec(pathname);
   return match?.[1] ?? null;
 }

@@ -403,7 +403,10 @@ function ManageSessionControls({
         onClose={() => setDeleteOpen(false)}
       >
         <h2>Delete archived session?</h2>
-        <p>Permanently delete this archived session? This cannot be undone.</p>
+        <p>
+          Permanently delete this archived session and all uploaded attachments? This cannot be
+          undone.
+        </p>
         <form
           onSubmit={(event) => {
             event.preventDefault();

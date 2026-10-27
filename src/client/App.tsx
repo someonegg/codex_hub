@@ -5,6 +5,7 @@ import { DiffPage } from "./components/DiffPage";
 import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
+import { UploadsPage } from "./components/UploadsPage";
 import { SessionPage } from "./SessionPage";
 import { SessionDraftProvider } from "./state/session-drafts";
 import { useHubNavigation } from "./state/use-hub-navigation";
@@ -109,16 +110,24 @@ function SessionHub() {
               <span aria-hidden="true">/</span>
               <span>Session</span>
             </div>
-            <SessionPage
-              key={sessionId}
-              sessionId={sessionId}
-              sessions={catalog.list?.sessions ?? []}
-              homes={homes}
-              includeArchived={navigation.includeArchived}
-              onNavigate={navigate}
-              onCatalogChanged={catalog.refresh}
-              onUpdatedAt={catalog.reportUpdatedAt}
-            />
+            {hub.uploadsOpen ? (
+              <UploadsPage
+                key={sessionId}
+                sessionId={sessionId}
+                onBack={() => navigate(sessionId)}
+              />
+            ) : (
+              <SessionPage
+                key={sessionId}
+                sessionId={sessionId}
+                sessions={catalog.list?.sessions ?? []}
+                homes={homes}
+                includeArchived={navigation.includeArchived}
+                onNavigate={navigate}
+                onCatalogChanged={catalog.refresh}
+                onUpdatedAt={catalog.reportUpdatedAt}
+              />
+            )}
           </>
         ) : (
           <section className="hub-welcome">

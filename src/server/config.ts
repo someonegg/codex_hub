@@ -4,6 +4,12 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+export function resolveHomeDirectory(value?: string): string {
+  return value === undefined
+    ? resolve(homedir(), ".codex-hub")
+    : resolveDirectoryOption("home-dir", value);
+}
+
 export const LOOPBACK_HOST = "127.0.0.1" as const;
 
 export type ServerTlsConfig =
@@ -69,6 +75,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       "ssl-ca": { type: "string" },
       help: { type: "boolean" },
       "tmux-socket": { type: "string" },
+      "home-dir": { type: "string" },
       "upload-dir": { type: "string" },
       hosting: { type: "boolean" },
       "hosting-dir": { type: "string" },
@@ -77,8 +84,8 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 
   if (values.help) return { kind: "help" };
 
-  if (values["hosting-dir"] !== undefined && !values.hosting)
-    throw new Error("--hosting-dir requires --hosting");
+  if (values["hosting-dir"] !== undefined || values["upload-dir"] !== undefined)
+    throw new Error("--hosting-dir and --upload-dir were removed; use --home-dir instead");
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
   const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
@@ -114,16 +121,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       clientDirectory: fileURLToPath(new URL("../../client/", import.meta.url)),
       tls,
       interactionEnabled: true,
+      uploadDirectory: resolve(resolveHomeDirectory(values["home-dir"]), "uploads"),
       ...(values.hosting
-        ? {
-            hostingDirectory:
-              values["hosting-dir"] !== undefined
-                ? resolveDirectoryOption("hosting-dir", values["hosting-dir"])
-                : resolve(homedir(), ".codex-hub/hosting"),
-          }
-        : {}),
-      ...(values["upload-dir"] !== undefined
-        ? { uploadDirectory: resolveDirectoryOption("upload-dir", values["upload-dir"]) }
+        ? { hostingDirectory: resolve(resolveHomeDirectory(values["home-dir"]), "hosting") }
         : {}),
       ...(values["tmux-socket"] !== undefined
         ? { tmuxSocket: resolve(nonEmptyOption("tmux-socket", values["tmux-socket"])!) }
@@ -140,13 +140,13 @@ Resources:
   codex-hub page delete <id>
   codex-hub diff list
   codex-hub diff delete <uuid>
-  All resource commands accept --hosting-dir <directory> and --json.
-Diff: codex-hub diff publish <file> [--title <title>] [--hosting-dir <directory>] [--json]
-Pages: codex-hub page publish <directory> --project <directory> [--name <name>] [--title <title>] [--hosting-dir <directory>] [--json]
+  All resource commands accept --home-dir <directory> and --json.
+Diff: codex-hub diff publish <file> [--title <title>] [--home-dir <directory>] [--json]
+Pages: codex-hub page publish <directory> --project <directory> [--name <name>] [--title <title>] [--home-dir <directory>] [--json]
 
 Options:
   --hosting            Enable trusted same-origin static web hosting
-  --hosting-dir <path> Hosting storage (requires --hosting; default: ~/.codex-hub/hosting)
+  --home-dir <path>    Hub data root (default: ~/.codex-hub; uploads/ and hosting/)
   --codex-home <nickname=path>
                        Codex home; repeat for multiple homes (default: default=~/.codex)
   --host <host>        Listen host (default: 127.0.0.1)
@@ -156,7 +156,6 @@ Options:
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
   --tmux-socket <path> tmux socket (default: tmux default selection)
-  --upload-dir <path>  Store uploads here (default: a persistent process temporary directory)
   --help               Show this help
 
 TLS example:

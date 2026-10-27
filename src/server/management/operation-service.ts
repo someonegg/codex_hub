@@ -5,6 +5,7 @@ import type { SessionInteractionService } from "../interaction/interaction-servi
 import { type PaneBindingManager, paneBindings } from "../interaction/pane-binding-manager.js";
 import type { SessionRuntime } from "../interaction/session-runtime.js";
 import { attachCommand } from "../interaction/tmux-launcher.js";
+import type { UploadCleanup } from "../uploads/store.js";
 import {
   AssociationError,
   type OperationContext,
@@ -63,6 +64,7 @@ export class OperationService {
     },
     bindings: PaneBindingManager = paneBindings,
     runtime?: SessionRuntime,
+    uploads?: UploadCleanup,
   ) {
     const control: OperationControl = {
       pending: (entry): entry is OperationEntry & { stage: OperationStage } => this.#pending(entry),
@@ -89,6 +91,7 @@ export class OperationService {
       control,
       now,
       waitMs,
+      uploads,
     );
     this.#timer = setInterval(() => {
       void this.poll();

@@ -111,7 +111,7 @@ export function createServer(
       }
       const url = new URL(request.url ?? "/", "http://localhost");
       const decodedPath = decodeURIComponent(url.pathname);
-      const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}\/?$/.test(decodedPath);
+      const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}(?:\/uploads)?\/?$/.test(decodedPath);
       const diffPage = /^\/diffs\/([a-f0-9-]{36})$/.exec(decodedPath);
       const appPage =
         decodedPath === "/" ||

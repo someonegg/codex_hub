@@ -5,6 +5,7 @@ import type { SessionDetail } from "../../shared/domain";
 import { sessionDisplayTitle } from "../session-title";
 import type { TimelineVisibility, TimelineVisibilityKey } from "../state/timeline-visibility";
 import { StatusBadge } from "./StatusBadge";
+import { UploadHistoryLink } from "./UploadHistoryLink";
 
 interface SessionHeaderProps {
   homeNickname?: string;
@@ -50,6 +51,8 @@ export function SessionHeader({
           <span>{updatedAt}</span>
           <span>·</span>
           <span>{session.itemCount} events</span>
+          <span>·</span>
+          <UploadHistoryLink sessionId={session.id} className="session-uploads-link" />
         </div>
         <div className="reader-controls">
           <details className="session-information" key={session.id}>

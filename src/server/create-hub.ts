@@ -14,6 +14,7 @@ import { OperationService } from "./management/operation-service.js";
 import { SessionManagerRegistry } from "./management/session-manager.js";
 import type { SessionSource } from "./source/session-source.js";
 import { SessionUpdatesService } from "./updates/session-updates-service.js";
+import type { UploadCleanup } from "./uploads/store.js";
 
 function createSessionReadService(
   sources: readonly SessionSource[],
@@ -37,6 +38,7 @@ export async function createCodexHub(
   homes: readonly CodexHomeConfig[],
   socket?: string,
   interactionEnabled = true,
+  uploads?: UploadCleanup,
 ) {
   const sources = await Promise.all(
     homes.map((home) => createCodexSessionSource(home.path, paneBindings)),
@@ -88,6 +90,7 @@ export async function createCodexHub(
       undefined,
       paneBindings,
       runtime,
+      uploads,
     );
     cleanup.push(() => operations.close());
     return { sessions, managers, interaction, catalog, updates, operations, close };

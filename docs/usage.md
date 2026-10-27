@@ -51,23 +51,24 @@ Use the attachment button to **Take photo**, **Choose images**, or **Choose file
 you can also paste images or drop files. Preview images or remove attachments
 before sending, with or without text. Multiple files are supported; folders are not.
 
-Unsent text and attachments stay with each session until the page is refreshed.
+Draft text and attachment selections survive session navigation but reset on refresh.
 
 Camera behavior depends on the browser and may fall back to a file picker. Images
 are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
 support depends on the agent. If the session becomes disconnected or busy while
 taking a photo, reconnect or retry later.
 
-Uploads use temporary storage by default. To keep them in a known location:
+Open **Upload history** from the attachment menu or session header to browse,
+preview, download, or delete uploads, including unsent files and files removed
+from drafts. Deleting a file removes it from the current draft and breaks paths
+in existing messages. Attachment deletion and cleanup are best effort. Session
+deletion triggers background cleanup; archive and exit retain uploads.
+[Preview upload history](images/codex-hub-uploads.png).
 
-```sh
-codex-hub --upload-dir ~/codex-hub-uploads
-```
-
-The directory must be accessible to the Codex process. Uploaded files are not
-removed when the hub stops or is uninstalled; delete them manually when no longer
-needed. See the [technical reference](technical-reference.md#file-uploads) for
-upload limits.
+Uploads persist under `uploads/` in the [Hub data root](#server-options), which
+must be accessible to the agent. Existing files are not migrated; manage old
+temporary uploads manually. See the [technical reference](technical-reference.md#file-uploads)
+for API and storage guarantees.
 
 ## Multiple homes
 
@@ -90,7 +91,7 @@ the destination home when creating a session.
 Start `codex-hub --hosting` to view published pages and diffs. Resource commands
 work while the server is stopped and print a relative URL and Markdown link on
 publication. Storage defaults to `~/.codex-hub/hosting`; for a custom location,
-pass the same `--hosting-dir /path` to the commands and server. Add `--json`
+pass the same `--home-dir /path` to the commands and server. Add `--json`
 for structured output.
 
 For agent-assisted publishing, install the
@@ -144,19 +145,18 @@ See the [diff reference](technical-reference.md#temporary-diffs) and
 Pass options to `codex-hub`; restart after changing them. Run `codex-hub --help`
 for the full command-line help.
 
-| Option                         | Default                | Purpose                                             |
-| ------------------------------ | ---------------------- | --------------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex`     | Choose one or more Codex homes                      |
-| `--host <host>`                | `127.0.0.1`            | Listen address                                      |
-| `--port <port>`                | `4173`                 | Listen port; `0` selects a free port                |
-| `--upload-dir <path>`          | Temporary directory    | Store uploaded files                                |
-| `--hosting`                    | Disabled               | Enable static web hosting                           |
-| `--hosting-dir <path>`         | `~/.codex-hub/hosting` | Hosting storage; requires `--hosting` at startup    |
-| `--tmux-socket <path>`         | tmux default           | Use a custom tmux socket                            |
-| `--ssl`                        | Disabled               | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
-| `--ssl-cert <path>`            | None                   | PEM server certificate or chain                     |
-| `--ssl-key <path>`             | None                   | PEM private key                                     |
-| `--ssl-ca <path>`              | None                   | Require client certificates signed by this CA       |
+| Option                         | Default            | Purpose                                             |
+| ------------------------------ | ------------------ | --------------------------------------------------- |
+| `--codex-home <nickname=path>` | `default=~/.codex` | Choose one or more Codex homes                      |
+| `--host <host>`                | `127.0.0.1`        | Listen address                                      |
+| `--port <port>`                | `4173`             | Listen port; `0` selects a free port                |
+| `--home-dir <path>`            | `~/.codex-hub`     | Hub data root (`uploads/` and `hosting/`)           |
+| `--hosting`                    | Disabled           | Enable static web hosting                           |
+| `--tmux-socket <path>`         | tmux default       | Use a custom tmux socket                            |
+| `--ssl`                        | Disabled           | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
+| `--ssl-cert <path>`            | None               | PEM server certificate or chain                     |
+| `--ssl-key <path>`             | None               | PEM private key                                     |
+| `--ssl-ca <path>`              | None               | Require client certificates signed by this CA       |
 
 ## Security
 
@@ -202,5 +202,5 @@ Stop the server. If installed globally:
 npm uninstall -g @someonegg/codex-hub
 ```
 
-An `npx` run needs no global uninstall. Sessions, worktrees, running tmux sessions,
-uploaded files, and hosted snapshots remain; clean them up separately as needed.
+An `npx` run needs no global uninstall. Uninstalling retains sessions, worktrees,
+running tmux sessions, uploads, and hosted snapshots; clean them up separately as needed.

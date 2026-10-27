@@ -16,6 +16,7 @@ import type {
   ToolDetailQuery,
   ToolDetailResponse,
 } from "../../shared/api-contract";
+import type { UploadAttachment } from "../../shared/uploads";
 
 export class ApiClientError extends Error {
   constructor(
@@ -78,11 +79,26 @@ function queryString(values: Record<string, string | number | boolean | undefine
 }
 
 export const api = {
-  upload: (file: File, signal: AbortSignal) =>
-    request<{ path: string }>(`/api/v1/uploads?filename=${encodeURIComponent(file.name)}`, signal, {
-      method: "POST",
-      body: file,
-    }),
+  upload: (file: File, signal: AbortSignal, sessionId: string) =>
+    request<UploadAttachment>(
+      `/api/v1/uploads?sessionId=${encodeURIComponent(sessionId)}&filename=${encodeURIComponent(file.name)}`,
+      signal,
+      {
+        method: "POST",
+        body: file,
+      },
+    ),
+  uploads: (id: string, signal: AbortSignal) =>
+    request<{ items: UploadAttachment[] }>(
+      `/api/v1/sessions/${encodeURIComponent(id)}/uploads`,
+      signal,
+    ),
+  deleteUpload: (id: string, attachmentId: string, signal: AbortSignal) =>
+    request<{ deleted: boolean }>(
+      `/api/v1/sessions/${encodeURIComponent(id)}/uploads/${encodeURIComponent(attachmentId)}`,
+      signal,
+      { method: "DELETE" },
+    ),
   createSession: (input: CreateSessionRequest) => postJson<HubOperation>("/api/v1/sessions", input),
   exitSession: (id: string) =>
     postJson<HubOperation>(`/api/v1/sessions/${encodeURIComponent(id)}/exit`, {}),

@@ -1,77 +1,113 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, open, realpath, unlink } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { mkdir, readFile, realpath } from "node:fs/promises";
+import type { IncomingMessage } from "node:http";
+import { join } from "node:path";
 
-import { MAX_UPLOAD_BYTES } from "../../shared/uploads.js";
+import { isPreviewableUploadType, MAX_UPLOAD_BYTES } from "../../shared/uploads.js";
+import type { SessionReader } from "../application/session-reader.js";
+import { resolveHomeDirectory } from "../config.js";
+import type { UploadStore } from "../uploads/store.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { RequestBodyError } from "./request-body.js";
 import { sendJson } from "./router.js";
 
-let defaultDirectory: Promise<string> | undefined;
-export async function uploadDirectory(configured?: string): Promise<string> {
-  if (configured !== undefined) {
-    await mkdir(configured, { recursive: true });
-    return realpath(configured);
+const SESSION_UPLOAD_PATH = /^\/api\/v1\/sessions\/([^/]+)\/uploads(?:\/([^/]+)(\/content)?)?$/;
+
+async function* uploadChunks(request: IncomingMessage): AsyncIterable<Uint8Array> {
+  let size = 0;
+  for await (const chunk of request.iterator({ destroyOnReturn: false })) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.byteLength;
+    if (size > MAX_UPLOAD_BYTES) {
+      request.resume();
+      throw new RequestBodyError(413, "body_too_large", "Files must be at most 20 MiB");
+    }
+    yield buffer;
   }
-  defaultDirectory ??= mkdtemp(join(tmpdir(), "codex-hub-uploads-")).then((directory) =>
-    realpath(directory),
-  );
-  return defaultDirectory;
+  if (!request.complete || request.aborted) throw new Error("Upload interrupted");
 }
 
-export function createUploadRoutes(directory?: string): ApiRouteHandler {
+export async function uploadDirectory(
+  configured = join(resolveHomeDirectory(), "uploads"),
+): Promise<string> {
+  await mkdir(configured, { recursive: true });
+  return realpath(configured);
+}
+export function createUploadRoutes(
+  store: UploadStore,
+  sessions: Pick<SessionReader, "getSession">,
+): ApiRouteHandler {
   return {
-    matches: (url) => url.pathname === "/api/v1/uploads",
+    matches: (url) => url.pathname === "/api/v1/uploads" || SESSION_UPLOAD_PATH.test(url.pathname),
     async handle(request, response, url) {
-      if (request.method !== "POST") {
-        response.setHeader("Allow", "POST");
+      const match = SESSION_UPLOAD_PATH.exec(url.pathname);
+      const [, encodedSessionId, attachmentId, contentPath] = match ?? [];
+      const id = match ? decodeURIComponent(encodedSessionId!) : url.searchParams.get("sessionId");
+      if (!id) throw new RequestBodyError(400, "invalid_session", "sessionId is required");
+      const method = request.method;
+      if (method === "POST" || method === "DELETE") {
+        const protocol =
+          "encrypted" in request.socket && request.socket.encrypted ? "https" : "http";
+        if (
+          request.headers.origin &&
+          request.headers.origin !== `${protocol}://${request.headers.host}`
+        )
+          throw new RequestBodyError(403, "forbidden", "Cross-origin uploads are not allowed");
+      }
+      let allowedMethod = "GET";
+      if (!match) allowedMethod = "POST";
+      else if (attachmentId && !contentPath) allowedMethod = "DELETE";
+      if (method !== allowedMethod) {
+        response.setHeader("Allow", allowedMethod);
         sendJson(response, 405, {
-          error: { code: "method_not_allowed", message: "Use POST to upload files" },
+          error: { code: "method_not_allowed", message: "Method not allowed" },
         });
         return true;
       }
-      const protocol = "encrypted" in request.socket && request.socket.encrypted ? "https" : "http";
-      if (
-        request.headers.origin &&
-        request.headers.origin !== `${protocol}://${request.headers.host}`
-      ) {
-        sendJson(response, 403, {
-          error: { code: "forbidden", message: "Cross-origin uploads are not allowed" },
-        });
-        return true;
-      }
-      const tooLarge = () =>
-        new RequestBodyError(413, "body_too_large", "Files must be at most 20 MiB");
-      if (Number(request.headers["content-length"]) > MAX_UPLOAD_BYTES) {
-        request.resume();
-        throw tooLarge();
-      }
-      const extension = extname(url.searchParams.get("filename") ?? "");
-      const safeExtension = /^\.[a-zA-Z0-9]{1,16}$/.test(extension) ? extension : "";
-      const path = join(await uploadDirectory(directory), `${randomUUID()}${safeExtension}`);
-      const file = await open(path, "wx", 0o600);
-      let complete = false;
-      try {
-        let bytes = 0;
-        for await (const chunk of request.iterator({ destroyOnReturn: false })) {
-          const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-          bytes += buffer.length;
-          if (bytes > MAX_UPLOAD_BYTES) {
-            request.resume();
-            throw tooLarge();
+      if (!match) {
+        if (Number(request.headers["content-length"]) > MAX_UPLOAD_BYTES) {
+          request.resume();
+          throw new RequestBodyError(413, "body_too_large", "Files must be at most 20 MiB");
+        }
+        if (!(await sessions.getSession(id)))
+          throw new RequestBodyError(404, "not_found", "Session not found");
+        const attachment = await store.upload(
+          id,
+          url.searchParams.get("filename") ?? "file",
+          request.headers["content-type"] ?? "application/octet-stream",
+          uploadChunks(request),
+        );
+        sendJson(response, 201, { ...attachment, attachment });
+      } else if (!attachmentId) {
+        if (!(await sessions.getSession(id)))
+          throw new RequestBodyError(404, "not_found", "Session not found");
+        sendJson(response, 200, { items: await store.list(id) });
+      } else if (!contentPath) {
+        await store.delete(id, attachmentId);
+        sendJson(response, 200, { deleted: true });
+      } else {
+        const content = await (async () => {
+          const attachment = await store.get(id, attachmentId);
+          if (!attachment) return null;
+          try {
+            return { attachment, data: await readFile(attachment.path) };
+          } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+            throw error;
           }
-          await file.writeFile(buffer);
-        }
-        if (!request.complete || request.aborted) throw new Error("Upload interrupted");
-        await file.close();
-        complete = true;
-        sendJson(response, 201, { path });
-      } finally {
-        if (!complete) {
-          await file.close().catch(() => undefined);
-          await unlink(path);
-        }
+        })();
+        if (!content) throw new RequestBodyError(404, "not_found", "Attachment not found");
+        const { attachment, data } = content;
+        const preview =
+          isPreviewableUploadType(attachment.type) && !url.searchParams.has("download");
+        response.setHeader("Content-Type", preview ? attachment.type : "application/octet-stream");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+        response.setHeader("Cache-Control", "no-store");
+        response.setHeader(
+          "Content-Disposition",
+          `${preview ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(attachment.filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16)}`)}`,
+        );
+        response.end(data);
       }
       return true;
     },

@@ -1,10 +1,13 @@
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 
 import type { SessionReader } from "../application/session-reader.js";
 import type { SessionCatalogService } from "../catalog/session-catalog-service.js";
+import { resolveHomeDirectory } from "../config.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
 import type { OperationService } from "../management/operation-service.js";
 import type { SessionUpdatesService } from "../updates/session-updates-service.js";
+import { UploadStore } from "../uploads/store.js";
 import { HttpQueryError } from "./query-params.js";
 import { RequestBodyError } from "./request-body.js";
 import { type ApiRouter, sendJson } from "./router.js";
@@ -30,6 +33,7 @@ export interface ApiRouterDependencies {
   readonly interaction?: InteractionApi;
   readonly operations?: OperationService;
   readonly uploadDirectory?: string;
+  readonly uploads?: UploadStore;
 }
 
 export interface ApiRouterOptions {
@@ -50,7 +54,11 @@ export function createApiRouter(
   const logger = options.logger ?? CONSOLE_ERROR_LOGGER;
   const requestIdFactory = options.requestId ?? randomUUID;
   const handlers = [
-    createUploadRoutes(dependencies.uploadDirectory),
+    createUploadRoutes(
+      dependencies.uploads ??
+        new UploadStore(dependencies.uploadDirectory ?? join(resolveHomeDirectory(), "uploads")),
+      dependencies.sessions,
+    ),
     createSessionManagementRoutes(dependencies.operations),
     createSessionUpdatesRoutes(dependencies.updates),
     createSessionInteractionRoutes(dependencies.interaction),

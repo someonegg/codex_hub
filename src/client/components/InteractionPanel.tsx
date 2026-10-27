@@ -21,6 +21,7 @@ import { api } from "../api/client";
 import { useSessionDraft } from "../state/session-drafts";
 import { AttachmentList } from "./AttachmentList";
 import { InternalLink } from "./InternalLink";
+import { UploadHistoryLink } from "./UploadHistoryLink";
 
 interface InteractionPanelProps {
   sessionId: string;
@@ -85,8 +86,6 @@ export function InteractionPanel({
     useSessionDraft(sessionId);
   const composer = useRef<HTMLTextAreaElement | null>(null);
   const upload = useRef<AbortController | null>(null);
-  const attachmentIdPrefix = useId();
-  const nextAttachmentId = useRef(0);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -129,7 +128,9 @@ export function InteractionPanel({
     }
     if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
     event.preventDefault();
-    const items = Array.from(event.currentTarget.querySelectorAll("button"));
+    const items = Array.from(
+      event.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not(:disabled)'),
+    );
     let next: number;
     if (event.key === "Home") next = 0;
     else if (event.key === "End") next = items.length - 1;
@@ -169,7 +170,7 @@ export function InteractionPanel({
       menu.style.maxHeight = `${Math.max(0, top - 12)}px`;
     };
     position();
-    attachmentMenu.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    attachmentMenu.current?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')?.focus();
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
     return () => {
@@ -190,10 +191,10 @@ export function InteractionPanel({
     try {
       for (const [index, file] of files.entries()) {
         setUploadProgress(`Uploading ${index + 1}/${files.length}…`);
-        const result = await api.upload(normalizeImageFile(file), controller.signal);
+        const result = await api.upload(normalizeImageFile(file), controller.signal, sessionId);
         if (controller.signal.aborted) return;
         addAttachment({
-          id: `${attachmentIdPrefix}-${nextAttachmentId.current++}`,
+          id: result.id,
           file,
           path: result.path,
         });
@@ -609,7 +610,6 @@ export function InteractionPanel({
                 aria-haspopup="menu"
                 aria-expanded={attachmentsOpen}
                 aria-controls={attachmentsOpen ? attachmentMenuId : undefined}
-                disabled={!previewConnected || interactionBusy || !!uploadProgress}
                 onClick={() => {
                   if (attachmentsOpen) closeAttachments();
                   else openAttachments();
@@ -646,11 +646,17 @@ export function InteractionPanel({
                   className="interaction-attachment-menu"
                   onKeyDown={onAttachmentMenuKeyDown}
                 >
+                  <UploadHistoryLink
+                    sessionId={sessionId}
+                    role="menuitem"
+                    onNavigate={closeAttachments}
+                  />
                   {attachmentPickers.map(({ label, input }) => (
                     <button
                       key={label}
                       type="button"
                       role="menuitem"
+                      disabled={!previewConnected || interactionBusy || !!uploadProgress}
                       onClick={() => {
                         input.current?.click();
                         closeAttachments();

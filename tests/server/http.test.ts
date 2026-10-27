@@ -227,6 +227,11 @@ describe("secure HTTP foundation", () => {
     const response = await fetch(`${base}/sessions/abcdefghijklmnopqrstuvwx`);
     expect(response.status).toBe(200);
     expect(await response.text()).toContain("trace notebook");
+    for (const suffix of ["/uploads", "/uploads/"]) {
+      const uploadsPage = await fetch(`${base}/sessions/abcdefghijklmnopqrstuvwx${suffix}`);
+      expect(uploadsPage.status).toBe(200);
+      expect(await uploadsPage.text()).toContain("trace notebook");
+    }
     const contentSecurityPolicy = response.headers.get("content-security-policy");
     expect(contentSecurityPolicy).toContain("default-src 'self'");
     expect(contentSecurityPolicy).toContain("font-src 'self' data:");
