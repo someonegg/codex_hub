@@ -175,9 +175,6 @@ cleans interrupted uploads, logging failures without blocking service. Cleanup
 does not block other uploads. Confirmed session deletion starts background cleanup;
 failed/unconfirmed deletion does not. Archive and exit retain uploads.
 
-A `.server-lock` is held from before recovery through HTTP draining and process
-exit. Competing Hubs fail immediately; dead owners are reclaimed on next startup.
-
 Drafts are in memory per session; navigation aborts unfinished uploads. Preview
 object URLs are revoked on removal/unmount. Sending prefixes text with one server
 path per line and a blank line, quoting paths when needed; attachment-only messages

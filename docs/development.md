@@ -47,10 +47,8 @@ npm test
 npm run format:check
 ```
 
-The full `npm test` run builds the shipped entry for its process/lock tests.
-After it passes, if application code has not changed, validate packaging with
-`npm run test:package -- --skip-build` to reuse that build. Standalone
-`npm run test:package` builds first; use `npm run build` when skipping the full suite.
+Validate packaging with `npm run test:package`, which builds first. If an existing
+build is current, use `npm run test:package -- --skip-build` to reuse it.
 
 Use `npm run format` for formatting and `npm run lint -- --fix` for fixable lint
 issues. Prettier owns formatting; ESLint covers application code, tests, and
