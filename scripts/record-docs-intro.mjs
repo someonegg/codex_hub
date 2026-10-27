@@ -165,6 +165,12 @@ async function record(
     await demo.getByRole("button", { name: "Create session", exact: true }).click();
     const composer = demo.getByRole("textbox", { name: "Message to agent" });
     await composer.waitFor();
+    await demo.waitForFunction(
+      () =>
+        document
+          .querySelector('.hub-project[data-project="atlas"] button[aria-expanded]')
+          ?.getAttribute("aria-expanded") === "true",
+    );
     await capture(1200);
     await composer.click();
     for (const character of prompt) {

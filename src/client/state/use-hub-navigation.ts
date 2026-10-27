@@ -70,6 +70,18 @@ export function useHubNavigation(list: SessionListResponse | null) {
     if (sessionId === null) document.title = "Codex Hub";
   }, [sessionId]);
   const selectedProject = projectForSession(list, sessionId);
+  let projectKey: string | undefined;
+  if (selectedProject !== undefined) {
+    projectKey = list?.projects.find((project) => project.id === selectedProject)?.id ?? "unknown";
+  }
+  useEffect(() => {
+    if (projectKey === undefined) return;
+    setNavigation((current) =>
+      current.expanded.includes(projectKey)
+        ? current
+        : { ...current, expanded: [...current.expanded, projectKey] },
+    );
+  }, [sessionId, projectKey]);
   const setIncludeArchived = (includeArchived: boolean) => {
     setNavigation((current) => ({ ...current, includeArchived }));
   };
