@@ -182,7 +182,7 @@ async function capture(
           sessions: [
             { ...session, sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false },
             ...[
-              ["keyboard", "Add keyboard navigation", "atlas"],
+              ["docs-demo-session-keyboard", "Add keyboard navigation", "atlas"],
               ["release", "Review the release checklist", "harbor"],
               ["api", "Document the API endpoints", "harbor"],
               ["guide", "Outline the getting started guide", "notes"],
@@ -200,7 +200,27 @@ async function capture(
       });
     }
     if (path.endsWith("/items")) {
-      return route.fulfill({ json: { ...snapshot, items } });
+      return route.fulfill({
+        json: {
+          ...snapshot,
+          session: path.includes("/docs-demo-session-keyboard/")
+            ? { ...session, id: "docs-demo-session-keyboard", title: "Add keyboard navigation" }
+            : session,
+          items,
+        },
+      });
+    }
+    if (path === "/api/v1/sessions/docs-demo-session-keyboard") {
+      return route.fulfill({
+        json: {
+          ...snapshot,
+          session: {
+            ...session,
+            id: "docs-demo-session-keyboard",
+            title: "Add keyboard navigation",
+          },
+        },
+      });
     }
     if (path === "/api/v1/sessions/docs-demo-session-00000001") {
       return route.fulfill({ json: snapshot });
@@ -285,6 +305,46 @@ async function capture(
     if (camera.isMultiple()) throw new Error("Camera accepts multiple files");
     await camera.setFiles([]);
     if (await composer.inputValue()) throw new Error("Cancelled camera changed the draft");
+    for (const kind of ["paste", "drop"]) {
+      await composer.evaluate((input, kind) => {
+        const transfer = new DataTransfer();
+        transfer.items.add(new File(["browser upload"], `${kind}.txt`, { type: "text/plain" }));
+        const event =
+          kind === "paste"
+            ? new ClipboardEvent("paste", {
+                clipboardData: transfer,
+                bubbles: true,
+                cancelable: true,
+              })
+            : new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true });
+        input.dispatchEvent(event);
+      }, kind);
+      const remove = demo.getByRole("button", { name: `Remove ${kind}.txt`, exact: true });
+      await remove.waitFor();
+      await remove.click();
+      if (uploadedNames.pop() !== `${kind}.txt`) throw new Error(`Unexpected ${kind} filename`);
+    }
+    const previewToggle = demo.getByRole("button", { name: "Terminal Preview", exact: true });
+    const previewWasExpanded = (await previewToggle.getAttribute("aria-expanded")) === "true";
+    await composer.fill("Draft survives switching sessions");
+    await demo.evaluate(() => {
+      history.pushState(null, "", "/sessions/docs-demo-session-keyboard");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await demo.getByRole("textbox", { name: "Message to agent" }).waitFor();
+    if (await composer.inputValue()) throw new Error("Draft leaked into another session");
+    await demo.evaluate((id) => {
+      history.pushState(null, "", `/sessions/${id}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }, session.id);
+    await demo.waitForFunction(
+      () => document.querySelector("textarea")?.value === "Draft survives switching sessions",
+    );
+    if (previewWasExpanded) {
+      if ((await previewToggle.getAttribute("aria-expanded")) !== "true")
+        await previewToggle.click();
+      await demo.getByLabel("Terminal Preview content", { exact: true }).waitFor();
+    }
     await composer.fill("Suggest the next step.");
   }
 

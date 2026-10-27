@@ -71,7 +71,8 @@ deletion triggers background cleanup; archive and exit retain uploads.
 Uploads persist under `uploads/` in the [Hub data root](#server-options), which
 must be accessible to the agent. Existing files are not migrated; manage old
 temporary uploads manually. See the [technical reference](technical-reference.md#file-uploads)
-for API and storage guarantees.
+for API and storage guarantees. Only one Hub can use an uploads directory at a time;
+stop the other Hub or choose another `--home-dir` if it is already in use.
 
 ## Multiple homes
 

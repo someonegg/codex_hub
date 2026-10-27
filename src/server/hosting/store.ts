@@ -14,7 +14,7 @@ import {
 import { homedir } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 
-import { HostingLock } from "./lock.js";
+import { DirectoryLock } from "../directory-lock.js";
 
 export const ID = /^[a-f0-9]{32}$/;
 export const defaultHostingDirectory = join(homedir(), ".codex-hub", "hosting");
@@ -73,7 +73,7 @@ export class HostingStore {
     this.root = resolve(root.startsWith("~/") ? join(homedir(), root.slice(2)) : root);
   }
   async locked<T>(action: () => Promise<T>): Promise<T> {
-    const lock = new HostingLock(this.root, ".write-lock");
+    const lock = new DirectoryLock(this.root, ".write-lock");
     try {
       while (!lock.acquire()) await new Promise((done) => setTimeout(done, 30));
       return await action();
