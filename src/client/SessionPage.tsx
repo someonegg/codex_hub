@@ -36,7 +36,7 @@ export function SessionPage({
     (session) =>
       session.parentId === sessionId && (includeArchived || session.status !== "archived"),
   );
-  const childSessionsKey = `codex-hub.child-sessions.${sessionId}`;
+  const childSessionsKey = `ahub.child-sessions.${sessionId}`;
   const [childrenExpanded, setChildrenExpanded] = useState(() => {
     try {
       return sessionStorage.getItem(childSessionsKey) === "true";

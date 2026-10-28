@@ -59,7 +59,7 @@ function boundSession(): InteractionSessionSnapshot {
     time: 0,
     ordinal: 4,
     position: 0,
-    attempt: { ordinal: 4, valid: true, socketPath: "/tmp/codex-hub.sock", paneId: "%7" },
+    attempt: { ordinal: 4, valid: true, socketPath: "/tmp/ahub.sock", paneId: "%7" },
   });
   return {
     archived: false,
@@ -116,7 +116,7 @@ describe("session interaction policy", () => {
 
   it("allows all actions whenever the pane is connected", async () => {
     const binding = {
-      socketPath: "/tmp/codex-hub.sock",
+      socketPath: "/tmp/ahub.sock",
       paneId: "%7",
     };
     const tmux = {
@@ -196,8 +196,8 @@ it("uses the adapter interrupt capability and preserves repeated interrupt order
   const snapshot = boundSession();
   const interruptSteps = vi.fn(codexInterruptSteps);
   const tmux = {
-    connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
-    resolveTarget: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
+    connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
+    resolveTarget: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
     sendKeys: vi.fn().mockResolvedValue(undefined),
   } as unknown as TmuxInteractionService;
   const service = new TestSessionInteractionService(
@@ -235,9 +235,9 @@ it("refreshes connection status after each completed query", async () => {
 it("freshly resolves management targets and rejects input while busy", async () => {
   const reader = repository(boundSession());
   const binding = {
-    socketPath: "/tmp/codex-hub.sock",
+    socketPath: "/tmp/ahub.sock",
     paneId: "%7",
-    sessionName: "codex-hub-test",
+    sessionName: "ahub-test",
   };
   const tmux = {
     connect: vi.fn().mockResolvedValue(binding),
@@ -248,7 +248,7 @@ it("freshly resolves management targets and rejects input while busy", async () 
   const service = new TestSessionInteractionService(reader, true, tmux);
   expect(await service.describe("session")).toMatchObject({
     state: "connected",
-    attachCommand: "tmux -S '/tmp/codex-hub.sock' attach-session -t 'codex-hub-test'",
+    attachCommand: "tmux -S '/tmp/ahub.sock' attach-session -t 'ahub-test'",
   });
   expect(await service.resolveTarget("session")).toBeNull();
   expect(tmux.resolveTarget).toHaveBeenCalledOnce();
@@ -276,7 +276,7 @@ it.each([
   "translates handoffPaneBinding transport failure %s without retry",
   async (transportCode, code) => {
     const tmux = {
-      connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/codex-hub.sock", paneId: "%7" }),
+      connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
       sendMessage: vi
         .fn()
         .mockRejectedValue(new InteractionTransportError(transportCode, "failed")),
@@ -303,7 +303,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
   "rechecks ownership immediately before queued %s executes",
   async (action) => {
     const reader = repository(boundSession());
-    const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
     let execute!: () => void;
     const queue = (check?: () => void) =>
       new Promise<void>((resolve, reject) => {
@@ -364,7 +364,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
 
 it("rechecks management target ownership after validation", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
   const tmux = {
     resolveTarget: vi.fn(async () => {
       bindings.submit({
@@ -396,7 +396,7 @@ it.each([false, true])(
           attempt: { ordinal: 5, valid: true, socketPath: "/tmp/new.sock", paneId: "%8" },
         });
         if (failure) throw new Error("query failed");
-        return { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+        return { socketPath: "/tmp/ahub.sock", paneId: "%7" };
       }),
     } as unknown as TmuxInteractionService;
     expect(
@@ -408,7 +408,7 @@ it.each([false, true])(
 
 it("does not recurse when a replacement changes during lookup", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
   bindings.submit({
     sessionId: "replacement",
     time: 1,
@@ -439,7 +439,7 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
   "validates superseded pane: %s",
   async (scenario) => {
     const reader = repository(boundSession());
-    const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
     bindings.submit({
       sessionId: "replacement",
       time: 1,
@@ -486,7 +486,7 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
 
 it("rejects an exit observation when ownership changes while querying pane liveness", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
   let resolve!: (state: "exited") => void;
   const tmux = {
     inspect: vi.fn(
@@ -519,7 +519,7 @@ it.each([
   async ({ change, ...target }) => {
     vi.useFakeTimers();
     const snapshot = boundSession();
-    const binding = { socketPath: "/tmp/codex-hub.sock", paneId: "%7" };
+    const binding = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
     let content = "first";
     let notify = () => {};
     const stop = vi.fn();

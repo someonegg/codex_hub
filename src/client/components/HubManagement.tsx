@@ -103,7 +103,7 @@ export function CreateSession({
   const recovery = useRef<boolean | null>(null);
   if (recovery.current === null) {
     try {
-      recovery.current = sessionStorage.getItem("codex-hub.operation.create") !== null;
+      recovery.current = sessionStorage.getItem("ahub.operation.create") !== null;
     } catch {
       recovery.current = false;
     }

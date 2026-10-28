@@ -12,8 +12,8 @@ import {
 } from "./docs-fixtures.mjs";
 
 const origin = process.argv[2] ?? "http://127.0.0.1:4187";
-const output = resolve(process.argv[3] ?? "docs/images/codex-hub-session-interaction.png");
-const directory = await mkdtemp(join(tmpdir(), "codex-hub-interaction-"));
+const output = resolve(process.argv[3] ?? "docs/images/ahub-session-interaction.png");
+const directory = await mkdtemp(join(tmpdir(), "ahub-interaction-"));
 const browserSession = `interaction-${Date.now()}`;
 
 async function capture(
@@ -26,7 +26,7 @@ async function capture(
   items,
   mockDocsTerminal,
 ) {
-  const resolveMobile = (view) => output.replace(/[^/]+$/, `codex-hub-mobile-${view}.png`);
+  const resolveMobile = (view) => output.replace(/[^/]+$/, `ahub-mobile-${view}.png`);
   const context = await page
     .context()
     .browser()
@@ -373,7 +373,7 @@ async function capture(
       throw new Error("Upload history horizontal overflow");
     if (demo.viewportSize().width > 600) {
       await demo.screenshot({
-        path: output.replace(/[^/]+$/, "codex-hub-uploads.png"),
+        path: output.replace(/[^/]+$/, "ahub-uploads.png"),
         animations: "disabled",
       });
     }
@@ -549,7 +549,7 @@ async function capture(
       throw new Error("Latest plan cannot be manually hidden");
     if (errors.length) throw new Error(errors.join("\n"));
   } catch (error) {
-    await demo.screenshot({ path: "/tmp/codex-hub-capture-failure.png" });
+    await demo.screenshot({ path: "/tmp/ahub-capture-failure.png" });
     throw new Error(
       `${error.message}\nPage: ${demo.url()}\n${await demo.locator("body").innerText()}\n${errors.join("\n")}`,
     );

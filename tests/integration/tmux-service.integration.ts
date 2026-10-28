@@ -94,13 +94,13 @@ describe("tmux interaction integration", () => {
       "-y",
       "20",
       "-s",
-      "codex-hub-test",
+      "ahub-test",
       "i=0; while [ \"$i\" -lt 80 ]; do printf 'HISTORY-%03d\\n' \"$i\"; i=$((i + 1)); done; printf '\\033[31mTAIL-世界\\033[0m\\n'; sleep 30",
     ]);
     try {
       const paneId = execFileSync(
         "tmux",
-        ["-S", socketPath, "display-message", "-p", "-t", "codex-hub-test", "#{pane_id}"],
+        ["-S", socketPath, "display-message", "-p", "-t", "ahub-test", "#{pane_id}"],
         { encoding: "utf8" },
       ).trim();
       const service = new TmuxInteractionService();

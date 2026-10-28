@@ -24,7 +24,7 @@ function SessionHub() {
   const catalog = useSessionList();
   const [homeFilter, setHomeFilter] = useState(() => {
     try {
-      return sessionStorage.getItem("codex-hub.home") ?? "";
+      return sessionStorage.getItem("ahub.home") ?? "";
     } catch {
       return "";
     }
@@ -35,7 +35,7 @@ function SessionHub() {
     if (!catalog.list) return;
     if (homeFilter !== selectedHome) setHomeFilter("");
     try {
-      sessionStorage.setItem("codex-hub.home", selectedHome);
+      sessionStorage.setItem("ahub.home", selectedHome);
     } catch {
       /* Storage may be unavailable. */
     }

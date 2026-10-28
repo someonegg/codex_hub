@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 
 const exec = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
-const temporary = await mkdtemp(join(tmpdir(), "codex-hub-package-"));
+const temporary = await mkdtemp(join(tmpdir(), "ahub-package-"));
 const args = process.argv.slice(2);
 assert(args.length <= 1, "Usage: test-package.mjs [--skip-build | package.tgz]");
 const skipBuild = args[0] === "--skip-build";

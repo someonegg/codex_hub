@@ -4,7 +4,7 @@ import type { SessionListResponse } from "../../shared/api-contract";
 
 import { projectForSession } from "./catalog-groups";
 
-const NAVIGATION_KEY = "codex-hub.navigation";
+const NAVIGATION_KEY = "ahub.navigation";
 interface NavigationState {
   includeArchived: boolean;
   expanded: string[];

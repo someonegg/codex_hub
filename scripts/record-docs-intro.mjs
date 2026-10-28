@@ -12,8 +12,8 @@ import { join, resolve } from "node:path";
 
 // Requires a running client server, playwright-cli, and Python with Pillow.
 const origin = process.argv[2] ?? "http://127.0.0.1:4187";
-const output = resolve(process.argv[3] ?? "docs/images/codex-hub-intro.gif");
-const frames = await mkdtemp(join(tmpdir(), "codex-hub-intro-"));
+const output = resolve(process.argv[3] ?? "docs/images/ahub-intro.gif");
+const frames = await mkdtemp(join(tmpdir(), "ahub-intro-"));
 const browserSession = `intro-${Date.now()}`;
 
 async function record(

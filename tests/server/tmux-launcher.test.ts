@@ -67,7 +67,7 @@ it.each([undefined, "/configured/socket path"])(
     ]);
     const args = execute.mock.calls[0]![1] as string[];
     expect(args.slice(0, socket ? 2 : 1)).toEqual(socket ? ["-S", socket] : ["new-session"]);
-    expect(args.slice(args.indexOf("-s"), args.indexOf("-s") + 2)).toEqual(["-s", "codex-hub-id"]);
+    expect(args.slice(args.indexOf("-s"), args.indexOf("-s") + 2)).toEqual(["-s", "ahub-id"]);
     expect(args).not.toContain("-L");
     if (!socket) expect(args).not.toContain("-S");
     expect(binding.socketPath).toBe("/actual/tmux.sock");
@@ -87,7 +87,7 @@ it("quotes shell values for attach", () => {
   expect(shellQuote("/tmp/a'b ; $HOME")).toBe(
     "'/tmp/a'" + String.fromCharCode(92) + "''b ; $HOME'",
   );
-  expect(attachCommand(undefined, "codex-hub-123")).toBe("tmux attach-session -t 'codex-hub-123'");
+  expect(attachCommand(undefined, "ahub-123")).toBe("tmux attach-session -t 'ahub-123'");
 });
 
 it("classifies a refused launch as definitely not started", async () => {
@@ -105,7 +105,7 @@ it("preserves a fallback attach command when launch times out", async () => {
     new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
   ).rejects.toMatchObject({
     outcome: "unknown",
-    attachCommand: attachCommand("/configured/socket", "codex-hub-id"),
+    attachCommand: attachCommand("/configured/socket", "ahub-id"),
   });
   expect(execute).toHaveBeenCalledOnce();
 });
@@ -118,7 +118,7 @@ it.each(["broken", "|%7", "/actual/socket|bad"])(
       new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
     ).rejects.toMatchObject({
       outcome: "unknown",
-      attachCommand: attachCommand("/configured/socket", "codex-hub-id"),
+      attachCommand: attachCommand("/configured/socket", "ahub-id"),
     });
     expect(execute).toHaveBeenCalledOnce();
   },
@@ -131,7 +131,7 @@ it("keeps the known target when post-launch setup fails", async () => {
   await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
     outcome: "unknown",
     target: { socketPath: "/actual/socket", paneId: "%7" },
-    attachCommand: attachCommand("/actual/socket", "codex-hub-id"),
+    attachCommand: attachCommand("/actual/socket", "ahub-id"),
   });
   expect(execute).toHaveBeenCalledTimes(2);
 });

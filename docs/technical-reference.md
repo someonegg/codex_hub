@@ -332,7 +332,7 @@ files directly.
 | Archive   | Reread source; already archived succeeds. Validate unique native identity, complete exit, then run native archive once (25-second command limit) and confirm within 30 seconds.                                                                                                      |
 | Delete    | Require archive, run native delete, and confirm same-source native identity absent within 30 seconds. Already absent in a successful initial snapshot succeeds.                                                                                                                      |
 
-Codex launches its main pane in `codex-hub-<operationId>` with `--no-daemon
+Codex launches its main pane in `ahub-<operationId>` with `--no-daemon
 --no-alt-screen`, plus optional `--worktree` and `--yolo` (default off). The initial
 CLI argument carries the binding shell instruction. Resume uses `codex resume
 <UUID>`, trying Working Directory then Project Directory; skip invalid paths and

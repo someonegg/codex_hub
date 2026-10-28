@@ -311,7 +311,7 @@ it("reports the native refusal for a running unbound session and archives it aft
 }, 60_000);
 
 it("composes the Hub with shared adapter, interaction, and operation bindings", async () => {
-  const root = await realpath(await createTempDirectory("codex-hub-composition-"));
+  const root = await realpath(await createTempDirectory("ahub-composition-"));
   const home = join(root, "home");
   const directory = join(root, "project");
   const socket = join(root, "tmux.sock");

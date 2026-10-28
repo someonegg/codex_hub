@@ -135,7 +135,7 @@ export class TmuxInteractionService implements InteractionTransport {
     return this.#serialize(binding, async () => {
       await this.#revalidate(binding);
       assertAvailable();
-      const bufferName = `codex-hub-${process.pid}-${randomUUID()}`;
+      const bufferName = `ahub-${process.pid}-${randomUUID()}`;
       let bufferMayExist = true;
       try {
         await this.#run(binding, ["load-buffer", "-b", bufferName, "-"], normalized);
