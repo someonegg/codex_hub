@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 
@@ -13,7 +13,7 @@ export interface UploadCleanup {
 export class UploadStore implements UploadCleanup {
   constructor(readonly directory: string) {}
   private folder(id: string) {
-    return join(this.directory, createHash("sha256").update(id).digest("hex"));
+    return join(this.directory, id);
   }
   async cleanup(id: string) {
     const tombstone = this.folder(id) + ".deleting";
@@ -68,9 +68,9 @@ export class UploadStore implements UploadCleanup {
     for (const folder of await readdir(this.directory, { withFileTypes: true })) {
       if (!folder.isDirectory()) continue;
       try {
-        if (/^[a-f0-9]{64}\.deleting$/.test(folder.name)) {
+        if (/^[A-Za-z0-9_-]+\.deleting$/.test(folder.name)) {
           await rm(join(this.directory, folder.name), { recursive: true, force: true });
-        } else if (/^[a-f0-9]{64}$/.test(folder.name)) {
+        } else if (/^[A-Za-z0-9_-]+$/.test(folder.name)) {
           await this.recover(join(this.directory, folder.name));
         }
       } catch (error) {

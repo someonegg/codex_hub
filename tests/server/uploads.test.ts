@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import * as fs from "node:fs/promises";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { createServer, request as httpRequest } from "node:http";
@@ -265,7 +265,7 @@ it.each([
 it("returns all uploads newest first and persists metadata across restarts", async () => {
   const { origin, directory, store } = await fixture();
   // Seed persisted history; the final upload still exercises the HTTP write path.
-  const folder = join(directory, createHash("sha256").update("one").digest("hex"));
+  const folder = join(directory, "one");
   await fs.mkdir(folder, { recursive: true });
   await Promise.all(
     Array.from({ length: 51 }, async (_, i) => {
@@ -373,6 +373,7 @@ it("accepts byte streams and recovers interrupted writes without HTTP dependenci
     yield new Uint8Array([2, 3]);
   }
   const attachment = await store.upload("one", "bytes.bin", "application/octet-stream", chunks());
+  expect(attachment.path).toBe(join(directory, "one", `${attachment.id}.bin`));
   expect(attachment.size).toBe(4);
   expect(await readFile(attachment.path)).toEqual(Buffer.from([0, 1, 2, 3]));
   async function* broken() {
