@@ -84,12 +84,6 @@ export function InteractionPanel({
   const { message, setMessage, attachments, addAttachment, removeAttachment, clearSentMessage } =
     useSessionDraft(sessionId);
   const composer = useRef<HTMLTextAreaElement | null>(null);
-  const pendingCaret = useRef<number | null>(null);
-  useLayoutEffect(() => {
-    if (pendingCaret.current === null) return;
-    composer.current?.setSelectionRange(pendingCaret.current, pendingCaret.current);
-    pendingCaret.current = null;
-  }, [message]);
   const [dragging, setDragging] = useState(false);
   const previewConnected = interaction?.supported === true && interaction.state === "connected";
   const {
@@ -187,24 +181,12 @@ export function InteractionPanel({
     void onSendKeys(keys).catch(() => undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.nativeEvent.isComposing) return;
-    const controlJ = isControlJ(event);
-    if (event.key !== "Enter" && !controlJ) return;
-    if (!event.shiftKey && !isStrictSlashCommand) {
-      if (!controlJ) return;
-      event.preventDefault();
-      if (!previewConnected || interactionBusy || isUploading()) return;
-      const { selectionStart, selectionEnd, maxLength } = event.currentTarget;
-      const next = message.slice(0, selectionStart) + "\n" + message.slice(selectionEnd);
-      if (next.length > maxLength) return;
-      if (next === message) {
-        event.currentTarget.setSelectionRange(selectionStart + 1, selectionStart + 1);
-        return;
-      }
-      pendingCaret.current = selectionStart + 1;
-      setMessage(next);
+    if (
+      event.key !== "Enter" ||
+      event.nativeEvent.isComposing ||
+      (!event.shiftKey && !isStrictSlashCommand)
+    )
       return;
-    }
     event.preventDefault();
     if (event.repeat) return;
     void send().catch(() => undefined);
@@ -214,13 +196,13 @@ export function InteractionPanel({
       !previewExpanded ||
       !previewConnected ||
       event.altKey ||
-      (event.ctrlKey && !isControlJ(event)) ||
+      event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
       event.nativeEvent.isComposing
     )
       return;
-    const key = isControlJ(event) ? "enter" : PREVIEW_KEYS[event.key];
+    const key = PREVIEW_KEYS[event.key];
     if (!key) return;
     event.preventDefault();
     sendKeys([key]);
@@ -529,10 +511,6 @@ function interactionStatus(
   if (state === "unknown") return { kind: "warning", label: "Connection unknown" };
   if (state === "unavailable") return { kind: "warning", label: "Unavailable" };
   return { kind: "connected", label: "Connected" };
-}
-
-function isControlJ(event: KeyboardEvent): boolean {
-  return event.ctrlKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "j";
 }
 
 const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {

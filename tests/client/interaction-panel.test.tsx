@@ -192,19 +192,6 @@ describe("interaction panel", () => {
     expect(await screen.findByRole("textbox", { name: "Message to agent" })).toHaveValue("");
   });
 
-  it("inserts a newline at the selection with Ctrl+J and keeps the caret after it", () => {
-    const handlers = props(interaction("connected"));
-    render(<InteractionPanel {...handlers} />);
-    const textarea = screen.getByRole<HTMLTextAreaElement>("textbox");
-    fireEvent.change(textarea, { target: { value: "before selected after" } });
-    textarea.setSelectionRange(7, 15);
-    expect(fireEvent.keyDown(textarea, { key: "j", ctrlKey: true })).toBe(false);
-    expect(textarea).toHaveValue("before \n after");
-    expect(textarea.selectionStart).toBe(8);
-    expect(textarea.selectionEnd).toBe(8);
-    expect(handlers.onSendMessage).not.toHaveBeenCalled();
-  });
-
   it("keeps Send disabled for blank input", async () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
@@ -567,36 +554,6 @@ it("does not expand the preview after failed handoff delivery", async () => {
 });
 
 it.each([
-  { key: "j", ctrlKey: true },
-  { key: "J", ctrlKey: true, shiftKey: true },
-])("treats Ctrl+J as Enter for slash commands: %j", async (options) => {
-  const handlers = props(interaction("connected"));
-  render(<InteractionPanel {...handlers} />);
-  const textarea = screen.getByRole("textbox");
-  fireEvent.change(textarea, { target: { value: "/help" } });
-  fireEvent.keyDown(textarea, options);
-  expect(handlers.onSendMessage).toHaveBeenCalledWith("/help");
-  await act(async () => {
-    await Promise.resolve();
-  });
-});
-
-it.each([
-  { ctrlKey: true, altKey: true },
-  { ctrlKey: true, metaKey: true },
-  { ctrlKey: true, isComposing: true },
-  {},
-])("leaves unrelated J shortcuts and composition alone: %j", (options) => {
-  const handlers = props(interaction("connected"));
-  render(<InteractionPanel {...handlers} />);
-  const textarea = screen.getByRole("textbox");
-  fireEvent.change(textarea, { target: { value: "hello" } });
-  expect(fireEvent.keyDown(textarea, { key: "j", ...options })).toBe(true);
-  expect(textarea).toHaveValue("hello");
-  expect(handlers.onSendMessage).not.toHaveBeenCalled();
-});
-
-it.each([
   ["Escape", "interrupt"],
   ["Enter", "enter"],
   ["ArrowLeft", "left"],
@@ -614,14 +571,6 @@ it.each([
   expect(handlers.onSendKeys).toHaveBeenCalledTimes(2);
   expect(handlers.onTogglePreview).not.toHaveBeenCalled();
   expect(button).toHaveFocus();
-});
-
-it("maps Ctrl+J to Enter in the terminal preview", () => {
-  const handlers = props(interaction("connected"));
-  render(<Panel {...handlers} previewExpanded />);
-  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
-  expect(fireEvent.keyDown(body, { key: "j", ctrlKey: true })).toBe(false);
-  expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["enter"]);
 });
 
 it("preserves editing and unrelated keyboard actions and blocks sends while busy or folded", () => {
