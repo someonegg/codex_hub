@@ -20,7 +20,6 @@ export function ThemeSelect() {
   const [theme, setTheme] = useState(savedTheme);
   return (
     <label className="theme-select">
-      <span>Theme</span>
       <select
         aria-label="Theme"
         value={theme}

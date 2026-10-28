@@ -225,7 +225,7 @@ try {
     const originalUrl = hub.url();
     const [demo] = await Promise.all([
       context.waitForEvent("page"),
-      hub.getByRole("link", { name: "Pages", exact: true }).click(),
+      hub.getByRole("link", { name: "Published pages", exact: true }).click(),
     ]);
     await demo.waitForURL(settings.origin + "/artifacts");
     if (hub.url() !== originalUrl) throw new Error("Pages replaced the original tab");

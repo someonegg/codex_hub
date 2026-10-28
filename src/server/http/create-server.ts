@@ -10,7 +10,6 @@ import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
 import type { ServerConfig } from "../config.js";
-import { DirectoryLock } from "../directory-lock.js";
 import { DiffStore } from "../hosting/diff-store.js";
 import { hostingRoutes } from "../hosting/routes.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
@@ -75,23 +74,6 @@ export function createServer(
   upgrades?: ServerUpgradeHandler,
 ) {
   const clientRoot = realpathSync(config.clientDirectory);
-  const finish = <T extends ReturnType<typeof createHttpServer>>(server: T): T => {
-    const lock = config.hostingDirectory
-      ? new DirectoryLock(config.hostingDirectory, ".server-lock")
-      : undefined;
-    try {
-      if (lock && !lock.acquire())
-        throw new Error("Hosting directory is already used by another Hub server");
-    } catch (error) {
-      lock?.close();
-      throw error;
-    }
-    server.once("close", () => lock?.close());
-    server.once("error", () => {
-      if (!server.listening) lock?.close();
-    });
-    return attachLifecycle(server, closeServices, upgrades);
-  };
   const hosting = hostingRoutes(config.hostingDirectory);
   const diffs = config.hostingDirectory ? new DiffStore(config.hostingDirectory) : undefined;
   const clientRootPrefix = `${clientRoot}${sep}`;
@@ -148,7 +130,7 @@ export function createServer(
 
   if (!config.tls.enabled) {
     const server = createHttpServer(requestListener);
-    return finish(server);
+    return attachLifecycle(server, closeServices, upgrades);
   }
 
   const requireClientCertificate = config.tls.certificateAuthorityPath !== undefined;
@@ -165,7 +147,7 @@ export function createServer(
     },
     requestListener,
   );
-  return finish(server);
+  return attachLifecycle(server, closeServices, upgrades);
 }
 
 /** Own startup cleanup as well as the server's pre-drain shutdown hook. */

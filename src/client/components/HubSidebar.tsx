@@ -184,7 +184,7 @@ export function HubSidebar({
       <footer className="hub-sidebar-footer">
         {hosting ? (
           <a href="/artifacts" target="_blank" rel="noopener noreferrer">
-            Pages
+            Published pages
           </a>
         ) : null}
         <ThemeSelect />
