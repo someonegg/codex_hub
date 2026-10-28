@@ -164,7 +164,7 @@ reject cross-origin access. Content/delete access is session-scoped. HTML, SVG,
 and other non-preview types always download; all content uses `nosniff` and a
 sandbox CSP.
 
-Storage is `<home-dir>/uploads/`, grouped by a digest of the opaque Hub session ID.
+Storage is `<home-dir>/uploads/<Hub session ID>/`.
 Metadata commits use atomic rename and record absolute content paths. Removed
 `--upload-dir` / `--hosting-dir` options have no automatic migration; stop the Hub
 before changing storage, and preserve recorded upload paths.
