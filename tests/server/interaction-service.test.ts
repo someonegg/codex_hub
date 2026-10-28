@@ -148,6 +148,16 @@ describe("session interaction policy", () => {
       "right",
       "interrupt",
       "plan",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
     ]);
     const frame = vi.fn();
     const failure = vi.fn();
@@ -171,6 +181,10 @@ describe("session interaction policy", () => {
         })),
         ...codexInterruptSteps(),
         { keys: ["BTab"], delayMs: 0 },
+        ...(["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"] as const).map((key) => ({
+          keys: [key],
+          delayMs: 0,
+        })),
       ],
       expect.any(Function),
     );

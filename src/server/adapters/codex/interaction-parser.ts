@@ -16,6 +16,16 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   left: "Left",
   right: "Right",
   plan: "BTab",
+  "0": "0",
+  "1": "1",
+  "2": "2",
+  "3": "3",
+  "4": "4",
+  "5": "5",
+  "6": "6",
+  "7": "7",
+  "8": "8",
+  "9": "9",
 } as const satisfies InteractionKeyBindings;
 
 // Clear terminal input and the previous Esc state before interrupting.

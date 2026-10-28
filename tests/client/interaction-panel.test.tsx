@@ -557,6 +557,16 @@ it.each([
   ["Escape", "interrupt"],
   ["Enter", "enter"],
   ["ArrowLeft", "left"],
+  ["0", "0"],
+  ["1", "1"],
+  ["2", "2"],
+  ["3", "3"],
+  ["4", "4"],
+  ["5", "5"],
+  ["6", "6"],
+  ["7", "7"],
+  ["8", "8"],
+  ["9", "9"],
 ])("maps physical %s in the preview and prevents defaults", (physical, key) => {
   const handlers = props(interaction("connected"));
   render(<Panel {...handlers} previewExpanded />);
@@ -578,7 +588,7 @@ it("preserves editing and unrelated keyboard actions and blocks sends while busy
   const view = render(<Panel {...handlers} previewExpanded />);
   const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
   for (const modifier of ["shiftKey", "ctrlKey", "altKey", "metaKey", "isComposing"]) {
-    for (const key of ["Enter", "Escape"]) {
+    for (const key of ["Enter", "Escape", "0", "9"]) {
       expect(fireEvent.keyDown(body, { key, [modifier]: true })).toBe(true);
     }
   }
@@ -586,12 +596,14 @@ it("preserves editing and unrelated keyboard actions and blocks sends while busy
   expect(
     fireEvent.keyDown(screen.getByRole("button", { name: "Terminal Preview" }), { key: "Enter" }),
   ).toBe(true);
+  expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "1" })).toBe(true);
   expect(handlers.onSendKeys).not.toHaveBeenCalled();
   fireEvent.click(body);
   expect(body).toHaveFocus();
   view.rerender(<Panel {...handlers} interactionBusy previewExpanded />);
   expect(fireEvent.keyDown(body, { key: "Enter" })).toBe(false);
   expect(fireEvent.keyDown(body, { key: "Escape" })).toBe(false);
+  expect(fireEvent.keyDown(body, { key: "1" })).toBe(false);
   expect(handlers.onSendKeys).not.toHaveBeenCalled();
   view.rerender(<Panel {...handlers} previewExpanded interaction={interaction("disconnected")} />);
   fireEvent.keyDown(body, { key: "Enter" });
