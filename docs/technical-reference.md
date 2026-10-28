@@ -207,11 +207,10 @@ without process-identity checks.
 
 ### Binding format and ownership
 
-Codex reads `CODEX_HUB_TMUX_BIND_V4` in user-message `<user_shell_command>` output.
+Codex reads `AHUB_TMUX_BIND_V1` in user-message `<user_shell_command>` output.
 Its five lines are the marker, absolute socket path, numeric `%` pane ID, optional
 operation UUID, and optional project directory. Empty optional fields keep their
-lines. V3 remains readable without the project field. An invalid latest attempt
-never falls back to an older bind.
+lines. An invalid latest attempt never falls back to an older bind.
 
 One process-wide manager retains the latest attempt per session and latest valid
 claim per socket/pane across homes. Adapters submit accepted records, including

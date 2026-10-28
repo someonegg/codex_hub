@@ -101,7 +101,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     ]);
     await interaction.sendMessage(
       manualId,
-      `! printf 'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
+      `! printf 'AHUB_TMUX_BIND_V1\\n%s\\n%s\\n\\n\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
     );
     await until(async () => {
       await reader.managementSnapshot();

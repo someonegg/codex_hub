@@ -22,27 +22,19 @@ it.each([null, undefined, "", "relative", "/a\0b", "/a\rb", "/a\nb"])(
 it.each(["relative", "/a\0b"])("emits an empty project field for invalid %j", (path) => {
   expect(codexBindingCommand(undefined, path)).toMatch(/'' ''$/);
 });
-it.each(["/a space/'quote'/$HOME;$(echo bad)`echo bad`"])(
-  "preserves and safely quotes %s",
-  (path) => {
-    expect(validProjectDirectory(path)).toBe(true);
-    const command = codexBindingCommand(undefined, path)
-      .slice(2)
-      .replace("\"$(tmux display-message -p '#{socket_path}')\"", "'/tmp/socket'");
-    const output = execFileSync("bash", ["-c", command], {
-      env: { ...process.env, TMUX_PANE: "%1" },
-      encoding: "utf8",
-    });
-    expect(output.split("\n")).toEqual([
-      "CODEX_HUB_TMUX_BIND_V4",
-      "/tmp/socket",
-      "%1",
-      "",
-      path,
-      "",
-    ]);
-  },
-);
+it("preserves and safely quotes shell characters in project paths", () => {
+  const path = "/a space/'quote'/$HOME;$(echo bad)`echo bad`";
+  expect(validProjectDirectory(path)).toBe(true);
+  const command = codexBindingCommand(undefined, path)
+    .slice(2)
+    .replace("\"$(tmux display-message -p '#{socket_path}')\"", "'/tmp/socket'");
+  const output = execFileSync("bash", ["-c", command], {
+    env: { ...process.env, TMUX_PANE: "%1" },
+    encoding: "utf8",
+  });
+  expect(output.split("\n")).toEqual(["AHUB_TMUX_BIND_V1", "/tmp/socket", "%1", "", path, ""]);
+});
+
 it("validates create directories, resolves symlinks and passes the explicit project through worktree launch", async () => {
   const home = await createTempDirectory("create-directory-");
   const directory = join(home, "project");

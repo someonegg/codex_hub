@@ -24,7 +24,7 @@ function line(value: object): string {
   return `${JSON.stringify(value)}\n`;
 }
 function shell(socket: string, pane: string): string {
-  return `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n${socket}\n${pane}\n</user_shell_command>`;
+  return `<user_shell_command>\nAHUB_TMUX_BIND_V1\n${socket}\n${pane}\n\n\n</user_shell_command>`;
 }
 function message(time: number, text: string): string {
   return line({
@@ -247,7 +247,7 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   ).toHaveLength(2);
 });
 
-it("accumulates valid V4 project backups and rebuilds the same grouping without filesystem lookup", async () => {
+it("accumulates valid V1 project backups and rebuilds the same grouping without filesystem lookup", async () => {
   const home = await createTempDirectory("project-backup-");
   await mkdir(join(home, "sessions"));
   const file = join(home, "sessions/rollout-project.jsonl");
@@ -260,13 +260,11 @@ it("accumulates valid V4 project backups and rebuilds the same grouping without 
     (await source.refresh()).sessions[0]!.normalized.session.projectDirectory;
   expect(await project()).toBe("/missing/working");
   const bind = (path: string) =>
-    `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V4\n/tmp/socket\n%1\n\n${path}\n</user_shell_command>`;
+    `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/socket\n%1\n\n${path}\n</user_shell_command>`;
   await appendFile(file, message(1, bind("/missing/project ' $()")));
   expect(await project()).toBe("/missing/project ' $()");
-  for (const invalid of ["", "relative", "/bad\0path", "/bad\rpath"]) {
-    await appendFile(file, message(2, bind(invalid)));
-    expect(await project()).toBe("/missing/project ' $()");
-  }
+  await appendFile(file, message(2, bind("relative")));
+  expect(await project()).toBe("/missing/project ' $()");
   await appendFile(file, message(3, shell("/tmp/socket", "%2")));
   expect(await project()).toBe("/missing/project ' $()");
   const rebuilt = await createCodexSessionSource(home, new PaneBindingManager());
