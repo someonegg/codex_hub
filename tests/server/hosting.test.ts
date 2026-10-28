@@ -177,28 +177,6 @@ it("ignores interrupted temporary snapshots and damaged entries on restart", asy
   expect(diagnostics).toHaveBeenCalled();
   diagnostics.mockRestore();
 });
-it("refuses a second service and releases its lock when closed", async () => {
-  const { root, store } = await fixture();
-  const client = join(root, "client");
-  await mkdir(client);
-  await writeFile(join(client, "index.html"), "hub");
-  const config = {
-    homes: [],
-    host: "127.0.0.1",
-    port: 0,
-    clientDirectory: client,
-    tls: { enabled: false } as const,
-    interactionEnabled: false,
-    hostingDirectory: store.root,
-  };
-  const first = createServer(config);
-  await listenServer(first, 0, config.host);
-  expect(() => createServer(config)).toThrow(/already used/);
-  await new Promise<void>((resolve) => first.close(() => resolve()));
-  const second = createServer(config);
-  await listenServer(second, 0, config.host);
-  await new Promise<void>((resolve) => second.close(() => resolve()));
-});
 it("keeps all hosting routes disabled without touching existing snapshots", async () => {
   const { root, source, project, store } = await fixture();
   const artifact = await store.publish(source, project);

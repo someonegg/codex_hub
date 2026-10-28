@@ -382,7 +382,7 @@ hosting adds no application login.
 Publish/delete share a process-aware filesystem lock installed by atomic rename.
 Dead owners are reclaimed only after the OS reports their PID absent; tombstones
 prevent reclaimers from disturbing newly acquired locks. PID reuse by a live
-process blocks recovery. A separate service lock permits one Hub per hosting root.
+process blocks recovery.
 Avoid manual storage changes during publication.
 
 ### Web pages
