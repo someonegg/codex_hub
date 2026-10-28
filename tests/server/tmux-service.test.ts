@@ -113,7 +113,7 @@ describe("tmux interaction transport", () => {
       "-p",
       "-d",
       "-b",
-      expect.stringMatching(/^codex-hub-/),
+      expect.stringMatching(/^ahub-/),
       "-t",
       "%3",
     ]);

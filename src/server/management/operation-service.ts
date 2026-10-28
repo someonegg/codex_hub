@@ -186,7 +186,7 @@ export class OperationService {
       ) {
         this.#attach(
           entry,
-          attachCommand(context.target.socketPath, `codex-hub-${entry.metadata.operationId}`),
+          attachCommand(context.target.socketPath, `ahub-${entry.metadata.operationId}`),
         );
       }
       if (
@@ -303,7 +303,7 @@ export class OperationService {
     if (context?.kind === "create" && context.phase === "observing" && status === "unknown") {
       entry.metadata.attachCommand = attachCommand(
         context.target.socketPath,
-        `codex-hub-${entry.metadata.operationId}`,
+        `ahub-${entry.metadata.operationId}`,
       );
     }
     entry.metadata.updatedAt = new Date(this.now()).toISOString();

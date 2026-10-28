@@ -4,14 +4,14 @@ A local web hub for Codex that pairs readable conversations with live CLI intera
 Browse sessions by project, follow responses in near real time, and keep working with
 Codex from desktop or mobile.
 
-![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/codex-hub-intro.gif)
+![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 
 <details>
 <summary>Mobile screenshots</summary>
 
-<img src="docs/images/codex-hub-mobile-catalog.png" alt="Mobile project navigation" width="260">
-<img src="docs/images/codex-hub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
-<img src="docs/images/codex-hub-mobile-composer.png" alt="Mobile message input with image attachment preview and send controls" width="260">
+<img src="docs/images/ahub-mobile-catalog.png" alt="Mobile project navigation" width="260">
+<img src="docs/images/ahub-mobile-reader.png" alt="Mobile conversation with an answered User input question, options, and selected answer" width="260">
+<img src="docs/images/ahub-mobile-composer.png" alt="Mobile message input with image attachment preview and send controls" width="260">
 
 </details>
 
@@ -88,7 +88,7 @@ See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API lim
 <details>
 <summary>Show session interaction screenshot</summary>
 
-<img src="docs/images/codex-hub-session-interaction.png" alt="Session conversation with answered User input, live terminal preview, controls, message input, and Handoff" width="900">
+<img src="docs/images/ahub-session-interaction.png" alt="Session conversation with answered User input, live terminal preview, controls, message input, and Handoff" width="900">
 
 </details>
 
@@ -129,6 +129,6 @@ authentication, such as the built-in mTLS option, and restrict access. See the
 
 Choose **Paper** from the theme list at the bottom of the sidebar. Your choice is saved on this device.
 
-<img src="docs/images/codex-hub-session-interaction-warm.png" alt="Paper theme with cream surfaces and muted green accents" width="900">
+<img src="docs/images/ahub-session-interaction-warm.png" alt="Paper theme with cream surfaces and muted green accents" width="900">
 
 </details>

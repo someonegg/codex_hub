@@ -78,7 +78,7 @@ interface OperationRun {
 }
 
 export function useHubOperation(scope: string, onSuccess: (operation: HubOperation) => void) {
-  const key = `codex-hub.operation.${scope}`;
+  const key = `ahub.operation.${scope}`;
   const [state, setState] = useState<State>(initial);
   const current = useRef<State>(initial);
   const runtime = useRef<OperationRun | null>(null);

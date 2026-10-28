@@ -9,7 +9,7 @@ Current scope: the unified hub remains in force. Navigation storage now records
 `includeArchived`, `expanded` project IDs, and `scroll`; the `collapsed` field
 described below is historical. See [usage](../usage.md#reading-and-managing-sessions)
 for current navigation behavior. The home filter is stored separately under
-`codex-hub.home`; a missing or removed home falls back to **All homes**.
+`ahub.home`; a missing or removed home falls back to **All homes**.
 
 ## Context and Problem Statement
 

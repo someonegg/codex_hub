@@ -9,6 +9,8 @@ import type {
 import type { DecodedRecord } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
 
+const BINDING_MARKER = "AHUB_TMUX_BIND_V1";
+
 export const CODEX_INTERACTION_KEY_BINDINGS = {
   enter: "Enter",
   up: "Up",
@@ -60,8 +62,8 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
   for (const block of shellBlocks) {
     const lines = (block[1] ?? "").split("\n").map((line) => line.replace(/\r$/, ""));
     for (let index = 0; index < lines.length; index += 1) {
-      if (!["CODEX_HUB_TMUX_BIND_V3", "CODEX_HUB_TMUX_BIND_V4"].includes(lines[index]!)) continue;
-      const project = lines[index] === "CODEX_HUB_TMUX_BIND_V4" ? lines[index + 4] : undefined;
+      if (lines[index] !== BINDING_MARKER) continue;
+      const project = lines[index + 4];
       const tmux = lines[index + 1] ?? "";
       const paneId = lines[index + 2] ?? "";
       const operationId = lines[index + 3] ?? "";
@@ -85,8 +87,7 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     const incomplete = text.slice(lastOpen + "<user_shell_command>".length);
     const incompleteLines = incomplete.replace(/\r\n?/g, "\n").split("\n");
     for (const line of incompleteLines) {
-      if (/^CODEX_HUB_TMUX_BIND_V[34]$/.test(line))
-        found.push({ ordinal: record.ordinal, valid: false });
+      if (line === BINDING_MARKER) found.push({ ordinal: record.ordinal, valid: false });
     }
   }
   return found;
@@ -110,7 +111,7 @@ export function codexBindingCommand(
     throw new Error("Invalid operation ID");
   const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   const project = validProjectDirectory(projectDirectory) ? projectDirectory : "";
-  return `! printf 'CODEX_HUB_TMUX_BIND_V4\\n%s\\n%s\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" ${quote(operationId ?? "")} ${quote(project)}`;
+  return `! printf '${BINDING_MARKER}\\n%s\\n%s\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" ${quote(operationId ?? "")} ${quote(project)}`;
 }
 
 function validOperationId(id: string): boolean {

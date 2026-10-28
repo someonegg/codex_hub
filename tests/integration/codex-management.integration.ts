@@ -101,7 +101,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     ]);
     await interaction.sendMessage(
       manualId,
-      `! printf 'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
+      `! printf 'AHUB_TMUX_BIND_V1\\n%s\\n%s\\n\\n\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
     );
     await until(async () => {
       await reader.managementSnapshot();
@@ -311,7 +311,7 @@ it("reports the native refusal for a running unbound session and archives it aft
 }, 60_000);
 
 it("composes the Hub with shared adapter, interaction, and operation bindings", async () => {
-  const root = await realpath(await createTempDirectory("codex-hub-composition-"));
+  const root = await realpath(await createTempDirectory("ahub-composition-"));
   const home = join(root, "home");
   const directory = join(root, "project");
   const socket = join(root, "tmux.sock");

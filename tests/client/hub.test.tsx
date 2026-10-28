@@ -37,7 +37,7 @@ const flush = async () => {
 beforeEach(() => {
   sessionStorage.clear();
   sessionStorage.setItem(
-    "codex-hub.navigation",
+    "ahub.navigation",
     JSON.stringify({ includeArchived: false, expanded: ["project-reader"], scroll: 0 }),
   );
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
@@ -290,7 +290,7 @@ describe("unified hub", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Close new session" }));
     fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
     expect(screen.queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
-    expect(JSON.parse(sessionStorage.getItem("codex-hub.navigation")!).expanded).toEqual([]);
+    expect(JSON.parse(sessionStorage.getItem("ahub.navigation")!).expanded).toEqual([]);
   });
 });
 
@@ -478,7 +478,7 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
   expect(within(sidebar).queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
   expect(within(sidebar).getByRole("link", { name: /Work trace/ })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
-  expect(sessionStorage.getItem("codex-hub.home")).toBe("work");
+  expect(sessionStorage.getItem("ahub.home")).toBe("work");
   fireEvent.change(screen.getByRole("combobox", { name: "Filter by home" }), {
     target: { value: "empty" },
   });
@@ -488,7 +488,7 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
 });
 it("requires explicit creation home in aggregate view and restores a stored filter", async () => {
   window.history.replaceState(null, "", "/");
-  sessionStorage.setItem("codex-hub.home", "removed-source");
+  sessionStorage.setItem("ahub.home", "removed-source");
   vi.mocked(api.sessions)
     .mockReset()
     .mockResolvedValueOnce(multiHomeCatalog())

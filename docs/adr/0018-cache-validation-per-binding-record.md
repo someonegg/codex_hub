@@ -3,10 +3,10 @@ status: accepted
 date: 2026-10-16
 ---
 
-# Use V3 bindings and current pane validation
+# Use ahub V1 bindings and current pane validation
 
-Current commands emit V4 with an added project-directory field; V3 remains
-supported. See the [current binding format](../technical-reference.md#tmux-interaction).
+Commands emit `AHUB_TMUX_BIND_V1` with socket, pane, optional operation UUID,
+and optional project directory. See the [current binding format](../technical-reference.md#tmux-interaction).
 
 The exit sequence and no-forced-kill policy below are historical; see
 [ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
@@ -41,11 +41,9 @@ owns tmux validation, serialized input, and capture. HTTP uses business services
 rather than depending on tmux implementation. Current protocol and publication
 rules live in the [interaction reference](../technical-reference.md#tmux-interaction).
 
-### Historical binding and archive protocol
+### Binding and archive protocol
 
-At introduction, commands emitted V3 bindings with socket, pane, and optional
-operation UUID. Creation correlated that marker with its launch target and
-project. V4 later added the project field while retaining V3 reads.
+Creation correlates the binding operation UUID with its launch target and project.
 
 Archive originally sent `Ctrl+C`, then `Ctrl+D`, without forced pane closure.
 ADR-0022 replaces only this shutdown strategy with the independent exit service;

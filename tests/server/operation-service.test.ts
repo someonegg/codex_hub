@@ -577,7 +577,7 @@ it.each(["not_started", "unknown"] as const)(
   "preserves explicit launch outcome %s and deduplicates",
   async (outcome) => {
     const { service, manager } = setup();
-    const attach = outcome === "unknown" ? "tmux attach-session -t 'codex-hub-test'" : null;
+    const attach = outcome === "unknown" ? "tmux attach-session -t 'ahub-test'" : null;
     manager.launch.mockRejectedValueOnce(
       new SessionLaunchError(outcome, "launch error", attach, target),
     );

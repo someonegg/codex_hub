@@ -207,11 +207,10 @@ without process-identity checks.
 
 ### Binding format and ownership
 
-Codex reads `CODEX_HUB_TMUX_BIND_V4` in user-message `<user_shell_command>` output.
+Codex reads `AHUB_TMUX_BIND_V1` in user-message `<user_shell_command>` output.
 Its five lines are the marker, absolute socket path, numeric `%` pane ID, optional
 operation UUID, and optional project directory. Empty optional fields keep their
-lines. V3 remains readable without the project field. An invalid latest attempt
-never falls back to an older bind.
+lines. An invalid latest attempt never falls back to an older bind.
 
 One process-wide manager retains the latest attempt per session and latest valid
 claim per socket/pane across homes. Adapters submit accepted records, including
@@ -332,7 +331,7 @@ files directly.
 | Archive   | Reread source; already archived succeeds. Validate unique native identity, complete exit, then run native archive once (25-second command limit) and confirm within 30 seconds.                                                                                                      |
 | Delete    | Require archive, run native delete, and confirm same-source native identity absent within 30 seconds. Already absent in a successful initial snapshot succeeds.                                                                                                                      |
 
-Codex launches its main pane in `codex-hub-<operationId>` with `--no-daemon
+Codex launches its main pane in `ahub-<operationId>` with `--no-daemon
 --no-alt-screen`, plus optional `--worktree` and `--yolo` (default off). The initial
 CLI argument carries the binding shell instruction. Resume uses `codex resume
 <UUID>`, trying Working Directory then Project Directory; skip invalid paths and

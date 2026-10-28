@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-const STORAGE_KEY = "codex-hub.theme";
+const STORAGE_KEY = "ahub.theme";
 
 type Theme = "mist" | "warm";
 

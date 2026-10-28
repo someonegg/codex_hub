@@ -68,7 +68,7 @@ Open **Upload history** from the session header to browse,
 preview, download, or delete uploads, including unsent files and files removed
 from drafts. Deleting a file removes it from the current draft. Attachment deletion
 and cleanup are best effort. Session deletion triggers background cleanup; archive
-and exit retain uploads. [Preview upload history](images/codex-hub-uploads.png).
+and exit retain uploads. [Preview upload history](images/ahub-uploads.png).
 
 Uploads persist under `uploads/` in the [Hub data root](#server-options), which
 must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
@@ -142,7 +142,7 @@ Open the returned `/diffs/<uuid>` link to review the diff. The agent chooses the
 comparison and deletes the publication when finished; there is no automatic
 cleanup. The source file is unchanged.
 See the [diff reference](technical-reference.md#temporary-diffs) and
-[desktop](images/codex-hub-diff.png) / [mobile](images/codex-hub-diff-mobile.png) previews.
+[desktop](images/ahub-diff.png) / [mobile](images/ahub-diff-mobile.png) previews.
 
 ## Server options
 

@@ -82,7 +82,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
         content: [
           {
             type: "input_text",
-            text: `<user_shell_command>\nCODEX_HUB_TMUX_BIND_V3\n${target.socketPath}\n${target.paneId}\n</user_shell_command>`,
+            text: `<user_shell_command>\nAHUB_TMUX_BIND_V1\n${target.socketPath}\n${target.paneId}\n\n\n</user_shell_command>`,
           },
         ],
       },

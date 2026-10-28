@@ -239,7 +239,7 @@ function eventMessage(
 }
 
 function binding(ordinal: number, tmux: string, pane: string): DecodedRecord {
-  const command = 'printf \'CODEX_HUB_TMUX_BIND_V3\\n%s\\n%s\\n\' "$TMUX" "$TMUX_PANE"';
+  const command = 'printf \'AHUB_TMUX_BIND_V1\\n%s\\n%s\\n\\n\\n\' "$TMUX" "$TMUX_PANE"';
   return record(ordinal, {
     type: "response_item",
     payload: {
@@ -248,7 +248,7 @@ function binding(ordinal: number, tmux: string, pane: string): DecodedRecord {
       content: [
         {
           type: "input_text",
-          text: `<user_shell_command>\n${command}\nCODEX_HUB_TMUX_BIND_V3\n${tmux}\n${pane}\n00000000-0000-4000-8000-000000000001\n</user_shell_command>`,
+          text: `<user_shell_command>\n${command}\nAHUB_TMUX_BIND_V1\n${tmux}\n${pane}\n00000000-0000-4000-8000-000000000001\n\n</user_shell_command>`,
         },
       ],
     },

@@ -23,7 +23,7 @@ interface Measurement {
   rssAfterBytes: number;
 }
 
-const root = await mkdtemp("/private/tmp/codex-hub-scale-");
+const root = await mkdtemp("/private/tmp/ahub-scale-");
 const sessions = join(root, "sessions", "2026", "07", "28");
 
 try {
@@ -209,7 +209,7 @@ try {
 
   const result = {
     corpus: {
-      directory: "/private/tmp/codex-hub-scale-<random>",
+      directory: "/private/tmp/ahub-scale-<random>",
       sessionCount: SESSION_COUNT,
       bytes: totalBytes,
     },

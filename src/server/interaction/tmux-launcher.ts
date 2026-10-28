@@ -28,7 +28,7 @@ export class TmuxLauncher {
   constructor(readonly socketPath?: string) {}
 
   async launch(id: string, directory: string, command: readonly string[]): Promise<TmuxBinding> {
-    const fallbackAttach = attachCommand(this.socketPath, `codex-hub-${id}`);
+    const fallbackAttach = attachCommand(this.socketPath, `ahub-${id}`);
     let stdout: string;
     try {
       ({ stdout } = await execute(
@@ -41,7 +41,7 @@ export class TmuxLauncher {
           "-F",
           "#{socket_path}|#{pane_id}",
           "-s",
-          `codex-hub-${id}`,
+          `ahub-${id}`,
           "-x",
           "120",
           "-y",
@@ -89,7 +89,7 @@ export class TmuxLauncher {
       throw new SessionLaunchError(
         "unknown",
         error instanceof Error ? error.message : String(error),
-        attachCommand(socketPath, `codex-hub-${id}`),
+        attachCommand(socketPath, `ahub-${id}`),
         target,
       );
     }

@@ -19,8 +19,8 @@ without the session API. Use the built server for end-to-end behavior and real
 sessions. To explore with isolated demo data after building:
 
 ```sh
-node scripts/create-docs-demo.mjs /tmp/codex-hub-docs-demo
-npm start -- --codex-home 'default=/tmp/codex-hub-docs-demo' --port 4187
+node scripts/create-docs-demo.mjs /tmp/ahub-docs-demo
+npm start -- --codex-home 'default=/tmp/ahub-docs-demo' --port 4187
 ```
 
 Use a new demo directory. Session creation and interaction require

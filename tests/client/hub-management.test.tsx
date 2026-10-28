@@ -157,7 +157,7 @@ describe("hub management", () => {
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ sessionId: SESSION_ID }));
   });
   it("restores pending tracking and clears the recovery marker for unknown results", async () => {
-    sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+    sessionStorage.setItem("ahub.operation.create", pending.operationId);
     const get = vi
       .spyOn(api, "operation")
       .mockResolvedValue({ ...pending, status: "unknown", error: "Timed out" });
@@ -165,7 +165,7 @@ describe("hub management", () => {
     await flush();
     expect(screen.getByRole("status")).toHaveTextContent("unknown");
     expect(screen.queryByRole("button", { name: "Check result" })).not.toBeInTheDocument();
-    expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+    expect(sessionStorage.getItem("ahub.operation.create")).toBeNull();
     view.unmount();
     render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
     await flush();
@@ -203,7 +203,7 @@ describe("hub management", () => {
     expect(onChanged).toHaveBeenCalledOnce();
   });
   it("refreshes an already archived session when recovering a successful archive operation", async () => {
-    sessionStorage.setItem(`codex-hub.operation.${SESSION_ID}`, pending.operationId);
+    sessionStorage.setItem(`ahub.operation.${SESSION_ID}`, pending.operationId);
     vi.spyOn(api, "operation").mockResolvedValue({
       ...pending,
       type: "archive",
@@ -220,7 +220,7 @@ describe("hub management", () => {
     render(<ManageSession session={session} onChanged={onChanged} />);
     await flush();
     expect(onChanged).toHaveBeenCalledOnce();
-    expect(sessionStorage.getItem(`codex-hub.operation.${SESSION_ID}`)).toBeNull();
+    expect(sessionStorage.getItem(`ahub.operation.${SESSION_ID}`)).toBeNull();
   });
   it("requires confirmation before deleting an archived session", async () => {
     const session = {
@@ -287,7 +287,7 @@ it("hides attach until the server supplies it and stops polling after a terminal
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
-  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+  expect(sessionStorage.getItem("ahub.operation.create")).toBeNull();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(5000);
   });
@@ -296,22 +296,22 @@ it("hides attach until the server supplies it and stops polling after a terminal
 });
 
 it("clears expired recovery markers on 404 while keeping retry for transient query failures", async () => {
-  sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+  sessionStorage.setItem("ahub.operation.create", pending.operationId);
   const get = vi
     .spyOn(api, "operation")
     .mockRejectedValueOnce(new Error("network failure"))
     .mockRejectedValueOnce(new ApiClientError(404, "management_error", "Operation not found"));
   render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
   await flush();
-  expect(sessionStorage.getItem("codex-hub.operation.create")).toBe(pending.operationId);
+  expect(sessionStorage.getItem("ahub.operation.create")).toBe(pending.operationId);
   fireEvent.click(screen.getByRole("button", { name: "Retry status check" }));
   await flush();
   expect(get).toHaveBeenCalledTimes(2);
-  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+  expect(sessionStorage.getItem("ahub.operation.create")).toBeNull();
 });
 
 it("serializes manual queries and ignores a response after scope changes", async () => {
-  sessionStorage.setItem("codex-hub.operation.stale", pending.operationId);
+  sessionStorage.setItem("ahub.operation.stale", pending.operationId);
   let resolve!: (op: HubOperation) => void;
   const get = vi.spyOn(api, "operation").mockImplementationOnce(
     () =>
@@ -340,7 +340,7 @@ it("serializes manual queries and ignores a response after scope changes", async
 });
 
 it("blocks submission during recovery and transient failures until a terminal result", async () => {
-  sessionStorage.setItem("codex-hub.operation.recovery", pending.operationId);
+  sessionStorage.setItem("ahub.operation.recovery", pending.operationId);
   let resolve!: (op: HubOperation) => void;
   const get = vi
     .spyOn(api, "operation")
@@ -376,7 +376,7 @@ it("blocks submission during recovery and transient failures until a terminal re
 });
 
 it("keeps failed initial recovery locked until a 404 confirms removal", async () => {
-  sessionStorage.setItem("codex-hub.operation.recovery", pending.operationId);
+  sessionStorage.setItem("ahub.operation.recovery", pending.operationId);
   vi.spyOn(api, "operation")
     .mockRejectedValueOnce(new Error("network failure"))
     .mockRejectedValueOnce(new ApiClientError(404, "management_error", "gone"));
@@ -388,7 +388,7 @@ it("keeps failed initial recovery locked until a 404 confirms removal", async ()
     await result.current.start(submit);
   });
   expect(submit).not.toHaveBeenCalled();
-  expect(sessionStorage.getItem("codex-hub.operation.recovery")).toBe(pending.operationId);
+  expect(sessionStorage.getItem("ahub.operation.recovery")).toBe(pending.operationId);
   act(() => result.current.check());
   await flush();
   expect(result.current.busy).toBe(false);
@@ -401,7 +401,7 @@ it("keeps failed initial recovery locked until a 404 confirms removal", async ()
 it("automatically retries initial recovery, shows the error once, and stops at a terminal result", async () => {
   vi.useFakeTimers();
   vi.spyOn(Math, "random").mockReturnValue(0.5);
-  sessionStorage.setItem("codex-hub.operation.create", pending.operationId);
+  sessionStorage.setItem("ahub.operation.create", pending.operationId);
   const get = vi
     .spyOn(api, "operation")
     .mockRejectedValueOnce(new Error("offline during recovery"))
@@ -429,7 +429,7 @@ it("automatically retries initial recovery, shows the error once, and stops at a
     await vi.advanceTimersByTimeAsync(2000);
   });
   expect(created).toHaveBeenCalledOnce();
-  expect(sessionStorage.getItem("codex-hub.operation.create")).toBeNull();
+  expect(sessionStorage.getItem("ahub.operation.create")).toBeNull();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(60000);
   });
@@ -438,7 +438,7 @@ it("automatically retries initial recovery, shows the error once, and stops at a
 
 it("keeps nonretryable query failures locked with a manual query and does not retry submissions", async () => {
   vi.useFakeTimers();
-  sessionStorage.setItem("codex-hub.operation.locked", pending.operationId);
+  sessionStorage.setItem("ahub.operation.locked", pending.operationId);
   const get = vi
     .spyOn(api, "operation")
     .mockRejectedValueOnce(new ApiClientError(403, "forbidden", "Forbidden"))
@@ -470,7 +470,7 @@ it("cancels hidden recovery reads and ignores late responses while a resumed man
   vi.useFakeTimers();
   let visible: DocumentVisibilityState = "visible";
   vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
-  sessionStorage.setItem("codex-hub.operation.visibility", pending.operationId);
+  sessionStorage.setItem("ahub.operation.visibility", pending.operationId);
   let old!: (value: HubOperation) => void;
   let fresh!: (value: HubOperation) => void;
   const get = vi
@@ -536,7 +536,7 @@ it("preserves a submission received while hidden and immediately queries when vi
     resolve(pending);
     await submitting;
   });
-  expect(sessionStorage.getItem("codex-hub.operation.hidden-submit")).toBe(pending.operationId);
+  expect(sessionStorage.getItem("ahub.operation.hidden-submit")).toBe(pending.operationId);
   await act(async () => vi.advanceTimersByTimeAsync(10000));
   expect(get).not.toHaveBeenCalled();
   expect(result.current.busy).toBe(true);
@@ -552,7 +552,7 @@ it.each([403, 503])(
     vi.useFakeTimers();
     let visible: DocumentVisibilityState = "visible";
     vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visible);
-    sessionStorage.setItem("codex-hub.operation.hidden-error", pending.operationId);
+    sessionStorage.setItem("ahub.operation.hidden-error", pending.operationId);
     const get = vi
       .spyOn(api, "operation")
       .mockRejectedValueOnce(new ApiClientError(status, "error", "query failed"))
