@@ -137,9 +137,19 @@ describe("interaction HTTP API", () => {
       "right",
       "interrupt",
       "plan",
+      "0",
+      "1",
+      "2",
+      "3",
+      "4",
+      "5",
+      "6",
+      "7",
+      "8",
+      "9",
       "left",
     ];
-    const boundaryKeys = [...representativeKeys, ...Array.from({ length: 56 }, () => "left")];
+    const boundaryKeys = [...representativeKeys, ...Array.from({ length: 46 }, () => "left")];
     expect(boundaryKeys).toHaveLength(64);
     const sentKeys = await postKeys(boundaryKeys);
     expect(sentKeys.status).toBe(204);
