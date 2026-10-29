@@ -431,3 +431,7 @@ and render diff content as text. Canonical Markdown links open in a new tab.
 The viewer supports Git unified diffs, renames, mode changes, binary markers, and
 C-quoted paths. Unsupported/incomplete input shows a warning and preserves access
 to the original text.
+
+## Browser state
+
+Long-lived preferences use the versioned localStorage key `ahub.preferences.v1`, synchronized across same-origin tabs. Tab-local browsing state is grouped under `ahub.browser-state.v1` in sessionStorage. Operation recovery and in-memory drafts retain independent lifecycles. Storage failures retain in-memory behavior.

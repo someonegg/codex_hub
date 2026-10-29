@@ -5,6 +5,7 @@ import type { HubOperation, InteractionResponse } from "../../src/shared/api-con
 
 import { api, ApiClientError } from "../../src/client/api/client";
 import { CreateSession, ManageSession } from "../../src/client/components/HubManagement";
+import { updatePreferences } from "../../src/client/state/preferences";
 import { useHubOperation } from "../../src/client/state/use-hub-operation";
 import { baseSession, SESSION_ID } from "./session.fixtures";
 
@@ -593,11 +594,15 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
   render(<Harness />);
   fireEvent.click(screen.getByRole("button", { name: "Resume" }));
   expect(screen.getByRole("dialog", { name: "Resume session" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Resume session" })).toHaveFocus();
   expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   expect(screen.queryByRole("checkbox", { name: "Enable worktree" })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
-  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  act(() => updatePreferences({ yolo: true }));
+  act(() => updatePreferences({ yolo: false }));
+  expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).toBeChecked();
+  fireEvent.click(screen.getByRole("button", { name: "Close resume session" }));
   fireEvent.click(screen.getByRole("button", { name: "Resume" }));
   expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
   fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
@@ -612,4 +617,35 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
   fireEvent.click(screen.getByRole("button", { name: "Session management" }));
   expect(screen.getByRole("button", { name: "Archive session" })).toBeDisabled();
   expect(screen.getByText("resume · pending")).toBeInTheDocument();
+});
+
+it("initializes creation options only when opening the dialog", () => {
+  const homes = [
+    { sourceInstanceId: "personal", nickname: "default" },
+    { sourceInstanceId: "work", nickname: "work" },
+    { sourceInstanceId: "other", nickname: "other" },
+  ];
+  act(() => updatePreferences({ defaultHome: "personal" }));
+  const props = { homes, project: "/project", projects: [], onCreated: vi.fn() };
+  const view = render(<CreateSession {...props} open={false} />);
+  view.rerender(<CreateSession {...props} open />);
+  expect(screen.getByLabelText("Session home")).toHaveValue("personal");
+  fireEvent.change(screen.getByLabelText("Session home"), { target: { value: "work" } });
+  fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/manual" } });
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable worktree" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
+  act(() => updatePreferences({ defaultHome: "other", worktree: true, yolo: true }));
+  act(() => updatePreferences({ worktree: false, yolo: false }));
+  view.rerender(<CreateSession {...props} project="/updated" open />);
+  expect(screen.getByLabelText("Project directory")).toHaveValue("/manual");
+  expect(screen.getByRole("checkbox", { name: "Enable worktree" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).toBeChecked();
+  expect(screen.getByLabelText("Session home")).toHaveValue("work");
+  view.rerender(<CreateSession {...props} open={false} />);
+  view.rerender(<CreateSession {...props} open />);
+  expect(screen.getByLabelText("Session home")).toHaveValue("other");
+  expect(screen.getByLabelText("Project directory")).toHaveValue("/project");
+  expect(screen.getByRole("checkbox", { name: "Enable worktree" })).not.toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
+  act(() => updatePreferences({ defaultHome: "" }));
 });

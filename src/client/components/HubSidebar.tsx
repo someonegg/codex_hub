@@ -6,8 +6,8 @@ import type { useHubNavigation } from "../state/use-hub-navigation";
 import type { useSessionList } from "../state/use-session-list";
 import { ErrorState } from "./ErrorState";
 import { InternalLink } from "./InternalLink";
+import { Settings } from "./Settings";
 import { StatusBadge } from "./StatusBadge";
-import { ThemeSelect } from "./ThemeSelect";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
@@ -182,12 +182,12 @@ export function HubSidebar({
         ) : null}
       </nav>
       <footer className="hub-sidebar-footer">
+        <Settings homes={catalog.list?.homes ?? []} />
         {hosting ? (
           <a href="/artifacts" target="_blank" rel="noopener noreferrer">
             Published pages
           </a>
         ) : null}
-        <ThemeSelect />
       </footer>
     </aside>
   );
