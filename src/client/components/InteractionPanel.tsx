@@ -447,7 +447,7 @@ export function InteractionPanel({
             disabled={interactionBusy || !!uploadProgress || !previewConnected}
             rows={4}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
-            placeholder={`Send a prompt… Paste images or drop files.\n\nShift+Enter ${enterToSend ? "for newline" : "to send"}.`}
+            placeholder={`Shift+Enter ${enterToSend ? "for newline" : "to send"}.`}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={onKeyDown}
           />
