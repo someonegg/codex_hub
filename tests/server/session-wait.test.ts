@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 
-import type { HubOperation } from "../../src/shared/api-contract.js";
 import { waitForLaunch, waitForOperation } from "../../src/server/cli/session-wait.js";
+import type { HubOperation } from "../../src/shared/api-contract.js";
 
 const operation = (status: HubOperation["status"]): HubOperation => ({
   operationId: "op/1",
