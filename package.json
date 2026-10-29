@@ -1,6 +1,6 @@
 {
   "name": "@someonegg/codex-hub",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Local project and session hub for Codex",
   "type": "module",
   "engines": {
