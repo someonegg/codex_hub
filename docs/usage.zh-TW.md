@@ -89,7 +89,7 @@ codex-hub \
 發布 Hub 所在機器上已建置、包含 `index.html` 的目錄：
 
 ```sh
-codex-hub page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
 ```
 
 兩個目錄都必須存在。資源使用相對路徑；Hub 不建置網站，也不接受遠端上傳發布包。
@@ -107,9 +107,9 @@ codex-hub page publish ./demo --project /absolute/path/to/project --title "Desig
 
 ```sh
 git diff HEAD > /tmp/review.diff
-codex-hub diff publish /tmp/review.diff --title "Review changes"
-codex-hub diff list
-codex-hub diff delete <uuid>
+ahub-cli diff publish /tmp/review.diff --title "Review changes"
+ahub-cli diff list
+ahub-cli diff delete <uuid>
 ```
 
 開啟傳回的 `/diffs/<uuid>` 連結審閱差異。代理程式負責選擇比較範圍並在完成後刪除發布內容，沒有自動清理。
