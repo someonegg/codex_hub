@@ -76,16 +76,12 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       help: { type: "boolean" },
       "tmux-socket": { type: "string" },
       "home-dir": { type: "string" },
-      "upload-dir": { type: "string" },
       hosting: { type: "boolean" },
-      "hosting-dir": { type: "string" },
     },
   });
 
   if (values.help) return { kind: "help" };
 
-  if (values["hosting-dir"] !== undefined || values["upload-dir"] !== undefined)
-    throw new Error("--hosting-dir and --upload-dir were removed; use --home-dir instead");
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
   const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
