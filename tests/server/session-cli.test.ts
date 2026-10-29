@@ -48,21 +48,19 @@ const reply = (res: ServerResponse, value: unknown, status = 200) => {
   res.end(JSON.stringify(value));
 };
 
-it("validates arguments, HTTP origins, keys and messages before any submission", async () => {
-  for (const args of [
-    ["send", "id"],
-    ["send", "id", "--stdin", "--message", "x"],
-    ["keys", "id", "interrupt"],
-    ["keys", "id", "C-c"],
-    ["resume", "id", "--home", "other"],
-    ["inspect", "id", "--limit", "301"],
-    ["list", "--url", "https://example.com"],
-    ["list", "--timeout", "0"],
-  ]) {
-    const result = await cli([...args, "--json"]);
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.stdout).error).toBeDefined();
-  }
+it.each([
+  ["send", "id"],
+  ["send", "id", "--stdin", "--message", "x"],
+  ["keys", "id", "interrupt"],
+  ["keys", "id", "C-c"],
+  ["resume", "id", "--home", "other"],
+  ["inspect", "id", "--limit", "301"],
+  ["list", "--url", "https://example.com"],
+  ["list", "--timeout", "0"],
+])("rejects invalid arguments before submission: %j", async (...args) => {
+  const result = await cli([...args, "--json"]);
+  expect(result.code).toBe(1);
+  expect(JSON.parse(result.stdout).error).toBeDefined();
 });
 
 it("uses explicit URL over the environment and filters by associated project", async () => {
