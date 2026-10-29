@@ -16,7 +16,7 @@ import { sendJson } from "./router.js";
 import { SESSION_ID_PATTERN, SESSION_ROOT, sessionPath } from "./session-path.js";
 
 const INTERACTION_PATH = new RegExp(
-  `^${SESSION_ROOT}/${SESSION_ID_PATTERN}/(?:terminal-preview|messages|keys|handoff-pane-binding)$`,
+  `^${SESSION_ROOT}/${SESSION_ID_PATTERN}/(?:terminal|terminal-preview|messages|keys|handoff-pane-binding)$`,
 );
 
 const INTERACTION_KEY_SET = new Set<string>(INTERACTION_KEYS);
@@ -27,7 +27,8 @@ type InteractionRoutesService = Pick<
 >;
 
 export function createSessionInteractionRoutes(
-  interaction?: InteractionRoutesService,
+  interaction?: InteractionRoutesService &
+    Partial<Pick<SessionInteractionService, "captureTerminal">>,
 ): ApiRouteHandler {
   return {
     matches: (url) => INTERACTION_PATH.test(url.pathname),
@@ -36,6 +37,13 @@ export function createSessionInteractionRoutes(
         id,
         segments: [operation = ""],
       } = sessionPath(url.pathname);
+      if (operation === "terminal" && request.method === "GET") {
+        if (!interaction?.captureTerminal) return interactionUnavailable(response);
+        if ([...url.searchParams].length) invalidBody("terminal does not accept query parameters");
+        response.setHeader("Cache-Control", "no-store");
+        sendJson(response, 200, await interaction.captureTerminal(id));
+        return true;
+      }
       if (operation === "terminal-preview") {
         response.setHeader("Upgrade", "websocket");
         sendJson(
@@ -58,16 +66,25 @@ export function createSessionInteractionRoutes(
       }
       if (operation === "messages") {
         const body = await readJsonObject(request);
-        if (Object.keys(body).length !== 1 || typeof body.message !== "string") {
+        if (
+          Object.keys(body).some((key) => !["message", "requireIdle"].includes(key)) ||
+          typeof body.message !== "string" ||
+          (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
+        ) {
           invalidBody("body must contain only a string message field");
         }
         normalizeMessage(body.message);
-        await interaction.sendMessage(id, body.message);
+        if (body.requireIdle === undefined) await interaction.sendMessage(id, body.message);
+        else await interaction.sendMessage(id, body.message, body.requireIdle);
         return noContent(response);
       }
       if (operation === "keys") {
         const body = await readJsonObject(request);
-        if (Object.keys(body).length !== 1 || !Array.isArray(body.keys)) {
+        if (
+          Object.keys(body).some((key) => !["keys", "requireIdle"].includes(key)) ||
+          !Array.isArray(body.keys) ||
+          (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
+        ) {
           invalidBody("body must contain only a keys array");
         }
         if (
@@ -79,7 +96,10 @@ export function createSessionInteractionRoutes(
             `keys must contain 1-${MAX_INTERACTION_KEY_SEQUENCE_LENGTH} supported interaction keys`,
           );
         }
-        await interaction.sendKeys(id, body.keys);
+        if (body.requireIdle === true && body.keys.includes("interrupt"))
+          invalidBody("interrupt cannot require idle");
+        if (body.requireIdle === undefined) await interaction.sendKeys(id, body.keys);
+        else await interaction.sendKeys(id, body.keys, body.requireIdle);
         return noContent(response);
       }
       return false;

@@ -203,13 +203,14 @@ export class SessionInteractionService {
     );
   }
 
-  async sendMessage(sessionId: string, message: string): Promise<void> {
+  async sendMessage(sessionId: string, message: string, requireIdle = false): Promise<void> {
     message = normalizeMessage(message);
     this.#assertAvailable(sessionId);
     const { binding } = await this.#resolve(sessionId);
     this.#assertAvailable(sessionId);
+    this.#assertInputAllowed(sessionId, binding, requireIdle);
     await this.#perform(() =>
-      this.tmux.sendMessage(binding, message, () => this.#assertInputAllowed(sessionId, binding)),
+      this.tmux.sendMessage(binding, message, this.#inputGuard(sessionId, binding, requireIdle)),
     );
   }
 
@@ -224,16 +225,26 @@ export class SessionInteractionService {
     );
   }
 
-  async sendKeys(sessionId: string, keys: readonly InteractionKey[]): Promise<void> {
+  async sendKeys(
+    sessionId: string,
+    keys: readonly InteractionKey[],
+    requireIdle = false,
+  ): Promise<void> {
     this.#assertAvailable(sessionId);
     const { binding, keyBindings, interruptSteps } = await this.#resolve(sessionId);
     this.#assertAvailable(sessionId);
+    this.#assertInputAllowed(sessionId, binding, requireIdle);
     const mapped = keys.flatMap((key): readonly InteractionKeyStep[] =>
       key === "interrupt" ? interruptSteps() : [{ keys: [keyBindings[key]], delayMs: 0 }],
     );
     await this.#perform(() =>
-      this.tmux.sendKeys(binding, mapped, () => this.#assertInputAllowed(sessionId, binding)),
+      this.tmux.sendKeys(binding, mapped, this.#inputGuard(sessionId, binding, requireIdle)),
     );
+  }
+
+  async captureTerminal(sessionId: string) {
+    const { binding } = await this.#resolve(sessionId);
+    return this.#previews.captureFresh(binding, () => this.#assertOwner(sessionId, binding));
   }
 
   async subscribePreview(
@@ -290,9 +301,21 @@ export class SessionInteractionService {
     };
   }
 
-  #assertInputAllowed(sessionId: string, binding: TmuxBinding): void {
+  #inputGuard(sessionId: string, binding: TmuxBinding, requireIdle: boolean): () => void {
+    let started = false;
+    return () => {
+      // Check idle at serialized transaction entry. Echo from our own paste or keys
+      // must not prevent Enter or the remaining keys; ownership stays checked throughout.
+      this.#assertInputAllowed(sessionId, binding, requireIdle && !started);
+      started = true;
+    };
+  }
+
+  #assertInputAllowed(sessionId: string, binding: TmuxBinding, requireIdle = false): void {
     this.#assertAvailable(sessionId);
     this.#assertOwner(sessionId, binding);
+    if (requireIdle && this.#activity.read(sessionId, binding) !== "idle")
+      throw new SessionInteractionError("session_busy", "Session must be live and idle for input");
   }
 
   #assertOwner(sessionId: string, target: TmuxBinding): void {

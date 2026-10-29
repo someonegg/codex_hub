@@ -18,6 +18,7 @@ async function start() {
       session: SESSION,
       interactionSession: { archived: false, interaction: null },
     }),
+    inspect: async () => null,
     getItems: unavailable,
     getSessionUpdates: unavailable,
     getToolDetail: unavailable,
@@ -44,6 +45,9 @@ async function start() {
     handoffPaneBinding: vi.fn().mockResolvedValue(undefined),
     sendMessage: vi.fn().mockResolvedValue(undefined),
     sendKeys: vi.fn().mockResolvedValue(undefined),
+    captureTerminal: vi
+      .fn()
+      .mockResolvedValue({ content: "screen", capturedAt: "now", truncated: false }),
   };
 
   const updates = new SessionUpdatesService(repository);
@@ -179,4 +183,25 @@ describe("interaction HTTP API", () => {
     ).toBe(405);
     expect((await fetch(`${base}/api/v1/unknown`, { method: "POST" })).status).toBe(405);
   });
+});
+
+it("exposes fresh terminal capture and validates idle input options", async () => {
+  const { base, interaction } = await start();
+  const root = `${base}/api/v1/sessions/${SESSION_ID}`;
+  const terminal = await fetch(`${root}/terminal`);
+  expect(terminal.status).toBe(200);
+  expect(await terminal.json()).toEqual({ content: "screen", capturedAt: "now", truncated: false });
+  expect(interaction.captureTerminal).toHaveBeenCalledWith(SESSION_ID);
+  const post = (operation: string, body: unknown) =>
+    fetch(`${root}/${operation}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  expect((await post("messages", { message: "hello", requireIdle: true })).status).toBe(204);
+  expect(interaction.sendMessage).toHaveBeenCalledWith(SESSION_ID, "hello", true);
+  expect((await post("keys", { keys: ["enter"], requireIdle: true })).status).toBe(204);
+  expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, ["enter"], true);
+  expect((await post("keys", { keys: ["interrupt"], requireIdle: true })).status).toBe(400);
+  expect((await post("messages", { message: "hello", requireIdle: "yes" })).status).toBe(400);
 });

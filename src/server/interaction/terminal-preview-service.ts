@@ -43,6 +43,21 @@ export class TerminalPreviewService {
     private readonly resolveTarget?: (binding: TmuxBinding) => Promise<TmuxBinding | null>,
   ) {}
 
+  async captureFresh(binding: TmuxBinding, assertOwner: () => void) {
+    if (this.resolveTarget) {
+      const current = await this.resolveTarget(binding);
+      if (!current || current.sessionName !== binding.sessionName)
+        throw new InteractionTransportError(
+          "disconnected",
+          "The pane no longer exists in its tmux session",
+        );
+    }
+    assertOwner();
+    const result = await this.capture(binding, assertOwner);
+    assertOwner();
+    return { ...result, capturedAt: new Date().toISOString() };
+  }
+
   subscribe(
     session: string,
     binding: TmuxBinding,
@@ -145,17 +160,7 @@ export class TerminalPreviewService {
     state.timer = undefined;
     state.dirty = false;
     state.task = (async () => {
-      if (this.resolveTarget) {
-        const current = await this.resolveTarget(state.binding);
-        if (!current || current.sessionName !== state.binding.sessionName)
-          throw new InteractionTransportError(
-            "disconnected",
-            "The pane no longer exists in its tmux session",
-          );
-      }
-      this.#assertOwner(state);
-      const result = await this.capture(state.binding, () => this.#assertOwner(state));
-      this.#assertOwner(state);
+      const result = await this.captureFresh(state.binding, () => this.#assertOwner(state));
       const previous = state.snapshot;
       if (
         previous &&
@@ -165,7 +170,7 @@ export class TerminalPreviewService {
         return;
       const snapshot: TerminalPreviewSnapshot = {
         ...result,
-        capturedAt: new Date().toISOString(),
+        capturedAt: result.capturedAt,
         revision: createHash("sha256")
           .update(JSON.stringify([this.#identity, state.key, result.content, result.truncated]))
           .digest("base64url"),

@@ -58,6 +58,7 @@ export async function createCodexHub(
     managers.register(
       source.descriptor.sourceInstanceId,
       createCodexSessionManager(homes[index]!.path, socket),
+      homes[index]!.nickname,
     ),
   );
   const transport = new TmuxInteractionService();

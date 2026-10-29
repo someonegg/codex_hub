@@ -710,7 +710,7 @@ it("updates public phase timestamps only on changes and freezes terminal results
   expect(await service.get(op.operationId)).toEqual(result);
 });
 
-it("requires an explicit home, isolates creation association and fingerprints the selected source", async () => {
+it("isolates creation association and fingerprints the selected source", async () => {
   const { service, manager, registry, set, interaction } = setup();
   const other = {
     ...manager,
@@ -720,7 +720,6 @@ it("requires an explicit home, isolates creation association and fingerprints th
   };
   registry.register("other", other);
   const input = { directory: "/project", worktree: false, requestId: "multi-home-create" };
-  expect(() => service.create(input)).toThrow("sourceInstanceId is required");
   expect(() => service.create({ ...input, sourceInstanceId: "missing" })).toThrow(
     "Unknown sourceInstanceId",
   );
@@ -1111,4 +1110,20 @@ describe("session upload cleanup", () => {
     await flush();
     expect(uploads.cleanup).not.toHaveBeenCalled();
   });
+});
+
+it("defaults to the first configured home and resolves explicit nicknames without fallback", async () => {
+  const { service, manager, registry } = setup();
+  const other = { ...manager, launch: vi.fn(async () => target) };
+  registry.register("other", other, "secondary");
+  const input = { directory: "/project", worktree: false, requestId: "default-home-test" };
+  service.create(input);
+  service.create({ ...input, requestId: "explicit-home-test", home: "secondary" });
+  expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
+  expect(() => service.create({ ...input, home: "secondary", sourceInstanceId: "other" })).toThrow(
+    "mutually exclusive",
+  );
+  await flush();
+  expect(manager.launch).toHaveBeenCalledOnce();
+  expect(other.launch).toHaveBeenCalledOnce();
 });

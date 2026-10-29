@@ -103,7 +103,7 @@ export class OperationService {
     if (input.resumeSessionId !== undefined) return this.#resume(input);
     let sourceInstanceId: string;
     try {
-      sourceInstanceId = this.managers.resolveCreateSource(input.sourceInstanceId);
+      sourceInstanceId = this.managers.resolveCreateSource(input.sourceInstanceId, input.home);
     } catch (error) {
       throw new ManagementError(400, (error as Error).message);
     }

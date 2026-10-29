@@ -1,6 +1,8 @@
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
+  InspectQuery,
+  InspectResponse,
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
@@ -16,6 +18,7 @@ import type { DomainAgentInteraction } from "../domain/session-domain.js";
 import type { RuntimeObservation } from "../interaction/pane-observation.js";
 
 export interface SessionReader {
+  inspect(id: SessionId, query: InspectQuery): Promise<SessionInspectResponse | null>;
   list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionReadDetailResponse | null>;
   getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null>;
@@ -38,6 +41,10 @@ export interface SessionReader {
   refresh(): Promise<void>;
   getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
 }
+
+export type SessionInspectResponse = Omit<InspectResponse, "live" | "interaction"> & {
+  readonly interactionSession: InteractionSessionSnapshot;
+};
 
 export type SessionReadDetailResponse = Omit<
   SessionDetailResponse,

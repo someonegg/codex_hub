@@ -72,6 +72,29 @@ export function createSessionReadRoutes(dependencies: {
       const itemId =
         segments.length === 3 && segments[0] === "items" ? decodeItemId(segments[1] ?? "") : "";
 
+      if (segments.length === 1 && segments[0] === "inspect") {
+        only(url.searchParams, ["limit", "after"]);
+        const limit = optional(url.searchParams, "limit");
+        const after = optional(url.searchParams, "after");
+        const result = await dependencies.sessions.inspect(id, {
+          ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
+          ...(after === undefined ? {} : { after: integer(after, "after") }),
+        });
+        if (!result) return notFound(response, headOnly, "session_not_found");
+        const assembled = await assembleSessionResponse(
+          result,
+          dependencies.interaction,
+          dependencies.updates.revision.bind(dependencies.updates),
+        );
+        const { updateRevision: _, ...publicResult } = assembled;
+        sendJson(
+          response,
+          200,
+          { ...publicResult, live: publicResult.session.status === "live" },
+          headOnly,
+        );
+        return true;
+      }
       if (segments.length === 0) {
         if ([...url.searchParams].length > 0) {
           invalid("session metadata does not accept query parameters");

@@ -1,19 +1,22 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { createCodexHub } from "../../src/server/create-hub.js";
+import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
+import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 beforeEach(() => {
@@ -411,3 +414,80 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
     }
   }
 }, 60_000);
+
+it("runs the HTTP session CLI through native create, local input, observation, resume and deletion", async () => {
+  const root = await realpath(await createTempDirectory("ahub-cli-native-"));
+  const home = join(root, "home");
+  const directory = join(root, "project");
+  const socket = join(root, "tmux.sock");
+  await mkdir(home);
+  await mkdir(directory);
+  await writeFile(
+    join(home, "config.toml"),
+    `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
+  );
+  execFileSync("codex", ["login", "--with-api-key"], {
+    env: { ...process.env, CODEX_HOME: home },
+    input: "test-only-not-a-real-key",
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const hub = await createCodexHub([{ nickname: "work", path: home }], socket);
+  const { base } = await startHttpServer(createApiRouter(hub), hub.close);
+  const cli = async (...args: string[]) => {
+    const { stdout, stderr } = await promisify(execFile)(process.execPath, [
+      "--import",
+      "tsx",
+      resolve("src/server/main.ts"),
+      "session",
+      ...args,
+      "--url",
+      base,
+      "--timeout",
+      "30",
+      "--json",
+    ]);
+    expect(stderr).toBe("");
+    expect(stdout).not.toContain("operationId");
+    expect(stdout).not.toContain("requestId");
+    return JSON.parse(stdout);
+  };
+  try {
+    const created = await cli("create", "--project", directory, "--home", "work");
+    const id = created.sessionId;
+    expect(created.status).toBe("succeeded");
+    expect(
+      (await cli("list", "--project", directory)).sessions.map((item: { id: string }) => item.id),
+    ).toContain(id);
+    expect(await cli("send", id, "--message", "! printf 'AHUB-CLI-ROUNDTRIP'")).toEqual({
+      sessionId: id,
+      status: "sent",
+    });
+    await until(async () =>
+      (await hub.interaction.captureTerminal(id)).content.includes("AHUB-CLI-ROUNDTRIP"),
+    );
+    expect((await cli("inspect", id)).live).toBe(true);
+    expect((await cli("terminal", id)).content).toContain("AHUB-CLI-ROUNDTRIP");
+    await until(async () => {
+      const state = await hub.interaction.describe(id);
+      return state?.supported === true && state.activity === "idle";
+    });
+    await cli("keys", id, "up", "down");
+    await cli("interrupt", id);
+    await cli("handoff", id);
+    const oldTarget = (await hub.interaction.resolveTarget(id))!;
+    await cli("exit", id);
+    expect(await new TmuxInteractionService().inspect(oldTarget)).toBe("exited");
+    expect((await cli("resume", id)).sessionId).toBe(id);
+    await cli("archive", id);
+    expect((await hub.sessions.getSession(id))!.session.status).toBe("archived");
+    await cli("delete", id);
+    expect((await cli("list")).sessions).toEqual([]);
+  } finally {
+    hub.close();
+    try {
+      execFileSync("tmux", ["-S", socket, "kill-server"], { stdio: "ignore" });
+    } catch {
+      /* already exited */
+    }
+  }
+}, 90_000);

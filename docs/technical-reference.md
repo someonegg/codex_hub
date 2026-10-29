@@ -9,6 +9,7 @@ opaque values that clients must return unchanged.
 - [Sources and identity](#sources-and-identity)
 - [Catalog](#catalog)
 - [Reader and automatic updates](#reader-and-automatic-updates)
+- [Session CLI and observation](#session-cli-and-observation)
 - [File uploads](#file-uploads)
 - [Tmux interaction](#tmux-interaction) and [Terminal Preview](#terminal-preview)
 - [Asynchronous management](#asynchronous-management)
@@ -73,8 +74,9 @@ Home identity follows its configured absolute path. Renaming or reordering homes
 preserves IDs; moving a home changes identity. Projects merge by directory across
 homes. Home paths remain private.
 
-Creation requires `sourceInstanceId` when multiple homes are configured; a single
-home is selected implicitly. Unknown or ambiguous sources return `400`. The source
+Creation accepts either `home` (a configured nickname) or `sourceInstanceId`,
+never both. Omission selects the first home in configuration order for all callers.
+An explicit unknown home or source returns `400`, without fallback. The source
 is part of request idempotency, so reusing a request ID for another home returns
 `409`. Launch and lifecycle operations use the selected or owning home and its
 `CODEX_HOME`, with the same local `codex` executable. See [Multiple homes](usage.md#multiple-homes).
@@ -148,6 +150,72 @@ runtime and interaction; effects validate ownership again at execution time.
 Only the opened, unarchived session subscribes. History paging coexists with
 updates while preserving reading position.
 
+## Session CLI and observation
+
+### Client behavior and results
+
+The stateless `session` CLI is a Node HTTP client of an existing hub. It does not
+read rollout files, control tmux directly, start or discover servers, or persist
+sessions, cursors, or recovery records. Server startup and page/diff commands
+remain available.
+
+URL precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Only HTTP
+origins are accepted; the client's HTTPS restriction does not change server TLS
+support. One invocation deadline (`--timeout`, seconds, default 360) covers stdin,
+requests, operation polling, and launch readiness.
+
+Lifecycle commands wait internally for the existing [management operation](#asynchronous-management).
+Create and resume then poll inspect until live, connected, and idle. Output maps
+public results without operation/request IDs, tmux targets, or operation attach
+commands. JSON mode emits a structured result or error; human errors go to stderr.
+No input success asserts task completion or answer correctness. List filtering
+uses project association, not launch or worktree directories.
+
+| Exit code | Meaning                                                         |
+| --------- | --------------------------------------------------------------- |
+| `0`       | Success                                                         |
+| `1`       | Definite failure, including failed queries                      |
+| `2`       | A submitted write may have taken effect but cannot be confirmed |
+
+Disconnects, interruption, deadlines, failed operation polling, and explicit
+unknown backend results never cause mutation resubmission or backend cancellation.
+Users can issue list, inspect, or terminal queries to assess actual state. The CLI
+adds no confirmation prompt; exit, archive, and delete retain the existing
+[validation and confirmation rules](#execution-and-confirmation).
+
+### Inspect and numbered pagination
+
+`GET /api/v1/sessions/:id/inspect?limit=N&after=number` uses the existing source
+snapshot and runtime state assembly. It returns `session`, `live`, `interaction`,
+`items`, `latestNumber`, `nextAfter`, and `hasMore`. Interaction follows the existing
+[connection and activity contracts](#tmux-interaction). Log and runtime observations
+are not atomic. A missing session returns `404`, distinct from an empty page.
+
+Visible items match the browser default: messages and structured user input
+requests/responses, including Plan markers, question options, answers, aborted
+and unavailable outcomes. Roles, normalized phases, item types, IDs, ordinals,
+and call IDs are preserved; unknown phases remain unclassified. Tools,
+directives, token usage, and internal events are excluded. Ordinals are original
+record numbers with possible gaps, not turn numbers. Requests and responses remain
+separate and correlate through `callId`.
+
+Limit defaults to 10 and accepts 1–300 visible records, returned in original order.
+Without `after`, the page starts at the latest N; older history does not set
+`hasMore`. With `after`, it starts at the earliest visible record beyond that
+number; `after=0` starts at the beginning. The existing [item-page byte budget](session-jsonl-filtering.md#truncation-and-paging)
+can yield fewer records without additional body truncation.
+
+| Field          | Meaning                                                                                       |
+| -------------- | --------------------------------------------------------------------------------------------- |
+| `latestNumber` | Latest visible ordinal, or null                                                               |
+| `nextAfter`    | Consumed raw timeline boundary; may cross hidden records but never an unreturned visible item |
+| `hasMore`      | Visible records remain after that boundary                                                    |
+
+An empty page still advances through hidden tail records and supplies current
+state. Numbers refer to the current timeline: rewrites are not detected, and
+numbers beyond its raw range fail rather than reset. The browser cursor API is
+unchanged.
+
 ## File uploads
 
 | Endpoint                                                          | Contract                                                    |
@@ -184,9 +252,10 @@ attachment leaves its file on disk. See [upload usage](usage.md#file-uploads).
 
 | Endpoint                                         | Request / response                                    |
 | ------------------------------------------------ | ----------------------------------------------------- |
-| `POST /api/v1/sessions/:id/messages`             | `{ message }` → `204`                                 |
-| `POST /api/v1/sessions/:id/keys`                 | `{ keys }` → `204`                                    |
+| `POST /api/v1/sessions/:id/messages`             | `{ message, requireIdle? }` → `204`                   |
+| `POST /api/v1/sessions/:id/keys`                 | `{ keys, requireIdle? }` → `204`                      |
 | `POST /api/v1/sessions/:id/handoff-pane-binding` | `{}` → `204`; a later binding record confirms handoff |
+| `GET /api/v1/sessions/:id/terminal`              | Fresh `{ content, capturedAt, truncated }` screen     |
 | `WS /api/v1/sessions/:id/terminal-preview`       | Snapshot, delta, or error frames                      |
 
 Keys and message limits live in [interaction.ts](../src/shared/interaction.ts).
@@ -202,6 +271,16 @@ and malformed responses mean unknown. Binding changes during an await fail close
 without recursive validation. Queued input and previews revalidate ownership;
 uncertain input is never automatically resent. Socket/pane reuse is allowed
 without process-identity checks.
+
+Message and key POST bodies accept optional boolean `requireIdle`. The CLI sends
+true for messages and ordinary keys: the server requires idle at input transaction
+entry, while checking binding ownership and management occupancy throughout.
+Non-idle input is refused without waiting for idle or automatic retry; browser
+calls omit this condition. Ordinary CLI keys use the existing non-interrupt
+whitelist. `interrupt` uses the interrupt capability and permits working;
+`handoff` sends the adapter's binding command without an idle restriction. Both
+retain connection, ownership, and occupancy checks. Handoff success means sent,
+not that a new binding has been confirmed.
 
 ### Binding format and ownership
 
@@ -243,6 +322,10 @@ Preview is the current screen as plain text, not scrollback or terminal emulatio
 It retains the last 256,000 UTF-8 bytes without splitting a character and marks
 removed prefixes as `truncated`.
 
+The HTTP terminal endpoint captures a fresh screen once and ends without a
+listener or cached WebSocket content. HTTP and WebSocket share binding resolution,
+ownership checks, capture limits, and truncation.
+
 WebSocket upgrades inherit TLS/mTLS, accept no query parameters, and reject
 cross-origin browser requests. Ordinary HTTP receives `426`. Clients send no
 application messages.
@@ -277,13 +360,13 @@ reconnect; explicit retry cancels backoff. See the
 
 ## Asynchronous management
 
-| Endpoint                              | Body / result                                                                                                                          |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions`               | New: `{ sourceInstanceId?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
-| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                 |
-| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                 |
-| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                 |
-| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                      |
+| Endpoint                              | Body / result                                                                                                                                 |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ home?, sourceInstanceId?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                        |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                        |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                        |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                             |
 
 ### Service responsibilities
 

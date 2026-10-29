@@ -13,6 +13,42 @@ to stop it. For installation and requirements, see the [README](../README.md#qui
 
 By default, the hub reads `~/.codex` and listens only on this machine.
 
+## Session CLI
+
+Start the hub separately, then use the HTTP client from another terminal:
+
+```bash
+codex-hub session list --project /path/to/project
+codex-hub session create --project /path/to/project --home default
+codex-hub session send <id> --message "Explain the failing tests"
+codex-hub session inspect <id>
+codex-hub session inspect <id> --after <nextAfter> --limit 20
+codex-hub session terminal <id>
+codex-hub session keys <id> down enter
+codex-hub session interrupt <id>
+codex-hub session exit <id>
+codex-hub session resume <id>
+codex-hub session archive <id>
+codex-hub session delete <id>
+```
+
+Use `send <id> --stdin` for piped input, and `handoff <id>` after a terminal
+switches sessions. Create accepts `--worktree` and `--yolo`; resume accepts
+`--yolo` and keeps the original home. Omitting `--home` selects the first
+configured home. Delete requires an archived session.
+
+All session commands accept `--url`, `--json`, and `--timeout <seconds>` (default
+360). The URL defaults to `CODEX_HUB_URL`, then `http://127.0.0.1:4173`; this client
+supports HTTP only. Create and resume wait for a live, idle connection; send and
+ordinary keys require idle. Idle reflects recent terminal output, not task
+completion. Successful input or handoff means sent, without confirming the result.
+
+Exit codes are `0` for success, `1` for a definite failure, and `2` for an unknown
+write result. After an unknown result, use list, inspect, or terminal to check the
+actual state; timeout or interruption does not cancel a submitted operation.
+See `codex-hub session --help` for commands and the [CLI and observation contract](technical-reference.md#session-cli-and-observation)
+for pagination and failure semantics.
+
 ## Reading and managing sessions
 
 Choose a project and session in the sidebar. Conversations update automatically;

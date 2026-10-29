@@ -50,6 +50,9 @@ try {
   const binary = join(temporary, "node_modules", ".bin", "codex-hub");
   const help = await exec(binary, ["--help"], { cwd: temporary });
   assert.match(help.stdout, /Usage: codex-hub/);
+  const sessionHelp = await exec(binary, ["session", "--help"], { cwd: temporary });
+  assert.match(sessionHelp.stdout, /Usage: codex-hub session/);
+  assert.match(sessionHelp.stdout, /inspect/);
   const source = join(temporary, "web-source");
   const hosting = join(temporary, "hosting");
   await mkdir(source);
