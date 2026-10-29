@@ -1,5 +1,7 @@
 # Usage and configuration
 
+English | [简体中文](usage.zh-CN.md)
+
 ## Start the hub
 
 ```sh
@@ -73,7 +75,9 @@ for API and storage guarantees.
 
 ## Browser settings
 
-Open **Settings** at the bottom of the sidebar to choose the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
+Open **Settings** at the bottom of the sidebar to choose language, the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
+
+The interface defaults to English. Choose **Language → 简体中文** to switch immediately without reloading; the choice also updates same-origin tabs. Language affects Hub controls, dates, and numbers; conversation text, terminal output, filenames, paths, and commands retain their original content.
 
 ## Multiple homes
 

@@ -1,0 +1,124 @@
+# Codex Hub
+
+[English](README.md) | 简体中文
+
+面向 Codex 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
+按项目浏览会话、跟进最新回复，并从电脑或手机继续工作。
+
+![创建会话、发送提示并查看已回答的用户输入卡片](docs/images/zh-CN/ahub-intro.gif)
+
+<details>
+<summary>手机截图</summary>
+
+<img src="docs/images/zh-CN/ahub-mobile-catalog.png" alt="手机上的项目导航" width="260">
+<img src="docs/images/zh-CN/ahub-mobile-reader.png" alt="手机上的会话与已回答问题" width="260">
+<img src="docs/images/zh-CN/ahub-mobile-composer.png" alt="手机上的消息输入与图片附件预览" width="260">
+
+</details>
+
+## 快速开始
+
+运行要求：
+
+- macOS 或 Linux，Node.js >=22.13 与 npm
+- 本地 Codex Home（通常为 `~/.codex`）
+- 支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force` 的 Codex CLI
+- tmux，用于创建会话和交互
+
+请使用所选 Node.js 版本系列的最新安全补丁。开发与完整检查需要 Node.js
+`^22.22.2 || ^24.15.0 || >=26.0.0`，参见[开发指南（英文）](docs/development.md)。
+
+无需全局安装即可试用：
+
+```sh
+npx @someonegg/codex-hub@latest
+```
+
+也可以安装后长期使用：
+
+```sh
+npm install -g @someonegg/codex-hub
+codex-hub
+```
+
+打开 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止服务器。
+界面默认英文，在侧边栏底部打开 **Settings → Language → 简体中文** 即可切换；选择保存在当前浏览器。
+
+指定其他 Codex Home 或端口：
+
+```sh
+codex-hub --codex-home 'personal=/path/to/codex-home' --port 4180
+```
+
+使用多个 Codex Home：
+
+```sh
+codex-hub \
+  --codex-home 'personal=~/.codex' \
+  --codex-home 'work=/path/to/codex-work'
+```
+
+详见[多个 Home](docs/usage.zh-CN.md#多个-home)。如需托管静态网页或审阅差异，启用可选托管功能：
+
+```sh
+codex-hub --hosting
+```
+
+详见[发布资源](docs/usage.zh-CN.md#发布资源)。升级时再次执行
+`npm install -g @someonegg/codex-hub@latest`。从源码运行请参阅[开发指南（英文）](docs/development.md)。
+
+## 功能
+
+- 按项目浏览主会话和子会话。
+- 阅读 Markdown、代码、表格和数学公式，可选显示技术事件。
+- 浏览历史记录的同时跟进会话更新。
+- 创建会话，可选 worktree；发送输入并预览终端。
+- 查看运行中的会话、安全恢复已退出会话、退出而不归档，以及管理归档记录。
+- 在英文与简体中文之间切换界面。
+
+## 会话交互
+
+在会话页面发送提示并控制实时终端。可以拍照、粘贴图片或拖放文件，预览后发送。
+上传存储、清理和限制见[文件上传](docs/usage.zh-CN.md#文件上传)。
+
+<details>
+<summary>查看会话交互截图</summary>
+
+<img src="docs/images/zh-CN/ahub-session-interaction.png" alt="会话、已回答问题、终端预览、消息输入与移交绑定" width="900">
+
+</details>
+
+### 终端预览
+
+展开**终端预览**跟进实时 CLI。使用屏幕按钮，或聚焦预览后按方向键及 **Enter**，处理 CLI 提示。
+按 **Esc** 或点击**中断**可中断执行。**工作中**与**空闲**仅反映近期终端输出，不代表任务完成。
+
+### 移交绑定后继续
+
+当 Codex 在同一终端中通过 `/clear`、`/resume` 或执行计划切换会话时，在旧会话页面点击**移交绑定**。
+显示**已被替代**后，点击**前往已绑定会话**。未发送草稿保留在旧页面。
+详见[与 Codex 交互](docs/usage.zh-CN.md#与-codex-交互)。
+
+## 安全
+
+Codex Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原生 CLI 命令管理会话。
+身份认证由 Codex 负责；Hub 不读取或管理令牌、API 密钥或凭据文件。
+
+服务器默认仅监听回环地址，交互和管理功能没有应用层登录保护。对外开放前，请添加身份认证
+（例如内置 mTLS）并限制访问。参阅[安全说明](docs/usage.zh-CN.md#安全)。
+
+## 文档
+
+- [使用与配置](docs/usage.zh-CN.md)
+- [技术参考（英文）](docs/technical-reference.md)
+- [开发与截图（英文）](docs/development.md)
+- [全部文档与架构决策](docs/README.md)
+
+<details>
+<summary>纸张主题</summary>
+
+在侧边栏底部打开**设置**，将主题设为**纸张**。选择保存在当前浏览器。
+
+<img src="docs/images/zh-CN/ahub-session-interaction-warm.png" alt="奶油色背景与柔和绿色点缀的纸张主题" width="900">
+
+</details>

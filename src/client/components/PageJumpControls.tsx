@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
 
 const EDGE_DISTANCE_PX = 480;
 const PANEL_GAP_PX = 12;
@@ -15,6 +18,7 @@ export function PageJumpControls({
 }: {
   interactionPanel?: HTMLElement | null;
 }) {
+  useTranslation();
   const controls = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(hiddenControls);
 
@@ -77,26 +81,26 @@ export function PageJumpControls({
   };
 
   return (
-    <nav ref={controls} className="page-jump-controls" aria-label="Page position">
+    <nav ref={controls} className="page-jump-controls" aria-label={t("pagePosition")}>
       <button
         type="button"
         className={`page-jump-control${visible.top ? " is-visible" : ""}`}
-        aria-label="Back to top"
+        aria-label={t("backToTop")}
         aria-hidden={!visible.top}
         tabIndex={visible.top ? 0 : -1}
         onClick={() => scrollTo(0)}
       >
-        <span aria-hidden="true">↑</span> TOP
+        <span aria-hidden="true">↑</span> {t("top")}
       </button>
       <button
         type="button"
         className={`page-jump-control${visible.bottom ? " is-visible" : ""}`}
-        aria-label="Jump to bottom"
+        aria-label={t("jumpToBottom")}
         aria-hidden={!visible.bottom}
         tabIndex={visible.bottom ? 0 : -1}
         onClick={() => scrollTo(document.documentElement.scrollHeight)}
       >
-        <span aria-hidden="true">↓</span> END
+        <span aria-hidden="true">↓</span> {t("end")}
       </button>
     </nav>
   );

@@ -49,6 +49,7 @@ export function SessionInteraction({
       updatedAt={updatedAt}
       interactionBusy={controller.interactionBusy || !!managementBusy}
       error={controller.error}
+      errorDetail={controller.errorDetail}
       onDismissError={controller.clearError}
       onSendMessage={controller.sendMessage}
       onSendKeys={controller.sendKeys}

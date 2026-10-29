@@ -1,4 +1,7 @@
 import { useEffect, useId, useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
 
 export function ProjectDirectory({
   value,
@@ -11,6 +14,7 @@ export function ProjectDirectory({
   disabled: boolean;
   onChange: (directory: string) => void;
 }) {
+  useTranslation();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -40,7 +44,7 @@ export function ProjectDirectory({
         }
       }}
     >
-      <label htmlFor={id}>Project directory</label>
+      <label htmlFor={id}>{t("projectDirectoryLabel")}</label>
       <input
         id={id}
         required
@@ -84,7 +88,7 @@ export function ProjectDirectory({
         }}
       />
       {expanded ? (
-        <div id={`${id}-options`} role="listbox" aria-label="Project directories">
+        <div id={`${id}-options`} role="listbox" aria-label={t("projectDirectories")}>
           {options.map((item, index) => (
             <button
               key={item.project}

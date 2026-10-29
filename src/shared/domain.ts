@@ -61,7 +61,7 @@ interface TimelineItemBase {
 export interface MessageItem extends TimelineItemBase {
   kind: "message";
   role: "user" | "assistant";
-  phase: "commentary" | "final" | null;
+  phase: "update" | "response" | null;
   itemType: string | null;
   markdown: string;
 }

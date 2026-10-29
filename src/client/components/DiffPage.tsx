@@ -1,11 +1,14 @@
 import "../styles/diff.css";
 
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { DiffResponse } from "../../shared/api-contract";
 import { type DiffLine, parseDiff } from "../../shared/diff";
 
 import { api, ApiClientError } from "../api/client";
+import type { PlainMessageKey } from "../i18n";
+import { t } from "../i18n";
 import { DiffFileTree } from "./DiffFileTree";
 
 const lineSigns = { add: "+", remove: "−", context: " " };
@@ -36,8 +39,9 @@ function renderDiffLine(line: DiffLine, index: number) {
 }
 
 export function DiffPage() {
+  const { i18n } = useTranslation();
   const [entry, setEntry] = useState<DiffResponse | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState<PlainMessageKey | "">("");
   useEffect(() => {
     const controller = new AbortController();
     api
@@ -47,29 +51,29 @@ export function DiffPage() {
         if (error.name !== "AbortError") {
           setError(
             error instanceof ApiClientError && error.status === 404
-              ? "Diff not found or already cleaned up."
-              : "Unable to load diff.",
+              ? "diffNotFoundOrAlreadyCleanedUp"
+              : "unableToLoadDiff",
           );
         }
       });
     return () => controller.abort();
   }, []);
   useEffect(() => {
-    document.title = entry?.title ?? "Diff";
-  }, [entry?.title]);
+    document.title = entry?.title ?? t("diff");
+  }, [entry?.title, i18n.resolvedLanguage]);
   const parsed = entry ? parseDiff(entry.raw) : null;
   return (
     <main className="diff-page">
       {error ? (
-        <p role="alert">{error}</p>
+        <p role="alert">{t(error)}</p>
       ) : !entry || !parsed ? (
-        <p>Loading diff…</p>
+        <p>{t("loadingDiff")}</p>
       ) : (
         <>
           <header className="diff-heading">
             <h1>{entry.title}</h1>
             <p className="diff-stats">
-              <span>{parsed.files.length} files changed</span>
+              <span>{t("filesChanged", { count: parsed.files.length })}</span>
               <span className="diff-added">
                 +{parsed.files.reduce((sum, file) => sum + file.additions, 0)}
               </span>
@@ -80,18 +84,16 @@ export function DiffPage() {
           </header>
           {parsed.warning ? (
             <>
-              <p role="status">
-                Some content could not be fully parsed. Check the original text below.
-              </p>
+              <p role="status">{t("someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow")}</p>
               <details className="diff-raw">
-                <summary>View original diff</summary>
+                <summary>{t("viewOriginalDiff")}</summary>
                 <pre>{entry.raw}</pre>
               </details>
             </>
           ) : null}
           <div className="diff-layout">
             <DiffFileTree files={parsed.files} />
-            <section aria-label="File diffs">
+            <section aria-label={t("fileDiffs")}>
               {parsed.files.map((file, i) => (
                 <details open id={`file-${i}`} key={i} className="diff-file">
                   <summary>
@@ -101,7 +103,11 @@ export function DiffPage() {
                       <span className="diff-removed">−{file.deletions}</span>
                     </span>
                   </summary>
-                  <div className="diff-code" tabIndex={0} aria-label={`Diff for ${file.path}`}>
+                  <div
+                    className="diff-code"
+                    tabIndex={0}
+                    aria-label={t("diffFor", { path: file.path })}
+                  >
                     <table>
                       <tbody>{file.lines.map(renderDiffLine)}</tbody>
                     </table>

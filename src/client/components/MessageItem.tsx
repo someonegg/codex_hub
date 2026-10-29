@@ -1,5 +1,6 @@
 import type { ComponentProps, ReactNode } from "react";
 import { memo, useId, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown, { defaultUrlTransform, type ExtraProps } from "react-markdown";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import { gfmFromMarkdown } from "mdast-util-gfm";
@@ -11,6 +12,7 @@ import remarkMath from "remark-math";
 
 import type { MessageItem as Message } from "../../shared/domain";
 
+import { t } from "../i18n";
 import { EventTime } from "./EventTime";
 
 const SAFE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
@@ -30,22 +32,22 @@ const MARKDOWN_COMPONENTS = {
       <span>{children}</span>
     ),
   img: ({ alt }: ComponentProps<"img">) => (
-    <span className="image-placeholder">[Image omitted{alt ? `: ${alt}` : ""}]</span>
+    <span className="image-placeholder">{t("omittedImage", { alt: alt ? `: ${alt}` : "" })}</span>
   ),
   table: ({ node: _node, children, ...props }: ComponentProps<"table"> & ExtraProps) => (
-    <MarkdownScrollRegion label="Scrollable table" kind="table">
+    <MarkdownScrollRegion label={t("scrollableTable")} kind="table">
       <table {...props}>{children}</table>
     </MarkdownScrollRegion>
   ),
   pre: ({ node: _node, children, ...props }: ComponentProps<"pre"> & ExtraProps) => (
-    <MarkdownScrollRegion label="Scrollable code block" kind="code">
+    <MarkdownScrollRegion label={t("scrollableCodeBlock")} kind="code">
       <pre {...props}>{children}</pre>
     </MarkdownScrollRegion>
   ),
   span: ({ node: _node, className, children, ...props }: ComponentProps<"span"> & ExtraProps) => {
     if (className?.split(" ").includes("katex-display")) {
       return (
-        <MarkdownScrollRegion label="Scrollable math formula" kind="math">
+        <MarkdownScrollRegion label={t("scrollableMathFormula")} kind="math">
           <span className={className} {...props}>
             {children}
           </span>
@@ -104,6 +106,7 @@ export const MessageItem = memo(function MessageItem({
   planOpen,
   onTogglePlan,
 }: MessageItemProps) {
+  useTranslation();
   const itemType = item.itemType === null ? "" : ` · ${item.itemType}`;
   if (isPlan(item))
     return <PlanMessage item={item} planOpen={planOpen} onTogglePlan={onTogglePlan} />;
@@ -124,6 +127,7 @@ export const MessageItem = memo(function MessageItem({
 });
 
 function PlanMessage({ item, planOpen, onTogglePlan }: MessageItemProps) {
+  useTranslation();
   const [localOpen, setLocalOpen] = useState(false);
   const open = planOpen ?? localOpen;
   const [mounted, setMounted] = useState(open);
@@ -144,18 +148,18 @@ function PlanMessage({ item, planOpen, onTogglePlan }: MessageItemProps) {
         }}
       >
         <span className="event-label">
-          Assistant final · Plan · {item.ordinal}
+          {t("assistantResponsePlan")} {item.ordinal}
           <EventTime timestamp={item.timestamp} />
         </span>
         <span className="plan-toggle-action">
-          {open ? "Hide" : "Show"}
+          {open ? t("hide") : t("show")}
           <span className="plan-toggle-mark" aria-hidden="true">
             ›
           </span>
         </span>
       </button>
       {open ? null : (
-        <p className="plan-preview message-content">{preview || "Plan content unavailable."}</p>
+        <p className="plan-preview message-content">{preview || t("planContentUnavailable")}</p>
       )}
       {mounted ? (
         <div className="plan-content message-content" id={contentId} hidden={!open}>
@@ -167,6 +171,7 @@ function PlanMessage({ item, planOpen, onTogglePlan }: MessageItemProps) {
 }
 
 const MarkdownContent = memo(function MarkdownContent({ markdown }: { markdown: string }) {
+  useTranslation();
   return (
     <ReactMarkdown
       remarkPlugins={REMARK_PLUGINS}
@@ -181,14 +186,14 @@ const MarkdownContent = memo(function MarkdownContent({ markdown }: { markdown: 
 });
 
 function messageLabel(item: Message): string {
-  if (item.role === "user") return "User";
-  if (item.phase === "commentary") return "Assistant commentary";
-  if (item.phase === "final") return "Assistant final";
-  return "Assistant";
+  if (item.role === "user") return t("user");
+  if (item.phase === "update") return t("assistantUpdate");
+  if (item.phase === "response") return t("assistantResponse");
+  return t("assistant");
 }
 
 export function isPlan(item: Message): boolean {
-  return item.role === "assistant" && item.phase === "final" && item.itemType === "Plan";
+  return item.role === "assistant" && item.phase === "response" && item.itemType === "Plan";
 }
 
 function parsePlanPreview(markdown: string): string {

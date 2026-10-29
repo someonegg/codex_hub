@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
 export function CharacterCount({ value }: { value: number }) {
-  return <span className="character-count">{value.toLocaleString()} characters</span>;
+  useTranslation();
+  return <span className="character-count">{t("characters", { count: value })}</span>;
 }

@@ -1,25 +1,29 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+
+import type { PlainMessageKey } from "../i18n";
+import { t } from "../i18n";
 
 export function AttachCommand({ command }: { command: string }) {
-  const [message, setMessage] = useState("");
+  useTranslation();
+  const [message, setMessage] = useState<PlainMessageKey | "">("");
   return (
     <div className="attach-command">
-      <p>tmux access</p>
+      <p>{t("tmuxAccessLabel")}</p>
       <pre>{command}</pre>
       <button
         type="button"
         onClick={() => {
           void navigator.clipboard?.writeText(command).then(
-            () => setMessage("Copied"),
-            () => setMessage("Copy failed. Select the command and copy it manually."),
+            () => setMessage("copied"),
+            () => setMessage("copyFailedSelectTheCommandAndCopyItManually"),
           );
-          if (!navigator.clipboard)
-            setMessage("Copy failed. Select the command and copy it manually.");
+          if (!navigator.clipboard) setMessage("copyFailedSelectTheCommandAndCopyItManually");
         }}
       >
-        Copy command
+        {t("copyCommand")}
       </button>
-      {message ? <small role="status">{message}</small> : null}
+      {message ? <small role="status">{t(message)}</small> : null}
     </div>
   );
 }

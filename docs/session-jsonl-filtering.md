@@ -74,14 +74,14 @@ safe internal summaries of their event type.
 
 For `item_completed`, only these item shapes become conversation messages:
 
-| Item type      | Accepted text                  | Message                                      |
-| -------------- | ------------------------------ | -------------------------------------------- |
-| `UserMessage`  | Non-empty `text` content parts | User                                         |
-| `AgentMessage` | Non-empty `Text` content parts | Assistant                                    |
-| `Plan`         | Non-empty `item.text`          | Assistant, phase `final`, `itemType: "Plan"` |
+| Item type      | Accepted text                  | Message                                         |
+| -------------- | ------------------------------ | ----------------------------------------------- |
+| `UserMessage`  | Non-empty `text` content parts | User                                            |
+| `AgentMessage` | Non-empty `Text` content parts | Assistant                                       |
+| `Plan`         | Non-empty `item.text`          | Assistant, phase `response`, `itemType: "Plan"` |
 
 Joined content parts are separated by a blank line. `AgentMessage` phases `final`
-and `final_answer` normalize to `final`; `commentary` is retained. Only `Plan`
+and `final_answer` normalize to `response`; `commentary` normalizes to `update`. Only `Plan`
 publishes its item type; user and agent messages leave `itemType` unset.
 
 Empty, non-text, and other completed items become internal events labeled

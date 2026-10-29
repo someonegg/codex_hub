@@ -1,20 +1,29 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { ArtifactsResponse, ArtifactSummary } from "../../shared/api-contract";
 
 import { api } from "../api/client";
+import type { PlainMessageKey } from "../i18n";
+import { formatDate, t } from "../i18n";
+import { LocalizedError } from "../i18n/localized-error";
+import { RequestError } from "./RequestError";
 
 export function ArtifactsPage() {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    document.title = `${t("pages")} · Codex Hub`;
+  }, [i18n.resolvedLanguage]);
   const [projects, setProjects] = useState<ArtifactsResponse["projects"]>([]);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [error, setError] = useState<unknown>("");
+  const [notice, setNotice] = useState<PlainMessageKey | "">("");
   const [busy, setBusy] = useState(true);
   async function copyLink(url: string) {
     try {
       await navigator.clipboard.writeText(location.origin + url);
-      setNotice("Link copied");
+      setNotice("linkCopied");
     } catch {
-      setError("Could not copy link");
+      setError(new LocalizedError("couldNotCopyLink"));
     }
   }
   const loadProjects = useCallback(async () => {
@@ -28,7 +37,7 @@ export function ArtifactsPage() {
     try {
       await action();
     } catch (error) {
-      setError(String(error));
+      setError(error);
     } finally {
       setBusy(false);
     }
@@ -37,7 +46,7 @@ export function ArtifactsPage() {
     return runOperation(loadProjects);
   }
   async function deleteArtifact(artifact: ArtifactSummary) {
-    if (!confirm(`Delete “${artifact.title}” and all its snapshots?`)) return;
+    if (!confirm(t("deleteArtifact", { title: artifact.title }))) return;
     await runOperation(async () => {
       await api.deleteArtifact(artifact.id);
       await loadProjects();
@@ -51,17 +60,21 @@ export function ArtifactsPage() {
       <a href="/">← Codex Hub</a>
       <header className="artifacts-heading">
         <div>
-          <p className="eyebrow">Published snapshots</p>
-          <h1>Pages</h1>
+          <p className="eyebrow">{t("publishedSnapshots")}</p>
+          <h1>{t("pages")}</h1>
         </div>
         <button type="button" disabled={busy} onClick={() => void refresh()}>
-          Refresh
+          {t("refresh")}
         </button>
       </header>
-      {error ? <p role="alert">{error}</p> : null}
-      {notice ? <p role="status">{notice}</p> : null}
-      {busy ? <p role="status">Loading pages…</p> : null}
-      {!busy && !error && projects.length === 0 ? <p>No published web pages.</p> : null}
+      {!!error ? (
+        <p role="alert">
+          <RequestError error={error} />
+        </p>
+      ) : null}
+      {notice ? <p role="status">{t(notice)}</p> : null}
+      {busy ? <p role="status">{t("loadingPages")}</p> : null}
+      {!busy && !error && projects.length === 0 ? <p>{t("noPublishedWebPages")}</p> : null}
       {projects.map((project) => (
         <section key={project.directory}>
           <h2>{project.directory}</h2>
@@ -69,17 +82,20 @@ export function ArtifactsPage() {
             <article key={artifact.id}>
               <h3>{artifact.title}</h3>
               <time dateTime={artifact.updatedAt}>
-                {new Date(artifact.updatedAt).toLocaleString()}
+                {formatDate(new Date(artifact.updatedAt), {
+                  dateStyle: "short",
+                  timeStyle: "medium",
+                })}
               </time>
               <div className="artifact-actions">
                 <a href={artifact.url} target="_blank" rel="noreferrer">
-                  Open
+                  {t("open")}
                 </a>
                 <button type="button" onClick={() => void copyLink(artifact.url)}>
-                  Copy link
+                  {t("copyLink")}
                 </button>
                 <button type="button" disabled={busy} onClick={() => void deleteArtifact(artifact)}>
-                  Delete
+                  {t("delete")}
                 </button>
               </div>
             </article>

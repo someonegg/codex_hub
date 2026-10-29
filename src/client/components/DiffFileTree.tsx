@@ -1,4 +1,8 @@
+import { useTranslation } from "react-i18next";
+
 import type { DiffFile } from "../../shared/diff";
+
+import { t } from "../i18n";
 
 interface Directory {
   directories: Map<string, Directory>;
@@ -53,8 +57,9 @@ function DirectoryEntries({ directory }: { directory: Directory }) {
 }
 
 export function DiffFileTree({ files }: { files: DiffFile[] }) {
+  useTranslation();
   return (
-    <nav className="diff-tree" aria-label="Changed files">
+    <nav className="diff-tree" aria-label={t("changedFiles")}>
       <DirectoryEntries directory={buildTree(files)} />
     </nav>
   );

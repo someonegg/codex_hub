@@ -48,7 +48,7 @@
   border-style: dashed;
   border-radius: 1px;
 }
-.final .trace-mark {
+.response .trace-mark {
   background: var(--current);
   transform: rotate(45deg) scale(0.78);
   border-radius: 0;

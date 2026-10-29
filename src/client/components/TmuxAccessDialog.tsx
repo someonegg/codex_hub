@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
+import { t } from "../i18n";
 import { AttachCommand } from "./AttachCommand";
 
 export function TmuxAccessDialog({ command, onClose }: { command: string; onClose: () => void }) {
+  useTranslation();
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const element = dialog.current;
@@ -17,7 +20,7 @@ export function TmuxAccessDialog({ command, onClose }: { command: string; onClos
     <dialog
       ref={dialog}
       className="terminal-connection-dialog"
-      aria-label="tmux access"
+      aria-label={t("tmuxAccessLabel")}
       onCancel={(event) => {
         event.preventDefault();
         onClose();
@@ -27,7 +30,7 @@ export function TmuxAccessDialog({ command, onClose }: { command: string; onClos
       <button
         type="button"
         className="dialog-close"
-        aria-label="Close tmux access"
+        aria-label={t("closeTmuxAccess")}
         onClick={onClose}
       >
         ×

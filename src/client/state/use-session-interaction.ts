@@ -7,6 +7,7 @@ import { messageFor } from "./request-errors";
 
 export function useSessionInteraction(sessionId: string) {
   const [interactionBusy, setInteractionBusy] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<unknown>(null);
   const [error, setError] = useState<string | null>(null);
   const activeSessionId = useRef(sessionId);
   const generation = useRef(0);
@@ -35,6 +36,7 @@ export function useSessionInteraction(sessionId: string) {
       await operation();
     } catch (reason) {
       if (mounted.current && generation.current === operationGeneration) {
+        setErrorDetail(reason);
         setError(messageFor(reason));
       }
       throw reason;
@@ -57,6 +59,7 @@ export function useSessionInteraction(sessionId: string) {
   return {
     interactionBusy,
     error,
+    errorDetail: error === null ? null : errorDetail,
     clearError: () => setError(null),
     sendMessage: (message: string) => act(() => api.sendMessage(sessionId, message)),
     handoffPaneBinding: () => act(() => api.handoffPaneBinding(sessionId)),

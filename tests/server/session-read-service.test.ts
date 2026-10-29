@@ -243,7 +243,7 @@ describe("SessionReadService", () => {
         ordinal: 3,
         timestamp: null,
         role: "assistant",
-        phase: "final",
+        phase: "response",
         itemType: null,
         markdown: "later",
       },
@@ -335,7 +335,7 @@ describe("SessionReadService", () => {
       ordinal: index + 1,
       timestamp: "2026-07-28T00:00:00Z",
       role: "assistant",
-      phase: "commentary",
+      phase: "update",
       itemType: null,
       markdown: `Message ${index + 1}`,
     }));
@@ -435,7 +435,7 @@ describe("SessionReadService", () => {
       ordinal: index + 1,
       timestamp: "2026-07-28T00:00:00Z",
       role: "assistant",
-      phase: "commentary",
+      phase: "update",
       itemType: null,
       markdown: longText,
     }));

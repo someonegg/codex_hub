@@ -347,7 +347,7 @@ function withMessage(normalized: NormalizedSession, markdown: string): Normalize
       ordinal: normalized.timeline.length + 1,
       timestamp: null,
       role: "assistant",
-      phase: "final",
+      phase: "response",
       itemType: null,
       markdown,
     },

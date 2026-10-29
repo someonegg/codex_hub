@@ -1,9 +1,11 @@
 import { memo, useCallback, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { TimelineCursor } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
 import type { UserInputItem as UserInputTimelineItem } from "../../shared/domain";
 
+import { t } from "../i18n";
 import { DirectiveItem } from "./DirectiveItem";
 import { EventMark } from "./EventMark";
 import { InfiniteScrollSentinel } from "./InfiniteScrollSentinel";
@@ -38,6 +40,7 @@ export const Timeline = memo(function Timeline({
   onLoadMore,
   onTimelineConflict,
 }: TimelineProps) {
+  useTranslation();
   const latestPlanId = useMemo(() => {
     for (let index = items.length - 1; index >= 0; index--) {
       const item = items[index]!;
@@ -68,7 +71,7 @@ export const Timeline = memo(function Timeline({
   const entries = useMemo(() => projectUserInputCards(items), [items]);
   return (
     <>
-      <ol className="timeline" aria-label="Session timeline">
+      <ol className="timeline" aria-label={t("sessionTimeline")}>
         {entries.map((item) => (
           <li className={`trace-event ${classFor(item)}`} key={`${sessionId}:${item.id}`}>
             <EventMark item={item} />
@@ -88,7 +91,7 @@ export const Timeline = memo(function Timeline({
           enabled={!readerBusy}
           triggerKey={cursor}
           loading={loading}
-          loadingLabel="Loading more events…"
+          loadingLabel={t("loadingMoreEvents")}
           onLoadMore={onLoadMore}
         />
       ) : null}
@@ -108,6 +111,7 @@ function TimelineContent({
   planOpen: boolean;
   onTogglePlan: (id: string) => void;
 }) {
+  useTranslation();
   switch (item.kind) {
     case "message":
       return <MessageItem item={item} planOpen={planOpen} onTogglePlan={onTogglePlan} />;
@@ -148,7 +152,7 @@ function TimelineContent({
 function classFor(item: TimelineEntry): string {
   if (item.kind === "message") {
     if (item.role === "user") return "human";
-    if (item.phase === "final") return "final";
+    if (item.phase === "response") return "response";
     return "assistant";
   }
   return item.kind;

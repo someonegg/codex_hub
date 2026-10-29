@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import type { TerminalPreviewSnapshot } from "../../shared/api-contract";
 
 import { connectTerminalPreview } from "../api/terminal-preview";
+import { LocalizedError } from "../i18n/localized-error";
 import { INITIAL_RETRY_MS, nextRetryMs, retryDelayMs } from "./retry-policy";
 import { applyPreview } from "./terminal-preview-patch";
 
@@ -19,6 +20,7 @@ export function useTerminalPreview(
   const [busy, setBusy] = useState(false);
   const [stopped, setStopped] = useState(false);
   const [retryKey, setRetryKey] = useState(0);
+  const [errorDetail, setErrorDetail] = useState<Error | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [visible, setVisible] = useState(() => document.visibilityState !== "hidden");
   const [activeSession, setActiveSession] = useState(sessionId);
@@ -63,10 +65,11 @@ export function useTerminalPreview(
       let confirmed: TerminalPreviewSnapshot | null = null;
       setBusy(true);
       setError(null);
-      const failed = (message: string, retryable: boolean) => {
+      const failed = (message: string, retryable: boolean, detail?: Error) => {
         if (disposed || generation !== current) return;
         ++generation;
         setBusy(false);
+        setErrorDetail(detail ?? new Error(message));
         setError(message);
         setStopped(true);
         if (retryable) {
@@ -91,7 +94,8 @@ export function useTerminalPreview(
           failed,
         });
       } catch {
-        failed("Terminal Preview connection failed", true);
+        const error = new LocalizedError("terminalPreviewConnectionFailed");
+        failed(error.message, true, error);
       }
     };
     connect();
@@ -111,6 +115,7 @@ export function useTerminalPreview(
       if (connection.current && expanded && visible && !busy) setRetryKey((value) => value + 1);
     },
     previewError: error,
+    previewErrorDetail: error === null ? null : errorDetail,
     previewExpanded: expanded,
     onExpandPreview: () => {
       if (connection.current) setExpanded(true);

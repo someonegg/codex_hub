@@ -1,3 +1,4 @@
+import { docsOptions, captureSource } from "./docs-language.mjs";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createServer as createProxy, request } from "node:http";
@@ -19,6 +20,7 @@ import {
 import { docsSession, docsTimestamp } from "./docs-fixtures.mjs";
 
 // Run after npm run build. Exercises real files over HTTP, mTLS and a cookie-gated proxy.
+const { language, output: diffScreenshot } = docsOptions("docs/images/ahub-diff.png");
 const exec = promisify(execFile);
 const directory = await mkdtemp(join(tmpdir(), "hub-hosting-browser-"));
 const servers = [];
@@ -162,11 +164,15 @@ try {
       await demo.close();
     };
     const context = await browser.newContext({
-      locale: "en-US",
+      locale: language === "zh-CN" ? "zh-CN" : "en-US",
       timezoneId: "UTC",
       permissions: ["clipboard-read", "clipboard-write"],
       viewport: { width: 1280, height: 900 },
     });
+    await context.addInitScript((value) => {
+      if (!localStorage.getItem("ahub.preferences.v1"))
+        localStorage.setItem("ahub.preferences.v1", JSON.stringify({ language: value }));
+    }, language);
     await context.route("**/api/v1/artifacts", async (route) => {
       const response = await route.fetch();
       const data = await response.json();
@@ -179,9 +185,9 @@ try {
     await verifyAssets(context, settings.origin, settings.url);
     const review = await context.newPage();
     await review.goto(settings.origin + settings.diffUrl);
-    await review.getByRole("heading", { name: "Review · Friendlier greetings" }).waitFor();
+    await review.getByRole("heading", { name: label("Review · Friendlier greetings") }).waitFor();
     if (
-      (await review.getByRole("link", { name: "Codex Hub", exact: true }).count()) ||
+      (await review.getByRole("link", { name: label("Codex Hub"), exact: true }).count()) ||
       (await review.getByRole("combobox").count())
     )
       throw new Error("Diff should not show Hub navigation or theme controls");
@@ -198,7 +204,7 @@ try {
     if (await review.locator('[role="status"]').count())
       throw new Error("Valid diff was not parsed");
     if (await review.evaluate(() => window.diffUnsafe)) throw new Error("Diff HTML executed");
-    await review.getByRole("link", { name: "README.md", exact: true }).click();
+    await review.getByRole("link", { name: label("README.md"), exact: true }).click();
     if (!review.url().endsWith("#file-1")) throw new Error("File navigation failed");
     await review.locator("#file-1 summary").click();
     if ((await review.locator("#file-1").getAttribute("open")) !== null)
@@ -209,44 +215,44 @@ try {
     if (await review.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Diff mobile overflow");
     await review.screenshot({ path: settings.diffMobileScreenshot, fullPage: true });
-    if (await review.getByText("View original diff", { exact: true }).count())
+    if (await review.getByText(label("View original diff"), { exact: true }).count())
       throw new Error("Valid diff should hide raw text controls");
     const folder = review
       .locator(".diff-tree details")
-      .filter({ has: review.getByText("src", { exact: true }) });
+      .filter({ has: review.getByText(label("src"), { exact: true }) });
     await folder.locator("summary").first().click();
-    if (await review.getByRole("link", { name: "greeting.ts", exact: true }).isVisible())
+    if (await review.getByRole("link", { name: label("greeting.ts"), exact: true }).isVisible())
       throw new Error("Directory did not collapse");
     await folder.locator("summary").first().click();
-    await review.getByRole("link", { name: "greeting.ts", exact: true }).click();
+    await review.getByRole("link", { name: label("greeting.ts"), exact: true }).click();
     if (!review.url().endsWith("#file-0")) throw new Error("Tree file navigation failed");
     const hub = await context.newPage();
     await hub.goto(settings.origin + "/");
     const originalUrl = hub.url();
     const [demo] = await Promise.all([
       context.waitForEvent("page"),
-      hub.getByRole("link", { name: "Published pages", exact: true }).click(),
+      hub.getByRole("link", { name: label("Published pages"), exact: true }).click(),
     ]);
     await demo.waitForURL(settings.origin + "/artifacts");
     if (hub.url() !== originalUrl) throw new Error("Pages replaced the original tab");
     const design = demo.locator("article").filter({ hasText: "Design comparison" });
-    await demo.getByRole("heading", { name: "Design comparison" }).waitFor();
-    await design.getByRole("button", { name: "Copy link" }).click();
+    await demo.getByRole("heading", { name: label("Design comparison") }).waitFor();
+    await design.getByRole("button", { name: label("Copy link") }).click();
     if (
       (await demo.evaluate(() => navigator.clipboard.readText())) !==
       settings.origin + settings.url
     )
       throw new Error("Copied link does not use current origin");
-    await demo.getByRole("button", { name: "Refresh" }).click();
+    await demo.getByRole("button", { name: label("Refresh") }).click();
     await demo.waitForFunction(() => !document.querySelector(".artifacts-heading button").disabled);
-    await demo.getByText("Loading pages…", { exact: true }).waitFor({ state: "hidden" });
+    await demo.getByText(label("Loading pages…"), { exact: true }).waitFor({ state: "hidden" });
     await demo.setViewportSize({ width: 390, height: 844 });
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Mobile horizontal overflow");
-    await design.getByRole("button", { name: "Copy link" }).click();
+    await design.getByRole("button", { name: label("Copy link") }).click();
     demo.once("dialog", (dialog) => dialog.dismiss());
-    await design.getByRole("button", { name: "Delete" }).click();
-    await demo.getByRole("heading", { name: "Design comparison" }).waitFor();
+    await design.getByRole("button", { name: label("Delete") }).click();
+    await demo.getByRole("heading", { name: label("Design comparison") }).waitFor();
     // Read a hosted-page Markdown link through the actual session reader.
     await context.route("**/api/v1/sessions**", async (route) => {
       const path = new URL(route.request().url()).pathname;
@@ -272,7 +278,7 @@ try {
                   timestamp,
                   kind: "message",
                   role: "assistant",
-                  phase: "final",
+                  phase: "response",
                   itemType: null,
                   markdown: `[Published page](${settings.url})\n[Review diff](${settings.diffUrl})`,
                 },
@@ -282,11 +288,11 @@ try {
       });
     });
     await demo.goto(settings.origin + "/sessions/" + docsSession.id);
-    const link = demo.getByRole("link", { name: "Published page" });
+    const link = demo.getByRole("link", { name: label("Published page") });
     await link.waitFor();
     if ((await link.getAttribute("href")) !== settings.url)
       throw new Error("Markdown link was filtered");
-    const diffLink = demo.getByRole("link", { name: "Review diff", exact: true });
+    const diffLink = demo.getByRole("link", { name: label("Review diff"), exact: true });
     if (
       (await diffLink.getAttribute("target")) !== "_blank" ||
       (await diffLink.getAttribute("href")) !== settings.diffUrl
@@ -294,8 +300,10 @@ try {
       throw new Error("Diff session link was filtered");
     await demo.goto(settings.origin + "/artifacts");
     demo.once("dialog", (dialog) => dialog.accept());
-    await design.getByRole("button", { name: "Delete" }).click();
-    await demo.getByRole("heading", { name: "Design comparison" }).waitFor({ state: "detached" });
+    await design.getByRole("button", { name: label("Delete") }).click();
+    await demo
+      .getByRole("heading", { name: label("Design comparison") })
+      .waitFor({ state: "detached" });
     if ((await context.request.get(settings.origin + settings.url)).status() !== 404)
       throw new Error("Deleted page is still available");
     const proxy = await browser.newContext();
@@ -304,7 +312,9 @@ try {
     await verifyAssets(proxy, settings.proxyOrigin, settings.proxyUrl);
     const proxyReview = await proxy.newPage();
     await proxyReview.goto(settings.proxyOrigin + settings.diffUrl);
-    await proxyReview.getByRole("heading", { name: "Review · Friendlier greetings" }).waitFor();
+    await proxyReview
+      .getByRole("heading", { name: label("Review · Friendlier greetings") })
+      .waitFor();
     await proxy.close();
     const mtls = await browser.newContext({
       ignoreHTTPSErrors: true,
@@ -319,7 +329,7 @@ try {
     await verifyAssets(mtls, settings.secureOrigin, settings.secureUrl);
     const secureReview = await mtls.newPage();
     await secureReview.goto(settings.secureOrigin + settings.secureDiffUrl);
-    await secureReview.getByRole("heading", { name: "Secure review" }).waitFor();
+    await secureReview.getByRole("heading", { name: label("Secure review") }).waitFor();
     await mtls.close();
     if (
       (await review.request.delete(settings.origin + "/api/v1" + settings.diffUrl)).status() !== 204
@@ -329,7 +339,7 @@ try {
     if (refreshed.status() !== 404) throw new Error("Deleted diff page should return 404");
     await review
       .getByRole("alert")
-      .filter({ hasText: "Diff not found or already cleaned up." })
+      .filter({ hasText: label("Diff not found or already cleaned up.") })
       .waitFor();
     await context.close();
   };
@@ -340,8 +350,8 @@ try {
     origin,
     diffUrl: diff.url,
     secureDiffUrl: secureDiff.url,
-    diffScreenshot: resolve("docs/images/ahub-diff.png"),
-    diffMobileScreenshot: resolve("docs/images/ahub-diff-mobile.png"),
+    diffScreenshot: diffScreenshot,
+    diffMobileScreenshot: diffScreenshot.replace("ahub-diff.png", "ahub-diff-mobile.png"),
     proxyOrigin,
     secureOrigin,
     url: artifact.url,
@@ -352,7 +362,7 @@ try {
   };
   await writeFile(
     code,
-    `(page) => (${browserCode.toString()})(page, ${JSON.stringify(settings)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(docsTimestamp)})`,
+    `(page) => (${captureSource(browserCode, language)})(page, ${JSON.stringify(settings)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(docsTimestamp)})`,
   );
   await cli("open", "about:blank");
   const result = await cli("run-code", "--filename", code);

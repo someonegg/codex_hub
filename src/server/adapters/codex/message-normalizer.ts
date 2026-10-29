@@ -80,14 +80,14 @@ export function eventMessage(
   const markdown = string(item.text);
   return markdown === null
     ? null
-    : messageItem(ordinal, timestamp, "assistant", "final", itemType, markdown);
+    : messageItem(ordinal, timestamp, "assistant", "response", itemType, markdown);
 }
 
 function messageItem(
   ordinal: number,
   timestamp: string | null,
   role: "user" | "assistant",
-  phase: "commentary" | "final" | null,
+  phase: "update" | "response" | null,
   itemType: string | null,
   markdown: string,
 ): DomainMessageRecord {
@@ -133,9 +133,9 @@ function itemContentText(value: unknown, acceptedType: "text" | "Text"): string 
   return text.length === 0 ? null : text;
 }
 
-function normalizePhase(value: unknown): "commentary" | "final" | null {
-  if (value === "commentary") return "commentary";
-  if (value === "final" || value === "final_answer") return "final";
+function normalizePhase(value: unknown): "update" | "response" | null {
+  if (value === "commentary") return "update";
+  if (value === "final" || value === "final_answer") return "response";
   return null;
 }
 

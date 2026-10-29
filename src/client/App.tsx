@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { ArtifactsPage } from "./components/ArtifactsPage";
 import { DiffPage } from "./components/DiffPage";
@@ -6,6 +7,7 @@ import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
 import { UploadsPage } from "./components/UploadsPage";
+import { t } from "./i18n";
 import { SessionPage } from "./SessionPage";
 import { browserStorage } from "./state/browser-storage";
 import { SessionDraftProvider } from "./state/session-drafts";
@@ -22,6 +24,7 @@ export function App() {
 }
 
 function SessionHub() {
+  useTranslation();
   const catalog = useSessionList();
   const [homeFilter, setHomeFilter] = useState(() => browserStorage.getItem("ahub.home") ?? "");
   const homes = catalog.list?.homes ?? [];
@@ -53,7 +56,7 @@ function SessionHub() {
     <main className={`hub${sessionId ? " has-session" : ""}`}>
       {createdSessionId ? (
         <aside className="creation-notice" role="status">
-          Session created.{" "}
+          {t("sessionCreated")}{" "}
           <InternalLink
             href={`/sessions/${createdSessionId}`}
             onNavigate={() => {
@@ -61,11 +64,11 @@ function SessionHub() {
               setCreatedSessionId(null);
             }}
           >
-            Open session
+            {t("openSession")}
           </InternalLink>
           <button
             type="button"
-            aria-label="Dismiss session created notification"
+            aria-label={t("dismissSessionCreatedNotification")}
             onClick={() => setCreatedSessionId(null)}
           >
             ×
@@ -87,19 +90,19 @@ function SessionHub() {
           <>
             <div className="hub-topbar">
               <button className="hub-back" type="button" onClick={() => navigate(null)}>
-                ← Back to list
+                {t("backToList")}
               </button>
-              <span>Projects</span>
+              <span>{t("projects")}</span>
               <span aria-hidden="true">/</span>
               <strong>
                 {catalog.list?.projects
                   .find((project) => project.id === selectedProject)
                   ?.directory.split(/[\\/]/)
                   .filter(Boolean)
-                  .at(-1) ?? "Unknown project"}
+                  .at(-1) ?? t("unknownProject")}
               </strong>
               <span aria-hidden="true">/</span>
-              <span>Session</span>
+              <span>{t("session")}</span>
             </div>
             {hub.uploadsOpen ? (
               <UploadsPage
@@ -122,9 +125,9 @@ function SessionHub() {
           </>
         ) : (
           <section className="hub-welcome">
-            <p className="eyebrow">Project hub</p>
-            <h1>Select a session from the sidebar</h1>
-            <p>Browse sessions by project, read their history, and continue your work.</p>
+            <p className="eyebrow">{t("projectHub")}</p>
+            <h1>{t("selectASessionFromTheSidebar")}</h1>
+            <p>{t("browseSessionsByProjectReadTheirHistoryAndContinueYourWork")}</p>
             <button
               type="button"
               onClick={() => {
@@ -132,7 +135,7 @@ function SessionHub() {
                 setCreateOpen(true);
               }}
             >
-              New session
+              {t("newSession")}
             </button>
           </section>
         )}

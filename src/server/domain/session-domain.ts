@@ -110,7 +110,7 @@ interface DomainTimelineRecordBase {
 export interface DomainMessageRecord extends DomainTimelineRecordBase {
   readonly kind: "message";
   readonly role: "user" | "assistant";
-  readonly phase: "commentary" | "final" | null;
+  readonly phase: "update" | "response" | null;
   readonly itemType: string | null;
   readonly markdown: string;
 }

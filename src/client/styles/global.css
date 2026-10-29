@@ -122,3 +122,8 @@ button:hover:not(:disabled, [aria-disabled="true"]) {
     padding-right: 3.5rem;
   }
 }
+
+.request-error-detail code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

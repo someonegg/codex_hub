@@ -1,19 +1,26 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { isPreviewableUploadType, type UploadAttachment } from "../../shared/uploads";
 
 import { api } from "../api/client";
+import { formatDate, formatNumber, t } from "../i18n";
+import { LocalizedError } from "../i18n/localized-error";
 import { useSessionDraft } from "../state/session-drafts";
 import { InternalLink } from "./InternalLink";
+import { RequestError } from "./RequestError";
 
 export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
+  const { i18n } = useTranslation();
+  useEffect(() => {
+    document.title = t("uploadHistoryCodexHub");
+  }, [i18n.resolvedLanguage]);
   const [items, setItems] = useState<UploadAttachment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const [retry, setRetry] = useState(0);
   const { removeAttachment } = useSessionDraft(sessionId);
   useEffect(() => {
-    document.title = "Upload history · Codex Hub";
     const controller = new AbortController();
     setLoading(true);
     setError(null);
@@ -25,7 +32,7 @@ export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: 
       })
       .catch((reason) => {
         if (!controller.signal.aborted)
-          setError(reason instanceof Error ? reason.message : "Unable to load uploads");
+          setError(reason instanceof Error ? reason : new LocalizedError("unableToLoadUploads"));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -35,10 +42,10 @@ export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: 
   return (
     <section className="uploads-page">
       <InternalLink href={`/sessions/${encodeURIComponent(sessionId)}`} onNavigate={onBack}>
-        ← Back to session
+        {t("backToSession")}
       </InternalLink>
-      <h1>Upload history</h1>
-      <p>All successful uploads are retained, including files removed from drafts.</p>
+      <h1>{t("uploadHistory")}</h1>
+      <p>{t("allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts")}</p>
       {items.map((item) => (
         <UploadEntry
           key={item.id}
@@ -49,25 +56,28 @@ export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: 
           }}
         />
       ))}
-      {loading ? <p role="status">Loading uploads…</p> : null}
-      {error ? (
+      {loading ? <p role="status">{t("loadingUploads")}</p> : null}
+      {!!error ? (
         <div role="alert">
-          <p>{error}</p>
+          <p>
+            <RequestError error={error} />
+          </p>
           <button type="button" onClick={() => setRetry((value) => value + 1)}>
-            Retry
+            {t("retry")}
           </button>
         </div>
       ) : null}
-      {!loading && !error && !items.length ? <p>No uploads yet.</p> : null}
+      {!loading && !error && !items.length ? <p>{t("noUploadsYet")}</p> : null}
     </section>
   );
 }
 function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: () => void }) {
+  useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [broken, setBroken] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<unknown>(null);
   const controller = useRef<AbortController | null>(null);
   useEffect(() => {
     controller.current = new AbortController();
@@ -83,7 +93,7 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
       })
       .catch((reason) => {
         if (!controller.current!.signal.aborted)
-          setError(reason instanceof Error ? reason.message : "Delete failed");
+          setError(reason instanceof Error ? reason : new LocalizedError("deleteFailed"));
       })
       .finally(() => {
         if (!controller.current!.signal.aborted) setBusy(false);
@@ -95,42 +105,48 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
     <article className="upload-entry">
       <strong>{item.filename}</strong>
       <p>
-        {item.size.toLocaleString()} bytes ·{" "}
-        <time dateTime={item.uploadedAt}>{new Date(item.uploadedAt).toLocaleString()}</time>
+        {t("uploadBytes", { size: formatNumber(item.size) })} ·{" "}
+        <time dateTime={item.uploadedAt}>
+          {formatDate(new Date(item.uploadedAt), { dateStyle: "short", timeStyle: "medium" })}
+        </time>
       </p>
       {image && !broken ? (
         <button
           type="button"
           className={`upload-preview${expanded ? " expanded" : ""}`}
           aria-expanded={expanded}
-          aria-label={`${expanded ? "Collapse" : "Expand"} ${item.filename}`}
+          aria-label={t(expanded ? "collapseFile" : "expandFile", { filename: item.filename })}
           onClick={() => setExpanded((value) => !value)}
         >
           <img src={url} alt={item.filename} onError={() => setBroken(true)} />
         </button>
       ) : null}
-      {broken ? <p>Preview unavailable. Download the file below.</p> : null}
+      {broken ? <p>{t("previewUnavailableDownloadTheFileBelow")}</p> : null}
       <div className="upload-actions">
         <a href={`${url}?download=1`} download={item.filename}>
-          Download
+          {t("download")}
         </a>
         {!confirming ? (
           <button type="button" onClick={() => setConfirming(true)}>
-            Delete
+            {t("delete")}
           </button>
         ) : (
           <>
-            <p>Delete this file?</p>
+            <p>{t("deleteThisFile")}</p>
             <button type="button" disabled={busy} onClick={deleteUpload}>
-              {busy ? "Deleting…" : "Confirm delete"}
+              {busy ? t("deleting") : t("confirmDelete")}
             </button>
             <button type="button" disabled={busy} onClick={() => setConfirming(false)}>
-              Cancel
+              {t("cancel")}
             </button>
           </>
         )}
       </div>
-      {error ? <p role="alert">{error}</p> : null}
+      {!!error ? (
+        <p role="alert">
+          <RequestError error={error} />
+        </p>
+      ) : null}
     </article>
   );
 }

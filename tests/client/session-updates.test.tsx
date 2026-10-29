@@ -42,7 +42,7 @@ describe("session automatic updates", () => {
     ["user input request", "request", true],
     ["user input response", "response", true],
     ["final plan", "plan", true],
-    ["commentary plan", "commentary", false],
+    ["commentary plan", "update", false],
     ["ordinary final", "final", false],
     ["a plan followed by another message", "followed", false],
   ])("auto-expands the terminal preview for %s: %s", async (_label, kind, expands) => {
@@ -51,7 +51,7 @@ describe("session automatic updates", () => {
       ...message("Plan"),
       kind: "message",
       role: "assistant",
-      phase: "final",
+      phase: "response",
       itemType: "Plan",
     };
     let tail: TimelineItem[];
@@ -68,8 +68,8 @@ describe("session automatic updates", () => {
             : { stage: "response" as const, outcome: "answered" as const, answers: [] }),
         },
       ];
-    } else if (kind === "commentary") {
-      tail = [{ ...plan, phase: "commentary" }];
+    } else if (kind === "update") {
+      tail = [{ ...plan, phase: "update" }];
     } else if (kind === "final") {
       tail = [message("Done")];
     } else {
@@ -113,7 +113,7 @@ describe("session automatic updates", () => {
       ...message("Plan"),
       kind: "message",
       role: "assistant",
-      phase: "final",
+      phase: "response",
       itemType: "Plan",
     };
     vi.spyOn(api, "items").mockResolvedValue({
@@ -462,7 +462,7 @@ function message(markdown: string, ordinal = 1): Extract<TimelineItem, { kind: "
     ordinal,
     timestamp: null,
     role: "assistant",
-    phase: "final",
+    phase: "response",
     itemType: null,
     markdown,
   };

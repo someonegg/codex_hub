@@ -422,7 +422,7 @@ it("feeds displayed session updatedAt back into sidebar ordering without refresh
     .mockImplementation(() => new Promise(() => {}));
   render(<App />);
   await flush();
-  const sidebar = screen.getByRole("complementary", { name: "Session catalog" });
+  const sidebar = screen.getByRole("complementary", { name: "Session list" });
   const order = () =>
     within(sidebar)
       .getAllByRole("link")
@@ -467,7 +467,7 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
     .mockImplementation(() => new Promise(() => {}));
   render(<App />);
   await flush();
-  const sidebar = screen.getByRole("complementary", { name: "Session catalog" });
+  const sidebar = screen.getByRole("complementary", { name: "Session list" });
   expect(within(sidebar).getByRole("link", { name: /Work trace/ })).toHaveTextContent("work");
   expect(within(sidebar).getAllByRole("button", { name: /reader, 2 main sessions/ })).toHaveLength(
     1,
