@@ -125,6 +125,7 @@ export function InteractionPanel({
   const hadPreviewContent = useRef(false);
   const previewContentId = useId();
   const previewBody = useRef<HTMLDivElement | null>(null);
+  const previewToggle = useRef<HTMLButtonElement | null>(null);
   const previewContent = useRef<HTMLPreElement | null>(null);
   const scrollOnExpand = useRef(true);
   const paths = attachments.map(({ path }) =>
@@ -208,12 +209,23 @@ export function InteractionPanel({
       !previewExpanded ||
       !previewConnected ||
       event.altKey ||
-      event.ctrlKey ||
       event.metaKey ||
       event.shiftKey ||
       event.nativeEvent.isComposing
     )
       return;
+    if (event.ctrlKey) {
+      if (event.key.toLowerCase() !== "c") return;
+      event.preventDefault();
+      sendKeys(["interrupt"]);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onTogglePreview();
+      previewToggle.current?.focus({ preventScroll: true });
+      return;
+    }
     const key = PREVIEW_KEYS[event.key];
     if (!key) return;
     event.preventDefault();
@@ -307,6 +319,7 @@ export function InteractionPanel({
           <div className="terminal-preview-header">
             <button
               type="button"
+              ref={previewToggle}
               className="terminal-preview-toggle"
               aria-expanded={previewExpanded}
               aria-label={t("terminalPreview")}
@@ -534,7 +547,6 @@ function interactionStatus(
 }
 
 const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
-  Escape: "interrupt",
   "0": "0",
   "1": "1",
   "2": "2",
