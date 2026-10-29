@@ -183,6 +183,39 @@ it("distinguishes failures from unknown writes and never retries or cancels", as
   expect(failure.stdout).not.toContain("secret");
 });
 
+it("treats backend unknown results as query failures unless a mutation was submitted", async () => {
+  const base = await serve((_req, res) =>
+    reply(
+      res,
+      { error: { code: "operation_result_unknown", message: "The tmux operation timed out" } },
+      504,
+    ),
+  );
+  for (const command of ["terminal", "inspect"]) {
+    const result = await cli([command, "id", "--url", base, "--json"]);
+    expect(result.code).toBe(1);
+    expect(JSON.parse(result.stdout)).toEqual({
+      error: { code: "request_failed", message: "The tmux operation timed out" },
+    });
+  }
+  const mutation = await cli(["interrupt", "id", "--url", base, "--json"]);
+  expect(mutation.code).toBe(2);
+  expect(JSON.parse(mutation.stdout).error.code).toBe("operation_result_unknown");
+
+  const polling = await serve((req, res) => {
+    if (req.method === "POST") reply(res, { operationId: "pending", status: "pending" }, 202);
+    else
+      reply(
+        res,
+        { error: { code: "operation_result_unknown", message: "Operation lookup timed out" } },
+        504,
+      );
+  });
+  const submitted = await cli(["archive", "id", "--url", polling, "--json"]);
+  expect(submitted.code).toBe(2);
+  expect(JSON.parse(submitted.stdout).error.code).toBe("operation_result_unknown");
+});
+
 it("applies one deadline to polling without resubmitting the mutation", async () => {
   const seen: string[] = [];
   const base = await serve((req, res) => {
