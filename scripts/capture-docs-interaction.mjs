@@ -32,7 +32,7 @@ async function capture(
     .browser()
     .newContext({
       viewport: { width: 1440, height: 1500 },
-      locale: language === "zh-CN" ? "zh-CN" : "en-US",
+      locale: language === "en" ? "en-US" : language,
       timezoneId: "UTC",
       deviceScaleFactor: 1,
       colorScheme: "light",
@@ -414,11 +414,11 @@ async function capture(
     await prepareDesktopPreview();
   }
 
-  async function assertDesktopCardsVisible(prefix = "") {
+  async function assertDesktopCardsVisible() {
     for (const selector of [".user-input-card", ".interaction-panel"]) {
       const bounds = await demo.locator(selector).boundingBox();
       if (!bounds || bounds.y < 0 || bounds.y + bounds.height > 1500)
-        throw new Error(`${prefix}${selector} is clipped`);
+        throw new Error(`${selector} is clipped`);
     }
   }
 
@@ -485,26 +485,6 @@ async function capture(
     await shortcutComposer.fill("");
     await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
     await enterToSend.uncheck();
-    await demo.getByRole("combobox", { name: label("Theme"), exact: true }).selectOption("warm");
-    await demo.getByRole("button", { name: label("Close settings"), exact: true }).click();
-    await demo.reload();
-    await demo.locator(".user-input-status.answered").waitFor();
-    if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
-      throw new Error("Theme was not restored after reload");
-    await prepareDesktopPreview();
-    await stageAttachment();
-    await demo.evaluate(() => window.scrollTo(0, 0));
-    await assertDesktopCardsVisible("Paper ");
-    if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
-      throw new Error("Paper horizontal overflow");
-    if (errors.length || (await demo.getByRole("alert").count()))
-      throw new Error(errors.join("\n") || "Paper error alert");
-    await demo.screenshot({
-      path: output.replace(/\.png$/, "-warm.png"),
-      animations: "disabled",
-    });
-    await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
-    await demo.getByRole("combobox", { name: label("Theme"), exact: true }).selectOption("mist");
     await demo.getByRole("button", { name: label("Close settings"), exact: true }).click();
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
@@ -608,7 +588,10 @@ async function capture(
     const nextLanguage = language === "en" ? "zh-CN" : "en";
     await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
     await demo
-      .getByRole("combobox", { name: language === "en" ? "Language" : "语言", exact: true })
+      .getByRole("combobox", {
+        name: label("Language"),
+        exact: true,
+      })
       .selectOption(nextLanguage);
     await demo.waitForFunction((value) => document.documentElement.lang === value, nextLanguage);
     await demo

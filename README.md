@@ -1,6 +1,6 @@
 # Codex Hub
 
-English | [简体中文](README.zh-CN.md)
+English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
 A local web hub for Codex that pairs readable conversations with live CLI interaction.
 Browse sessions by project, follow responses in near real time, and keep working with
@@ -45,7 +45,7 @@ npm install -g @someonegg/codex-hub
 codex-hub
 ```
 
-Open <http://127.0.0.1:4173>. Choose **Settings → Language** to switch between English (the default) and 简体中文. Press `Ctrl-C` to stop the server.
+Open <http://127.0.0.1:4173>. Choose **Settings → Language** to switch between English (the default), 简体中文, and 繁體中文. Press `Ctrl-C` to stop the server.
 To use a different Codex home or port:
 
 ```sh
@@ -125,12 +125,3 @@ authentication, such as the built-in mTLS option, and restrict access. See the
 - [Technical reference](docs/technical-reference.md)
 - [Development and screenshots](docs/development.md)
 - [All documentation and architecture decisions](docs/README.md)
-
-<details>
-<summary>Paper theme</summary>
-
-Open **Settings** at the bottom of the sidebar and choose **Paper** from the theme list. Your choice is saved on this device.
-
-<img src="docs/images/ahub-session-interaction-warm.png" alt="Paper theme with cream surfaces and muted green accents" width="900">
-
-</details>

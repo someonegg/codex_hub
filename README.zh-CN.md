@@ -1,6 +1,6 @@
 # Codex Hub
 
-[English](README.md) | 简体中文
+[English](README.md) | 简体中文 | [繁體中文](README.zh-TW.md)
 
 面向 Codex 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
 按项目浏览会话、跟进最新回复，并从电脑或手机继续工作。
@@ -42,7 +42,7 @@ codex-hub
 ```
 
 打开 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止服务器。
-界面默认英文，在侧边栏底部打开 **Settings → Language → 简体中文** 即可切换；选择保存在当前浏览器。
+界面默认英文，在侧边栏底部打开 **Settings → Language → 简体中文 / 繁體中文** 即可切换；选择保存在当前浏览器。
 
 指定其他 Codex Home 或端口：
 
@@ -74,7 +74,7 @@ codex-hub --hosting
 - 浏览历史记录的同时跟进会话更新。
 - 创建会话，可选 worktree；发送输入并预览终端。
 - 查看运行中的会话、安全恢复已退出会话、退出而不归档，以及管理归档记录。
-- 在英文与简体中文之间切换界面。
+- 在英文、简体中文与繁体中文之间切换界面。
 
 ## 会话交互
 
@@ -113,12 +113,3 @@ Codex Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原�
 - [技术参考（英文）](docs/technical-reference.md)
 - [开发与截图（英文）](docs/development.md)
 - [全部文档与架构决策](docs/README.md)
-
-<details>
-<summary>纸张主题</summary>
-
-在侧边栏底部打开**设置**，将主题设为**纸张**。选择保存在当前浏览器。
-
-<img src="docs/images/zh-CN/ahub-session-interaction-warm.png" alt="奶油色背景与柔和绿色点缀的纸张主题" width="900">
-
-</details>
