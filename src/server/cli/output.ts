@@ -1,3 +1,4 @@
+import { ResourceValidationError } from "../hosting/validation-error.js";
 import { CommandError } from "./command-error.js";
 
 export function singleLine(value: string): string {
@@ -9,16 +10,14 @@ export function output(result: unknown, json: boolean, human: string): void {
 }
 
 export function outputFailure(error: unknown, json: boolean): void {
-  const failure =
-    error instanceof CommandError
-      ? error
-      : new CommandError(
-          error instanceof TypeError ||
-            (error instanceof Error && error.message.startsWith("Unknown command:"))
-            ? "invalid_arguments"
-            : "command_failed",
-          error instanceof Error ? error.message : "Command failed",
-        );
+  let failure: CommandError;
+  if (error instanceof CommandError) {
+    failure = error;
+  } else {
+    const code = error instanceof ResourceValidationError ? "invalid_arguments" : "command_failed";
+    const message = error instanceof Error ? error.message : "Command failed";
+    failure = new CommandError(code, message);
+  }
   if (json)
     console.log(JSON.stringify({ error: { code: failure.code, message: failure.message } }));
   else console.error(failure.message);

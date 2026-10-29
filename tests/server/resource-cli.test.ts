@@ -4,6 +4,12 @@ import { expect, it } from "vitest";
 
 const exec = promisify(execFile);
 it.each([
+  ["unknown"],
+  ["page", "list", "--unknown"],
+  ["page", "list", "--home-dir"],
+  ["diff", "delete", "not-a-uuid"],
+  ["diff", "publish", "."],
+  ["page", "publish", ".", "--project", ".", "--name", " "],
   ["page", "nonsense"],
   ["page", "delete"],
   ["page", "publish", "."],

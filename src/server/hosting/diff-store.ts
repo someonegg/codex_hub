@@ -3,6 +3,7 @@ import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/
 import { basename, join } from "node:path";
 
 import { HostingStore } from "./store.js";
+import { ResourceValidationError } from "./validation-error.js";
 
 export const DIFF_ID = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
 export interface DiffMetadata {
@@ -72,7 +73,8 @@ export class DiffStore {
     return entries.filter((entry) => entry !== null);
   }
   async publish(file: string, title?: string): Promise<DiffMetadata> {
-    if (!(await lstat(file)).isFile()) throw new Error("Diff source must be a regular file");
+    if (!(await lstat(file)).isFile())
+      throw new ResourceValidationError("Diff source must be a regular file");
     const raw = await readFile(file);
     return this.hosting.locked(async () => {
       const id = randomUUID();
@@ -95,7 +97,7 @@ export class DiffStore {
     });
   }
   async delete(id: string): Promise<void> {
-    if (!DIFF_ID.test(id)) throw new Error("Invalid diff UUID");
+    if (!DIFF_ID.test(id)) throw new ResourceValidationError("Invalid diff UUID");
     await this.hosting.locked(() => rm(this.directory(id), { recursive: true, force: true }));
   }
 }

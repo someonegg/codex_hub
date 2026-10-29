@@ -25,18 +25,7 @@ export async function runResourceCommand(
   action: string | undefined,
   args: string[],
 ): Promise<void> {
-  const { values, positionals } = parseArgs({
-    args,
-    allowPositionals: true,
-    options: {
-      project: { type: "string" },
-      name: { type: "string" },
-      title: { type: "string" },
-      "home-dir": { type: "string" },
-      json: { type: "boolean" },
-      help: { type: "boolean" },
-    },
-  });
+  const { values, positionals } = parseResourceArgs(args);
   if (values.help || action === "--help" || action === undefined) {
     console.log(resourceHelp(resource));
     return;
@@ -93,4 +82,26 @@ function formatResourceList(
   }
   if (entries.length === 0) lines.push(`No ${resource === "page" ? "pages" : "diffs"}.`);
   return lines.join("\n");
+}
+
+function parseResourceArgs(args: string[]) {
+  try {
+    return parseArgs({
+      args,
+      allowPositionals: true,
+      options: {
+        project: { type: "string" },
+        name: { type: "string" },
+        title: { type: "string" },
+        "home-dir": { type: "string" },
+        json: { type: "boolean" },
+        help: { type: "boolean" },
+      },
+    });
+  } catch (error) {
+    throw new CommandError(
+      "invalid_arguments",
+      error instanceof Error ? error.message : "Invalid arguments",
+    );
+  }
 }

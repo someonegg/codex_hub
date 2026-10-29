@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { basename, join, resolve, sep } from "node:path";
 
 import { DirectoryLock } from "../directory-lock.js";
+import { ResourceValidationError } from "./validation-error.js";
 
 export const ID = /^[a-f0-9]{32}$/;
 export const defaultHostingDirectory = join(homedir(), ".codex-hub", "hosting");
@@ -60,7 +61,9 @@ async function copySnapshot(from: string, to: string): Promise<void> {
     return;
   }
   if (!info.isFile())
-    throw new Error(`Only regular files and directories can be published: ${from}`);
+    throw new ResourceValidationError(
+      `Only regular files and directories can be published: ${from}`,
+    );
   await copyFile(from, to, constants.COPYFILE_EXCL);
 }
 function inside(child: string, parent: string): boolean {
@@ -69,7 +72,7 @@ function inside(child: string, parent: string): boolean {
 export class HostingStore {
   readonly root: string;
   constructor(root = defaultHostingDirectory) {
-    if (!root.trim()) throw new Error("Hosting directory must not be empty");
+    if (!root.trim()) throw new ResourceValidationError("Hosting directory must not be empty");
     this.root = resolve(root.startsWith("~/") ? join(homedir(), root.slice(2)) : root);
   }
   async locked<T>(action: () => Promise<T>): Promise<T> {
@@ -125,15 +128,15 @@ export class HostingStore {
     const source = await realpath(resolve(sourcePath));
     const project = await realpath(resolve(projectPathInput));
     if (!(await lstat(source)).isDirectory() || !(await lstat(project)).isDirectory())
-      throw new Error("Source and project must be directories");
+      throw new ResourceValidationError("Source and project must be directories");
     await mkdir(this.root, { recursive: true });
     const root = await realpath(this.root);
     if (inside(source, root) || inside(root, source))
-      throw new Error("Source must not overlap hosting storage");
+      throw new ResourceValidationError("Source must not overlap hosting storage");
     const name = nameInput ?? basename(source);
-    if (!name.trim()) throw new Error("Artifact name must not be empty");
+    if (!name.trim()) throw new ResourceValidationError("Artifact name must not be empty");
     if (!(await lstat(join(source, "index.html"))).isFile())
-      throw new Error("Source requires index.html");
+      throw new ResourceValidationError("Source requires index.html");
     return this.locked(async () => {
       const previous = (await this.entries()).find(
         ({ artifact }) => artifact.project === project && artifact.name === name,

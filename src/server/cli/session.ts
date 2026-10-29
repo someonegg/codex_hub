@@ -14,7 +14,7 @@ import {
 import type { TimelineItem } from "../../shared/domain.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { commandFailure } from "./command-error.js";
-import { output, outputFailure } from "./output.js";
+import { output, outputFailure, singleLine } from "./output.js";
 import { SessionClient } from "./session-client.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
@@ -249,7 +249,7 @@ function formatResult(command: string, result: unknown): string {
           list.homes.find((home) => home.sourceInstanceId === session.sourceInstanceId)?.nickname ??
             "",
           list.projects.find((project) => project.id === session.projectId)?.directory ?? "",
-          session.title.replace(/[\r\n\t]/g, " "),
+          singleLine(session.title),
         ].join("\t"),
       ),
     ].join("\n");

@@ -23,3 +23,9 @@ it("separates JSON errors from human diagnostics", () => {
   expect(err).toHaveBeenCalledWith("Storage failed");
   expect(process.exitCode).toBe(1);
 });
+
+it("does not classify arbitrary TypeErrors as invalid arguments", () => {
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  outputFailure(new TypeError("Unexpected internal failure"), true);
+  expect(JSON.parse(log.mock.calls[0]![0]).error.code).toBe("command_failed");
+});

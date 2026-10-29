@@ -154,7 +154,9 @@ updates while preserving reading position.
 
 ### CLI output contract
 
-All `ahub-cli` business commands default to human-readable stdout; diagnostics go to stderr. `--json` emits one compact JSON result or `{ "error": { "code": "...", "message": "..." } }` on stdout, followed by a newline. Existing success payloads and session exit codes are preserved. Help is always text. Resource and dispatch failures exit with code 1; `invalid_arguments` identifies argument parsing, validation, and dispatch errors, and `command_failed` identifies other resource failures.
+All `ahub-cli` business commands default to human-readable stdout; diagnostics go to stderr. `--json` emits one compact JSON result or `{ "error": { "code": "...", "message": "..." } }` on stdout, followed by a newline. Help is always text.
+
+Existing success payloads and session exit codes are preserved. Resource and dispatch failures exit with code 1; `invalid_arguments` identifies argument parsing, validation, and dispatch errors, and `command_failed` identifies other resource failures.
 
 ### Client behavior and results
 
