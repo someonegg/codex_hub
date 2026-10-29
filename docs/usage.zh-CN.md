@@ -11,6 +11,8 @@ npx @someonegg/codex-hub@latest
 打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止。
 安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex`，且仅监听本机。
 
+`ahub-cli` 默认输出便于阅读的文本，添加 `--json` 可获取结构化结果和错误。输出通道与错误码见 [CLI 输出约定](technical-reference.md#cli-output-contract)。
+
 ## 阅读与管理会话
 
 在侧边栏选择项目和会话。会话内容自动更新，勾选**已归档**可浏览归档会话。

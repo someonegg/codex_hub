@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { outputFailure } from "./output.js";
 const help = `Usage: ahub-cli <command> [options]
   page      Publish, list, or delete local hosted pages
   diff      Publish, list, or delete local review diffs
@@ -22,6 +23,5 @@ async function main(): Promise<void> {
   }
 }
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Command failed");
-  process.exitCode = 1;
+  outputFailure(error, process.argv.slice(2).includes("--json"));
 });

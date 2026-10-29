@@ -152,6 +152,10 @@ updates while preserving reading position.
 
 ## Session CLI and observation
 
+### CLI output contract
+
+All `ahub-cli` business commands default to human-readable stdout; diagnostics go to stderr. `--json` emits one compact JSON result or `{ "error": { "code": "...", "message": "..." } }` on stdout, followed by a newline. Existing success payloads and session exit codes are preserved. Help is always text. Resource and dispatch failures exit with code 1; `invalid_arguments` identifies argument parsing, validation, and dispatch errors, and `command_failed` identifies other resource failures.
+
 ### Client behavior and results
 
 The stateless `ahub-cli session` command is a Node HTTP client of an existing hub.
