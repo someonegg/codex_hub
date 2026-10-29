@@ -5,9 +5,16 @@ export interface Preferences {
   theme: "mist" | "warm";
   worktree: boolean;
   yolo: boolean;
+  enterToSend: boolean;
 }
 const key = "ahub.preferences.v1";
-const defaults: Preferences = { defaultHome: "", theme: "mist", worktree: false, yolo: false };
+const defaults: Preferences = {
+  defaultHome: "",
+  theme: "mist",
+  worktree: false,
+  yolo: false,
+  enterToSend: false,
+};
 function read(): Preferences {
   try {
     const value = JSON.parse(localStorage.getItem(key) ?? "null") ?? {};
@@ -16,6 +23,7 @@ function read(): Preferences {
       theme: value.theme === "warm" ? "warm" : "mist",
       worktree: value.worktree === true,
       yolo: value.yolo === true,
+      enterToSend: value.enterToSend === true,
     };
   } catch {
     return defaults;

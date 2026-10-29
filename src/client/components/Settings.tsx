@@ -77,6 +77,14 @@ export function Settings({ homes }: { homes: readonly SessionHome[] }) {
               Enable YOLO by default
             </label>
           </fieldset>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={preferences.enterToSend}
+              onChange={(event) => updatePreferences({ enterToSend: event.target.checked })}
+            />
+            Enter to send (Shift+Enter for newline)
+          </label>
         </div>
       </dialog>
     </>

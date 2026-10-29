@@ -7,11 +7,13 @@ import type { InteractionResponse } from "../../src/shared/api-contract";
 import type { UploadAttachment } from "../../src/shared/uploads";
 
 import { InteractionPanel as Panel } from "../../src/client/components/InteractionPanel";
+import { updatePreferences } from "../../src/client/state/preferences";
 import { SessionDraftProvider } from "../../src/client/state/session-drafts";
 
 // @vitest-environment jsdom
 
 beforeEach(() => {
+  updatePreferences({ enterToSend: false });
   Object.defineProperty(URL, "createObjectURL", {
     configurable: true,
     value: vi.fn(() => "blob:preview"),
@@ -1032,3 +1034,27 @@ function uploadResult(path: string): UploadAttachment {
     uploadedAt: "2026-01-01T00:00:00.000Z",
   };
 }
+
+it("switches send shortcuts live and keeps Shift+Enter available for command newlines", async () => {
+  const handlers = props(interaction("connected"));
+  render(<InteractionPanel {...handlers} />);
+  act(() => updatePreferences({ enterToSend: true }));
+  const textarea = screen.getByRole("textbox");
+  expect(textarea).toHaveAttribute(
+    "placeholder",
+    expect.stringContaining("Shift+Enter for newline"),
+  );
+  for (const message of ["hello", "/help"]) {
+    fireEvent.change(textarea, { target: { value: message } });
+    expect(fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true })).toBe(true);
+    fireEvent.keyDown(textarea, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(textarea, { key: "Enter", repeat: true });
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    await act(async () => {
+      expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(false);
+    });
+    expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
+    expect(textarea).toHaveValue("");
+    handlers.onSendMessage.mockClear();
+  }
+});
