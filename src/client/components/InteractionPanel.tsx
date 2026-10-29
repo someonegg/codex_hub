@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 
 import type {
   InteractionKey,
@@ -16,12 +17,16 @@ import type {
 } from "../../shared/api-contract";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
+import type { PlainMessageKey } from "../i18n";
+import { formatDate, formatNumber, t } from "../i18n";
+import { LocalizedError } from "../i18n/localized-error";
 import { usePreferences } from "../state/preferences";
 import { useSessionDraft } from "../state/session-drafts";
 import { useAttachmentUpload } from "../state/use-attachment-upload";
 import { AttachmentList } from "./AttachmentList";
 import { AttachmentMenu } from "./AttachmentMenu";
 import { InternalLink } from "./InternalLink";
+import { RequestError } from "./RequestError";
 
 interface InteractionPanelProps {
   sessionId: string;
@@ -35,6 +40,7 @@ interface InteractionPanelProps {
   updatedAt: string | null;
   interactionBusy: boolean;
   error: string | null;
+  errorDetail?: unknown;
   onDismissError: () => void;
   onHandoffPaneBinding: () => Promise<void>;
   onExpandPreview: () => void;
@@ -45,6 +51,7 @@ interface InteractionPanelProps {
   previewStopped: boolean;
   onRetryPreview: () => void;
   previewError: string | null;
+  previewErrorDetail?: unknown;
   onDismissPreviewError: () => void;
   previewExpanded: boolean;
   onTogglePreview: () => void;
@@ -61,6 +68,7 @@ export function InteractionPanel({
   updatedAt,
   interactionBusy,
   error,
+  errorDetail,
   onDismissError,
   onSendMessage,
   onHandoffPaneBinding,
@@ -71,10 +79,12 @@ export function InteractionPanel({
   previewStopped,
   onRetryPreview,
   previewError,
+  previewErrorDetail,
   onDismissPreviewError,
   previewExpanded,
   onTogglePreview,
 }: InteractionPanelProps) {
+  useTranslation();
   const { enterToSend } = usePreferences();
   const mounted = useRef(true);
   useEffect(() => {
@@ -221,7 +231,7 @@ export function InteractionPanel({
     interaction?.supported && interaction.state === "unbound" ? (
       <div className="interaction-connection-status">
         {statusLabel}
-        <span className="resume-reason">Ensure the original session has exited.</span>
+        <span className="resume-reason">{t("ensureTheOriginalSessionHasExited")}</span>
       </div>
     ) : (
       statusLabel
@@ -240,7 +250,7 @@ export function InteractionPanel({
       onError={setUploadError}
     >
       {(attachmentMenu) => (
-        <section ref={setPanel} className="interaction-panel" aria-label="Session interaction">
+        <section ref={setPanel} className="interaction-panel" aria-label={t("sessionInteraction")}>
           {status.kind !== "connected" || recoveryActions ? (
             <div className="interaction-heading">
               {status.kind !== "connected" ? connectionStatus : null}
@@ -252,10 +262,10 @@ export function InteractionPanel({
                       onNavigate ? () => onNavigate(interaction.supersededBySessionId!) : undefined
                     }
                   >
-                    Go to bound session
+                    {t("goToBoundSession")}
                   </InternalLink>
                 ) : (
-                  <span>Replacement session unavailable</span>
+                  <span>{t("replacementSessionUnavailable")}</span>
                 )
               ) : null}
               <div className="interaction-management-actions">{recoveryActions}</div>
@@ -264,17 +274,23 @@ export function InteractionPanel({
           <div className="interaction-panel-content">
             {error ? (
               <div className="interaction-error" role="alert">
-                <span>{error}</span>
+                <span>
+                  <RequestError error={errorDetail ?? error} />
+                </span>
                 <button
                   type="button"
                   onClick={onDismissError}
-                  aria-label="Dismiss interaction error"
+                  aria-label={t("dismissInteractionError")}
                 >
                   ×
                 </button>
               </div>
             ) : null}
-            {!previewConnected && uploadError ? <p role="alert">{uploadError}</p> : null}
+            {!previewConnected && uploadError ? (
+              <p role="alert">
+                <RequestError error={uploadError} />
+              </p>
+            ) : null}
             {operationStatus}
             {previewConnected ? renderConnectedInteraction(attachmentMenu) : null}
             <p className="interaction-summary">{sessionSummary(itemCount, updatedAt)}</p>
@@ -287,13 +303,13 @@ export function InteractionPanel({
   function renderConnectedInteraction(attachmentMenu: ReactNode) {
     return (
       <>
-        <section className="terminal-preview" aria-label="Terminal Preview">
+        <section className="terminal-preview" aria-label={t("terminalPreview")}>
           <div className="terminal-preview-header">
             <button
               type="button"
               className="terminal-preview-toggle"
               aria-expanded={previewExpanded}
-              aria-label="Terminal Preview"
+              aria-label={t("terminalPreview")}
               aria-controls={previewContentId}
               onClick={togglePreview}
               disabled={!previewConnected}
@@ -301,7 +317,7 @@ export function InteractionPanel({
               <span className="terminal-preview-mark" aria-hidden="true">
                 {preview !== null && previewExpanded ? "▾" : "▸"}
               </span>
-              <span>Terminal Preview</span>
+              <span>{t("terminalPreview")}</span>
               {interaction?.supported &&
               (interaction.activity === "working" || interaction.activity === "idle") ? (
                 <span
@@ -309,29 +325,31 @@ export function InteractionPanel({
                   role="status"
                 >
                   <span className="terminal-activity-dot" aria-hidden="true" />
-                  {interaction.activity === "working" ? "Working" : "Idle"}
+                  {interaction.activity === "working" ? t("working") : t("idle")}
                 </span>
               ) : null}
               {preview === null && previewBusy ? (
-                <span className="terminal-preview-status">Capturing…</span>
+                <span className="terminal-preview-status">{t("capturing")}</span>
               ) : null}
             </button>
           </div>
           {previewStopped ? (
             <div className="terminal-preview-notice" role="status">
-              <span>Preview updates stopped.</span>{" "}
+              <span>{t("previewUpdatesStopped")}</span>{" "}
               <button type="button" onClick={onRetryPreview} disabled={previewBusy}>
-                {previewBusy ? "Reconnecting…" : "Retry preview"}
+                {previewBusy ? t("reconnecting") : t("retryPreview")}
               </button>
             </div>
           ) : null}
           {previewError ? (
             <div className="interaction-error terminal-preview-error" role="alert">
-              <span>{previewError}</span>
+              <span>
+                <RequestError error={previewErrorDetail ?? previewError} />
+              </span>
               <button
                 type="button"
                 onClick={onDismissPreviewError}
-                aria-label="Dismiss terminal preview error"
+                aria-label={t("dismissTerminalPreviewError")}
               >
                 ×
               </button>
@@ -351,11 +369,11 @@ export function InteractionPanel({
             >
               {preview?.truncated ? (
                 <p className="terminal-preview-notice">
-                  Terminal output exceeded the preview limit; the beginning was omitted.
+                  {t("terminalOutputExceededThePreviewLimitTheBeginningWasOmitted")}
                 </p>
               ) : null}
               {preview && preview.content.length > 0 ? (
-                <pre ref={previewContent} aria-label="Terminal Preview content" tabIndex={0}>
+                <pre ref={previewContent} aria-label={t("terminalPreviewContent")} tabIndex={0}>
                   <span key={preview.capturedAt} className="terminal-preview-content">
                     {preview.content}
                   </span>
@@ -363,24 +381,24 @@ export function InteractionPanel({
               ) : (
                 <p className="terminal-preview-empty">
                   {preview === null && previewBusy
-                    ? "Capturing terminal pane…"
+                    ? t("capturingTerminalPane")
                     : preview === null
-                      ? "Terminal Preview unavailable."
-                      : "The terminal pane is empty."}
+                      ? t("terminalPreviewUnavailable")
+                      : t("theTerminalPaneIsEmpty")}
                 </p>
               )}
-              <div className="terminal-keypad" role="group" aria-label="Terminal controls">
+              <div className="terminal-keypad" role="group" aria-label={t("terminalControls")}>
                 {TERMINAL_CONTROL_KEYS.map(({ key, label, glyph }) => (
                   <button
                     key={key}
                     type="button"
                     className={`terminal-key terminal-key-${key}`}
-                    aria-label={label}
+                    aria-label={t(label)}
                     disabled={!previewConnected}
                     aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
                     onClick={() => sendKeys([key])}
                   >
-                    <span aria-hidden="true">{glyph}</span>
+                    <span aria-hidden="true">{key === "plan" ? t("plan") : glyph}</span>
                   </button>
                 ))}
               </div>
@@ -409,20 +427,20 @@ export function InteractionPanel({
             setDragging(false);
             const items = Array.from(event.dataTransfer.items ?? []);
             if (items.some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
-              if (!isUploading()) setUploadError("Folders are not supported");
+              if (!isUploading()) setUploadError(new LocalizedError("foldersAreNotSupported"));
               return;
             }
             void uploadFiles(Array.from(event.dataTransfer.files));
           }}
         >
-          {dragging ? <p role="status">Drop files to upload</p> : null}
+          {dragging ? <p role="status">{t("dropFilesToUpload")}</p> : null}
           {uploadProgress ? <p role="status">{uploadProgress}</p> : null}
           {uploadError ? (
             <div className="interaction-error" role="alert">
-              {uploadError}
+              <RequestError error={uploadError} />
               <button
                 type="button"
-                aria-label="Dismiss upload error"
+                aria-label={t("dismissUploadError")}
                 onClick={() => setUploadError(null)}
               >
                 ×
@@ -442,19 +460,21 @@ export function InteractionPanel({
               event.preventDefault();
               void uploadFiles(files);
             }}
-            aria-label="Message to agent"
+            aria-label={t("messageToAgent")}
             value={message}
             disabled={interactionBusy || !!uploadProgress || !previewConnected}
             rows={4}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
-            placeholder={`Shift+Enter ${enterToSend ? "for newline" : "to send"}.`}
+            placeholder={t(enterToSend ? "shiftNewline" : "shiftSend")}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={onKeyDown}
           />
           {messageTooLarge ? (
             <p className="interaction-message-limit" role="alert">
-              Message is {messageBytes.toLocaleString()} UTF-8 bytes; the limit is{" "}
-              {MAX_INTERACTION_MESSAGE_BYTES.toLocaleString()} bytes.
+              {t("messageLimit", {
+                size: formatNumber(messageBytes),
+                limit: formatNumber(MAX_INTERACTION_MESSAGE_BYTES),
+              })}
             </p>
           ) : null}
           <div className="interaction-actions">
@@ -462,11 +482,11 @@ export function InteractionPanel({
               <button
                 type="button"
                 className="interaction-handoff"
-                title="Hand off this pane’s binding to the active Codex session."
+                title={t("handOffThisPaneSBindingToTheActiveCodexSession")}
                 disabled={!previewConnected || interactionBusy || !!uploadProgress}
                 onClick={() => void handoff().catch(() => undefined)}
               >
-                Handoff
+                {t("handoff")}
               </button>
               <button
                 type="button"
@@ -475,7 +495,7 @@ export function InteractionPanel({
                 aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
                 onClick={() => sendKeys(["interrupt"])}
               >
-                Interrupt
+                {t("interrupt")}
               </button>
             </div>
             <div className="interaction-primary-actions">
@@ -489,7 +509,7 @@ export function InteractionPanel({
                 aria-disabled={interactionBusy}
                 onClick={() => void send().catch(() => undefined)}
               >
-                Send
+                {t("send")}
               </button>
             </div>
           </div>
@@ -504,13 +524,13 @@ function interactionStatus(
   error: string | null,
   previewError: string | null,
 ): { kind: "error" | "warning" | "connected"; label: string } {
-  if (state === "superseded") return { kind: "warning", label: "Superseded" };
-  if (error !== null || previewError !== null) return { kind: "error", label: "Error" };
-  if (state === "disconnected") return { kind: "warning", label: "Disconnected" };
-  if (state === "unbound") return { kind: "warning", label: "Unbound" };
-  if (state === "unknown") return { kind: "warning", label: "Connection unknown" };
-  if (state === "unavailable") return { kind: "warning", label: "Unavailable" };
-  return { kind: "connected", label: "Connected" };
+  if (state === "superseded") return { kind: "warning", label: t("superseded") };
+  if (error !== null || previewError !== null) return { kind: "error", label: t("error") };
+  if (state === "disconnected") return { kind: "warning", label: t("disconnected") };
+  if (state === "unbound") return { kind: "warning", label: t("unbound") };
+  if (state === "unknown") return { kind: "warning", label: t("connectionUnknown") };
+  if (state === "unavailable") return { kind: "warning", label: t("unavailable") };
+  return { kind: "connected", label: t("connected") };
 }
 
 const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
@@ -534,21 +554,20 @@ const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
 
 const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
   readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "plan">;
-  readonly label: string;
+  readonly label: PlainMessageKey;
   readonly glyph: string;
 }> = [
-  { key: "enter", label: "Enter", glyph: "Enter" },
-  { key: "up", label: "Up", glyph: "↑" },
-  { key: "plan", label: "Plan", glyph: "Plan" },
-  { key: "left", label: "Left", glyph: "←" },
-  { key: "down", label: "Down", glyph: "↓" },
-  { key: "right", label: "Right", glyph: "→" },
+  { key: "enter", label: "enter", glyph: "Enter" },
+  { key: "up", label: "up", glyph: "↑" },
+  { key: "plan", label: "plan", glyph: "Plan" },
+  { key: "left", label: "left", glyph: "←" },
+  { key: "down", label: "down", glyph: "↓" },
+  { key: "right", label: "right", glyph: "→" },
 ];
 
 function sessionSummary(itemCount: number, updatedAt: string | null): string {
-  const eventLabel = `${itemCount} ${itemCount === 1 ? "event" : "events"}`;
-  if (updatedAt === null) return `${eventLabel} · Update time unavailable`;
-  const date = new Date(updatedAt);
-  if (Number.isNaN(date.valueOf())) return `${eventLabel} · Update time unavailable`;
-  return `${eventLabel} · Updated ${date.toLocaleTimeString(undefined, { timeStyle: "medium" })}`;
+  const events = t("events", { count: itemCount });
+  const date = updatedAt === null ? null : new Date(updatedAt);
+  if (date === null || Number.isNaN(date.valueOf())) return t("unknownUpdateSummary", { events });
+  return t("updatedSummary", { events, time: formatDate(date, { timeStyle: "medium" }) });
 }

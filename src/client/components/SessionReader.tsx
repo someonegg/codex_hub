@@ -1,8 +1,10 @@
 import { type ReactNode, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { InteractionResponse } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
 
+import { t } from "../i18n";
 import type { ReaderContext } from "../state/session-reader-state";
 import {
   filterVisibleTimelineItems,
@@ -63,6 +65,7 @@ export function SessionReader({
   error,
   onDismissError,
 }: SessionReaderProps) {
+  useTranslation();
   const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
   const visibleItems = useMemo(
     () => filterVisibleTimelineItems(items, visibility),
@@ -83,7 +86,7 @@ export function SessionReader({
     (latestMessage.kind === "user_input" ||
       (latestMessage.kind === "message" &&
         latestMessage.role === "assistant" &&
-        latestMessage.phase === "final" &&
+        latestMessage.phase === "response" &&
         latestMessage.itemType === "Plan"))
       ? latestMessage.id
       : null;
@@ -98,7 +101,7 @@ export function SessionReader({
       />
       {related}
       {visibleItems.length === 0 && !readerLoading ? (
-        <EmptyState title="This session has no visible events">
+        <EmptyState title={t("thisSessionHasNoVisibleEvents")}>
           {emptyStateMessage(visibility, hasMore)}
         </EmptyState>
       ) : null}
@@ -133,19 +136,18 @@ export function SessionReader({
         />
       ) : null}
       {error && onDismissError ? (
-        <ErrorState title="Could not load session" message={error} onDismiss={onDismissError} />
+        <ErrorState title={t("couldNotLoadSession")} message={error} onDismiss={onDismissError} />
       ) : null}
       {timelineConflict ? (
         <aside className="continuity-notice" role="alert">
           <div>
-            <strong>Session content has changed</strong>
+            <strong>{t("sessionContentHasChanged")}</strong>
             <p>
-              Your reading position has been preserved. Reload to read the latest version from the
-              first page.
+              {t("yourReadingPositionHasBeenPreservedReloadToReadTheLatestVersionFromTheFirstPage")}
             </p>
           </div>
           <button type="button" disabled={readerBusy} onClick={onRefreshLatest}>
-            Reload latest version
+            {t("reloadLatestVersion")}
           </button>
         </aside>
       ) : null}
@@ -156,10 +158,10 @@ export function SessionReader({
 
 function emptyStateMessage(visibility: TimelineVisibility, hasMore: boolean): string {
   if (hasMore) {
-    return "No visible events in the loaded range. Keep scrolling or change a visibility filter.";
+    return t("noVisibleEventsInTheLoadedRangeKeepScrollingOrChangeAVisibilityFilter");
   }
   if (Object.values(visibility).some((visible) => !visible)) {
-    return "Try showing more event types, or wait for the session to update.";
+    return t("tryShowingMoreEventTypesOrWaitForTheSessionToUpdate");
   }
-  return "Wait for the session to update.";
+  return t("waitForTheSessionToUpdate");
 }

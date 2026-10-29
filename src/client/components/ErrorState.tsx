@@ -1,3 +1,7 @@
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
+import { RequestError } from "./RequestError";
 export function ErrorState({
   title,
   message,
@@ -9,17 +13,25 @@ export function ErrorState({
   onDismiss?: () => void;
   onRetry?: () => void;
 }) {
+  useTranslation();
   return (
     <div className="error-state" role="alert">
       <strong>{title}</strong>
-      <p>{message}</p>
+      <p>
+        <RequestError error={message} />
+      </p>
       {onRetry ? (
         <button type="button" onClick={onRetry}>
-          Retry
+          {t("retry")}
         </button>
       ) : null}
       {onDismiss ? (
-        <button className="error-dismiss" type="button" aria-label="Dismiss" onClick={onDismiss}>
+        <button
+          className="error-dismiss"
+          type="button"
+          aria-label={t("dismiss")}
+          onClick={onDismiss}
+        >
           <span aria-hidden="true">×</span>
         </button>
       ) : null}

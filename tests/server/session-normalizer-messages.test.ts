@@ -90,7 +90,7 @@ describe("message and directive normalization", () => {
       expect.objectContaining({ role: "user", markdown: "Actual user" }),
       expect.objectContaining({
         role: "assistant",
-        phase: "commentary",
+        phase: "update",
         markdown: "Canonical assistant",
       }),
     ]);
@@ -212,9 +212,9 @@ describe("message and directive normalization", () => {
   });
 
   it.each([
-    ["commentary", "commentary"],
-    ["final", "final"],
-    ["final_answer", "final"],
+    ["commentary", "update"],
+    ["final", "response"],
+    ["final_answer", "response"],
     [undefined, null],
   ] as const)("normalizes completed AgentMessage phase %s", (phase, expectedPhase) => {
     const normalized = normalizeRecords(`completed-agent-${phase ?? "missing"}`, [
@@ -259,7 +259,7 @@ describe("message and directive normalization", () => {
       expect.objectContaining({
         kind: "message",
         role: "assistant",
-        phase: "final",
+        phase: "response",
         itemType: "Plan",
         markdown: "# Plan\n\n- First step",
       }),

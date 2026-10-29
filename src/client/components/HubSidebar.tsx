@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { api } from "../api/client";
+import { formatDate, t } from "../i18n";
 import { catalogGroups } from "../state/catalog-groups";
 import type { useHubNavigation } from "../state/use-hub-navigation";
 import type { useSessionList } from "../state/use-session-list";
@@ -22,6 +24,8 @@ export function HubSidebar({
   homeFilter = "",
   onHomeFilter,
 }: HubSidebarProps) {
+  const { i18n } = useTranslation();
+  const language = i18n.resolvedLanguage;
   const [hosting, setHosting] = useState(false);
   useEffect(() => {
     void api
@@ -46,12 +50,15 @@ export function HubSidebar({
   const updatedAtLabels = useMemo(
     () =>
       new Map(
-        (catalog.list?.sessions ?? []).map((item) => [item.id, shortActivity(item.updatedAt)]),
+        (catalog.list?.sessions ?? []).map((item) => [
+          item.id,
+          shortActivity(item.updatedAt, language),
+        ]),
       ),
-    [catalog.list],
+    [catalog.list, language],
   );
   return (
-    <aside ref={sidebar} className="hub-sidebar" aria-label="Session catalog">
+    <aside ref={sidebar} className="hub-sidebar" aria-label={t("sessionList")}>
       <header className="hub-brand">
         <InternalLink href="/" onNavigate={() => navigate(null)}>
           <img className="brand-logo" src="/favicon.svg" alt="" width="29" height="29" />
@@ -61,13 +68,13 @@ export function HubSidebar({
       <div className="catalog-filters">
         {(catalog.list?.homes?.length ?? 0) > 1 ? (
           <label className="home-filter">
-            Home
+            {t("home")}
             <select
-              aria-label="Filter by home"
+              aria-label={t("filterByHome")}
               value={homeFilter}
               onChange={(event) => onHomeFilter?.(event.target.value)}
             >
-              <option value="">All homes</option>
+              <option value="">{t("allHomes")}</option>
               {catalog.list!.homes.map((home) => (
                 <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
                   {home.nickname}
@@ -82,14 +89,14 @@ export function HubSidebar({
             checked={navigation.includeArchived}
             onChange={(event) => setIncludeArchived(event.target.checked)}
           />
-          Archived
+          {t("archived")}
         </label>
       </div>
       <div className="hub-section-label">
-        Projects
+        {t("projects")}
         <button
           type="button"
-          aria-label="New session"
+          aria-label={t("newSession")}
           onClick={() => {
             onCreate(null);
           }}
@@ -99,14 +106,15 @@ export function HubSidebar({
       </div>
       <nav
         ref={projectNav}
-        aria-label="Projects and main sessions"
+        aria-label={t("projectsAndMainSessions")}
         onScroll={(event) => persistScroll(event.currentTarget)}
       >
-        {catalog.listLoading ? <p role="status">Loading sessions…</p> : null}
+        {catalog.listLoading ? <p role="status">{t("loadingSessions")}</p> : null}
         {catalog.list && groups.length === 0 ? (
-          <p className="hub-empty">No main sessions yet</p>
+          <p className="hub-empty">{t("noMainSessionsYet")}</p>
         ) : null}
         {groups.map((group) => {
+          const groupName = group.id === null ? t("unknownProject") : group.name;
           const key = group.id ?? "unknown";
           const expanded = navigation.expanded.includes(key);
           return (
@@ -114,19 +122,22 @@ export function HubSidebar({
               <div className="project-heading">
                 <button
                   type="button"
-                  title={group.directory ?? group.name}
-                  aria-label={`${group.name}, ${group.sessions.length} main sessions`}
+                  title={group.directory ?? groupName}
+                  aria-label={t("projectSessions", {
+                    project: groupName,
+                    count: group.sessions.length,
+                  })}
                   aria-expanded={expanded}
                   onClick={() => toggleProject(key)}
                 >
                   <span aria-hidden="true">{expanded ? "⌄" : "›"}</span>
-                  <span className="project-name">{group.name}</span>
+                  <span className="project-name">{groupName}</span>
                   <small> {group.sessions.length}</small>
                 </button>
                 {group.directory ? (
                   <button
                     type="button"
-                    aria-label={`New session in ${group.name}`}
+                    aria-label={t("newProjectSession", { project: groupName })}
                     onClick={() => {
                       onCreate(group.directory);
                     }}
@@ -174,7 +185,7 @@ export function HubSidebar({
         })}
         {catalog.listError ? (
           <ErrorState
-            title="Could not update session list"
+            title={t("couldNotUpdateSessionList")}
             message={catalog.listError}
             onDismiss={catalog.clearListError}
             onRetry={catalog.retryList}
@@ -185,22 +196,27 @@ export function HubSidebar({
         <Settings homes={catalog.list?.homes ?? []} />
         {hosting ? (
           <a href="/artifacts" target="_blank" rel="noopener noreferrer">
-            Published pages
+            {t("publishedPages")}
           </a>
         ) : null}
       </footer>
     </aside>
   );
 }
-const ACTIVITY_FORMAT = new Intl.DateTimeFormat(undefined, {
-  month: "short",
-  day: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
-function shortActivity(value: string | null | undefined): string | null {
+function shortActivity(value: string | null | undefined, language?: string): string | null {
   if (!value) return null;
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? null : ACTIVITY_FORMAT.format(date);
+  return Number.isNaN(date.valueOf())
+    ? null
+    : formatDate(
+        date,
+        {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        },
+        language,
+      );
 }

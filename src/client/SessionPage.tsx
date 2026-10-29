@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { SessionHome } from "../shared/api-contract";
 import type { SessionSummary } from "../shared/domain";
@@ -8,6 +9,7 @@ import { ManageSession, OperationStatus, ResumeSession } from "./components/HubM
 import { InternalLink } from "./components/InternalLink";
 import { SessionReader } from "./components/SessionReader";
 import { StatusBadge } from "./components/StatusBadge";
+import { t } from "./i18n";
 import { sessionDisplayTitle } from "./session-title";
 import { browserStorage } from "./state/browser-storage";
 import { useHubOperation } from "./state/use-hub-operation";
@@ -33,6 +35,7 @@ export function SessionPage({
   onCatalogChanged,
   onUpdatedAt,
 }: SessionPageProps) {
+  useTranslation();
   const children = sessions.filter(
     (session) =>
       session.parentId === sessionId && (includeArchived || session.status !== "archived"),
@@ -121,12 +124,12 @@ export function SessionPage({
           related={
             <>
               {parentId !== null ? (
-                <nav className="parent-session child-sessions" aria-label="Parent session">
+                <nav className="parent-session child-sessions" aria-label={t("parentSession")}>
                   <InternalLink
                     href={`/sessions/${parentId}`}
                     onNavigate={onNavigate ? () => onNavigate(parentId) : undefined}
                   >
-                    ← Parent session
+                    {t("parentSessionLabel")}
                     {parent ? (
                       <>
                         {" "}
@@ -146,8 +149,10 @@ export function SessionPage({
                     browserStorage.setItem(childSessionsKey, String(open));
                   }}
                 >
-                  <summary>Child sessions · {children.length}</summary>
-                  <nav className="child-sessions" aria-label="Child sessions">
+                  <summary>
+                    {t("childSessionsLabel")} {children.length}
+                  </summary>
+                  <nav className="child-sessions" aria-label={t("childSessions")}>
                     {children.map((session) => (
                       <InternalLink
                         key={session.id}
@@ -182,12 +187,12 @@ export function SessionPage({
       ) : reader.readerError ? (
         <section className="reader">
           <ErrorState
-            title={reader.missing ? "Session not found" : "Could not load session"}
+            title={reader.missing ? t("sessionNotFound") : t("couldNotLoadSession")}
             message={reader.readerError}
           />
           {reader.missing ? (
             <InternalLink href="/" onNavigate={onNavigate ? () => onNavigate(null) : undefined}>
-              Back to home
+              {t("backToHome")}
             </InternalLink>
           ) : (
             <button
@@ -196,14 +201,14 @@ export function SessionPage({
               disabled={reader.operation !== null}
               onClick={() => void reader.retryOpen()}
             >
-              Retry opening session
+              {t("retryOpeningSession")}
             </button>
           )}
         </section>
       ) : (
         <section className="reader reader-welcome">
           <p className="loading" role="status">
-            Opening session…
+            {t("openingSession")}
           </p>
         </section>
       )}

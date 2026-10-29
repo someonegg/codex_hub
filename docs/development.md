@@ -107,6 +107,8 @@ node scripts/capture-docs-interaction.mjs
 
 The scripts use the real UI with shared fabricated data and intercepted HTTP and
 WebSocket requests. They do not start Codex or read user sessions.
+Translation catalogs load through the project's `tsx` dependency; native Node.js
+type stripping is not required.
 
 Outputs go to `docs/images/`: the intro GIF, themed session screenshots,
 upload history, and mobile views.
@@ -119,6 +121,20 @@ Both capture scripts accept optional URL and output-path arguments, for example:
 ```sh
 node scripts/capture-docs-interaction.mjs http://127.0.0.1:4187 /tmp/interaction.png
 ```
+
+To generate Chinese documentation assets, run the same scenarios with an explicit language:
+
+```sh
+node scripts/record-docs-intro.mjs --language zh-CN
+node scripts/capture-docs-interaction.mjs --language zh-CN
+npm run build
+node --import tsx scripts/test-hosting.mjs --language zh-CN
+```
+
+The default is `--language en`. Chinese assets go to `docs/images/zh-CN/` with
+matching filenames. Keep both variants current when changing visible UI.
+See [interface localization](technical-reference.md#interface-localization) for
+language resolution and catalog conventions.
 
 Related screenshots are saved beside the specified output. GIF source frames stay
 in the printed temporary directory. Scripts check page errors and horizontal

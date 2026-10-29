@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
+import { t } from "../i18n";
 import type { DraftAttachment } from "../state/session-drafts";
 
 export function AttachmentList({
@@ -11,8 +13,9 @@ export function AttachmentList({
   disabled: boolean;
   onRemove: (id: string) => void;
 }) {
+  useTranslation();
   return (
-    <ul className="interaction-attachments" aria-label="Pending attachments">
+    <ul className="interaction-attachments" aria-label={t("pendingAttachments")}>
       {attachments.map((attachment) => (
         <Attachment
           key={attachment.id}
@@ -34,6 +37,7 @@ function Attachment({
   disabled: boolean;
   onRemove: (id: string) => void;
 }) {
+  useTranslation();
   const { file } = attachment;
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -59,7 +63,7 @@ function Attachment({
         <button
           type="button"
           className="attachment-thumbnail"
-          aria-label={`Preview ${file.name}`}
+          aria-label={t("previewFile", { filename: file.name })}
           onClick={() => setExpanded(true)}
         >
           <img src={url} alt={file.name} onError={() => setFailed(true)} />
@@ -81,11 +85,11 @@ function Attachment({
       <span className="attachment-name" title={file.name}>
         {file.name}
       </span>
-      {failed ? <span className="attachment-preview-error">Preview unavailable</span> : null}
+      {failed ? <span className="attachment-preview-error">{t("previewUnavailable")}</span> : null}
       <button
         type="button"
         className="attachment-remove"
-        aria-label={`Remove ${file.name}`}
+        aria-label={t("removeFile", { filename: file.name })}
         disabled={disabled}
         onClick={() => onRemove(attachment.id)}
       >
@@ -94,14 +98,14 @@ function Attachment({
       <dialog
         ref={dialog}
         className="attachment-preview-dialog"
-        aria-label={`Preview ${file.name}`}
+        aria-label={t("previewFile", { filename: file.name })}
         onCancel={() => setExpanded(false)}
         onClose={() => setExpanded(false)}
       >
         <button
           type="button"
           className="dialog-close"
-          aria-label="Close image preview"
+          aria-label={t("closeImagePreview")}
           onClick={() => setExpanded(false)}
         >
           ×

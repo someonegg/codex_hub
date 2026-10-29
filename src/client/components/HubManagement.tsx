@@ -1,14 +1,36 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { HubOperation, InteractionResponse, SessionHome } from "../../shared/api-contract";
 import type { SessionDetail } from "../../shared/domain";
 
 import { api } from "../api/client";
+import { t } from "../i18n";
 import { usePreferences } from "../state/preferences";
 import { useHubOperation } from "../state/use-hub-operation";
 import { AttachCommand } from "./AttachCommand";
 import { ProjectDirectory } from "./ProjectDirectory";
+import { RequestError } from "./RequestError";
 import { TmuxAccessDialog } from "./TmuxAccessDialog";
+
+const OPERATION_LABELS = {
+  create: "operationCreate",
+  archive: "operationArchive",
+  delete: "operationDelete",
+  exit: "operationExit",
+} as const;
+const STATUS_LABELS = {
+  pending: "statusPending",
+  succeeded: "statusSucceeded",
+  failed: "statusFailed",
+  unknown: "statusUnknown",
+} as const;
+const PHASE_LABELS = {
+  sending_exit: "sendingExitCommand",
+  waiting_exit: "waitingForExit",
+  archiving: "archiving",
+  confirming_archive: "confirmingArchive",
+} as const;
 
 // getRandomValues is available over HTTP as well as in secure contexts.
 function newRequestId(): string {
@@ -18,6 +40,7 @@ function newRequestId(): string {
 
 export type OperationController = ReturnType<typeof useHubOperation>;
 export function OperationStatus({ controller }: { controller: OperationController }) {
+  useTranslation();
   const op = controller.operation;
   const [dismissed, setDismissed] = useState<HubOperation | null>(null);
   useEffect(() => {
@@ -30,49 +53,47 @@ export function OperationStatus({ controller }: { controller: OperationControlle
       {op && op !== dismissed ? (
         <aside className="operation-status" role="status">
           <strong>
-            {op.mode === "resume" ? "resume" : op.type} · {op.status}
+            {t(op.mode === "resume" ? "operationResume" : OPERATION_LABELS[op.type])} ·{" "}
+            {t(STATUS_LABELS[op.status])}
           </strong>
           {op.status === "pending" && op.type === "create" ? (
             <p>
               {op.attachCommand
-                ? "No Codex session detected yet. Attach to tmux to check startup progress."
-                : "Starting Codex"}
+                ? t("noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress")
+                : t("startingCodex")}
             </p>
           ) : null}
-          {op.status === "pending" && op.phase ? (
-            <p>
-              {
-                {
-                  sending_exit: "Sending exit command",
-                  waiting_exit: "Waiting for exit",
-                  archiving: "Archiving",
-                  confirming_archive: "Confirming archive",
-                }[op.phase]
-              }
-            </p>
-          ) : null}
+          {op.status === "pending" && op.phase ? <p>{t(PHASE_LABELS[op.phase])}</p> : null}
           {op.attachCommand ? <AttachCommand command={op.attachCommand} /> : null}
           {op.status === "unknown" ? (
             <p>
-              Tracking has stopped. Refresh the session list to check the result.{" "}
+              {t("trackingHasStoppedRefreshTheSessionListToCheckTheResult")}{" "}
               {op.type === "create"
-                ? "Attach to tmux before trying again; creating again may start another session."
-                : "Check the current state before trying again."}
+                ? t("attachToTmuxBeforeTryingAgainCreatingAgainMayStartAnotherSession")
+                : t("checkTheCurrentStateBeforeTryingAgain")}
             </p>
           ) : null}
-          {op.error ? <p>{op.error}</p> : null}
-          <small>Operation {op.operationId}</small>
+          {op.error ? (
+            <p>
+              <RequestError error={op.error} />
+            </p>
+          ) : null}
+          <small>
+            {t("operation")} {op.operationId}
+          </small>
         </aside>
       ) : null}
       {controller.error ? (
         <div role="alert">
-          <p>{controller.error}</p>
+          <p>
+            <RequestError error={controller.error} />
+          </p>
           {controller.canCheck ? (
             <button type="button" onClick={controller.check}>
-              Retry status check
+              {t("retryStatusCheck")}
             </button>
           ) : controller.errorPhase === "submit" ? (
-            <p>Use the original action button to try again.</p>
+            <p>{t("useTheOriginalActionButtonToTryAgain")}</p>
           ) : null}
         </div>
       ) : null}
@@ -100,6 +121,7 @@ export function CreateSession({
   onClose,
   onRecovered,
 }: CreateSessionProps) {
+  useTranslation();
   const preferences = usePreferences();
   const dialog = useRef<HTMLDialogElement>(null);
   const recovery = useRef<boolean | null>(null);
@@ -146,16 +168,16 @@ export function CreateSession({
     if (controller.operation && controller.operation.status !== "pending") request.current = null;
   }, [controller.operation]);
   return (
-    <dialog ref={dialog} className="create-session" aria-label="New session" onCancel={onClose}>
+    <dialog ref={dialog} className="create-session" aria-label={t("newSession")} onCancel={onClose}>
       <button
         type="button"
         className="dialog-close"
-        aria-label="Close new session"
+        aria-label={t("closeNewSession")}
         onClick={onClose}
       >
         ×
       </button>
-      <h2 tabIndex={-1}>New session</h2>
+      <h2 tabIndex={-1}>{t("newSession")}</h2>
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -175,16 +197,16 @@ export function CreateSession({
       >
         {homes.length > 1 ? (
           <label>
-            Home
+            {t("home")}
             <select
               required
-              aria-label="Session home"
+              aria-label={t("sessionHome")}
               value={sourceInstanceId}
               disabled={controller.busy}
               onChange={(event) => setSourceInstanceId(event.target.value)}
             >
               <option value="" disabled>
-                Select a home
+                {t("selectAHome")}
               </option>
               {homes.map((home) => (
                 <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
@@ -207,7 +229,7 @@ export function CreateSession({
             onChange={(event) => setWorktree(event.target.checked)}
             disabled={controller.busy}
           />
-          Enable worktree
+          {t("enableWorktree")}
         </label>
         <label className="check-row">
           <input
@@ -216,7 +238,7 @@ export function CreateSession({
             onChange={(event) => setYolo(event.target.checked)}
             disabled={controller.busy}
           />
-          Enable YOLO mode
+          {t("enableYOLOMode")}
         </label>
         <OperationStatus controller={controller} />
         <button
@@ -227,7 +249,7 @@ export function CreateSession({
             (homes.length > 1 && !homes.some((home) => home.sourceInstanceId === sourceInstanceId))
           }
         >
-          {controller.busy ? "Creating…" : "Create session"}
+          {controller.busy ? t("creating") : t("createSession")}
         </button>
       </form>
     </dialog>
@@ -296,6 +318,7 @@ function ManageSessionControls({
   showStatus: boolean;
   onStart?: () => void;
 }) {
+  useTranslation();
   const [accessOpen, setAccessOpen] = useState(false);
   const attachCommand = interaction?.attachCommand;
   useEffect(() => {
@@ -334,7 +357,7 @@ function ManageSessionControls({
       <button
         type="button"
         className="session-menu-trigger"
-        aria-label="Session management"
+        aria-label={t("sessionManagement")}
         aria-expanded={menuOpen}
         aria-controls={menuOpen ? menuId : undefined}
         onClick={() => setMenuOpen(!menuOpen)}
@@ -351,7 +374,7 @@ function ManageSessionControls({
                 setAccessOpen(true);
               }}
             >
-              Tmux access
+              {t("tmuxAccess")}
             </button>
           ) : null}
           {session.status === "archived" ? (
@@ -363,7 +386,7 @@ function ManageSessionControls({
                 setDeleteOpen(true);
               }}
             >
-              Delete session
+              {t("deleteSession")}
             </button>
           ) : (
             <button
@@ -375,7 +398,7 @@ function ManageSessionControls({
                 void controller.start(() => api.archiveSession(session.id));
               }}
             >
-              Archive session
+              {t("archiveSession")}
             </button>
           )}
           {interaction?.supported && interaction.state === "connected" ? (
@@ -388,7 +411,7 @@ function ManageSessionControls({
                 void controller.start(() => api.exitSession(session.id));
               }}
             >
-              Exit session
+              {t("exitSession")}
             </button>
           ) : null}
         </div>
@@ -399,14 +422,13 @@ function ManageSessionControls({
       <dialog
         ref={deleteDialog}
         className="create-session"
-        aria-label="Delete archived session"
+        aria-label={t("deleteArchivedSession")}
         onCancel={() => setDeleteOpen(false)}
         onClose={() => setDeleteOpen(false)}
       >
-        <h2>Delete archived session?</h2>
+        <h2>{t("deleteArchivedSessionLabel")}</h2>
         <p>
-          Permanently delete this archived session and all uploaded attachments? This cannot be
-          undone.
+          {t("permanentlyDeleteThisArchivedSessionAndAllUploadedAttachmentsThisCannotBeUndone")}
         </p>
         <form
           onSubmit={(event) => {
@@ -418,10 +440,10 @@ function ManageSessionControls({
           }}
         >
           <button type="button" autoFocus onClick={() => setDeleteOpen(false)}>
-            Cancel
+            {t("cancel")}
           </button>
           <button type="submit" disabled={controller.busy || session.status !== "archived"}>
-            Confirm delete
+            {t("confirmDelete")}
           </button>
         </form>
       </dialog>
@@ -443,6 +465,7 @@ export function ResumeSession({
   controller: OperationController;
   onStart?: () => void;
 }) {
+  useTranslation();
   const preferences = usePreferences();
   const [open, setOpen] = useState(false);
   const [yolo, setYolo] = useState(false);
@@ -470,26 +493,28 @@ export function ResumeSession({
             setOpen(true);
           }}
         >
-          Resume
+          {t("resume")}
         </button>
       ) : (
-        <span className="resume-reason">{session.resume.reason}</span>
+        <span className="resume-reason">
+          <RequestError error={session.resume.reason} summary="resumeUnavailable" />
+        </span>
       )}
       <dialog
         ref={dialog}
         className="create-session"
-        aria-label="Resume session"
+        aria-label={t("resumeSession")}
         onCancel={() => setOpen(false)}
       >
         <button
           type="button"
           className="dialog-close"
-          aria-label="Close resume session"
+          aria-label={t("closeResumeSession")}
           onClick={() => setOpen(false)}
         >
           ×
         </button>
-        <h2 tabIndex={-1}>Resume session</h2>
+        <h2 tabIndex={-1}>{t("resumeSession")}</h2>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -513,10 +538,10 @@ export function ResumeSession({
               disabled={controller.busy}
               onChange={(event) => setYolo(event.target.checked)}
             />
-            Enable YOLO mode
+            {t("enableYOLOMode")}
           </label>
           <button type="submit" disabled={controller.busy || !session.resume.allowed}>
-            Resume session
+            {t("resumeSession")}
           </button>
         </form>
       </dialog>

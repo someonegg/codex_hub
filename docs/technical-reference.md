@@ -435,3 +435,28 @@ to the original text.
 ## Browser state
 
 Long-lived preferences use the versioned localStorage key `ahub.preferences.v1`, synchronized across same-origin tabs. Tab-local browsing state is grouped under `ahub.browser-state.v1` in sessionStorage. Operation recovery and in-memory drafts retain independent lifecycles. Storage failures retain in-memory behavior.
+
+## Interface localization
+
+The browser preference `ahub.preferences.v1.language` selects `en` (default) or
+`zh-CN`. Missing, malformed, and unsupported stored values fall back to English;
+existing launch and theme preferences retain their behavior. Language changes apply
+without reloading and synchronize through same-origin storage events. Storage
+failures retain the in-memory choice. Locale affects presentation, not API values,
+session identity, conversation text, terminal output, paths, or commands. Dates use
+the device time zone; documentation captures fix the time zone to UTC.
+
+`src/client/i18n/` owns bundled dictionaries, language metadata, semantic keys,
+interpolation types, namespace assignment, and locale formatters. The English
+catalog defines keys and parameters; Chinese must provide matching entries.
+Common messages remain in `common`; feature messages use `hub`, `reader`,
+`interaction`, `hosting`, `errors`, and `settings`. Missing or empty translations
+fall back to English. New languages require a matching catalog, registration in
+`languageOptions` and the initialization resources, and catalog validation tests.
+No runtime translation fetch or browser-language detection is used.
+
+Local notifications retain keys until rendering. Native diagnostic details remain
+verbatim beside localized explanations; known structured API errors use their
+codes, never English-message matching. Translation does not alter HTTP or
+WebSocket contracts. Preference changes must not restart pending operations,
+remount draft inputs, or reload already requested detail data.

@@ -24,7 +24,7 @@ export function useLazyDetail<T>({
     load: typeof load;
     detail: T;
   } | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ message: string | null } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const channel = useRef(createRequestChannel());
   const callbacks = useRef(onTimelineConflict);
@@ -46,11 +46,15 @@ export function useLazyDetail<T>({
       .catch((reason: unknown) => {
         if (!request.isCurrent()) return;
         if (isTimelineConflict(reason)) {
-          setFailure(unavailableMessage);
+          setFailure({ message: null });
           callbacks.current();
-        } else setFailure(reason instanceof Error ? reason.message : unavailableMessage);
+        } else setFailure({ message: reason instanceof Error ? reason.message : null });
       });
     return () => requestChannel.cancel();
-  }, [detail, enabled, load, unavailableMessage, attempt]);
-  return { detail, error: failure, retry: () => setAttempt((value) => value + 1) };
+  }, [detail, enabled, load, attempt]);
+  return {
+    detail,
+    error: failure === null ? null : (failure.message ?? unavailableMessage),
+    retry: () => setAttempt((value) => value + 1),
+  };
 }

@@ -203,7 +203,7 @@ describe("session reader components", () => {
           ordinal: 9,
           timestamp: null,
           role: "assistant",
-          phase: "final",
+          phase: "response",
           itemType: null,
           markdown:
             "<script>alert(1)</script>\n\n[bad](javascript:alert(1))\n\n![remote](https://tracker.invalid/a.png)\n\n[good](https://example.com)",
@@ -231,7 +231,7 @@ describe("session reader components", () => {
           ordinal: 10,
           timestamp: null,
           role: "assistant",
-          phase: "final",
+          phase: "response",
           itemType: null,
           markdown:
             "Inline $E = mc^2$.\n\n$$a^2 + b^2 = c^2$$\n\n$$\n\\int_0^1 x^2\\,dx = \\frac{1}{3}\n$$",
@@ -255,7 +255,7 @@ describe("session reader components", () => {
           ordinal: 11,
           timestamp: null,
           role: "assistant",
-          phase: "final",
+          phase: "response",
           itemType: null,
           markdown: [
             "| Column | Value |",
@@ -295,7 +295,7 @@ describe("session reader components", () => {
           ordinal: 11,
           timestamp: null,
           role: "assistant",
-          phase: "final",
+          phase: "response",
           itemType: null,
           markdown: "`$notMath$`\n\n```text\n$$not display math$$\n```\n\n$$\\frac{1}{$$",
         }}
@@ -318,7 +318,7 @@ describe("session reader components", () => {
           ordinal: 12,
           timestamp: null,
           role: "assistant",
-          phase: "final",
+          phase: "response",
           itemType: "Plan",
           markdown:
             "<proposed_plan>\n# Release plan\n\n- First **important** step\n- Read the [docs](https://example.com)\n</proposed_plan>",
@@ -326,7 +326,7 @@ describe("session reader components", () => {
       />,
     );
 
-    const toggle = screen.getByRole("button", { name: /Assistant final · Plan · 12.*Show/ });
+    const toggle = screen.getByRole("button", { name: /Assistant response · Plan · 12.*Show/ });
     expect(toggle.querySelector(".message-avatar")).toBeNull();
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(document.querySelector(".plan-preview")).toHaveTextContent(
@@ -362,7 +362,7 @@ describe("session reader components", () => {
       ordinal,
       timestamp: null,
       role: "assistant",
-      phase: "final",
+      phase: "response",
       itemType: "Plan",
       markdown: `# Plan ${ordinal}`,
     });
@@ -379,7 +379,7 @@ describe("session reader components", () => {
       />
     );
     const toggle = (ordinal: number) =>
-      screen.getByRole("button", { name: new RegExp(`Assistant final · Plan · ${ordinal}`) });
+      screen.getByRole("button", { name: new RegExp(`Assistant response · Plan · ${ordinal}`) });
     const view = render(timeline([plan(1), plan(2)]));
     expect(toggle(1)).toHaveAttribute("aria-expanded", "false");
     expect(toggle(2)).toHaveAttribute("aria-expanded", "true");

@@ -1,3 +1,6 @@
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
 import { InternalLink } from "./InternalLink";
 
 interface UploadHistoryLinkProps {
@@ -8,6 +11,7 @@ interface UploadHistoryLinkProps {
 }
 
 export function UploadHistoryLink({ sessionId, onNavigate, ...props }: UploadHistoryLinkProps) {
+  useTranslation();
   const href = `/sessions/${encodeURIComponent(sessionId)}/uploads`;
   return (
     <InternalLink
@@ -19,7 +23,7 @@ export function UploadHistoryLink({ sessionId, onNavigate, ...props }: UploadHis
         onNavigate?.();
       }}
     >
-      Upload history
+      {t("uploadHistory")}
     </InternalLink>
   );
 }

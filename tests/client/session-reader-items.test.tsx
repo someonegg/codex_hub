@@ -379,7 +379,7 @@ function message(id: string, ordinal: number, markdown: string): TimelineItem {
     ordinal,
     timestamp: null,
     role: "assistant",
-    phase: "final",
+    phase: "response",
     itemType: null,
     markdown,
   };

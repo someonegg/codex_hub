@@ -1,8 +1,11 @@
 import type { TerminalPreviewFrame, TerminalPreviewMessage } from "../../shared/api-contract";
 
+import { LocalizedError } from "../i18n/localized-error";
+import { ApiClientError } from "./client";
+
 export interface PreviewConnectionCallbacks {
   frame(value: TerminalPreviewFrame): boolean;
-  failed(message: string, retryable: boolean): void;
+  failed(message: string, retryable: boolean, error?: Error): void;
 }
 
 /** A new connection always starts from a full snapshot; there is no resume cursor. */
@@ -23,10 +26,10 @@ export function connectTerminalPreview(
     stopped = true;
     socket.close();
   };
-  const failed = (message: string, retryable: boolean) => {
+  const failed = (error: Error, retryable: boolean) => {
     if (stopped) return;
     close();
-    callbacks.failed(message, retryable);
+    callbacks.failed(error.message, retryable, error);
   };
   socket.onmessage = (event) => {
     if (stopped) return;
@@ -41,7 +44,7 @@ export function connectTerminalPreview(
           typeof message.retryable !== "boolean"
         )
           throw new Error();
-        failed(message.message, message.retryable);
+        failed(new ApiClientError(0, message.code, message.message), message.retryable);
       } else {
         if (
           (message.type !== "snapshot" && message.type !== "delta") ||
@@ -52,10 +55,11 @@ export function connectTerminalPreview(
         receivedSnapshot = true;
       }
     } catch {
-      failed("Invalid terminal preview update; reconnecting", true);
+      failed(new LocalizedError("invalidTerminalPreviewUpdateReconnecting"), true);
     }
   };
-  socket.onerror = () => failed("Terminal Preview connection failed", true);
-  socket.onclose = (event) => failed("Terminal Preview connection closed", event.code !== 1008);
+  socket.onerror = () => failed(new LocalizedError("terminalPreviewConnectionFailed"), true);
+  socket.onclose = (event) =>
+    failed(new LocalizedError("terminalPreviewConnectionClosed"), event.code !== 1008);
   return close;
 }

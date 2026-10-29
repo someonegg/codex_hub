@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
 
+import { applyLanguage, isLanguage, type Language } from "../i18n";
+
 export interface Preferences {
+  language: Language;
   defaultHome: string;
   theme: "mist" | "warm";
   worktree: boolean;
@@ -9,6 +12,7 @@ export interface Preferences {
 }
 const key = "ahub.preferences.v1";
 const defaults: Preferences = {
+  language: "en",
   defaultHome: "",
   theme: "mist",
   worktree: false,
@@ -19,6 +23,7 @@ function read(): Preferences {
   try {
     const value = JSON.parse(localStorage.getItem(key) ?? "null") ?? {};
     return {
+      language: isLanguage(value.language) ? value.language : "en",
       defaultHome: typeof value.defaultHome === "string" ? value.defaultHome : "",
       theme: value.theme === "warm" ? "warm" : "mist",
       worktree: value.worktree === true,
@@ -33,6 +38,7 @@ let current = read();
 const listeners = new Set<() => void>();
 export function initializeTheme() {
   document.documentElement.dataset.theme = current.theme;
+  applyLanguage(current.language);
 }
 export function updatePreferences(patch: Partial<Preferences>) {
   current = { ...current, ...patch };

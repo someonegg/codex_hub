@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { DirectiveDetailResponse, TimelineCursor } from "../../shared/api-contract";
 import type { DirectiveItem as Directive } from "../../shared/domain";
 
 import { api } from "../api/client";
+import { t } from "../i18n";
 import { useLazyDetail } from "../state/use-lazy-detail";
 import { CharacterCount } from "./CharacterCount";
 import { EventDetail } from "./EventDetail";
@@ -17,6 +19,7 @@ interface DirectiveItemProps {
 }
 
 export function DirectiveItem({ item, sessionId, cursor, onTimelineConflict }: DirectiveItemProps) {
+  useTranslation();
   if (!item.hasDetail) {
     return <InlineDirective item={item} />;
   }
@@ -31,10 +34,11 @@ export function DirectiveItem({ item, sessionId, cursor, onTimelineConflict }: D
 }
 
 function InlineDirective({ item }: { item: Extract<Directive, { hasDetail: false }> }) {
+  useTranslation();
   return (
     <article className="directive-body">
       <p className="event-label">
-        Directive · {item.ordinal}
+        {t("directive")} {item.ordinal}
         <EventTime timestamp={item.timestamp} />
       </p>
       <pre className="directive-block">{item.text}</pre>
@@ -48,6 +52,7 @@ function LazyDirective({
   cursor,
   onTimelineConflict,
 }: DirectiveItemProps & { item: Extract<Directive, { hasDetail: true }> }) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   const loadDetail = useCallback(
     (requestCursor: TimelineCursor, signal: AbortSignal): Promise<DirectiveDetailResponse> =>
@@ -58,14 +63,14 @@ function LazyDirective({
     enabled: open,
     cursor,
     load: loadDetail,
-    unavailableMessage: "Directive unavailable",
+    unavailableMessage: t("directiveUnavailable"),
     onTimelineConflict,
   });
 
   return (
     <article className="directive-body">
       <p className="event-label">
-        Directive · {item.ordinal}
+        {t("directive")} {item.ordinal}
         <EventTime timestamp={item.timestamp} />
       </p>
       <p className="detail-summary">
@@ -73,12 +78,12 @@ function LazyDirective({
         <CharacterCount value={item.charCount} />
       </p>
       <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        {open ? "Hide directive" : "Show directive"}
+        {open ? t("hideDirective") : t("showDirective")}
       </button>
       {open ? (
         <EventDetail
           loading={detail === null && error === null}
-          loadingMessage="Loading directive…"
+          loadingMessage={t("loadingDirective")}
           error={error}
           onRetry={retry}
         >
@@ -86,7 +91,7 @@ function LazyDirective({
             <>
               <pre>{detail.text}</pre>
               {detail.truncated ? (
-                <p className="truncated">Directive was truncated for safe display.</p>
+                <p className="truncated">{t("directiveWasTruncatedForSafeDisplay")}</p>
               ) : null}
             </>
           ) : null}

@@ -1,7 +1,10 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { SessionDetail } from "../../shared/domain";
 
+import type { PlainMessageKey } from "../i18n";
+import { formatDate, t } from "../i18n";
 import { sessionDisplayTitle } from "../session-title";
 import type { TimelineVisibility, TimelineVisibilityKey } from "../state/timeline-visibility";
 import { StatusBadge } from "./StatusBadge";
@@ -15,11 +18,6 @@ interface SessionHeaderProps {
   onVisibilityChange: (key: TimelineVisibilityKey, visible: boolean) => void;
 }
 
-const DATE_FORMAT = new Intl.DateTimeFormat(undefined, {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
-
 export function SessionHeader({
   homeNickname,
   management,
@@ -27,6 +25,7 @@ export function SessionHeader({
   visibility,
   onVisibilityChange,
 }: SessionHeaderProps) {
+  useTranslation();
   const updatedAt = formatTimestamp(session.updatedAt);
 
   return (
@@ -44,33 +43,35 @@ export function SessionHeader({
           {homeNickname !== undefined ? (
             <>
               <span>·</span>
-              <span>Home: {homeNickname}</span>
+              <span>
+                {t("homeLabel")} {homeNickname}
+              </span>
             </>
           ) : null}
           <span>·</span>
           <span>{updatedAt}</span>
           <span>·</span>
-          <span>{session.itemCount} events</span>
+          <span>{t("events", { count: session.itemCount })}</span>
           <span>·</span>
           <UploadHistoryLink sessionId={session.id} className="session-uploads-link" />
         </div>
         <div className="reader-controls">
           <details className="session-information" key={session.id}>
-            <summary>Session information</summary>
+            <summary>{t("sessionInformation")}</summary>
             <div className="session-information-content">
               <p className="session-meta">
-                Project Directory · <code>{session.projectDirectory ?? "Unavailable"}</code>
+                {t("projectDirectory")} <code>{session.projectDirectory ?? t("unavailable")}</code>
               </p>
               <p className="session-meta">
-                Working Directory · <code>{session.workingDirectory ?? "Unavailable"}</code>
+                {t("workingDirectory")} <code>{session.workingDirectory ?? t("unavailable")}</code>
               </p>
               <p className="session-origin">{sessionOriginLabel(session.origin)}</p>
               <p className="session-source-id">
-                Original session ID · <code>{session.sourceId ?? "Unavailable"}</code>
+                {t("originalSessionID")} <code>{session.sourceId ?? t("unavailable")}</code>
               </p>
             </div>
           </details>
-          <div className="event-toggles" role="group" aria-label="Timeline event visibility">
+          <div className="event-toggles" role="group" aria-label={t("timelineEventVisibility")}>
             {VISIBILITY_TOGGLES.map(({ key, label }) => (
               <label className="check-row event-toggle" key={key}>
                 <input
@@ -78,7 +79,7 @@ export function SessionHeader({
                   checked={visibility[key]}
                   onChange={(event) => onVisibilityChange(key, event.target.checked)}
                 />
-                {label}
+                {t(label)}
               </label>
             ))}
           </div>
@@ -89,19 +90,24 @@ export function SessionHeader({
 }
 
 function formatTimestamp(value: string | null): string {
-  if (value === null) return "Time unavailable";
+  if (value === null) return t("timeUnavailable");
   const date = new Date(value);
-  return Number.isNaN(date.valueOf()) ? "Time unavailable" : DATE_FORMAT.format(date);
+  return Number.isNaN(date.valueOf())
+    ? t("timeUnavailable")
+    : formatDate(date, {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
 }
 
 const VISIBILITY_TOGGLES: Array<{
   key: TimelineVisibilityKey;
-  label: string;
+  label: PlainMessageKey;
 }> = [
-  { key: "directive", label: "directive" },
-  { key: "tools", label: "tool" },
-  { key: "token", label: "token" },
-  { key: "internal", label: "internal" },
+  { key: "directive", label: "directiveEvent" },
+  { key: "tools", label: "toolEvent" },
+  { key: "token", label: "tokenEvent" },
+  { key: "internal", label: "internalEvent" },
 ];
 
 function sessionOriginLabel(origin: SessionDetail["origin"]): string {

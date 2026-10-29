@@ -7,13 +7,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
+
+import { t } from "../i18n";
+import { LocalizedError } from "../i18n/localized-error";
 
 interface AttachmentMenuProps {
   previewConnected: boolean;
   interactionBusy: boolean;
   uploadProgress: string | null;
   onFiles: (files: File[]) => void;
-  onError: (error: string) => void;
+  onError: (error: LocalizedError) => void;
   // Keep inputs mounted across connection changes to validate late picker results.
   children: (actions: ReactNode) => ReactNode;
 }
@@ -26,6 +30,7 @@ export function AttachmentMenu({
   onError,
   children,
 }: AttachmentMenuProps) {
+  useTranslation();
   const [attachmentsOpen, setAttachmentsOpen] = useState(false);
   const attachmentButton = useRef<HTMLButtonElement | null>(null);
   const attachmentMenu = useRef<HTMLDivElement | null>(null);
@@ -33,9 +38,9 @@ export function AttachmentMenu({
   const imagesInput = useRef<HTMLInputElement | null>(null);
   const filesInput = useRef<HTMLInputElement | null>(null);
   const attachmentPickers = [
-    { label: "Take photo", input: photoInput, accept: "image/*", capture: "environment" },
-    { label: "Choose images", input: imagesInput, accept: "image/*", multiple: true },
-    { label: "Choose files", input: filesInput, multiple: true },
+    { label: t("takePhoto"), input: photoInput, accept: "image/*", capture: "environment" },
+    { label: t("chooseImages"), input: imagesInput, accept: "image/*", multiple: true },
+    { label: t("chooseFiles"), input: filesInput, multiple: true },
   ] as const;
   const attachmentMenuId = useId();
   const openAttachments = () => {
@@ -123,7 +128,9 @@ export function AttachmentMenu({
     if (!files.length) return;
     if (!previewConnected || interactionBusy) {
       onError(
-        !previewConnected ? "Reconnect before attaching files" : "Session is busy; try again later",
+        new LocalizedError(
+          !previewConnected ? "reconnectBeforeAttachingFiles" : "sessionIsBusyTryAgainLater",
+        ),
       );
       return;
     }
@@ -133,7 +140,7 @@ export function AttachmentMenu({
     <>
       {attachmentPickers.map(({ label, input, ...options }) => (
         <input
-          key={label}
+          key={input === photoInput ? "photo" : input === imagesInput ? "images" : "files"}
           ref={input}
           type="file"
           {...options}
@@ -148,7 +155,7 @@ export function AttachmentMenu({
             ref={attachmentButton}
             type="button"
             className="interaction-attach"
-            aria-label="Attach files"
+            aria-label={t("attachFiles")}
             aria-haspopup="menu"
             aria-expanded={attachmentsOpen}
             aria-controls={attachmentsOpen ? attachmentMenuId : undefined}
@@ -184,13 +191,13 @@ export function AttachmentMenu({
               ref={attachmentMenu}
               id={attachmentMenuId}
               role="menu"
-              aria-label="Attach files"
+              aria-label={t("attachFiles")}
               className="interaction-attachment-menu"
               onKeyDown={onAttachmentMenuKeyDown}
             >
               {attachmentPickers.map(({ label, input }) => (
                 <button
-                  key={label}
+                  key={input === photoInput ? "photo" : input === imagesInput ? "images" : "files"}
                   type="button"
                   role="menuitem"
                   disabled={!previewConnected || interactionBusy || !!uploadProgress}

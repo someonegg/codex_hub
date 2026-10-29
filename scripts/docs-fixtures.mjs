@@ -84,7 +84,7 @@ export const docsItems = [
     timestamp: docsTimestamp,
     kind: "message",
     role: "assistant",
-    phase: "final",
+    phase: "response",
     itemType: null,
     markdown:
       "Start with **project health**, then highlight recent activity and keep navigation clear.",

@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { MAX_UPLOAD_BYTES } from "../../shared/uploads";
 
 import { api } from "../api/client";
+import { t } from "../i18n";
+import { LocalizedError } from "../i18n/localized-error";
 import type { DraftAttachment } from "./session-drafts";
 
 export function useAttachmentUpload(
@@ -11,9 +14,12 @@ export function useAttachmentUpload(
   interactionBusy: boolean,
   addAttachment: (attachment: DraftAttachment) => void,
 ) {
+  useTranslation();
   const upload = useRef<AbortController | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
+  const [uploadError, setUploadError] = useState<Error | null>(null);
   useEffect(() => {
     upload.current = null;
     return () => upload.current?.abort();
@@ -22,14 +28,14 @@ export function useAttachmentUpload(
     if (!files.length || upload.current || interactionBusy || !previewConnected) return;
     setUploadError(null);
     if (files.some((file) => file.size > MAX_UPLOAD_BYTES)) {
-      setUploadError("Files must be at most 20 MiB");
+      setUploadError(new LocalizedError("filesMustBeAtMost20MiB"));
       return;
     }
     const controller = new AbortController();
     upload.current = controller;
     try {
       for (const [index, file] of files.entries()) {
-        setUploadProgress(`Uploading ${index + 1}/${files.length}…`);
+        setUploadProgress({ current: index + 1, total: files.length });
         const result = await api.upload(normalizeImageFile(file), controller.signal, sessionId);
         if (controller.signal.aborted) return;
         addAttachment({
@@ -40,7 +46,7 @@ export function useAttachmentUpload(
       }
     } catch (error) {
       if (!controller.signal.aborted)
-        setUploadError(error instanceof Error ? error.message : "Upload failed");
+        setUploadError(error instanceof Error ? error : new LocalizedError("uploadFailed"));
     } finally {
       if (!controller.signal.aborted) {
         upload.current = null;
@@ -51,7 +57,7 @@ export function useAttachmentUpload(
   };
   return {
     uploadFiles,
-    uploadProgress,
+    uploadProgress: uploadProgress ? t("uploadProgress", uploadProgress) : null,
     uploadError,
     setUploadError,
     isUploading: () => upload.current !== null,

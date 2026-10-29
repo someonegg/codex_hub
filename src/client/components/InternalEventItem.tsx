@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { InternalDetailResponse, TimelineCursor } from "../../shared/api-contract";
 import type { InternalEventItem as Internal } from "../../shared/domain";
 
 import { api } from "../api/client";
+import { t } from "../i18n";
 import { useLazyDetail } from "../state/use-lazy-detail";
 import { EventDetail } from "./EventDetail";
 import { EventTime } from "./EventTime";
@@ -21,6 +23,7 @@ export function InternalEventItem({
   cursor,
   onTimelineConflict,
 }: InternalEventItemProps) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   const loadDetail = useCallback(
     (requestCursor: TimelineCursor, signal: AbortSignal): Promise<InternalDetailResponse> =>
@@ -31,26 +34,26 @@ export function InternalEventItem({
     enabled: open,
     cursor,
     load: loadDetail,
-    unavailableMessage: "Internal event unavailable",
+    unavailableMessage: t("internalEventUnavailable"),
     onTimelineConflict,
   });
 
   return (
     <article className="internal-event-body">
       <p className="event-label">
-        Internal · {item.ordinal}
+        {t("internal")} {item.ordinal}
         <EventTime timestamp={item.timestamp} />
       </p>
       <p>
         <strong>{item.eventType}</strong>
       </p>
       <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-        {open ? "Hide JSON" : "Show JSON"}
+        {open ? t("hideJSON") : t("showJSON")}
       </button>
       {open ? (
         <EventDetail
           loading={detail === null && error === null}
-          loadingMessage="Loading internal event…"
+          loadingMessage={t("loadingInternalEvent")}
           error={error}
           onRetry={retry}
         >
@@ -58,7 +61,7 @@ export function InternalEventItem({
             <>
               <pre>{detail.json}</pre>
               {detail.truncated ? (
-                <p className="truncated">JSON was truncated for safe display.</p>
+                <p className="truncated">{t("jSONWasTruncatedForSafeDisplay")}</p>
               ) : null}
             </>
           ) : null}

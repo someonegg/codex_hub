@@ -1,7 +1,8 @@
+import { docsOptions, captureSource, translateFixture } from "./docs-language.mjs";
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import {
   connectedInteraction,
@@ -11,8 +12,7 @@ import {
   mockDocsTerminal,
 } from "./docs-fixtures.mjs";
 
-const origin = process.argv[2] ?? "http://127.0.0.1:4187";
-const output = resolve(process.argv[3] ?? "docs/images/ahub-session-interaction.png");
+const { origin, output, language } = docsOptions("docs/images/ahub-session-interaction.png");
 const directory = await mkdtemp(join(tmpdir(), "ahub-interaction-"));
 const browserSession = `interaction-${Date.now()}`;
 
@@ -32,11 +32,15 @@ async function capture(
     .browser()
     .newContext({
       viewport: { width: 1440, height: 1500 },
-      locale: "en-US",
+      locale: language === "zh-CN" ? "zh-CN" : "en-US",
       timezoneId: "UTC",
       deviceScaleFactor: 1,
       colorScheme: "light",
     });
+  await context.addInitScript((value) => {
+    if (!localStorage.getItem("ahub.preferences.v1"))
+      localStorage.setItem("ahub.preferences.v1", JSON.stringify({ language: value }));
+  }, language);
   const demo = await context.newPage();
   await demo.route("**/api/v1/capabilities", (route) => route.fulfill({ json: { hosting: true } }));
   const verifyPageJumps = async () => {
@@ -54,7 +58,7 @@ async function capture(
     if (!valid) throw new Error("Page jumps hide or overlap the interaction panel");
   };
   const verifyCompactInteraction = async () => {
-    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     const original = await composer.inputValue();
     await composer.fill("One\nTwo\nThree\nFour");
     const metrics = await composer.evaluate((element) => {
@@ -90,10 +94,12 @@ async function capture(
     await composer.fill(original);
     if (await demo.locator(".interaction-heading").count())
       throw new Error("Empty interaction heading");
-    await demo.getByRole("button", { name: "Session management", exact: true }).click();
+    await demo.getByRole("button", { name: label("Session management"), exact: true }).click();
     const menu = demo.locator(".session-action-menu");
     const labels = await menu.locator("button").allTextContents();
-    if (labels.join("|") !== "Tmux access|Archive session|Exit session")
+    if (
+      labels.join("|") !== ["Tmux access", "Archive session", "Exit session"].map(label).join("|")
+    )
       throw new Error("Unexpected session menu order");
     const bounds = await menu.boundingBox();
     const viewport = demo.viewportSize();
@@ -104,9 +110,9 @@ async function capture(
       bounds.y + bounds.height > viewport.height
     )
       throw new Error("Session menu clipped");
-    await demo.getByRole("button", { name: "Tmux access", exact: true }).click();
-    await demo.getByRole("dialog", { name: "tmux access", exact: true }).waitFor();
-    await demo.getByRole("button", { name: "Close tmux access", exact: true }).click();
+    await demo.getByRole("button", { name: label("Tmux access"), exact: true }).click();
+    await demo.getByRole("dialog", { name: label("tmux access"), exact: true }).waitFor();
+    await demo.getByRole("button", { name: label("Close tmux access"), exact: true }).click();
   };
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
@@ -228,18 +234,23 @@ async function capture(
     return route.abort();
   });
   async function prepareDesktopPreview() {
-    const previewToggle = demo.getByRole("button", { name: "Terminal Preview", exact: true });
+    const previewToggle = demo.getByRole("button", {
+      name: label("Terminal Preview"),
+      exact: true,
+    });
     if ((await previewToggle.getAttribute("aria-expanded")) !== "true") await previewToggle.click();
-    await demo.getByLabel("Terminal Preview content", { exact: true }).waitFor();
-    await demo.getByRole("textbox", { name: "Message to agent" }).fill("Suggest the next step.");
+    await demo.getByLabel(label("Terminal Preview content"), { exact: true }).waitFor();
+    await demo
+      .getByRole("textbox", { name: label("Message to agent") })
+      .fill("Suggest the next step.");
     await demo.evaluate(() => document.fonts.ready);
   }
 
   async function verifyAttachments() {
-    const trigger = demo.getByRole("button", { name: "Attach files", exact: true });
-    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    const trigger = demo.getByRole("button", { name: label("Attach files"), exact: true });
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     await trigger.click();
-    const menu = demo.getByRole("menu", { name: "Attach files" });
+    const menu = demo.getByRole("menu", { name: label("Attach files") });
     const bounds = await menu.boundingBox();
     const viewport = demo.viewportSize();
     if (
@@ -255,7 +266,7 @@ async function capture(
     await composer.evaluate((input) => input.setSelectionRange(7, 14));
     await trigger.click();
     const chooserPromise = demo.waitForEvent("filechooser");
-    await demo.getByRole("menuitem", { name: "Choose images" }).click();
+    await demo.getByRole("menuitem", { name: label("Choose images") }).click();
     const chooser = await chooserPromise;
     if (!chooser.isMultiple()) throw new Error("Gallery does not support multiple images");
     await chooser.setFiles({
@@ -278,9 +289,9 @@ async function capture(
       );
     }
     await demo.waitForFunction(() => document.activeElement === document.querySelector("textarea"));
-    const thumbnail = demo.getByRole("button", { name: "Preview photo.png", exact: true });
+    const thumbnail = demo.getByRole("button", { name: label("Preview photo.png"), exact: true });
     await thumbnail.click();
-    await demo.getByRole("dialog", { name: "Preview photo.png", exact: true }).waitFor();
+    await demo.getByRole("dialog", { name: label("Preview photo.png"), exact: true }).waitFor();
     await demo.keyboard.press("Escape");
     if (!(await thumbnail.evaluate((element) => document.activeElement === element)))
       throw new Error("Image preview did not restore thumbnail focus");
@@ -288,7 +299,7 @@ async function capture(
     await demo.waitForFunction(
       () => document.querySelector(".interaction-send")?.getAttribute("aria-disabled") !== "true",
     );
-    await demo.getByRole("button", { name: "Send", exact: true }).click();
+    await demo.getByRole("button", { name: label("Send"), exact: true }).click();
     try {
       await demo.waitForFunction(() => document.querySelector("textarea")?.value === "");
     } catch {
@@ -300,7 +311,7 @@ async function capture(
       throw new Error("Unexpected upload or message payload");
     await trigger.click();
     const cameraPromise = demo.waitForEvent("filechooser");
-    await demo.getByRole("menuitem", { name: "Take photo" }).click();
+    await demo.getByRole("menuitem", { name: label("Take photo") }).click();
     const camera = await cameraPromise;
     if (camera.isMultiple()) throw new Error("Camera accepts multiple files");
     await camera.setFiles([]);
@@ -319,19 +330,22 @@ async function capture(
             : new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true });
         input.dispatchEvent(event);
       }, kind);
-      const remove = demo.getByRole("button", { name: `Remove ${kind}.txt`, exact: true });
+      const remove = demo.getByRole("button", { name: label(`Remove ${kind}.txt`), exact: true });
       await remove.waitFor();
       await remove.click();
       if (uploadedNames.pop() !== `${kind}.txt`) throw new Error(`Unexpected ${kind} filename`);
     }
-    const previewToggle = demo.getByRole("button", { name: "Terminal Preview", exact: true });
+    const previewToggle = demo.getByRole("button", {
+      name: label("Terminal Preview"),
+      exact: true,
+    });
     const previewWasExpanded = (await previewToggle.getAttribute("aria-expanded")) === "true";
     await composer.fill("Draft survives switching sessions");
     await demo.evaluate(() => {
       history.pushState(null, "", "/sessions/docs-demo-session-keyboard");
       window.dispatchEvent(new PopStateEvent("popstate"));
     });
-    await demo.getByRole("textbox", { name: "Message to agent" }).waitFor();
+    await demo.getByRole("textbox", { name: label("Message to agent") }).waitFor();
     if (await composer.inputValue()) throw new Error("Draft leaked into another session");
     await demo.evaluate((id) => {
       history.pushState(null, "", `/sessions/${id}`);
@@ -343,7 +357,7 @@ async function capture(
     if (previewWasExpanded) {
       if ((await previewToggle.getAttribute("aria-expanded")) !== "true")
         await previewToggle.click();
-      await demo.getByLabel("Terminal Preview content", { exact: true }).waitFor();
+      await demo.getByLabel(label("Terminal Preview content"), { exact: true }).waitFor();
     }
     await composer.fill("Suggest the next step.");
   }
@@ -351,24 +365,26 @@ async function capture(
   async function stageAttachment() {
     const buffer = await demo.locator(".user-input-card").screenshot();
     imageBuffer = buffer;
-    await demo.getByLabel("Choose files", { exact: true }).setInputFiles({
+    await demo.getByLabel(label("Choose files"), { exact: true }).setInputFiles({
       name: "dashboard.png",
       mimeType: "image/png",
       buffer,
     });
-    const image = demo.getByRole("img", { name: "dashboard.png", exact: true });
+    const image = demo.getByRole("img", { name: label("dashboard.png"), exact: true });
     await image.waitFor();
     await image.evaluate((element) => element.decode());
   }
 
   async function verifyUploadHistory() {
-    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     await composer.fill("Keep this draft while browsing uploads");
     await stageAttachment();
-    await demo.getByRole("link", { name: "Upload history", exact: true }).click();
-    await demo.getByRole("heading", { name: "Upload history", exact: true }).waitFor();
-    await demo.getByRole("button", { name: "Expand dashboard.png", exact: true }).click();
-    await demo.getByRole("button", { name: "Collapse dashboard.png", exact: true }).waitFor();
+    await demo.getByRole("link", { name: label("Upload history"), exact: true }).click();
+    await demo.getByRole("heading", { name: label("Upload history"), exact: true }).waitFor();
+    await demo.getByRole("button", { name: label("Expand dashboard.png"), exact: true }).click();
+    await demo
+      .getByRole("button", { name: label("Collapse dashboard.png"), exact: true })
+      .waitFor();
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Upload history horizontal overflow");
     if (demo.viewportSize().width > 600) {
@@ -381,18 +397,18 @@ async function capture(
     await composer.waitFor();
     if ((await composer.inputValue()) !== "Keep this draft while browsing uploads")
       throw new Error("History lost draft text");
-    await demo.getByRole("button", { name: "Remove dashboard.png", exact: true }).waitFor();
+    await demo.getByRole("button", { name: label("Remove dashboard.png"), exact: true }).waitFor();
     await demo.goForward();
-    await demo.getByRole("heading", { name: "Upload history", exact: true }).waitFor();
+    await demo.getByRole("heading", { name: label("Upload history"), exact: true }).waitFor();
     await demo.reload();
-    await demo.getByRole("button", { name: "Delete", exact: true }).click();
-    await demo.getByRole("button", { name: "Cancel", exact: true }).click();
-    await demo.getByRole("button", { name: "Delete", exact: true }).click();
-    await demo.getByRole("button", { name: "Confirm delete", exact: true }).click();
+    await demo.getByRole("button", { name: label("Delete"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Cancel"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Delete"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Confirm delete"), exact: true }).click();
     await demo.getByRole("alert").waitFor();
-    await demo.getByRole("button", { name: "Confirm delete", exact: true }).click();
-    await demo.getByText("No uploads yet.", { exact: true }).waitFor();
-    await demo.getByRole("link", { name: "← Back to session", exact: true }).click();
+    await demo.getByRole("button", { name: label("Confirm delete"), exact: true }).click();
+    await demo.getByText(label("No uploads yet."), { exact: true }).waitFor();
+    await demo.getByRole("link", { name: label("← Back to session"), exact: true }).click();
     await composer.waitFor();
     historyDeleted = false;
     await prepareDesktopPreview();
@@ -410,7 +426,14 @@ async function capture(
   try {
     await demo.goto(`${origin}/sessions/${session.id}`);
     await prepareDesktopPreview();
-    const selectedProject = demo.getByRole("button", { name: /atlas-dashboard, .* main sessions/ });
+    const selectedProject = demo.getByRole("button", {
+      name: new RegExp(
+        label("{{project}}, {{count, number}} main sessions", {
+          project: "atlas-dashboard",
+          count: ".*",
+        }),
+      ),
+    });
     await selectedProject.waitFor();
     if ((await selectedProject.getAttribute("aria-expanded")) !== "true")
       throw new Error("Opening a session must expand its project");
@@ -418,17 +441,17 @@ async function capture(
     await verifyAttachments();
     await prepareDesktopPreview();
     for (const name of ["Message to agent", "Terminal Preview content"]) {
-      if (!(await demo.getByLabel(name, { exact: true }).isVisible()))
+      if (!(await demo.getByLabel(label(name), { exact: true }).isVisible()))
         throw new Error(`${name} is hidden`);
     }
-    if (!(await demo.getByRole("button", { name: "Handoff", exact: true }).isVisible()))
+    if (!(await demo.getByRole("button", { name: label("Handoff"), exact: true }).isVisible()))
       throw new Error("Handoff is hidden");
     if (errors.length) throw new Error(errors.join("\n"));
     if (await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth))
       throw new Error("Horizontal overflow");
     await demo.locator(".user-input-status.answered").waitFor();
     await demo
-      .getByText("Project health selected. Ready for the next step.", { exact: false })
+      .getByText(label("Project health selected. Ready for the next step."), { exact: false })
       .waitFor();
     if (await demo.getByRole("alert").count()) throw new Error("Desktop error alert");
     await verifyUploadHistory();
@@ -439,27 +462,31 @@ async function capture(
       path: output,
       animations: "disabled",
     });
-    await demo.getByRole("button", { name: "Settings", exact: true }).click();
+    await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
     const enterToSend = demo.getByRole("checkbox", {
-      name: "Enter to send (Shift+Enter for newline)",
+      name: label("Enter to send (Shift+Enter for newline)"),
       exact: true,
     });
     await enterToSend.check();
-    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
+    await demo.getByRole("button", { name: label("Close settings"), exact: true }).click();
     await demo.reload();
-    const shortcutComposer = demo.getByRole("textbox", { name: "Message to agent" });
+    const shortcutComposer = demo.getByRole("textbox", { name: label("Message to agent") });
     await shortcutComposer.waitFor();
-    if (!(await shortcutComposer.getAttribute("placeholder")).includes("Shift+Enter for newline"))
+    if (
+      !(await shortcutComposer.getAttribute("placeholder")).includes(
+        label("Shift+Enter for newline"),
+      )
+    )
       throw new Error("Send shortcut was not restored after reload");
     await shortcutComposer.fill("/help");
     await shortcutComposer.press("Shift+Enter");
     if ((await shortcutComposer.inputValue()) !== "/help\n")
       throw new Error("Shift+Enter did not insert a newline");
     await shortcutComposer.fill("");
-    await demo.getByRole("button", { name: "Settings", exact: true }).click();
+    await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
     await enterToSend.uncheck();
-    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("warm");
-    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
+    await demo.getByRole("combobox", { name: label("Theme"), exact: true }).selectOption("warm");
+    await demo.getByRole("button", { name: label("Close settings"), exact: true }).click();
     await demo.reload();
     await demo.locator(".user-input-status.answered").waitFor();
     if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
@@ -476,13 +503,17 @@ async function capture(
       path: output.replace(/\.png$/, "-warm.png"),
       animations: "disabled",
     });
-    await demo.getByRole("button", { name: "Settings", exact: true }).click();
-    await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("mist");
-    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
+    await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
+    await demo.getByRole("combobox", { name: label("Theme"), exact: true }).selectOption("mist");
+    await demo.getByRole("button", { name: label("Close settings"), exact: true }).click();
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
     for (const project of ["atlas-dashboard", "harbor-api", "field-notes"]) {
-      const toggle = demo.getByRole("button", { name: new RegExp(`${project}, .* main sessions`) });
+      const toggle = demo.getByRole("button", {
+        name: new RegExp(
+          label("{{project}}, {{count, number}} main sessions", { project, count: ".*" }),
+        ),
+      });
       if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
     }
     await demo.getByText(session.title, { exact: true }).waitFor();
@@ -500,8 +531,8 @@ async function capture(
     if (errors.length || (await demo.getByRole("alert").count()))
       throw new Error(errors.join("\n") || "Mobile error alert");
     await demo.screenshot({ path: resolveMobile("reader"), animations: "disabled" });
-    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
-    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await demo.getByRole("button", { name: label("Terminal Preview"), exact: true }).click();
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     await verifyCompactInteraction();
     await composer.fill("Suggest the next step.");
     await stageAttachment();
@@ -516,7 +547,7 @@ async function capture(
       throw new Error(`Mobile attachment composer is clipped: ${JSON.stringify(panelBounds)}`);
     await verifyPageJumps();
     await demo.screenshot({ path: resolveMobile("composer"), animations: "disabled" });
-    await demo.getByRole("button", { name: "Remove dashboard.png", exact: true }).click();
+    await demo.getByRole("button", { name: label("Remove dashboard.png"), exact: true }).click();
     await verifyAttachments();
     await demo.setViewportSize({ width: 320, height: 568 });
     await verifyCompactInteraction();
@@ -533,7 +564,7 @@ async function capture(
     await composer.focus();
     await demo.setViewportSize({ width: 1440, height: 1000 });
     await verifyPageJumps();
-    await demo.getByRole("button", { name: "Terminal Preview", exact: true }).click();
+    await demo.getByRole("button", { name: label("Terminal Preview"), exact: true }).click();
     await verifyPageJumps();
     await demo.setViewportSize({ width: 1440, height: 400 });
     await demo.evaluate(() => window.scrollTo(0, 0));
@@ -550,7 +581,7 @@ async function capture(
       ordinal,
       timestamp,
       role: "assistant",
-      phase: "final",
+      phase: "response",
       itemType: "Plan",
       markdown: `# Plan ${ordinal}`,
     }));
@@ -562,14 +593,55 @@ async function capture(
       (await plans.nth(1).getAttribute("aria-expanded")) !== "true"
     )
       throw new Error("Latest plan must be the only plan initially expanded");
-    await demo.getByRole("heading", { name: "Plan 2", exact: true }).waitFor();
+    await demo.getByRole("heading", { name: label("Plan 2"), exact: true }).waitFor();
     await plans.nth(0).click();
-    await demo.getByRole("heading", { name: "Plan 1", exact: true }).waitFor();
+    await demo.getByRole("heading", { name: label("Plan 1"), exact: true }).waitFor();
     if ((await plans.nth(1).getAttribute("aria-expanded")) !== "true")
       throw new Error("Manually opening an older plan closed the latest plan");
     await plans.nth(1).click();
     if ((await plans.nth(1).getAttribute("aria-expanded")) !== "false")
       throw new Error("Latest plan cannot be manually hidden");
+    // Exercise the actual setting, rather than only seeding localized screenshots.
+    const draft = demo.locator("textarea");
+    await draft.fill("Preserve this draft /original/path");
+    const originalInput = await draft.elementHandle();
+    const nextLanguage = language === "en" ? "zh-CN" : "en";
+    await demo.getByRole("button", { name: label("Settings"), exact: true }).click();
+    await demo
+      .getByRole("combobox", { name: language === "en" ? "Language" : "语言", exact: true })
+      .selectOption(nextLanguage);
+    await demo.waitForFunction((value) => document.documentElement.lang === value, nextLanguage);
+    await demo
+      .getByRole("button", {
+        name: nextLanguage === "en" ? "Close settings" : "关闭设置",
+        exact: true,
+      })
+      .click();
+    await demo
+      .getByRole("textbox", {
+        name: nextLanguage === "en" ? "Message to agent" : "发送给智能体的消息",
+        exact: true,
+      })
+      .waitFor();
+    if (
+      !(await draft.evaluate((element, original) => element === original, originalInput)) ||
+      (await draft.inputValue()) !== "Preserve this draft /original/path"
+    )
+      throw new Error("Language switching remounted or cleared the draft");
+    await demo.reload();
+    await demo.waitForFunction((value) => document.documentElement.lang === value, nextLanguage);
+    const otherTab = await context.newPage();
+    await otherTab.goto(origin);
+    await otherTab.waitForFunction(
+      (value) => document.documentElement.lang === value,
+      nextLanguage,
+    );
+    await otherTab.evaluate((value) => {
+      const settings = JSON.parse(localStorage.getItem("ahub.preferences.v1"));
+      localStorage.setItem("ahub.preferences.v1", JSON.stringify({ ...settings, language: value }));
+    }, language);
+    await demo.waitForFunction((value) => document.documentElement.lang === value, language);
+    await otherTab.close();
     if (errors.length) throw new Error(errors.join("\n"));
   } catch (error) {
     await demo.screenshot({ path: "/tmp/ahub-capture-failure.png" });
@@ -584,7 +656,7 @@ async function capture(
 const recording = join(directory, "capture.js");
 await writeFile(
   recording,
-  `(page) => (${capture.toString()})(page, ${[origin, output, docsSession, connectedInteraction, docsTimestamp, docsItems].map((value) => JSON.stringify(value)).join(", ")}, ${mockDocsTerminal.toString()})`,
+  `(page) => (${captureSource(capture, language)})(page, ${[origin, output, translateFixture(docsSession, language), connectedInteraction, docsTimestamp, translateFixture(docsItems, language)].map((value) => JSON.stringify(value)).join(", ")}, ${mockDocsTerminal.toString()})`,
 );
 const cli = (...args) =>
   execFileSync("playwright-cli", [`-s=${browserSession}`, ...args], { stdio: "inherit" });

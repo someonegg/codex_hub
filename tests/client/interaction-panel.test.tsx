@@ -1058,3 +1058,28 @@ it("switches send shortcuts live and keeps Shift+Enter available for command new
     handlers.onSendMessage.mockClear();
   }
 });
+
+it("keeps the mounted draft and expanded preview when changing language", () => {
+  updatePreferences({ language: "en" });
+  const callbacks = props(interaction("connected"));
+  render(
+    <SessionDraftProvider>
+      <InteractionPanel {...callbacks} />
+    </SessionDraftProvider>,
+  );
+  const composer = screen.getByRole("textbox", { name: "Message to agent" });
+  fireEvent.change(composer, { target: { value: "Keep this draft /original/path" } });
+  fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
+  try {
+    act(() => updatePreferences({ language: "zh-CN" }));
+    expect(screen.getByRole("textbox", { name: "发送给智能体的消息" })).toBe(composer);
+    expect(composer).toHaveValue("Keep this draft /original/path");
+    expect(screen.getByRole("button", { name: "终端预览" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(callbacks.onSendMessage).not.toHaveBeenCalled();
+  } finally {
+    act(() => updatePreferences({ language: "en" }));
+  }
+});

@@ -1,9 +1,11 @@
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import type { TimelineCursor, ToolDetailResponse } from "../../shared/api-contract";
 import type { ToolItem as Tool } from "../../shared/domain";
 
 import { api } from "../api/client";
+import { t } from "../i18n";
 import { useLazyDetail } from "../state/use-lazy-detail";
 import { CharacterCount } from "./CharacterCount";
 import { EventDetail } from "./EventDetail";
@@ -17,6 +19,7 @@ interface ToolItemProps {
 }
 
 export function ToolItem({ item, sessionId, cursor, onTimelineConflict }: ToolItemProps) {
+  useTranslation();
   const [open, setOpen] = useState(false);
   const loadDetail = useCallback(
     (requestCursor: TimelineCursor, signal: AbortSignal): Promise<ToolDetailResponse> =>
@@ -27,7 +30,7 @@ export function ToolItem({ item, sessionId, cursor, onTimelineConflict }: ToolIt
     enabled: open && item.hasDetail,
     cursor,
     load: loadDetail,
-    unavailableMessage: "Tool detail unavailable",
+    unavailableMessage: t("toolDetailUnavailable"),
     onTimelineConflict,
   });
 
@@ -35,8 +38,11 @@ export function ToolItem({ item, sessionId, cursor, onTimelineConflict }: ToolIt
     <article className="tool-body">
       <p className="event-label">
         {item.stage === "call"
-          ? `Tool call · ${item.ordinal}`
-          : `Tool output · ${item.status} · ${item.ordinal}`}
+          ? t("toolCall", { ordinal: item.ordinal })
+          : t("toolOutput", {
+              status: t(item.status === "completed" ? "toolCompleted" : "toolFailed"),
+              ordinal: item.ordinal,
+            })}
         <EventTime timestamp={item.timestamp} />
       </p>
       <p className="detail-summary">
@@ -45,19 +51,19 @@ export function ToolItem({ item, sessionId, cursor, onTimelineConflict }: ToolIt
         {item.hasDetail ? <CharacterCount value={item.charCount} /> : null}
       </p>
       <p className="tool-call-id">
-        Call ID · <code>{item.callId}</code>
+        {t("callID")} <code>{item.callId}</code>
       </p>
       {item.hasDetail ? (
         <button type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-          {open ? "Hide tool detail" : "Show tool detail"}
+          {open ? t("hideToolDetail") : t("showToolDetail")}
         </button>
       ) : (
-        <p className="muted">No detail available.</p>
+        <p className="muted">{t("noDetailAvailable")}</p>
       )}
       {open ? (
         <EventDetail
           loading={detail === null && error === null}
-          loadingMessage="Loading tool detail…"
+          loadingMessage={t("loadingToolDetail")}
           error={error}
           onRetry={retry}
         >
@@ -65,18 +71,18 @@ export function ToolItem({ item, sessionId, cursor, onTimelineConflict }: ToolIt
             <>
               {detail.input !== null ? (
                 <>
-                  <h4>Input</h4>
+                  <h4>{t("input")}</h4>
                   <pre>{detail.input}</pre>
                 </>
               ) : null}
               {item.stage === "output" && detail.output !== null ? (
                 <>
-                  <h4>Output</h4>
+                  <h4>{t("output")}</h4>
                   <pre>{detail.output}</pre>
                 </>
               ) : null}
               {detail.truncated ? (
-                <p className="truncated">Detail was truncated for safe display.</p>
+                <p className="truncated">{t("detailWasTruncatedForSafeDisplay")}</p>
               ) : null}
             </>
           ) : null}

@@ -1,3 +1,4 @@
+import { docsOptions, captureSource, translateFixture } from "./docs-language.mjs";
 import {
   connectedInteraction,
   docsSession,
@@ -8,11 +9,10 @@ import {
 import { execFileSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 // Requires a running client server, playwright-cli, and Python with Pillow.
-const origin = process.argv[2] ?? "http://127.0.0.1:4187";
-const output = resolve(process.argv[3] ?? "docs/images/ahub-intro.gif");
+const { origin, output, language } = docsOptions("docs/images/ahub-intro.gif");
 const frames = await mkdtemp(join(tmpdir(), "ahub-intro-"));
 const browserSession = `intro-${Date.now()}`;
 
@@ -31,25 +31,30 @@ async function record(
     .browser()
     .newContext({
       viewport: { width: 1440, height: 1000 },
-      locale: "en-US",
+      locale: language === "zh-CN" ? "zh-CN" : "en-US",
       timezoneId: "UTC",
       deviceScaleFactor: 1,
       colorScheme: "light",
     });
+  await context.addInitScript((value) => {
+    if (!localStorage.getItem("ahub.preferences.v1"))
+      localStorage.setItem("ahub.preferences.v1", JSON.stringify({ language: value }));
+  }, language);
   const demo = await context.newPage();
   await demo.route("**/api/v1/capabilities", (route) => route.fulfill({ json: { hosting: true } }));
   demo.setDefaultTimeout(10000);
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
-  const prompt = "Suggest three improvements for this project dashboard.";
-  const reply =
-    "### Three focused improvements\n\n1. **Show project health.** Put status and open tasks at the top.\n2. **Highlight recent activity.** Surface the latest changes and decisions.\n3. **Keep navigation clear.** Group sessions by project for quick access.";
+  const prompt = label("Suggest three improvements for this project dashboard.");
+  const reply = label(
+    "### Three focused improvements\n\n1. **Show project health.** Put status and open tasks at the top.\n2. **Highlight recent activity.** Surface the latest changes and decisions.\n3. **Keep navigation clear.** Group sessions by project for quick access.",
+  );
   let created = false;
   let stage = 0;
   const session = () => ({
     ...docsSession,
     id: "demo-session",
-    title: "Improve the project dashboard",
+    title: label("Improve the project dashboard"),
     messageCount: stage,
     itemCount: stage === 2 ? 4 : stage,
   });
@@ -72,7 +77,7 @@ async function record(
         timestamp,
         kind: "message",
         role: "assistant",
-        phase: "final",
+        phase: "response",
         itemType: null,
         markdown: reply,
       },
@@ -151,19 +156,24 @@ async function record(
   };
   try {
     await demo.goto(origin);
-    await demo.getByRole("heading", { name: "Select a session from the sidebar" }).waitFor();
-    await demo.getByText(/Loading sessions/).waitFor({ state: "hidden" });
+    await demo.getByRole("heading", { name: label("Select a session from the sidebar") }).waitFor();
+    await demo
+      .getByText(new RegExp(label("Loading sessions…").replace("…", "")))
+      .waitFor({ state: "hidden" });
     await capture(1100);
-    await demo.getByRole("button", { name: "New session", exact: true }).first().click();
+    await demo
+      .getByRole("button", { name: label("New session"), exact: true })
+      .first()
+      .click();
     await demo.waitForFunction(
-      () => document.querySelector('select[aria-label="Session home"]')?.value === "docs-demo",
+      () => document.querySelector("select[required]")?.value === "docs-demo",
     );
     await capture(900);
-    const directory = demo.getByRole("combobox", { name: "Project directory" });
+    const directory = demo.getByRole("combobox", { name: label("Project directory") });
     await directory.fill("/projects/atlas-dashboard");
     await capture(1100);
-    await demo.getByRole("button", { name: "Create session", exact: true }).click();
-    const composer = demo.getByRole("textbox", { name: "Message to agent" });
+    await demo.getByRole("button", { name: label("Create session"), exact: true }).click();
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     await composer.waitFor();
     await demo.waitForFunction(
       () =>
@@ -178,17 +188,15 @@ async function record(
       await capture(60);
     }
     await capture(1000);
-    if (await demo.getByText("Three focused improvements", { exact: true }).count()) {
+    if (await demo.getByText(label("Three focused improvements"), { exact: true }).count()) {
       throw new Error("Reply appeared before send");
     }
-    await demo.getByRole("button", { name: "Send", exact: true }).click();
-    await demo.waitForFunction(
-      () => document.querySelector('textarea[aria-label="Message to agent"]')?.value === "",
-    );
-    await demo.getByText(prompt, { exact: true }).waitFor();
+    await demo.getByRole("button", { name: label("Send"), exact: true }).click();
+    await demo.waitForFunction(() => document.querySelector("textarea")?.value === "");
+    await demo.getByText(label(prompt), { exact: true }).waitFor();
     await capture(1100);
     stage = 2;
-    await demo.getByRole("heading", { name: "Three focused improvements" }).waitFor();
+    await demo.getByRole("heading", { name: label("Three focused improvements") }).waitFor();
     await demo.locator(".interaction-panel").scrollIntoViewIfNeeded();
     await demo.locator(".user-input-status.answered").waitFor();
     await demo.locator(".user-input-card").scrollIntoViewIfNeeded();
@@ -199,6 +207,8 @@ async function record(
     const overflow = await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     if (overflow) throw new Error("Horizontal overflow in demo");
     console.log(`Captured ${frame} frames to ${frames}`);
+  } catch (error) {
+    throw new Error(error.message + "\n" + (await demo.locator("body").innerText()));
   } finally {
     await context.close();
   }
@@ -207,7 +217,7 @@ async function record(
 const recording = join(frames, "record.js");
 await writeFile(
   recording,
-  `(page) => (${record.toString()})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(docsSession)}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)}, ${JSON.stringify(docsUserInput)}, ${mockDocsTerminal.toString()})`,
+  `(page) => (${captureSource(record, language)})(page, ${JSON.stringify(frames)}, ${JSON.stringify(origin)}, ${JSON.stringify(translateFixture(docsSession, language))}, ${JSON.stringify(connectedInteraction)}, ${JSON.stringify(docsTimestamp)}, ${JSON.stringify(translateFixture(docsUserInput, language))}, ${mockDocsTerminal.toString()})`,
 );
 const cli = (...args) =>
   execFileSync("playwright-cli", [`-s=${browserSession}`, ...args], { stdio: "inherit" });
