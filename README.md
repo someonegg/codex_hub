@@ -98,8 +98,8 @@ See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API lim
 
 Expand **Terminal Preview** to follow the live CLI. Use the on-screen controls,
 or focus the preview and press arrow keys and **Enter**, to navigate CLI prompts.
-Press **Esc** or click **Interrupt** to interrupt. **Working** and **Idle** reflect
-recent terminal output, not task completion.
+Press **Ctrl+C** or click **Interrupt** to interrupt; **Esc** collapses the preview.
+**Working** and **Idle** reflect recent terminal output, not task completion.
 
 ### Continue with Handoff
 

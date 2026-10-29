@@ -42,8 +42,9 @@ The latest loaded plan opens automatically and collapses earlier plans. Use
 
 A green **Live** badge indicates a connected terminal. Send prompts from the
 message input and expand **Terminal Preview** to inspect the CLI. Use
-**Interrupt**, or press **Esc** in the preview, to interrupt.
-**Working** and **Idle** reflect terminal output, not whether a task is complete.
+**Interrupt**, or press **Ctrl+C** in the preview, to interrupt. Press **Esc** to
+collapse the preview. **Working** and **Idle** reflect terminal output, not whether
+a task is complete.
 
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's connected page.

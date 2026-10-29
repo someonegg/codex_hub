@@ -556,7 +556,6 @@ it("does not expand the preview after failed handoff delivery", async () => {
 });
 
 it.each([
-  ["Escape", "interrupt"],
   ["Enter", "enter"],
   ["ArrowLeft", "left"],
   ["0", "0"],
@@ -583,6 +582,46 @@ it.each([
   expect(handlers.onSendKeys).toHaveBeenCalledTimes(2);
   expect(handlers.onTogglePreview).not.toHaveBeenCalled();
   expect(button).toHaveFocus();
+});
+
+it("collapses the preview with Escape without interrupting and restores toggle focus", () => {
+  const handlers = props(interaction("connected"));
+  render(<Panel {...handlers} previewExpanded interactionBusy />);
+  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+  body.focus();
+  expect(fireEvent.keyDown(body, { key: "Escape" })).toBe(false);
+  expect(handlers.onTogglePreview).toHaveBeenCalledExactlyOnceWith();
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveFocus();
+});
+
+it.each(["c", "C"])("interrupts with Ctrl+%s in the preview without collapsing it", (key) => {
+  const handlers = props(interaction("connected"));
+  render(<Panel {...handlers} previewExpanded />);
+  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+  expect(fireEvent.keyDown(body, { key, ctrlKey: true })).toBe(false);
+  expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["interrupt"]);
+  expect(handlers.onTogglePreview).not.toHaveBeenCalled();
+});
+
+it("ignores interrupt shortcuts outside the preview, with other modifiers, or while busy", () => {
+  const handlers = props(interaction("connected"));
+  const view = render(<Panel {...handlers} previewExpanded />);
+  const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+  for (const modifiers of [
+    {},
+    { metaKey: true },
+    { ctrlKey: true, shiftKey: true },
+    { ctrlKey: true, altKey: true },
+    { ctrlKey: true, isComposing: true },
+  ]) {
+    expect(fireEvent.keyDown(body, { key: "c", ...modifiers })).toBe(true);
+  }
+  expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "c", ctrlKey: true })).toBe(true);
+  view.rerender(<Panel {...handlers} previewExpanded interactionBusy />);
+  expect(fireEvent.keyDown(body, { key: "c", ctrlKey: true })).toBe(false);
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  expect(handlers.onTogglePreview).not.toHaveBeenCalled();
 });
 
 it("preserves editing and unrelated keyboard actions and blocks sends while busy or folded", () => {
