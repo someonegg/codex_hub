@@ -11,6 +11,8 @@ npx @someonegg/codex-hub@latest
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
 安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex`，且僅監聽本機。
 
+`ahub-cli` 預設輸出便於閱讀的文字，加入 `--json` 可取得結構化結果和錯誤。輸出通道與錯誤碼見 [CLI 輸出約定](technical-reference.md#cli-output-contract)。
+
 ## 閱讀與管理工作階段
 
 在側邊欄選擇專案和工作階段。工作階段內容自動更新，勾選**已封存**可瀏覽封存工作階段。

@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { CommandError } from "./command-error.js";
+import { outputFailure } from "./output.js";
 const help = `Usage: ahub-cli <command> [options]
   page      Publish, list, or delete local hosted pages
   diff      Publish, list, or delete local review diffs
@@ -18,10 +20,9 @@ async function main(): Promise<void> {
     const { runResourceCommand } = await import("./resource.js");
     await runResourceCommand(command, args[0], args.slice(1));
   } else {
-    throw new Error(`Unknown command: ${command}\n${help}`);
+    throw new CommandError("invalid_arguments", `Unknown command: ${command}\n${help}`);
   }
 }
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Command failed");
-  process.exitCode = 1;
+  outputFailure(error, process.argv.slice(2).includes("--json"));
 });

@@ -14,6 +14,7 @@ import {
 import type { TimelineItem } from "../../shared/domain.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { commandFailure } from "./command-error.js";
+import { output, outputFailure, singleLine } from "./output.js";
 import { SessionClient } from "./session-client.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
@@ -186,13 +187,10 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       if (launch) await waitForLaunch(operation.sessionId, api, abort.signal);
       result = { sessionId: operation.sessionId, status: "succeeded" };
     }
-    console.log(json ? JSON.stringify(result) : formatResult(command, result));
+    output(result, json, json ? "" : formatResult(command, result));
   } catch (error) {
     const failure = commandFailure(error, client?.mutationSubmitted ?? false);
-    if (json)
-      console.log(JSON.stringify({ error: { code: failure.code, message: failure.message } }));
-    else console.error(failure.message);
-    process.exitCode = failure.exitCode;
+    outputFailure(failure, json);
   } finally {
     clearTimeout(timer);
     process.removeListener("SIGINT", interrupt);
@@ -243,6 +241,7 @@ function formatResult(command: string, result: unknown): string {
     const list = result as SessionListResponse;
     return [
       "ID\tSTATUS\tHOME\tPROJECT\tTITLE",
+      ...(list.sessions.length ? [] : ["No sessions."]),
       ...list.sessions.map((session) =>
         [
           session.id,
@@ -250,7 +249,7 @@ function formatResult(command: string, result: unknown): string {
           list.homes.find((home) => home.sourceInstanceId === session.sourceInstanceId)?.nickname ??
             "",
           list.projects.find((project) => project.id === session.projectId)?.directory ?? "",
-          session.title.replace(/[\r\n\t]/g, " "),
+          singleLine(session.title),
         ].join("\t"),
       ),
     ].join("\n");
@@ -265,11 +264,12 @@ function formatResult(command: string, result: unknown): string {
     const pagination = `nextAfter=${inspected.nextAfter} hasMore=${inspected.hasMore} latestNumber=${inspected.latestNumber}`;
     return `${header}\n${items}\n${pagination}`;
   }
-  return JSON.stringify(result, null, 2);
+  const operation = result as { sessionId: string; status: string };
+  return `${command} ${operation.sessionId}: ${operation.status}`;
 }
 
 function formatTimelineItem(item: TimelineItem): string {
-  if (item.kind !== "message") return `#${item.ordinal} ${JSON.stringify(item)}`;
+  if (item.kind !== "message") return `#${item.ordinal} ${item.kind}`;
   const phase = item.itemType ?? item.phase ?? "";
   return `#${item.ordinal} ${item.role} ${phase}\n${item.markdown}`;
 }

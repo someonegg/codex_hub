@@ -4,6 +4,8 @@ import { parseArgs } from "node:util";
 import { resolveHomeDirectory } from "../config.js";
 import { DiffStore } from "../hosting/diff-store.js";
 import { HostingStore } from "../hosting/store.js";
+import { CommandError } from "./command-error.js";
+import { output, singleLine } from "./output.js";
 
 function resourceHelp(resource: string): string {
   const publishUsage =
@@ -23,18 +25,7 @@ export async function runResourceCommand(
   action: string | undefined,
   args: string[],
 ): Promise<void> {
-  const { values, positionals } = parseArgs({
-    args,
-    allowPositionals: true,
-    options: {
-      project: { type: "string" },
-      name: { type: "string" },
-      title: { type: "string" },
-      "home-dir": { type: "string" },
-      json: { type: "boolean" },
-      help: { type: "boolean" },
-    },
-  });
+  const { values, positionals } = parseResourceArgs(args);
   if (values.help || action === "--help" || action === undefined) {
     console.log(resourceHelp(resource));
     return;
@@ -43,13 +34,16 @@ export async function runResourceCommand(
     !["publish", "list", "delete"].includes(action) ||
     positionals.length !== (action === "list" ? 0 : 1)
   )
-    throw new Error("Expected page/diff publish <source>, list, or delete <id>");
+    throw new CommandError(
+      "invalid_arguments",
+      "Expected page/diff publish <source>, list, or delete <id>",
+    );
   const directory = join(resolveHomeDirectory(values["home-dir"]), "hosting");
   const pages = new HostingStore(directory);
   const diffs = new DiffStore(directory);
-  let result: object;
   if (action === "publish") {
-    if (resource === "page" && !values.project) throw new Error("page publish requires --project");
+    if (resource === "page" && !values.project)
+      throw new CommandError("invalid_arguments", "page publish requires --project");
     const entry =
       resource === "page"
         ? await pages.publish(positionals[0], values.project!, values.name, values.title)
@@ -59,14 +53,55 @@ export async function runResourceCommand(
     return;
   }
   if (action === "list") {
-    result =
+    const entries =
       resource === "page"
         ? (await pages.entries()).map(({ artifact }) => artifact)
         : await diffs.list();
-  } else {
-    if (resource === "page") await pages.delete(positionals[0]);
-    else await diffs.delete(positionals[0]);
-    result = { id: positionals[0], deleted: true };
+    output(entries, values.json ?? false, formatResourceList(resource, entries));
+    return;
   }
-  console.log(JSON.stringify(result, null, values.json ? undefined : 2));
+  if (resource === "page") await pages.delete(positionals[0]);
+  else await diffs.delete(positionals[0]);
+  output(
+    { id: positionals[0], deleted: true },
+    values.json ?? false,
+    `Deleted ${resource} ${positionals[0]}`,
+  );
+}
+
+function formatResourceList(
+  resource: string,
+  entries: Array<{ id: string; project?: string; title: string; url: string }>,
+): string {
+  const lines = [resource === "page" ? "ID\tPROJECT\tTITLE\tURL" : "ID\tTITLE\tURL"];
+  for (const entry of entries) {
+    const fields = [entry.id];
+    if (resource === "page") fields.push(entry.project ?? "");
+    fields.push(entry.title, entry.url);
+    lines.push(fields.map(singleLine).join("\t"));
+  }
+  if (entries.length === 0) lines.push(`No ${resource === "page" ? "pages" : "diffs"}.`);
+  return lines.join("\n");
+}
+
+function parseResourceArgs(args: string[]) {
+  try {
+    return parseArgs({
+      args,
+      allowPositionals: true,
+      options: {
+        project: { type: "string" },
+        name: { type: "string" },
+        title: { type: "string" },
+        "home-dir": { type: "string" },
+        json: { type: "boolean" },
+        help: { type: "boolean" },
+      },
+    });
+  } catch (error) {
+    throw new CommandError(
+      "invalid_arguments",
+      error instanceof Error ? error.message : "Invalid arguments",
+    );
+  }
 }

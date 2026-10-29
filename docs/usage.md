@@ -22,6 +22,8 @@ To run without installing globally:
 npx --package=@someonegg/codex-hub@latest ahub-cli --help
 ```
 
+Commands default to human-readable text. Add `--json` for structured results and errors. See the [CLI output contract](technical-reference.md#cli-output-contract) for output channels and error codes.
+
 ### Sessions
 
 Start the hub separately, then use the HTTP client from another terminal:
