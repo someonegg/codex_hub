@@ -16,6 +16,7 @@ import type {
 } from "../../shared/api-contract";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
+import { usePreferences } from "../state/preferences";
 import { useSessionDraft } from "../state/session-drafts";
 import { useAttachmentUpload } from "../state/use-attachment-upload";
 import { AttachmentList } from "./AttachmentList";
@@ -74,6 +75,7 @@ export function InteractionPanel({
   previewExpanded,
   onTogglePreview,
 }: InteractionPanelProps) {
+  const { enterToSend } = usePreferences();
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -184,7 +186,7 @@ export function InteractionPanel({
     if (
       event.key !== "Enter" ||
       event.nativeEvent.isComposing ||
-      (!event.shiftKey && !isStrictSlashCommand)
+      (enterToSend ? event.shiftKey : !event.shiftKey && !isStrictSlashCommand)
     )
       return;
     event.preventDefault();
@@ -445,9 +447,7 @@ export function InteractionPanel({
             disabled={interactionBusy || !!uploadProgress || !previewConnected}
             rows={4}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
-            placeholder={
-              "Send a prompt… Paste images or drop files.\n\nClick Send or Shift+Enter to send."
-            }
+            placeholder={`Send a prompt… Paste images or drop files.\n\nShift+Enter ${enterToSend ? "for newline" : "to send"}.`}
             onChange={(event) => setMessage(event.target.value)}
             onKeyDown={onKeyDown}
           />

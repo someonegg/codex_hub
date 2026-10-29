@@ -440,6 +440,24 @@ async function capture(
       animations: "disabled",
     });
     await demo.getByRole("button", { name: "Settings", exact: true }).click();
+    const enterToSend = demo.getByRole("checkbox", {
+      name: "Enter to send (Shift+Enter for newline)",
+      exact: true,
+    });
+    await enterToSend.check();
+    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
+    await demo.reload();
+    const shortcutComposer = demo.getByRole("textbox", { name: "Message to agent" });
+    await shortcutComposer.waitFor();
+    if (!(await shortcutComposer.getAttribute("placeholder")).includes("Shift+Enter for newline"))
+      throw new Error("Send shortcut was not restored after reload");
+    await shortcutComposer.fill("/help");
+    await shortcutComposer.press("Shift+Enter");
+    if ((await shortcutComposer.inputValue()) !== "/help\n")
+      throw new Error("Shift+Enter did not insert a newline");
+    await shortcutComposer.fill("");
+    await demo.getByRole("button", { name: "Settings", exact: true }).click();
+    await enterToSend.uncheck();
     await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("warm");
     await demo.getByRole("button", { name: "Close settings", exact: true }).click();
     await demo.reload();
