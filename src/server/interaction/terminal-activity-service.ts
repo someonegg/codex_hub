@@ -4,7 +4,7 @@ import type { TmuxBinding } from "./transport.js";
 
 type Activity = Extract<InteractionResponse, { supported: true }>["activity"];
 const WINDOW_MS = 5000;
-const LEASE_MS = 60_000;
+const LEASE_MS = 30 * 60_000;
 interface Observation {
   binding: TmuxBinding;
   subscription?: PreviewSubscription;

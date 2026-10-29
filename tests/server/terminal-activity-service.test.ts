@@ -73,9 +73,9 @@ it("closes a failed subscription and retries with a fresh observation on the nex
   expect(service.read("one", binding)).toBe("working");
 });
 
-it("expires an unread subscription at sixty seconds without requiring another read", async () => {
+it("expires an unread subscription at thirty minutes without requiring another read", async () => {
   const { first } = setup();
-  await vi.advanceTimersByTimeAsync(59_999);
+  await vi.advanceTimersByTimeAsync(30 * 60_000 - 1);
   expect(first.close).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
   expect(first.close).toHaveBeenCalledOnce();
@@ -85,12 +85,12 @@ it("expires an unread subscription at sixty seconds without requiring another re
 
 it("renews the subscription lease on reads and closes it only at the new deadline", async () => {
   const { service, listen, first } = setup();
-  await vi.advanceTimersByTimeAsync(30_000);
+  await vi.advanceTimersByTimeAsync(15 * 60_000);
   service.read("one", binding);
   expect(listen).toHaveBeenCalledOnce();
-  await vi.advanceTimersByTimeAsync(30_000);
+  await vi.advanceTimersByTimeAsync(15 * 60_000);
   expect(first.close).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(29_999);
+  await vi.advanceTimersByTimeAsync(15 * 60_000 - 1);
   expect(first.close).not.toHaveBeenCalled();
   await vi.advanceTimersByTimeAsync(1);
   expect(first.close).toHaveBeenCalledOnce();

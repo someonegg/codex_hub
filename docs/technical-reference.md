@@ -312,7 +312,7 @@ Empty/invalid fields neither invalidate the pane bind nor erase an earlier proje
 Activity is null unless connected. Output in the last monotonic five seconds means
 `working`; otherwise `idle`. Initial or failed observation means `unknown`.
 `%output` / `%extended-output` subscriptions retry on the next read after failure.
-Reader and interaction reads renew a 60-second lease. Activity shares control
+Reader and interaction reads renew a 30-minute lease. Activity shares control
 clients with preview without capturing frames. Transitions affect reader revisions;
 repeated output while already working does not. Catalog omits activity.
 
