@@ -1,6 +1,8 @@
 # Documentation
 
-中文：[项目介绍](../README.zh-CN.md) · [使用与配置](usage.zh-CN.md)
+简体中文：[项目介绍](../README.zh-CN.md) · [使用与配置](usage.zh-CN.md)
+
+繁體中文：[專案介紹](../README.zh-TW.md) · [使用與設定](usage.zh-TW.md)
 
 - [Usage and configuration](usage.md): daily use, configuration, security, and troubleshooting.
 - [Technical reference](technical-reference.md): APIs, hosting resources, and runtime guarantees.

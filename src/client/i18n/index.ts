@@ -1,12 +1,13 @@
 import { initReactI18next } from "react-i18next";
 import i18next from "i18next";
 
-import { en, settingsEn, settingsZh, zh } from "./messages";
+import { en, settingsEn, settingsZh, settingsZhTW, zh, zhTW } from "./messages";
 import { namespaceFor, partitionMessages } from "./namespaces";
 
 export const languageOptions = [
   { value: "en", label: "English", locale: "en-US" },
   { value: "zh-CN", label: "简体中文", locale: "zh-CN" },
+  { value: "zh-TW", label: "繁體中文", locale: "zh-TW" },
 ] as const;
 export const languages = languageOptions.map(({ value }) => value);
 export type Language = (typeof languageOptions)[number]["value"];
@@ -23,6 +24,7 @@ void i18next.use(initReactI18next).init({
   resources: {
     en: { settings: settingsEn, ...partitionMessages(en) },
     "zh-CN": { settings: settingsZh, ...partitionMessages(zh) },
+    "zh-TW": { settings: settingsZhTW, ...partitionMessages(zhTW) },
   },
   defaultNS: "common",
   interpolation: { escapeValue: false },

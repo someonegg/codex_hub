@@ -31,7 +31,7 @@ async function record(
     .browser()
     .newContext({
       viewport: { width: 1440, height: 1000 },
-      locale: language === "zh-CN" ? "zh-CN" : "en-US",
+      locale: language === "en" ? "en-US" : language,
       timezoneId: "UTC",
       deviceScaleFactor: 1,
       colorScheme: "light",

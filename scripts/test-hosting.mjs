@@ -164,7 +164,7 @@ try {
       await demo.close();
     };
     const context = await browser.newContext({
-      locale: language === "zh-CN" ? "zh-CN" : "en-US",
+      locale: language === "en" ? "en-US" : language,
       timezoneId: "UTC",
       permissions: ["clipboard-read", "clipboard-write"],
       viewport: { width: 1280, height: 900 },

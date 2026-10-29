@@ -438,8 +438,8 @@ Long-lived preferences use the versioned localStorage key `ahub.preferences.v1`,
 
 ## Interface localization
 
-The browser preference `ahub.preferences.v1.language` selects `en` (default) or
-`zh-CN`. Missing, malformed, and unsupported stored values fall back to English;
+The browser preference `ahub.preferences.v1.language` selects `en` (default),
+`zh-CN` (Simplified Chinese), or `zh-TW` (Traditional Chinese, Taiwan). Missing, malformed, and unsupported stored values fall back to English;
 existing launch and theme preferences retain their behavior. Language changes apply
 without reloading and synchronize through same-origin storage events. Storage
 failures retain the in-memory choice. Locale affects presentation, not API values,
