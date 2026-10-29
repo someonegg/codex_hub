@@ -30,7 +30,7 @@ function cli(args: string[], stdin = "", env: Record<string, string> = {}) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((done, reject) => {
     const child = spawn(
       process.execPath,
-      ["--import", "tsx", "src/server/main.ts", "session", ...args],
+      ["--import", "tsx", "src/server/cli/main.ts", "session", ...args],
       { env: { ...process.env, CODEX_HUB_URL: "http://127.0.0.1:1", ...env } },
     );
     let stdout = "",

@@ -67,7 +67,8 @@
     "vitest": "^4.1.10"
   },
   "bin": {
-    "codex-hub": "dist/server/server/main.js"
+    "codex-hub": "dist/server/server/main.js",
+    "ahub-cli": "dist/server/server/cli/main.js"
   },
   "files": [
     "dist/client",

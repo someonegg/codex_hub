@@ -17,7 +17,7 @@ import { commandFailure } from "./command-error.js";
 import { SessionClient } from "./session-client.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
-export const sessionHelp = `Usage: codex-hub session <command> [options]
+export const sessionHelp = `Usage: ahub-cli session <command> [options]
   list [--project <directory>]
   create --project <directory> [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]

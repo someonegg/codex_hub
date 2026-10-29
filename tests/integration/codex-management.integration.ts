@@ -437,7 +437,7 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [
       "--import",
       "tsx",
-      resolve("src/server/main.ts"),
+      resolve("src/server/cli/main.ts"),
       "session",
       ...args,
       "--url",

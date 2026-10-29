@@ -162,7 +162,7 @@ not provide offline session access.
 
 ## Releases
 
-The npm package is `@someonegg/codex-hub`; the executable is `codex-hub`.
+The npm package is `@someonegg/codex-hub`; the executables are `codex-hub` (server) and `ahub-cli` (management commands).
 
 1. Update package and lockfile versions in a PR, run the checks and
    `npm run test:package`, then merge.

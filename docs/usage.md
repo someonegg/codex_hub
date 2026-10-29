@@ -13,23 +13,32 @@ to stop it. For installation and requirements, see the [README](../README.md#qui
 
 By default, the hub reads `~/.codex` and listens only on this machine.
 
-## Session CLI
+## Management CLI
+
+`codex-hub` starts the server; `ahub-cli` provides `page`, `diff`, and `session` commands.
+To run without installing globally:
+
+```sh
+npx --package=@someonegg/codex-hub@latest ahub-cli --help
+```
+
+### Sessions
 
 Start the hub separately, then use the HTTP client from another terminal:
 
 ```bash
-codex-hub session list --project /path/to/project
-codex-hub session create --project /path/to/project --home default
-codex-hub session send <id> --message "Explain the failing tests"
-codex-hub session inspect <id>
-codex-hub session inspect <id> --after <nextAfter> --limit 20
-codex-hub session terminal <id>
-codex-hub session keys <id> down enter
-codex-hub session interrupt <id>
-codex-hub session exit <id>
-codex-hub session resume <id>
-codex-hub session archive <id>
-codex-hub session delete <id>
+ahub-cli session list --project /path/to/project
+ahub-cli session create --project /path/to/project --home default
+ahub-cli session send <id> --message "Explain the failing tests"
+ahub-cli session inspect <id>
+ahub-cli session inspect <id> --after <nextAfter> --limit 20
+ahub-cli session terminal <id>
+ahub-cli session keys <id> down enter
+ahub-cli session interrupt <id>
+ahub-cli session exit <id>
+ahub-cli session resume <id>
+ahub-cli session archive <id>
+ahub-cli session delete <id>
 ```
 
 Use `send <id> --stdin` for piped input, and `handoff <id>` after a terminal
@@ -46,7 +55,7 @@ completion. Successful input or handoff means sent, without confirming the resul
 Exit codes are `0` for success, `1` for a definite failure, and `2` for an unknown
 write result. After an unknown result, use list, inspect, or terminal to check the
 actual state; timeout or interruption does not cancel a submitted operation.
-See `codex-hub session --help` for commands and the [CLI and observation contract](technical-reference.md#session-cli-and-observation)
+See `ahub-cli session --help` for commands and the [CLI and observation contract](technical-reference.md#session-cli-and-observation)
 for pagination and failure semantics.
 
 ## Reading and managing sessions
@@ -152,7 +161,7 @@ content you trust. Open **Pages** at `/artifacts` to manage them.
 Publish an already built directory containing `index.html` on the Hub machine:
 
 ```sh
-codex-hub page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
 ```
 
 Both directories must exist. Use relative asset paths; Hub does not build sites
@@ -175,9 +184,9 @@ Generate a diff file for the intended comparison, then publish it:
 
 ```sh
 git diff HEAD > /tmp/review.diff
-codex-hub diff publish /tmp/review.diff --title "Review changes"
-codex-hub diff list
-codex-hub diff delete <uuid>
+ahub-cli diff publish /tmp/review.diff --title "Review changes"
+ahub-cli diff list
+ahub-cli diff delete <uuid>
 ```
 
 Open the returned `/diffs/<uuid>` link to review the diff. The agent chooses the

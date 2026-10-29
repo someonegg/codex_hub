@@ -154,10 +154,12 @@ updates while preserving reading position.
 
 ### Client behavior and results
 
-The stateless `session` CLI is a Node HTTP client of an existing hub. It does not
-read rollout files, control tmux directly, start or discover servers, or persist
-sessions, cursors, or recovery records. Server startup and page/diff commands
-remain available.
+The stateless `ahub-cli session` command is a Node HTTP client of an existing hub.
+It does not read rollout files, control tmux directly, start or discover servers,
+or persist sessions, cursors, or recovery records.
+
+`codex-hub` starts the server. `ahub-cli page` and `ahub-cli diff` manage local
+hosting storage directly, using `--home-dir` to select the Hub data root.
 
 URL precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Only HTTP
 origins are accepted; the client's HTTPS restriction does not change server TLS

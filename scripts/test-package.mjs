@@ -47,18 +47,22 @@ try {
     ],
     { cwd: temporary },
   );
-  const binary = join(temporary, "node_modules", ".bin", "codex-hub");
-  const help = await exec(binary, ["--help"], { cwd: temporary });
+  const serverBinary = join(temporary, "node_modules", ".bin", "codex-hub");
+  const help = await exec(serverBinary, ["--help"], { cwd: temporary });
   assert.match(help.stdout, /Usage: codex-hub/);
-  const sessionHelp = await exec(binary, ["session", "--help"], { cwd: temporary });
-  assert.match(sessionHelp.stdout, /Usage: codex-hub session/);
+  const cli = join(temporary, "node_modules", ".bin", "ahub-cli");
+  await assert.rejects(exec(serverBinary, ["session", "--help"]));
+  assert.match((await exec(cli, ["--help"])).stdout, /Usage: ahub-cli/);
+  await assert.rejects(exec(cli, ["unknown"]));
+  const sessionHelp = await exec(cli, ["session", "--help"], { cwd: temporary });
+  assert.match(sessionHelp.stdout, /Usage: ahub-cli session/);
   assert.match(sessionHelp.stdout, /inspect/);
   const source = join(temporary, "web-source");
   const hosting = join(temporary, "hosting");
   await mkdir(source);
   await writeFile(join(source, "index.html"), "<h1>Package hosting</h1>");
   const published = await exec(
-    binary,
+    cli,
     ["page", "publish", source, "--project", temporary, "--home-dir", hosting, "--json"],
     { cwd: temporary },
   );
@@ -66,7 +70,7 @@ try {
   const concurrent = await Promise.all(
     Array.from({ length: 4 }, () =>
       exec(
-        binary,
+        cli,
         ["page", "publish", source, "--project", temporary, "--home-dir", hosting, "--json"],
         { cwd: temporary },
       ),
@@ -74,20 +78,20 @@ try {
   );
   assert(concurrent.every(({ stdout }) => JSON.parse(stdout).id === artifact.id));
   assert.match(artifact.url, /^\/web\/[a-f0-9]{32}\/$/);
-  await assert.rejects(exec(binary, ["publish", source, "--project", temporary]));
+  await assert.rejects(exec(serverBinary, ["publish", source, "--project", temporary]));
   const resource = (kind, action, ...args) =>
-    exec(binary, [kind, action, ...args, "--home-dir", hosting, "--json"], { cwd: temporary });
+    exec(cli, [kind, action, ...args, "--home-dir", hosting, "--json"], { cwd: temporary });
   assert.equal(JSON.parse((await resource("page", "list")).stdout).length, 1);
   const diffFile = join(temporary, "review.diff");
   await writeFile(
     diffFile,
     "diff --git a/test b/test\n--- a/test\n+++ b/test\n@@ -1 +1 @@\n-old\n+new\n",
   );
-  const plainDiff = await exec(binary, ["diff", "publish", diffFile, "--home-dir", hosting]);
+  const plainDiff = await exec(cli, ["diff", "publish", diffFile, "--home-dir", hosting]);
   const plainUrl = plainDiff.stdout.split("\n")[0];
   assert.match(plainDiff.stdout, /\[review\.diff\]\(\/diffs\/[a-f0-9-]{36}\)/);
   await resource("diff", "delete", plainUrl.split("/").at(-1));
-  assert.match((await exec(binary, ["diff", "--help"])).stdout, /diff publish/);
+  assert.match((await exec(cli, ["diff", "--help"])).stdout, /diff publish/);
   const diffEntries = await Promise.all(
     Array.from({ length: 4 }, async () =>
       JSON.parse((await resource("diff", "publish", diffFile, "--title", "Review")).stdout),
@@ -106,7 +110,7 @@ try {
   await mkdir(join(home, "sessions"));
   await mkdir(join(home, "archived_sessions"));
   server = spawn(
-    binary,
+    serverBinary,
     ["--codex-home", `smoke=${home}`, "--port", "0", "--hosting", "--home-dir", hosting],
     { cwd: temporary, stdio: ["ignore", "pipe", "pipe"] },
   );
@@ -140,6 +144,8 @@ try {
   await resource("page", "delete", artifact.id);
   await resource("page", "delete", artifact.id);
   assert.equal((await fetch(new URL(artifact.url, address))).status, 404);
+  const sessions = await exec(cli, ["session", "list", "--url", address, "--json"]);
+  assert.deepEqual(JSON.parse(sessions.stdout).sessions, []);
   const response = await fetch(address);
   assert.equal(response.status, 200);
   const html = await response.text();

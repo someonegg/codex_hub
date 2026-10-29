@@ -89,7 +89,7 @@ codex-hub \
 发布 Hub 所在机器上已构建、包含 `index.html` 的目录：
 
 ```sh
-codex-hub page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
 ```
 
 两个目录都必须存在。资源使用相对路径；Hub 不构建网站，也不接受远程上传发布包。
@@ -107,9 +107,9 @@ codex-hub page publish ./demo --project /absolute/path/to/project --title "Desig
 
 ```sh
 git diff HEAD > /tmp/review.diff
-codex-hub diff publish /tmp/review.diff --title "Review changes"
-codex-hub diff list
-codex-hub diff delete <uuid>
+ahub-cli diff publish /tmp/review.diff --title "Review changes"
+ahub-cli diff list
+ahub-cli diff delete <uuid>
 ```
 
 打开返回的 `/diffs/<uuid>` 链接审阅差异。智能体负责选择比较范围并在完成后删除发布内容，没有自动清理。

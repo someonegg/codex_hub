@@ -26,7 +26,7 @@ export default defineConfig({
   build: {
     outDir: "dist/client",
     emptyOutDir: true,
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       input: {
         index: resolve(import.meta.dirname, "index.html"),
