@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { request } from "node:http";
 import { resolve } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -14,6 +13,9 @@ import {
 } from "../../shared/api-contract.js";
 import type { TimelineItem } from "../../shared/domain.js";
 import { normalizeMessage } from "../interaction/message.js";
+import { commandFailure } from "./command-error.js";
+import { SessionClient } from "./session-client.js";
+import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: codex-hub session <command> [options]
   list [--project <directory>]
@@ -30,20 +32,10 @@ Options: --url <http-url> --json --timeout <seconds> (default 360)
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}`;
 
-class CommandError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly exitCode = 1,
-  ) {
-    super(message);
-  }
-}
-
 /** One invocation owns one deadline and never retries a submitted mutation. */
 export async function runSessionCommand(args: string[]): Promise<void> {
   let json = args.includes("--json");
-  let mutationSubmitted = false;
+  let client: SessionClient | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const abort = new AbortController();
   const interrupt = () => abort.abort();
@@ -122,75 +114,8 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
       throw new Error("URL must contain only an HTTP origin");
     timer = setTimeout(() => abort.abort(), seconds * 1000);
-    const api = async <T>(path: string, method = "GET", body?: object): Promise<T> => {
-      if (abort.signal.aborted) throw new Error("Command interrupted or timed out");
-      const payload = body === undefined ? undefined : JSON.stringify(body);
-      return new Promise<T>((accept, reject) => {
-        const req = request(
-          new URL(path, base),
-          {
-            method,
-            signal: abort.signal,
-            headers:
-              payload === undefined
-                ? {}
-                : {
-                    "Content-Type": "application/json",
-                    "Content-Length": Buffer.byteLength(payload),
-                  },
-          },
-          (res) => {
-            const chunks: Buffer[] = [];
-            res.on("data", (chunk: Buffer) => chunks.push(chunk));
-            res.on("error", reject);
-            res.on("end", () => {
-              try {
-                const text = Buffer.concat(chunks).toString("utf8");
-                const data = text ? JSON.parse(text) : undefined;
-                if ((res.statusCode ?? 500) >= 400) {
-                  const unknown =
-                    (method === "GET" && mutationSubmitted) ||
-                    data?.error?.code === "operation_result_unknown" ||
-                    ((res.statusCode ?? 500) >= 500 &&
-                      method !== "GET" &&
-                      data?.error?.code !== "interaction_failed");
-                  reject(
-                    new CommandError(
-                      unknown ? "operation_result_unknown" : "request_failed",
-                      unknown
-                        ? "操作结果未知；请通过 list、inspect 或 terminal 检查实际状态。"
-                        : (data?.error?.message ?? `HTTP ${res.statusCode}`),
-                      unknown ? 2 : 1,
-                    ),
-                  );
-                } else accept(data as T);
-              } catch (error) {
-                reject(error);
-              }
-            });
-          },
-        );
-        req.on("error", reject);
-        if (method !== "GET") mutationSubmitted = true;
-        req.end(payload);
-      });
-    };
-    const pause = () =>
-      new Promise<void>((accept, reject) => {
-        if (abort.signal.aborted) {
-          reject(new Error("Command interrupted or timed out"));
-          return;
-        }
-        const stop = () => {
-          clearTimeout(wait);
-          reject(new Error("Command interrupted or timed out"));
-        };
-        const wait = setTimeout(() => {
-          abort.signal.removeEventListener("abort", stop);
-          accept();
-        }, 500);
-        abort.signal.addEventListener("abort", stop, { once: true });
-      });
+    client = new SessionClient(base, abort.signal);
+    const api = client.request;
     const path = `/api/v1/sessions/${encodeURIComponent(id ?? "")}`;
     let result: unknown;
     if (command === "list") {
@@ -257,50 +182,13 @@ export async function runSessionCommand(args: string[]): Promise<void> {
         command === "delete" ? "DELETE" : "POST",
         body,
       );
-      while (operation.status === "pending") {
-        await pause();
-        operation = await api<HubOperation>(
-          `/api/v1/operations/${encodeURIComponent(operation.operationId)}`,
-        );
-      }
-      if (operation.status !== "succeeded")
-        throw new CommandError(
-          operation.status === "unknown" ? "operation_result_unknown" : "operation_failed",
-          operation.status === "unknown"
-            ? "操作结果未知；请检查会话实际状态。"
-            : "操作失败；请检查服务端诊断。",
-          operation.status === "unknown" ? 2 : 1,
-        );
-      if (launch) {
-        if (!operation.sessionId) throw new Error("Launch response has no session");
-        for (;;) {
-          const observed = await api<InspectResponse>(
-            `/api/v1/sessions/${encodeURIComponent(operation.sessionId)}/inspect?limit=1`,
-          );
-          if (
-            observed.live &&
-            observed.interaction.supported &&
-            observed.interaction.state === "connected" &&
-            observed.interaction.activity === "idle"
-          )
-            break;
-          await pause();
-        }
-      }
+      operation = await waitForOperation(operation, api, abort.signal);
+      if (launch) await waitForLaunch(operation.sessionId, api, abort.signal);
       result = { sessionId: operation.sessionId, status: "succeeded" };
     }
     console.log(json ? JSON.stringify(result) : formatResult(command, result));
   } catch (error) {
-    const failure =
-      error instanceof CommandError
-        ? error
-        : new CommandError(
-            mutationSubmitted ? "operation_result_unknown" : "query_failed",
-            mutationSubmitted
-              ? "操作结果未知；未重试或取消后端操作，请通过 list、inspect 或 terminal 检查实际状态。"
-              : `查询失败：${error instanceof Error ? error.message : String(error)}`,
-            mutationSubmitted ? 2 : 1,
-          );
+    const failure = commandFailure(error, client?.mutationSubmitted ?? false);
     if (json)
       console.log(JSON.stringify({ error: { code: failure.code, message: failure.message } }));
     else console.error(failure.message);
