@@ -110,6 +110,7 @@ async function start(
   const repository = {
     list: vi.fn(),
     getSession: unavailable,
+    inspect: async () => null,
     getItems: unavailable,
     getSessionUpdates,
     getToolDetail: unavailable,

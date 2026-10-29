@@ -49,28 +49,31 @@ export class SessionLaunchError extends Error {
 }
 
 export class SessionManagerRegistry {
+  readonly #homes = new Map<string, string>();
   readonly #managers = new Map<string, SessionManager>();
 
   constructor(readonly defaultSourceInstanceId: string) {}
 
-  register(sourceInstanceId: string, manager: SessionManager): this {
+  register(sourceInstanceId: string, manager: SessionManager, nickname?: string): this {
     if (this.#managers.has(sourceInstanceId)) {
       throw new Error(`Duplicate management source: ${sourceInstanceId}`);
     }
     this.#managers.set(sourceInstanceId, manager);
+    if (nickname !== undefined) this.#homes.set(nickname, sourceInstanceId);
     return this;
   }
 
-  resolveCreateSource(sourceInstanceId?: string): string {
-    if (sourceInstanceId === undefined && this.#managers.size === 1)
-      return this.defaultSourceInstanceId;
-    if (!sourceInstanceId || !this.#managers.has(sourceInstanceId))
-      throw new Error(
-        sourceInstanceId
-          ? "Unknown sourceInstanceId"
-          : "sourceInstanceId is required when multiple homes are configured",
-      );
-    return sourceInstanceId;
+  resolveCreateSource(sourceInstanceId?: string, home?: string): string {
+    if (sourceInstanceId !== undefined && home !== undefined)
+      throw new Error("home and sourceInstanceId are mutually exclusive");
+    if (home !== undefined) {
+      const source = this.#homes.get(home);
+      if (!source) throw new Error("Unknown home nickname");
+      return source;
+    }
+    const source = sourceInstanceId ?? this.defaultSourceInstanceId;
+    if (!this.#managers.has(source)) throw new Error("Unknown sourceInstanceId");
+    return source;
   }
 
   get(sourceInstanceId: string): SessionManager {

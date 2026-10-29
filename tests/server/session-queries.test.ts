@@ -38,7 +38,7 @@ const session: DomainSession = {
   diagnostics: [],
 };
 const key = new Uint8Array(32);
-function message(index: number): DomainTimelineRecord {
+function message(index: number): Extract<DomainTimelineRecord, { kind: "message" }> {
   return {
     id: `item-${index}`,
     ordinal: index * 3 + 1,
@@ -184,4 +184,77 @@ it("builds the detail index lazily once per immutable normalized session", () =>
     timeline: [{ ...message(0), id: "replacement" }, ...items.slice(1)],
   });
   expect(() => queries.items(replaced, session.id, { cursor })).toThrow(/prefix/);
+});
+
+it("inspects visible messages and structured user input with raw ordinal boundaries", () => {
+  const queries = new SessionQueries();
+  const timeline: DomainTimelineRecord[] = [
+    { ...message(0), role: "assistant", phase: "update", itemType: "plan" },
+    { id: "hidden", ordinal: 2, timestamp: null, kind: "internal", eventType: "event" },
+    {
+      id: "question",
+      ordinal: 4,
+      timestamp: null,
+      kind: "user_input",
+      stage: "request",
+      callId: "call",
+      questions: [
+        {
+          id: "q",
+          header: "Choice",
+          question: "Which?",
+          options: [{ label: "A", description: "First" }],
+        },
+      ],
+    },
+    {
+      id: "answer",
+      ordinal: 7,
+      timestamp: null,
+      kind: "user_input",
+      stage: "response",
+      callId: "call",
+      outcome: "answered",
+      answers: [{ questionId: "q", answers: ["A"] }],
+    },
+    { id: "hidden-end", ordinal: 10, timestamp: null, kind: "internal", eventType: "event" },
+  ];
+  const state = snapshot(normalized(timeline));
+  expect(queries.inspect(state, session.id, { limit: 2 })).toMatchObject({
+    items: timeline.slice(2, 4),
+    latestNumber: 7,
+    nextAfter: 10,
+    hasMore: false,
+  });
+  const first = queries.inspect(state, session.id, { after: 0, limit: 1 })!;
+  expect(first).toMatchObject({ items: [timeline[0]], nextAfter: 2, hasMore: true });
+  const second = queries.inspect(state, session.id, { after: first.nextAfter, limit: 1 })!;
+  expect(second).toMatchObject({ items: [timeline[2]], nextAfter: 4, hasMore: true });
+  expect(queries.inspect(state, session.id, { after: 7 })).toMatchObject({
+    items: [],
+    nextAfter: 10,
+    latestNumber: 7,
+    hasMore: false,
+  });
+  expect(() => queries.inspect(state, session.id, { after: 11 })).toThrow("range");
+  expect(() => queries.inspect(state, session.id, { after: -1 })).toThrow();
+  expect(() => queries.inspect(state, session.id, { limit: 301 })).toThrow();
+  expect(queries.inspect(state, "missing", {})).toBeNull();
+  expect(queries.inspect(snapshot(normalized([])), session.id, {})).toMatchObject({
+    items: [],
+    latestNumber: null,
+    nextAfter: 0,
+    hasMore: false,
+  });
+});
+
+it("inspect honors the byte budget without truncating visible bodies or skipping records", () => {
+  const queries = new SessionQueries();
+  const large = { ...message(0), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES - 500) };
+  const next = { ...message(1), markdown: "y".repeat(1000) };
+  const state = snapshot(normalized([large, next]));
+  const first = queries.inspect(state, session.id, { after: 0, limit: 10 })!;
+  expect(first.items).toEqual([large]);
+  expect(first.hasMore).toBe(true);
+  expect(queries.inspect(state, session.id, { after: first.nextAfter })!.items).toEqual([next]);
 });

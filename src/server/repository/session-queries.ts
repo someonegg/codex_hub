@@ -60,6 +60,42 @@ export class SessionQueries {
     return versioned?.normalized.session ?? null;
   }
 
+  inspect(snapshot: CatalogSnapshot, id: string, query: { limit?: number; after?: number }) {
+    validateItemQuery(query);
+    if (query.after !== undefined && (!Number.isSafeInteger(query.after) || query.after < 0))
+      throw new RepositoryQueryError("invalid_query", "after must be a nonnegative safe integer");
+    const versioned = snapshot.sessions.get(id);
+    if (!versioned) return null;
+    const timeline = versioned.normalized.timeline;
+    const end = timeline.at(-1)?.ordinal ?? 0;
+    if ((query.after ?? 0) > end)
+      throw new RepositoryQueryError("invalid_query", "after exceeds the current timeline range");
+    const visible = timeline.filter(
+      (item) => item.kind === "message" || item.kind === "user_input",
+    );
+    const limit = query.limit ?? 10;
+    const candidates =
+      query.after === undefined
+        ? visible.slice(-limit)
+        : visible.filter((item) => item.ordinal > query.after!);
+    const items: DomainTimelineRecord[] = [];
+    let bytes = 0;
+    for (const item of candidates) {
+      const size = Buffer.byteLength(JSON.stringify(item), "utf8") + (items.length ? 1 : 0);
+      if (items.length >= limit || (items.length > 0 && bytes + size > MAX_ITEM_PAGE_BYTES)) break;
+      items.push(item);
+      bytes += size;
+    }
+    const next = candidates[items.length];
+    return {
+      session: versioned.normalized.session,
+      items,
+      latestNumber: visible.at(-1)?.ordinal ?? null,
+      nextAfter: next ? (timeline[timeline.indexOf(next) - 1]?.ordinal ?? 0) : end,
+      hasMore: next !== undefined,
+    };
+  }
+
   items(snapshot: CatalogSnapshot, id: string, query: ItemPageCriteria): ItemPageResult | null {
     validateItemQuery(query);
     const versioned = snapshot.sessions.get(id);

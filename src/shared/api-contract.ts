@@ -42,6 +42,27 @@ export interface SessionDetailResponse {
   updateRevision: UpdateRevision;
 }
 
+export interface InspectQuery {
+  limit?: number;
+  after?: number;
+}
+
+export interface InspectResponse {
+  session: SessionDetail;
+  live: boolean;
+  interaction: InteractionResponse;
+  items: TimelineItem[];
+  latestNumber: number | null;
+  nextAfter: number;
+  hasMore: boolean;
+}
+
+export interface TerminalResponse {
+  content: string;
+  truncated: boolean;
+  capturedAt: string;
+}
+
 export interface ItemPageQuery {
   limit?: number;
   cursor?: TimelineCursor;
@@ -159,6 +180,7 @@ export type CreateSessionRequest =
   | {
       resumeSessionId: string;
       sourceInstanceId?: never;
+      home?: never;
       directory?: never;
       worktree?: never;
       yolo?: boolean;
@@ -167,6 +189,7 @@ export type CreateSessionRequest =
   | {
       resumeSessionId?: never;
       sourceInstanceId?: string;
+      home?: string;
       directory: string;
       worktree: boolean;
       yolo?: boolean;

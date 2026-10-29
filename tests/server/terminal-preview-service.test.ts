@@ -290,3 +290,19 @@ it.each([8192, 8193])("enforces serialized UTF-8 delta byte boundary %i", async 
     expect(Buffer.byteLength(JSON.stringify(next))).toBe(size);
   } else expect(next).toMatchObject({ type: "snapshot", content });
 });
+
+it("captures a fresh HTTP screen without subscribing or returning the WebSocket cache", async () => {
+  const result = await service.captureFresh(binding, () => {});
+  expect(result).toMatchObject({
+    content: "first",
+    truncated: false,
+    capturedAt: expect.any(String),
+  });
+  expect(listen).not.toHaveBeenCalled();
+  subscribe();
+  await flush();
+  content = "new HTTP screen";
+  expect((await service.captureFresh(binding, () => {})).content).toBe(content);
+  expect(listen).toHaveBeenCalledOnce();
+  expect(capture).toHaveBeenCalledTimes(3);
+});

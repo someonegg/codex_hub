@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
+  InspectQuery,
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
@@ -91,6 +92,20 @@ export class SessionReadService implements SessionReader {
     const response = this.#mapper.detail(result);
     const interactionSession = await this.#runtimeDetail(response.session, snapshot);
     return { ...response, interactionSession };
+  }
+
+  async inspect(id: SessionId, query: InspectQuery) {
+    const snapshot = await this.#store.current();
+    const result = this.#queries.inspect(snapshot, id, query);
+    if (!result) return null;
+    const session = this.#mapper.sessionDetail(result.session);
+    const interactionSession = await this.#runtimeDetail(session, snapshot);
+    return {
+      ...result,
+      session,
+      items: result.items.map((item) => this.#mapper.timelineItem(item)),
+      interactionSession,
+    };
   }
 
   async getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null> {

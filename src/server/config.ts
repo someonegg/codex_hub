@@ -131,6 +131,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 export function commandLineHelp(): string {
   return `Usage: codex-hub [options]
 
+Session client:
+  codex-hub session --help
+
 Resources:
   codex-hub page list
   codex-hub page delete <id>

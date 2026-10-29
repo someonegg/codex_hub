@@ -31,6 +31,7 @@ function repository(snapshot: InteractionSessionSnapshot | null): SessionReader 
   return {
     list: vi.fn(),
     getSession: vi.fn(),
+    inspect: async () => null,
     getItems: vi.fn(),
     getSessionUpdates: vi.fn(),
     getToolDetail: vi.fn(),
@@ -588,3 +589,62 @@ it.each([
     expect(listen).toHaveBeenCalledTimes(2);
   },
 );
+
+it("checks idle both before transport and at actual input, while allowing interrupt and handoff", async () => {
+  vi.useFakeTimers();
+  try {
+    const snapshot = boundSession();
+    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7", sessionName: "test" };
+    let output!: (pane: string) => void;
+    const tmux = {
+      connect: vi.fn(async () => target),
+      sendMessage: vi.fn(async (_target, _message, check) => check()),
+      sendKeys: vi.fn(async (_target, _keys, check) => check()),
+    } as unknown as TmuxInteractionService;
+    const service = new SessionInteractionService(
+      repository(snapshot),
+      true,
+      tmux,
+      bindings,
+      (_binding, changed) => {
+        output = changed;
+        return { ready: Promise.resolve(), close() {} };
+      },
+    );
+    services.push(service);
+    await expect(service.sendMessage("session", "hello", true)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    expect(tmux.sendMessage).not.toHaveBeenCalled();
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(5001);
+    await service.sendMessage("session", "hello", true);
+    output("%7");
+    await expect(service.sendKeys("session", ["enter"], true)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    await service.sendKeys("session", ["interrupt"]);
+    await service.handoffPaneBinding("session");
+    await vi.advanceTimersByTimeAsync(5001);
+    (tmux.sendMessage as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async (_target, _message, check) => {
+        output("%7");
+        check();
+      },
+    );
+    await expect(service.sendMessage("session", "raced", true)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    await vi.advanceTimersByTimeAsync(5001);
+    (tmux.sendMessage as ReturnType<typeof vi.fn>).mockImplementationOnce(
+      async (_target, _message, check) => {
+        check();
+        output("%7");
+        check(); // Echo after paste must not block the Enter step.
+      },
+    );
+    await service.sendMessage("session", "complete-paste", true);
+  } finally {
+    vi.useRealTimers();
+  }
+});

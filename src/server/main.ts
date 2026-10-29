@@ -2,6 +2,7 @@
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
+import { runSessionCommand } from "./cli/session.js";
 import { commandLineHelp, loadConfig, resolveHomeDirectory } from "./config.js";
 import { createCodexHub } from "./create-hub.js";
 import { DiffStore } from "./hosting/diff-store.js";
@@ -62,6 +63,10 @@ async function runResourceCommand(resource: string, action: string, args: string
 }
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "session") {
+    await runSessionCommand(process.argv.slice(3));
+    return;
+  }
   if (["page", "diff"].includes(process.argv[2])) {
     await runResourceCommand(process.argv[2], process.argv[3], process.argv.slice(4));
     return;

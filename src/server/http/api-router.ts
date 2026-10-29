@@ -30,7 +30,8 @@ export interface ApiRouterDependencies {
   readonly sessions: SessionReader;
   readonly catalog: SessionCatalogService;
   readonly updates: SessionUpdatesService;
-  readonly interaction?: InteractionApi;
+  readonly interaction?: InteractionApi &
+    Partial<Pick<SessionInteractionService, "captureTerminal">>;
   readonly operations?: OperationService;
   readonly uploadDirectory?: string;
   readonly uploads?: UploadStore;
