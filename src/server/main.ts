@@ -21,8 +21,6 @@ async function runResourceCommand(resource: string, action: string, args: string
       name: { type: "string" },
       title: { type: "string" },
       "home-dir": { type: "string" },
-      "hosting-dir": { type: "string" },
-      "upload-dir": { type: "string" },
       json: { type: "boolean" },
       help: { type: "boolean" },
     },
@@ -36,8 +34,6 @@ async function runResourceCommand(resource: string, action: string, args: string
     positionals.length !== (action === "list" ? 0 : 1)
   )
     throw new Error("Expected page/diff publish <source>, list, or delete <id>");
-  if (values["hosting-dir"] !== undefined || values["upload-dir"] !== undefined)
-    throw new Error("Use --home-dir instead of --hosting-dir or --upload-dir");
   const directory = join(resolveHomeDirectory(values["home-dir"]), "hosting");
   const pages = new HostingStore(directory);
   const diffs = new DiffStore(directory);

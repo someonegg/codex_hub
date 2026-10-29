@@ -165,9 +165,7 @@ and other non-preview types always download; all content uses `nosniff` and a
 sandbox CSP.
 
 Storage is `<home-dir>/uploads/<Hub session ID>/`.
-Metadata commits use atomic rename and record absolute content paths. Removed
-`--upload-dir` / `--hosting-dir` options have no automatic migration; stop the Hub
-before changing storage, and preserve recorded upload paths.
+Metadata commits use atomic rename and record absolute content paths.
 
 Deletion first renames metadata to a tombstone, hiding the attachment, then removes
 content and tombstone. Failed cleanup retries on deletion or startup. Startup also

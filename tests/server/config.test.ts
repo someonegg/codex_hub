@@ -82,11 +82,6 @@ it("resolves hosting directories and reports their own option name for empty val
   );
 });
 
-it("rejects removed storage options with migration guidance", () => {
-  for (const option of ["--upload-dir", "--hosting-dir"])
-    expect(() => loadConfig([option, "old"])).toThrow("use --home-dir");
-});
-
 it("shares the Hub root for uploads and hosting, expanding home-relative paths", () => {
   expect(runnable(["--hosting"])).toMatchObject({
     uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
