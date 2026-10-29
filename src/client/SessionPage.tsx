@@ -9,6 +9,7 @@ import { InternalLink } from "./components/InternalLink";
 import { SessionReader } from "./components/SessionReader";
 import { StatusBadge } from "./components/StatusBadge";
 import { sessionDisplayTitle } from "./session-title";
+import { browserStorage } from "./state/browser-storage";
 import { useHubOperation } from "./state/use-hub-operation";
 import { useSessionReader } from "./state/use-session-reader";
 import { useTimelineVisibility } from "./state/use-timeline-visibility";
@@ -37,13 +38,9 @@ export function SessionPage({
       session.parentId === sessionId && (includeArchived || session.status !== "archived"),
   );
   const childSessionsKey = `ahub.child-sessions.${sessionId}`;
-  const [childrenExpanded, setChildrenExpanded] = useState(() => {
-    try {
-      return sessionStorage.getItem(childSessionsKey) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [childrenExpanded, setChildrenExpanded] = useState(
+    () => browserStorage.getItem(childSessionsKey) === "true",
+  );
   const focused = useRef(false);
   const timelineVisibility = useTimelineVisibility();
   const reader = useSessionReader(sessionId);
@@ -146,11 +143,7 @@ export function SessionPage({
                   onToggle={(event) => {
                     const open = event.currentTarget.open;
                     setChildrenExpanded(open);
-                    try {
-                      sessionStorage.setItem(childSessionsKey, String(open));
-                    } catch {
-                      // Optional storage; toggling still works in memory.
-                    }
+                    browserStorage.setItem(childSessionsKey, String(open));
                   }}
                 >
                   <summary>Child sessions · {children.length}</summary>

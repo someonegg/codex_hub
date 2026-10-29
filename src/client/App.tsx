@@ -7,6 +7,7 @@ import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
 import { UploadsPage } from "./components/UploadsPage";
 import { SessionPage } from "./SessionPage";
+import { browserStorage } from "./state/browser-storage";
 import { SessionDraftProvider } from "./state/session-drafts";
 import { useHubNavigation } from "./state/use-hub-navigation";
 import { useSessionList } from "./state/use-session-list";
@@ -22,23 +23,13 @@ export function App() {
 
 function SessionHub() {
   const catalog = useSessionList();
-  const [homeFilter, setHomeFilter] = useState(() => {
-    try {
-      return sessionStorage.getItem("ahub.home") ?? "";
-    } catch {
-      return "";
-    }
-  });
+  const [homeFilter, setHomeFilter] = useState(() => browserStorage.getItem("ahub.home") ?? "");
   const homes = catalog.list?.homes ?? [];
   const selectedHome = homes.some((home) => home.sourceInstanceId === homeFilter) ? homeFilter : "";
   useEffect(() => {
     if (!catalog.list) return;
     if (homeFilter !== selectedHome) setHomeFilter("");
-    try {
-      sessionStorage.setItem("ahub.home", selectedHome);
-    } catch {
-      /* Storage may be unavailable. */
-    }
+    browserStorage.setItem("ahub.home", selectedHome);
   }, [catalog.list, homeFilter, selectedHome]);
   const visibleList = useMemo(
     () =>

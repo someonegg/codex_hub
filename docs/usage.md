@@ -74,6 +74,10 @@ Uploads persist under `uploads/` in the [Hub data root](#server-options), which
 must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
 for API and storage guarantees.
 
+## Browser settings
+
+Open **Settings** at the bottom of the sidebar to choose the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
+
 ## Multiple homes
 
 To use a different Codex home, pass `--codex-home 'nickname=path'`. Point to the

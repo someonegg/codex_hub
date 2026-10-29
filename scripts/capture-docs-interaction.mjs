@@ -416,6 +416,7 @@ async function capture(
       throw new Error("Opening a session must expand its project");
     await verifyCompactInteraction();
     await verifyAttachments();
+    await prepareDesktopPreview();
     for (const name of ["Message to agent", "Terminal Preview content"]) {
       if (!(await demo.getByLabel(name, { exact: true }).isVisible()))
         throw new Error(`${name} is hidden`);
@@ -438,7 +439,9 @@ async function capture(
       path: output,
       animations: "disabled",
     });
+    await demo.getByRole("button", { name: "Settings", exact: true }).click();
     await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("warm");
+    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
     await demo.reload();
     await demo.locator(".user-input-status.answered").waitFor();
     if ((await demo.locator("html").getAttribute("data-theme")) !== "warm")
@@ -455,7 +458,9 @@ async function capture(
       path: output.replace(/\.png$/, "-warm.png"),
       animations: "disabled",
     });
+    await demo.getByRole("button", { name: "Settings", exact: true }).click();
     await demo.getByRole("combobox", { name: "Theme", exact: true }).selectOption("mist");
+    await demo.getByRole("button", { name: "Close settings", exact: true }).click();
     await demo.setViewportSize({ width: 390, height: 844 });
     await demo.goto(origin);
     for (const project of ["atlas-dashboard", "harbor-api", "field-notes"]) {

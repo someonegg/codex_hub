@@ -4,6 +4,7 @@ import type { HubOperation, InteractionResponse, SessionHome } from "../../share
 import type { SessionDetail } from "../../shared/domain";
 
 import { api } from "../api/client";
+import { usePreferences } from "../state/preferences";
 import { useHubOperation } from "../state/use-hub-operation";
 import { AttachCommand } from "./AttachCommand";
 import { ProjectDirectory } from "./ProjectDirectory";
@@ -99,6 +100,7 @@ export function CreateSession({
   onClose,
   onRecovered,
 }: CreateSessionProps) {
+  const preferences = usePreferences();
   const dialog = useRef<HTMLDialogElement>(null);
   const recovery = useRef<boolean | null>(null);
   if (recovery.current === null) {
@@ -111,24 +113,26 @@ export function CreateSession({
   const [directory, setDirectory] = useState(project);
   const initialHome =
     selectedHome ||
+    homes.find((home) => home.sourceInstanceId === preferences.defaultHome)?.sourceInstanceId ||
     homes.find((home) => home.nickname === "default")?.sourceInstanceId ||
     (homes.length === 1 ? homes[0]!.sourceInstanceId : "");
   const [sourceInstanceId, setSourceInstanceId] = useState(initialHome);
   useEffect(() => {
-    if (open) setSourceInstanceId(initialHome);
-  }, [open, initialHome]);
-  useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
-      dialog.current?.querySelector<HTMLElement>("h2")?.focus();
+      dialog.current?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
     } else dialog.current?.close?.();
   }, [open]);
+  const launchDefaults = useRef({ ...preferences, home: initialHome, directory: project });
+  launchDefaults.current = { ...preferences, home: initialHome, directory: project };
   const [worktree, setWorktree] = useState(false);
   const [yolo, setYolo] = useState(false);
   useEffect(() => {
     if (open) {
-      setWorktree(false);
-      setYolo(false);
+      setDirectory(launchDefaults.current.directory);
+      setSourceInstanceId(launchDefaults.current.home);
+      setWorktree(launchDefaults.current.worktree);
+      setYolo(launchDefaults.current.yolo);
     }
   }, [open]);
   const request = useRef<{ fingerprint: string; id: string } | null>(null);
@@ -138,9 +142,6 @@ export function CreateSession({
     recovery.current = false;
     if (controller.operation?.status !== "succeeded") onRecovered?.();
   }, [controller.operation, controller.error, onRecovered]);
-  useEffect(() => {
-    if (open) setDirectory(project);
-  }, [project, open]);
   useEffect(() => {
     if (controller.operation && controller.operation.status !== "pending") request.current = null;
   }, [controller.operation]);
@@ -442,13 +443,16 @@ export function ResumeSession({
   controller: OperationController;
   onStart?: () => void;
 }) {
+  const preferences = usePreferences();
   const [open, setOpen] = useState(false);
   const [yolo, setYolo] = useState(false);
   const request = useRef<{ yolo: boolean; id: string } | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (open) dialog.current?.showModal?.();
-    else dialog.current?.close?.();
+    if (open) {
+      dialog.current?.showModal?.();
+      dialog.current?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+    } else dialog.current?.close?.();
   }, [open]);
   useEffect(() => {
     if (controller.operation && controller.operation.status !== "pending") request.current = null;
@@ -462,7 +466,7 @@ export function ResumeSession({
           className="interaction-management-trigger"
           disabled={controller.busy}
           onClick={() => {
-            setYolo(false);
+            setYolo(preferences.yolo);
             setOpen(true);
           }}
         >
@@ -477,7 +481,15 @@ export function ResumeSession({
         aria-label="Resume session"
         onCancel={() => setOpen(false)}
       >
-        <h2>Resume session</h2>
+        <button
+          type="button"
+          className="dialog-close"
+          aria-label="Close resume session"
+          onClick={() => setOpen(false)}
+        >
+          ×
+        </button>
+        <h2 tabIndex={-1}>Resume session</h2>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -505,9 +517,6 @@ export function ResumeSession({
           </label>
           <button type="submit" disabled={controller.busy || !session.resume.allowed}>
             Resume session
-          </button>
-          <button type="button" onClick={() => setOpen(false)}>
-            Cancel
           </button>
         </form>
       </dialog>

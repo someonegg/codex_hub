@@ -200,33 +200,37 @@
   font-size: var(--text-small);
   flex-shrink: 0;
 }
-.hub-sidebar-footer > a {
+.hub-sidebar-footer > a::before {
+  content: "";
+  display: inline-block;
+  height: 0.85em;
+  border-left: 1px solid var(--mist);
+  margin-right: 12px;
+  vertical-align: -0.05em;
+}
+.hub-sidebar-footer > a,
+.hub-sidebar-footer > button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
   flex-shrink: 0;
   color: var(--current);
   white-space: nowrap;
   text-decoration: none;
 }
 .hub-sidebar-footer > a:hover,
-.hub-sidebar-footer > a:focus-visible {
+.hub-sidebar-footer > a:focus-visible,
+.hub-sidebar-footer > button:hover,
+.hub-sidebar-footer > button:focus-visible {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-.hub-sidebar-footer > a:focus-visible {
+.hub-sidebar-footer > a:focus-visible,
+.hub-sidebar-footer > button:focus-visible {
   outline: none;
   text-decoration-thickness: 2px;
-}
-.theme-select {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-}
-.theme-select select {
-  min-height: 44px;
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
 }
 .hub-project a:hover {
   background: var(--hover-surface);

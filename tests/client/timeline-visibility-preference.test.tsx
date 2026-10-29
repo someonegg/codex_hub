@@ -1,6 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import { browserStorage } from "../../src/client/state/browser-storage";
 import {
   TIMELINE_VISIBILITY_STORAGE_KEY,
   useTimelineVisibility,
@@ -17,7 +18,7 @@ describe("timeline visibility preference", () => {
     act(() => first.result.current.setVisibility("token", true));
     act(() => first.result.current.setVisibility("internal", true));
 
-    expect(JSON.parse(sessionStorage.getItem(TIMELINE_VISIBILITY_STORAGE_KEY)!)).toEqual({
+    expect(JSON.parse(browserStorage.getItem(TIMELINE_VISIBILITY_STORAGE_KEY)!)).toEqual({
       directive: true,
       tools: true,
       token: true,
@@ -35,7 +36,7 @@ describe("timeline visibility preference", () => {
   });
 
   it("uses defaults for malformed and missing stored fields", () => {
-    sessionStorage.setItem(
+    browserStorage.setItem(
       TIMELINE_VISIBILITY_STORAGE_KEY,
       JSON.stringify({
         directive: true,
@@ -53,7 +54,7 @@ describe("timeline visibility preference", () => {
     });
     partial.unmount();
 
-    sessionStorage.setItem(TIMELINE_VISIBILITY_STORAGE_KEY, "{not-json");
+    browserStorage.setItem(TIMELINE_VISIBILITY_STORAGE_KEY, "{not-json");
     const malformed = renderHook(() => useTimelineVisibility());
     expect(malformed.result.current.visibility).toEqual({
       directive: false,

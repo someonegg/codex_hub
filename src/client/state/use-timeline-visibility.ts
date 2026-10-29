@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
 
+import { browserStorage } from "./browser-storage";
 import {
   DEFAULT_TIMELINE_VISIBILITY,
   type TimelineVisibility,
@@ -17,7 +18,7 @@ export function useTimelineVisibility() {
 
       const next = { ...current, [key]: visible };
       try {
-        sessionStorage.setItem(TIMELINE_VISIBILITY_STORAGE_KEY, JSON.stringify(next));
+        browserStorage.setItem(TIMELINE_VISIBILITY_STORAGE_KEY, JSON.stringify(next));
       } catch {
         // Storage can be unavailable in privacy modes; visibility still works in memory.
       }
@@ -31,7 +32,7 @@ export function useTimelineVisibility() {
 function readVisibility(): TimelineVisibility {
   try {
     const stored: unknown = JSON.parse(
-      sessionStorage.getItem(TIMELINE_VISIBILITY_STORAGE_KEY) ?? "null",
+      browserStorage.getItem(TIMELINE_VISIBILITY_STORAGE_KEY) ?? "null",
     );
     if (!isRecord(stored)) return { ...DEFAULT_TIMELINE_VISIBILITY };
 

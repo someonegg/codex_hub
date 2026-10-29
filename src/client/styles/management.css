@@ -7,7 +7,7 @@
 .create-session h2 {
   font-size: 1rem;
   font-weight: var(--weight-semibold);
-  margin-top: 0;
+  margin: 0 0 12px;
   min-height: 36px;
   padding-right: 44px;
 }
@@ -15,9 +15,14 @@
 .create-session h2[tabindex="-1"]:focus {
   outline: none;
 }
-.create-session form {
+.create-session form,
+.create-session .dialog-body,
+.settings-launch {
   display: grid;
-  gap: 0.8rem;
+  gap: 12px;
+}
+.create-session .check-row {
+  margin-top: 0;
 }
 .create-session label:not(.check-row) {
   display: grid;
@@ -284,4 +289,11 @@ dialog::backdrop {
   color: var(--ink);
   cursor: pointer;
   font-size: var(--text-control);
+}
+
+.settings-launch {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
 }

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { SessionListResponse } from "../../shared/api-contract";
 
+import { browserStorage } from "./browser-storage";
 import { projectForSession } from "./catalog-groups";
 
 const NAVIGATION_KEY = "ahub.navigation";
@@ -12,7 +13,7 @@ interface NavigationState {
 }
 function readNavigation(): NavigationState {
   try {
-    const value = JSON.parse(sessionStorage.getItem(NAVIGATION_KEY) ?? "null");
+    const value = JSON.parse(browserStorage.getItem(NAVIGATION_KEY) ?? "null");
     if (value && typeof value.includeArchived === "boolean" && Array.isArray(value.expanded))
       return value;
   } catch {
@@ -22,7 +23,7 @@ function readNavigation(): NavigationState {
 }
 function saveNavigation(navigation: NavigationState) {
   try {
-    sessionStorage.setItem(NAVIGATION_KEY, JSON.stringify(navigation));
+    browserStorage.setItem(NAVIGATION_KEY, JSON.stringify(navigation));
   } catch {
     /* Optional storage. */
   }
