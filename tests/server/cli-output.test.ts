@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
+
 import { output, outputFailure, singleLine } from "../../src/server/cli/output.js";
 
 afterEach(() => {
