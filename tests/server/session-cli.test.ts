@@ -71,14 +71,25 @@ it("uses explicit URL over the environment and filters by associated project", a
       revision: "private",
       projects: [{ id: "p", directory: "/project" }],
       sessions: [
-        { id: "yes", projectId: "p" },
+        { id: "yes", projectId: "p", title: "Title", status: "normal", updatedAt: null },
+        { id: "child", projectId: "p", isChild: true, parentId: "yes" },
+        { id: "orphan", projectId: "p", isChild: true, parentId: null },
         { id: "no", projectId: "q" },
       ],
     });
   });
   const result = await cli(["list", "--project", "/project", "--url", base, "--json"]);
   expect(result.code).toBe(0);
-  expect(JSON.parse(result.stdout).sessions).toEqual([{ id: "yes", projectId: "p" }]);
+  expect(JSON.parse(result.stdout).sessions).toEqual([
+    {
+      id: "yes",
+      title: "Title",
+      status: "normal",
+      home: null,
+      projectDirectory: "/project",
+      updatedAt: null,
+    },
+  ]);
   expect((await cli(["list", "--json"], "", { CODEX_HUB_URL: base })).code).toBe(0);
 });
 
@@ -255,4 +266,75 @@ it("renders human output and sends human diagnostics to stderr", async () => {
   expect(failure.code).toBe(1);
   expect(failure.stdout).toBe("");
   expect(failure.stderr).toContain("Unsupported key");
+});
+
+it("uses child IDs directly for queries, input and lifecycle operations without catalog requests", async () => {
+  const seen: string[] = [];
+  const base = await serve((req, res, body) => {
+    seen.push(`${req.method} ${req.url}`);
+    if (req.url?.includes("/inspect"))
+      reply(res, {
+        session: {
+          id: "child",
+          parentId: "parent",
+          childIds: [],
+          title: "Child",
+          nickname: null,
+          status: "normal",
+          origin: { sourceType: "codex", agentName: "Codex", sourceInstanceId: "private" },
+          resume: { allowed: true, reason: null },
+          workingDirectory: null,
+          projectDirectory: null,
+          createdAt: null,
+          updatedAt: null,
+        },
+        live: true,
+        interaction: {
+          supported: true,
+          state: "connected",
+          activity: "idle",
+          supersededBySessionId: null,
+          attachCommand: "private",
+        },
+        items: [],
+        nextAfter: 0,
+        hasMore: false,
+      });
+    else if (req.url?.endsWith("/terminal"))
+      reply(res, { content: "screen", truncated: false, capturedAt: "now", private: "private" });
+    else if (req.url === "/api/v1/sessions") {
+      expect(body.resumeSessionId).toBe("child");
+      reply(res, { status: "succeeded", sessionId: "child" });
+    } else reply(res, { status: "succeeded", sessionId: "child" });
+  });
+  for (const args of [
+    ["inspect", "child"],
+    ["terminal", "child"],
+    ["send", "child", "--message", "hello"],
+    ["keys", "child", "enter"],
+    ["interrupt", "child"],
+    ["handoff", "child"],
+    ["exit", "child"],
+    ["archive", "child"],
+    ["delete", "child"],
+    ["resume", "child"],
+  ]) {
+    const result = await cli([...args, "--url", base, "--json"]);
+    expect(result.code).toBe(0);
+    expect(result.stdout).not.toContain("private");
+    expect(result.stdout).not.toContain("parent");
+  }
+  expect(seen).toEqual([
+    "GET /api/v1/sessions/child/inspect",
+    "GET /api/v1/sessions/child/terminal",
+    "POST /api/v1/sessions/child/messages",
+    "POST /api/v1/sessions/child/keys",
+    "POST /api/v1/sessions/child/keys",
+    "POST /api/v1/sessions/child/handoff-pane-binding",
+    "POST /api/v1/sessions/child/exit",
+    "POST /api/v1/sessions/child/archive",
+    "DELETE /api/v1/sessions/child",
+    "POST /api/v1/sessions",
+    "GET /api/v1/sessions/child/inspect?limit=1",
+  ]);
 });

@@ -11,11 +11,17 @@ import {
   type SessionListResponse,
   type TerminalResponse,
 } from "../../shared/api-contract.js";
-import type { TimelineItem } from "../../shared/domain.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { commandFailure } from "./command-error.js";
-import { output, outputFailure, singleLine } from "./output.js";
+import { output, outputFailure } from "./output.js";
 import { SessionClient } from "./session-client.js";
+import {
+  type CliResult,
+  formatResult,
+  mapInspect,
+  mapList,
+  mapTerminal,
+} from "./session-output.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
@@ -118,20 +124,11 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     client = new SessionClient(base, abort.signal);
     const api = client.request;
     const path = `/api/v1/sessions/${encodeURIComponent(id ?? "")}`;
-    let result: unknown;
+    let result: CliResult;
     if (command === "list") {
       const list = await api<SessionListResponse>("/api/v1/sessions");
       const project = values.project === undefined ? undefined : resolve(values.project);
-      const projectIds = new Set(
-        list.projects.filter((entry) => entry.directory === project).map((entry) => entry.id),
-      );
-      result = {
-        sessions: list.sessions.filter(
-          (entry) => project === undefined || projectIds.has(entry.projectId!),
-        ),
-        projects: list.projects,
-        homes: list.homes,
-      };
+      result = mapList(list, project);
     } else if (command === "inspect") {
       const query = new URLSearchParams();
       for (const name of ["limit", "after"] as const) {
@@ -145,8 +142,9 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           throw new Error(`Invalid ${name}`);
         query.set(name, value);
       }
-      result = await api<InspectResponse>(`${path}/inspect?${query}`);
-    } else if (command === "terminal") result = await api(`${path}/terminal`);
+      result = mapInspect(await api<InspectResponse>(`${path}/inspect?${query}`));
+    } else if (command === "terminal")
+      result = mapTerminal(await api<TerminalResponse>(`${path}/terminal`));
     else if (["send", "keys", "interrupt", "handoff"].includes(command)) {
       if (command === "send") {
         const message = normalizeMessage(
@@ -160,7 +158,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           "POST",
           command === "interrupt" ? { keys: ["interrupt"] } : { keys, requireIdle: true },
         );
-      result = { sessionId: id, status: "sent" };
+      result = { sessionId: id!, status: "sent" };
     } else {
       const launch = command === "create" || command === "resume";
       let operationPath = command === "delete" ? path : `${path}/${command}`;
@@ -230,46 +228,4 @@ async function readStdin(signal: AbortSignal): Promise<string> {
     process.stdin.on("data", data).once("end", end).once("error", fail);
     signal.addEventListener("abort", stop, { once: true });
   });
-}
-
-function formatResult(command: string, result: unknown): string {
-  if (command === "terminal") {
-    const screen = result as TerminalResponse;
-    return `${screen.capturedAt}${screen.truncated ? " (truncated)" : ""}\n${screen.content}`;
-  }
-  if (command === "list") {
-    const list = result as SessionListResponse;
-    return [
-      "ID\tSTATUS\tHOME\tPROJECT\tTITLE",
-      ...(list.sessions.length ? [] : ["No sessions."]),
-      ...list.sessions.map((session) =>
-        [
-          session.id,
-          session.status,
-          list.homes.find((home) => home.sourceInstanceId === session.sourceInstanceId)?.nickname ??
-            "",
-          list.projects.find((project) => project.id === session.projectId)?.directory ?? "",
-          singleLine(session.title),
-        ].join("\t"),
-      ),
-    ].join("\n");
-  }
-  if (command === "inspect") {
-    const inspected = result as InspectResponse;
-    const state = inspected.interaction.supported
-      ? `${inspected.interaction.state} ${inspected.interaction.activity ?? ""}`
-      : "unsupported";
-    const header = `${inspected.session.id} ${inspected.session.status} ${state}`;
-    const items = inspected.items.map(formatTimelineItem).join("\n\n");
-    const pagination = `nextAfter=${inspected.nextAfter} hasMore=${inspected.hasMore} latestNumber=${inspected.latestNumber}`;
-    return `${header}\n${items}\n${pagination}`;
-  }
-  const operation = result as { sessionId: string; status: string };
-  return `${command} ${operation.sessionId}: ${operation.status}`;
-}
-
-function formatTimelineItem(item: TimelineItem): string {
-  if (item.kind !== "message") return `#${item.ordinal} ${item.kind}`;
-  const phase = item.itemType ?? item.phase ?? "";
-  return `#${item.ordinal} ${item.role} ${phase}\n${item.markdown}`;
 }
