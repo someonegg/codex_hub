@@ -11,14 +11,6 @@ npx @someonegg/codex-hub@latest
 打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止。
 安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex`，且仅监听本机。
 
-`ahub-cli` 默认输出便于阅读的文本，添加 `--json` 可获取结构化结果和错误。输出通道与错误码见 [CLI 输出约定](technical-reference.md#cli-output-contract)。
-
-`ahub-cli session list --project /path/to/project` 仅列出主会话，按关联项目过滤。
-显式指定任意会话 ID（包括子会话）时直接交由服务端处理。
-`ahub-cli session inspect <id>` 依次显示摘要、消息与结构化问答、分页信息；
-将 `Next after` 的值传给 `--after` 继续读取。文本和 `--json` 使用同一公开结果，
-不暴露内部关联字段；完整字段见[公开输出契约](technical-reference.md#public-session-cli-results)。
-
 ## 阅读与管理会话
 
 在侧边栏选择项目和会话。会话内容自动更新，勾选**已归档**可浏览归档会话。
@@ -37,7 +29,7 @@ npx @someonegg/codex-hub@latest
 ## 与 Codex 交互
 
 绿色**运行中**标记表示终端已连接。通过消息输入框发送提示，展开**终端预览**查看 CLI。
-点击**中断**，或在预览中按 **Esc** 中断执行。**工作中**和**空闲**反映终端输出，不表示任务是否完成。
+点击**中断**，或在预览中按 **Ctrl+C** 中断执行；按 **Esc** 收起预览。**工作中**和**空闲**反映终端输出，不表示任务是否完成。
 
 如果 Codex 通过 `/clear`、`/resume` 或执行计划在同一终端切换会话，在旧会话的已连接页面
 点击**移交绑定**。显示**已被替代**后点击**前往已绑定会话**；未发送的草稿保留在旧页面。
@@ -52,9 +44,10 @@ npx @someonegg/codex-hub@latest
 相机行为取决于浏览器，可能退回文件选择器。图片按原样上传，包括 EXIF 元数据，单个文件上限
 20 MiB；HEIC/HEIF 支持取决于智能体。拍照时会话若断开或正忙，请重新连接或稍后重试。
 
-点击会话标题区域的**上传记录**，浏览、预览、下载或删除上传文件，包括未发送文件和从草稿移除的文件。
-删除文件也会将其从当前草稿移除。附件删除和清理尽力执行；删除会话触发后台清理，归档与退出保留附件。
-[查看上传记录截图](images/zh-CN/ahub-uploads.png)。
+点击会话标题区域的**上传记录**，预览、下载或删除上传文件，包括未发送文件和从草稿移除的文件。
+删除文件也会将其从当前草稿移除。[查看上传记录截图](images/zh-CN/ahub-uploads.png)。
+
+删除会话会请求后台清理上传文件，归档与退出保留附件。清理失败时，可从 Hub 数据目录删除残留文件。
 
 上传文件保存在 [Hub 数据目录](#服务器选项)的 `uploads/` 下，智能体必须能访问此目录。
 API 与存储保证见[技术参考（英文）](technical-reference.md#file-uploads)。
@@ -64,8 +57,49 @@ API 与存储保证见[技术参考（英文）](technical-reference.md#file-upl
 在侧边栏底部打开**设置**，选择语言、主题、新会话默认 Home，以及默认 worktree 和 YOLO 选项。
 修改自动保存在当前浏览器。YOLO 默认值也用于恢复会话，启动对话框可覆盖默认值。
 
-界面默认英文；选择 **Language → 简体中文 / 繁體中文** 后立即生效，不需要刷新，同源标签页同步更新。
+默认使用 **Shift+Enter** 发送、**Enter** 换行。在设置中开启 **Enter 发送** 后，改为 **Enter** 发送、**Shift+Enter** 换行。
+不含参数或附件的单独斜杠命令（如 `/help`）也可直接按 **Enter** 发送。
+
+界面默认英文；选择 **Language → 简体中文 / 繁體中文** 后立即生效，不需要刷新，其他已打开的 Hub 标签页同步更新。
 语言仅影响 Hub 界面及日期、数字显示，不翻译会话原文、终端输出、文件名、路径或命令。
+
+## 管理 CLI
+
+`codex-hub` 启动服务器；`ahub-cli` 提供 `page`、`diff` 和 `session` 命令。
+无需全局安装即可运行：
+
+```sh
+npx --package=@someonegg/codex-hub@latest ahub-cli --help
+```
+
+`ahub-cli` 默认输出便于阅读的文本，添加 `--json` 可获取结构化结果和错误。输出通道与错误码见 [CLI 输出约定](technical-reference.md#cli-output-contract)。
+
+### 会话
+
+先启动 Hub，再从另一终端运行会话命令：
+
+```sh
+ahub-cli session list --project /path/to/project
+ahub-cli session send <id> --message "Explain the failing tests"
+ahub-cli session inspect <id>
+```
+
+使用 `list` 返回的 ID 发送输入或查看会话。`list` 列出主会话，`inspect` 也接受子会话 ID。
+将返回的 `Next after` 值传给 `--after <value>` 继续读取下一页。
+使用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端。
+终端切换会话后，用 `handoff <id>` 移交绑定。
+
+创建、恢复、退出、归档等命令见 `ahub-cli session --help`。创建支持 `--home`、`--worktree`
+和 `--yolo`；恢复保留原 Home，支持 `--yolo`。省略 `--home` 时选择第一个已配置 Home。
+删除前必须先归档会话。
+
+会话命令默认连接 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
+HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默认的 360 秒超时。
+
+创建和恢复等待终端已连接且空闲；发送输入和普通按键要求空闲。输入或 `handoff` 成功仅表示
+已发送，不代表任务完成。超时或退出码为 `2`（写入结果不明）时，先用 `list`、`inspect`
+或 `terminal` 核查，再决定是否重试。停止客户端不会取消已提交操作。
+输出字段、退出码与失败语义见 [CLI 参考（英文）](technical-reference.md#session-cli-and-observation)。
 
 ## 多个 Home
 

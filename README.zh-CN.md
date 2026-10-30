@@ -25,9 +25,6 @@
 - 支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force` 的 Codex CLI
 - tmux，用于创建会话和交互
 
-请使用所选 Node.js 版本系列的最新安全补丁。开发与完整检查需要 Node.js
-`^22.22.2 || ^24.15.0 || >=26.0.0`，参见[开发指南（英文）](docs/development.md)。
-
 无需全局安装即可试用：
 
 ```sh
@@ -44,27 +41,9 @@ codex-hub
 打开 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止服务器。
 界面默认英文，在侧边栏底部打开 **Settings → Language → 简体中文 / 繁體中文** 即可切换；选择保存在当前浏览器。
 
-指定其他 Codex Home 或端口：
+Home、端口与可选网页／差异托管配置见[使用与配置](docs/usage.zh-CN.md)。
 
-```sh
-codex-hub --codex-home 'personal=/path/to/codex-home' --port 4180
-```
-
-使用多个 Codex Home：
-
-```sh
-codex-hub \
-  --codex-home 'personal=~/.codex' \
-  --codex-home 'work=/path/to/codex-work'
-```
-
-详见[多个 Home](docs/usage.zh-CN.md#多个-home)。如需托管静态网页或审阅差异，启用可选托管功能：
-
-```sh
-codex-hub --hosting
-```
-
-详见[发布资源](docs/usage.zh-CN.md#发布资源)。升级时再次执行
+升级时再次执行
 `npm install -g @someonegg/codex-hub@latest`。从源码运行请参阅[开发指南（英文）](docs/development.md)。
 
 ## 功能
@@ -91,7 +70,7 @@ codex-hub --hosting
 ### 终端预览
 
 展开**终端预览**跟进实时 CLI。使用屏幕按钮，或聚焦预览后按方向键及 **Enter**，处理 CLI 提示。
-按 **Esc** 或点击**中断**可中断执行。**工作中**与**空闲**仅反映近期终端输出，不代表任务完成。
+按 **Ctrl+C** 或点击**中断**可中断执行；**Esc** 收起预览。**工作中**与**空闲**仅反映近期终端输出，不代表任务完成。
 
 ### 移交绑定后继续
 
