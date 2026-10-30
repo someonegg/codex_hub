@@ -156,7 +156,7 @@ updates while preserving reading position.
 
 All `ahub-cli` business commands default to human-readable stdout; diagnostics go to stderr. `--json` emits one compact JSON result or `{ "error": { "code": "...", "message": "..." } }` on stdout, followed by a newline. Help is always text.
 
-Existing success payloads and session exit codes are preserved. Resource and dispatch failures exit with code 1; `invalid_arguments` identifies argument parsing, validation, and dispatch errors, and `command_failed` identifies other resource failures.
+Resource and dispatch failures exit with code 1; `invalid_arguments` identifies argument parsing, validation, and dispatch errors, and `command_failed` identifies other resource failures.
 
 ### Client behavior and results
 
@@ -190,6 +190,54 @@ unknown backend results never cause mutation resubmission or backend cancellatio
 Users can issue list, inspect, or terminal queries to assess actual state. The CLI
 adds no confirmation prompt; exit, archive, and delete retain the existing
 [validation and confirmation rules](#execution-and-confirmation).
+
+### Public session CLI results
+
+Session CLI types are independent of HTTP API types. Both text and JSON are
+produced from explicit field-whitelist mappings; extra server properties are
+never passed through. Launch readiness still uses the original API `live` and
+interaction state, before public output mapping.
+
+- `list`: `{ sessions }`, excluding every `isChild` session, including orphans.
+  Each entry contains only `id`, `title`, `status`, `home`, `projectDirectory`,
+  and `updatedAt`. `home` resolves the Home nickname and `projectDirectory`
+  resolves the associated project directory; missing associations become null.
+  `--project` filters by this directory. Association tables, keys and hierarchy
+  are omitted.
+- `inspect`: `{ session, interaction, items, nextAfter, hasMore }`.
+  `session` contains only `id`, `title`, `nickname`, `status`, `home`,
+  `sourceType`, `agentName`, `workingDirectory`, `projectDirectory`, `createdAt`,
+  `updatedAt`, and `resume: { allowed, reason }`. Nullable metadata remains null.
+  `home` is null because the inspect API supplies no Home nickname; the client
+  does not request the catalog to resolve it. Native IDs, hierarchy, agent
+  identity details, versions and counts are omitted.
+- `interaction`: `{ supported: false }` or
+  `{ supported: true, state, activity, supersededBySessionId }`. No attach command
+  is exposed. Null activity is rendered as `unknown`, never idle.
+- `items`: only message and structured user-input records. All contain `id`,
+  `ordinal`, `timestamp`, and `kind`. Messages contain `role`, `phase`, `itemType`,
+  and `markdown`. User input contains `stage` and `callId`: requests include
+  `questions: [{ id, header, question, options: [{ label, description }] }]`;
+  answered responses include `outcome: "answered"` and
+  `answers: [{ questionId, answers: string[] }]`; aborted responses contain
+  `outcome: "aborted"`; unavailable responses contain `outcome: "unavailable"`
+  and `summary`. Other record kinds and additional nested properties are omitted.
+- `terminal`: `{ content, truncated, capturedAt }`.
+- Input and handoff results: `{ sessionId, status: "sent" }`. Lifecycle results:
+  `{ sessionId, status: "succeeded" }`.
+
+Explicit IDs go straight to the normal server endpoint, including child IDs;
+there is no catalog preflight, child check or parent redirection.
+
+Inspect text has a labeled session summary, numbered history blocks, then
+`Next after` and `Has more: yes|no`. English labels leave user content in its
+original language. Summary and table fields replace newlines and tabs with
+spaces; message Markdown and line breaks are preserved. Questions show each
+prompt and numbered options. Answers match headers by `callId` and question ID
+within the page, falling back to question IDs. Cancelled and unavailable outcomes
+are explicit, including the unavailable explanation. Empty history reads
+`No visible items.`; unsupported interaction reads `Interaction: unsupported`.
+List retains its table; terminal and operation confirmations remain concise.
 
 ### Inspect and numbered pagination
 

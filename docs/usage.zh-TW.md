@@ -13,6 +13,12 @@ npx @someonegg/codex-hub@latest
 
 `ahub-cli` 預設輸出便於閱讀的文字，加入 `--json` 可取得結構化結果和錯誤。輸出通道與錯誤碼見 [CLI 輸出約定](technical-reference.md#cli-output-contract)。
 
+`ahub-cli session list --project /path/to/project` 僅列出主工作階段，依關聯專案篩選。
+明確指定任意工作階段 ID（包括子工作階段）時直接交由伺服器處理。
+`ahub-cli session inspect <id>` 依序顯示摘要、訊息與結構化問答、分頁資訊；
+將 `Next after` 的值傳給 `--after` 繼續讀取。文字與 `--json` 使用相同公開結果，
+不暴露內部關聯欄位；完整欄位見[公開輸出契約](technical-reference.md#public-session-cli-results)。
+
 ## 閱讀與管理工作階段
 
 在側邊欄選擇專案和工作階段。工作階段內容自動更新，勾選**已封存**可瀏覽封存工作階段。

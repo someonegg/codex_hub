@@ -13,6 +13,12 @@ npx @someonegg/codex-hub@latest
 
 `ahub-cli` 默认输出便于阅读的文本，添加 `--json` 可获取结构化结果和错误。输出通道与错误码见 [CLI 输出约定](technical-reference.md#cli-output-contract)。
 
+`ahub-cli session list --project /path/to/project` 仅列出主会话，按关联项目过滤。
+显式指定任意会话 ID（包括子会话）时直接交由服务端处理。
+`ahub-cli session inspect <id>` 依次显示摘要、消息与结构化问答、分页信息；
+将 `Next after` 的值传给 `--after` 继续读取。文本和 `--json` 使用同一公开结果，
+不暴露内部关联字段；完整字段见[公开输出契约](technical-reference.md#public-session-cli-results)。
+
 ## 阅读与管理会话
 
 在侧边栏选择项目和会话。会话内容自动更新，勾选**已归档**可浏览归档会话。

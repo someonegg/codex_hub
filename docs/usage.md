@@ -43,6 +43,13 @@ ahub-cli session archive <id>
 ahub-cli session delete <id>
 ```
 
+`list` shows top-level sessions only and filters by associated project. Explicit
+session IDs, including child sessions, go directly to the server. `inspect` shows
+a session summary, messages and structured questions/answers, then pagination;
+pass `Next after` to `--after` for the next page. JSON uses the same public results,
+with resolved Home/project labels and no internal association fields. See the
+[public session output schema](technical-reference.md#public-session-cli-results).
+
 Use `send <id> --stdin` for piped input, and `handoff <id>` after a terminal
 switches sessions. Create accepts `--worktree` and `--yolo`; resume accepts
 `--yolo` and keeps the original home. Omitting `--home` selects the first
