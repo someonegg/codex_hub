@@ -4,6 +4,9 @@ import type { AddressInfo } from "node:net";
 
 import { afterEach, expect, it } from "vitest";
 
+import { CommandError } from "../../src/server/cli/command-error.js";
+import { parseSessionArguments } from "../../src/server/cli/session.js";
+
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => {
   await Promise.all(
@@ -63,16 +66,46 @@ it.each([
   ["inspect", "id", "--limit", "301"],
   ["list", "--url", "https://example.com"],
   ["list", "--timeout", "0"],
-])("rejects invalid arguments before submission: %j", async (...args) => {
+])("rejects invalid session arguments: %j", (...args) => {
+  expect(() => parseSessionArguments(args)).toThrow(CommandError);
+  expect(() => parseSessionArguments(args)).toThrow(
+    expect.objectContaining({ code: "invalid_arguments" }),
+  );
+});
+
+it.each([true, false])("wires invalid arguments without requests (json=%s)", async (json) => {
   let requests = 0;
   const base = await serve((_req, res) => {
     requests++;
     res.end();
   });
-  const result = await cli([...args, "--json"], "", { CODEX_HUB_URL: base });
+  const result = await cli(["list", "extra", ...(json ? ["--json"] : [])], "", {
+    CODEX_HUB_URL: base,
+  });
   expect(result.code).toBe(1);
-  expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
   expect(requests).toBe(0);
+  if (json) {
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
+  } else {
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("Invalid session command arguments");
+  }
+});
+it("parses valid session options and help without I/O", () => {
+  const parsed = parseSessionArguments(
+    ["inspect", "opaque-native-id", "--limit", "300", "--after", "0"],
+    "http://localhost:4173",
+  );
+  expect(parsed).toMatchObject({
+    help: false,
+    command: "inspect",
+    id: "opaque-native-id",
+    seconds: 360,
+    values: { limit: "300", after: "0" },
+  });
+  expect(parsed.help ? undefined : parsed.base.origin).toBe("http://localhost:4173");
+  expect(parseSessionArguments(["--help", "unknown"]).help).toBe(true);
 });
 
 it("uses explicit URL over the environment and filters by associated project", async () => {

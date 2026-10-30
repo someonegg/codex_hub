@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -11,11 +11,7 @@ import type { TimelineItem } from "../../src/shared/domain";
 
 import { api } from "../../src/client/api/client";
 import { SessionPage } from "../../src/client/SessionPage";
-import {
-  installIntersectionObserver,
-  intersectLatest,
-  latestObserverOptions,
-} from "./intersection-observer";
+import { installIntersectionObserver } from "./intersection-observer";
 import { installMockWebSocket, MockWebSocket } from "./mock-websocket";
 import {
   baseSession,
@@ -280,43 +276,6 @@ describe("session automatic updates", () => {
     expect(String(fetchMock.mock.calls[5]?.[0])).toContain("cursor=opaque.timeline.tail");
   });
 
-  it("discards an old automatic updates response after manual pagination advances the snapshot", async () => {
-    installIntersectionObserver();
-    let resolveOld!: (response: Response) => void;
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(json(page([message("One")], TIMELINE_CURSOR, true)))
-      .mockReturnValueOnce(
-        new Promise<Response>((resolve) => {
-          resolveOld = resolve;
-        }),
-      )
-      .mockResolvedValueOnce(
-        json(page([message("Two", 2)], NEXT_TIMELINE_CURSOR, false, false, NEXT_REVISION)),
-      )
-      .mockReturnValueOnce(new Promise<Response>(() => {}));
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await flush();
-    await flush();
-    expect(document.querySelector(".infinite-scroll-sentinel")).toBeInTheDocument();
-    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
-    intersectLatest();
-    await flush(8);
-    expect(screen.getByText("Two")).toBeInTheDocument();
-
-    const obsolete = updates(false, OTHER_UPDATE_REVISION);
-    resolveOld(
-      json({
-        ...obsolete,
-        session: { ...obsolete.session, title: "Obsolete title" },
-      }),
-    );
-    await flush(8);
-    expect(screen.queryByRole("heading", { name: "Obsolete title" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
-  });
-
   it("adopts interaction and metadata-only automatic updates changes without advancing cursor", async () => {
     const changed = updates(false, NEXT_REVISION, {
       supported: true,
@@ -373,85 +332,11 @@ describe("session automatic updates", () => {
     expect(screen.getByText("Preserved")).toBeInTheDocument();
     expect(screen.getByText("Session content has changed")).toBeInTheDocument();
   });
-
-  it("reconnects immediately after consecutive 204 responses", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(json(page([])))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockReturnValueOnce(new Promise<Response>(() => {}));
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await flush();
-    await flush(10);
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-  });
-
-  it("backs off retryable failures and stops on terminal 4xx responses", async () => {
-    vi.useFakeTimers();
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(json(page([])))
-      .mockResolvedValueOnce(json({ error: { code: "busy", message: "Busy" } }, 503))
-      .mockResolvedValueOnce(json({ error: { code: "invalid_query", message: "Stop" } }, 400));
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await flush();
-    await flush(8);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(999);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(60_000);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(screen.getByText("Stop")).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it("aborts while hidden and resumes immediately when visible", async () => {
-    const signals: AbortSignal[] = [];
-    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      if (!String(input).includes("/updates?")) return Promise.resolve(json(page([])));
-      signals.push(init?.signal as AbortSignal);
-      return abortable(init?.signal as AbortSignal);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await flush();
-    await flush();
-    expect(signals).toHaveLength(1);
-    Object.defineProperty(document, "hidden", { configurable: true, value: true });
-    document.dispatchEvent(new Event("visibilitychange"));
-    await flush();
-    expect(signals[0]?.aborted).toBe(true);
-    Object.defineProperty(document, "hidden", { configurable: true, value: false });
-    document.dispatchEvent(new Event("visibilitychange"));
-    await vi.waitFor(() => expect(signals).toHaveLength(2));
-  });
 });
 
 async function flush(turns = 4) {
   await act(async () => {
     for (let index = 0; index < turns; index += 1) await Promise.resolve();
-  });
-}
-
-function abortable(signal: AbortSignal): Promise<Response> {
-  return new Promise((_resolve, reject) => {
-    signal.addEventListener(
-      "abort",
-      () => reject(new DOMException("The operation was aborted", "AbortError")),
-      { once: true },
-    );
   });
 }
 

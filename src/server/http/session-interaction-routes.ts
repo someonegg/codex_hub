@@ -65,39 +65,13 @@ export function createSessionInteractionRoutes(
         return noContent(response);
       }
       if (operation === "messages") {
-        const body = await readJsonObject(request);
-        if (
-          Object.keys(body).some((key) => !["message", "requireIdle"].includes(key)) ||
-          typeof body.message !== "string" ||
-          (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
-        ) {
-          invalidBody("body must contain only a string message field");
-        }
-        normalizeMessage(body.message);
+        const body = parseMessageBody(await readJsonObject(request));
         if (body.requireIdle === undefined) await interaction.sendMessage(id, body.message);
         else await interaction.sendMessage(id, body.message, body.requireIdle);
         return noContent(response);
       }
       if (operation === "keys") {
-        const body = await readJsonObject(request);
-        if (
-          Object.keys(body).some((key) => !["keys", "requireIdle"].includes(key)) ||
-          !Array.isArray(body.keys) ||
-          (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
-        ) {
-          invalidBody("body must contain only a keys array");
-        }
-        if (
-          body.keys.length === 0 ||
-          body.keys.length > MAX_INTERACTION_KEY_SEQUENCE_LENGTH ||
-          !body.keys.every(isInteractionKey)
-        ) {
-          invalidBody(
-            `keys must contain 1-${MAX_INTERACTION_KEY_SEQUENCE_LENGTH} supported interaction keys`,
-          );
-        }
-        if (body.requireIdle === true && body.keys.includes("interrupt"))
-          invalidBody("interrupt cannot require idle");
+        const body = parseKeysBody(await readJsonObject(request));
         if (body.requireIdle === undefined) await interaction.sendKeys(id, body.keys);
         else await interaction.sendKeys(id, body.keys, body.requireIdle);
         return noContent(response);
@@ -163,4 +137,46 @@ function interactionUnavailable(response: ServerResponse): true {
     },
   });
   return true;
+}
+
+export function parseMessageBody(body: Record<string, unknown>): {
+  message: string;
+  requireIdle?: boolean;
+} {
+  if (
+    Object.keys(body).some((key) => !["message", "requireIdle"].includes(key)) ||
+    typeof body.message !== "string" ||
+    (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
+  ) {
+    invalidBody("body must contain only a string message field");
+  }
+  normalizeMessage(body.message);
+
+  return body as { message: string; requireIdle?: boolean };
+}
+
+export function parseKeysBody(body: Record<string, unknown>): {
+  keys: InteractionKey[];
+  requireIdle?: boolean;
+} {
+  if (
+    Object.keys(body).some((key) => !["keys", "requireIdle"].includes(key)) ||
+    !Array.isArray(body.keys) ||
+    (body.requireIdle !== undefined && typeof body.requireIdle !== "boolean")
+  ) {
+    invalidBody("body must contain only a keys array");
+  }
+  if (
+    body.keys.length === 0 ||
+    body.keys.length > MAX_INTERACTION_KEY_SEQUENCE_LENGTH ||
+    !body.keys.every(isInteractionKey)
+  ) {
+    invalidBody(
+      `keys must contain 1-${MAX_INTERACTION_KEY_SEQUENCE_LENGTH} supported interaction keys`,
+    );
+  }
+  if (body.requireIdle === true && body.keys.includes("interrupt"))
+    invalidBody("interrupt cannot require idle");
+
+  return body as { keys: InteractionKey[]; requireIdle?: boolean };
 }

@@ -25,40 +25,16 @@ export async function runResourceCommand(
   action: string | undefined,
   args: string[],
 ): Promise<void> {
-  const { values, positionals } = parseResourceArgs(args);
-  if (values.help || action === "--help" || action === undefined) {
+  const { values, positionals, help } = parseResourceArguments(resource, action, args);
+  if (help) {
     console.log(resourceHelp(resource));
     return;
-  }
-  if (
-    !["publish", "list", "delete"].includes(action) ||
-    positionals.length !== (action === "list" ? 0 : 1)
-  )
-    throw new CommandError(
-      "invalid_arguments",
-      "Expected page/diff publish <source>, list, or delete <id>",
-    );
-  const allowed = new Set(["home-dir", "json", "help"]);
-  if (action === "publish") {
-    allowed.add("title");
-    if (resource === "page") {
-      allowed.add("project");
-      allowed.add("name");
-    }
-  }
-  for (const option of Object.keys(values)) {
-    if (!allowed.has(option))
-      throw new CommandError(
-        "invalid_arguments",
-        `Option --${option} is not supported for ${resource} ${action}`,
-      );
   }
   const directory = join(resolveHomeDirectory(values["home-dir"]), "hosting");
   const pages = new HostingStore(directory);
   const diffs = new DiffStore(directory);
   if (action === "publish") {
-    if (resource === "page" && !values.project)
-      throw new CommandError("invalid_arguments", "page publish requires --project");
+    validateResourcePublish(resource, values.project);
     const entry =
       resource === "page"
         ? await pages.publish(positionals[0], values.project!, values.name, values.title)
@@ -119,4 +95,44 @@ function parseResourceArgs(args: string[]) {
       error instanceof Error ? error.message : "Invalid arguments",
     );
   }
+}
+
+export function parseResourceArguments(
+  resource: string,
+  action: string | undefined,
+  args: string[],
+) {
+  const { values, positionals } = parseResourceArgs(args);
+  if (values.help || action === "--help" || action === undefined) {
+    return { values, positionals, help: true as const };
+  }
+  if (
+    !["publish", "list", "delete"].includes(action) ||
+    positionals.length !== (action === "list" ? 0 : 1)
+  )
+    throw new CommandError(
+      "invalid_arguments",
+      "Expected page/diff publish <source>, list, or delete <id>",
+    );
+  const allowed = new Set(["home-dir", "json", "help"]);
+  if (action === "publish") {
+    allowed.add("title");
+    if (resource === "page") {
+      allowed.add("project");
+      allowed.add("name");
+    }
+  }
+  for (const option of Object.keys(values)) {
+    if (!allowed.has(option))
+      throw new CommandError(
+        "invalid_arguments",
+        `Option --${option} is not supported for ${resource} ${action}`,
+      );
+  }
+  return { values, positionals, help: false as const };
+}
+
+export function validateResourcePublish(resource: string, project: string | undefined): void {
+  if (resource === "page" && !project)
+    throw new CommandError("invalid_arguments", "page publish requires --project");
 }

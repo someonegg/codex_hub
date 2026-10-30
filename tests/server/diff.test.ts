@@ -234,3 +234,8 @@ it("serves pages and deletes resources without loading diff bodies", async () =>
   expect(await store.exists(entry.id)).toBe(false);
   expect(await store.exists("../invalid")).toBe(false);
 });
+
+it("rejects a directory as the diff source", async () => {
+  const { root, store } = await fixture();
+  await expect(store.publish(root)).rejects.toThrow("Diff source must be a regular file");
+});

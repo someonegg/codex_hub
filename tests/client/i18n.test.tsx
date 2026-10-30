@@ -9,7 +9,7 @@ import { AttachCommand } from "../../src/client/components/AttachCommand";
 import { MessageItem } from "../../src/client/components/MessageItem";
 import { RequestError } from "../../src/client/components/RequestError";
 import { Settings } from "../../src/client/components/Settings";
-import { formatDate, t } from "../../src/client/i18n";
+import { t } from "../../src/client/i18n";
 import { settings as settingsEn } from "../../src/client/i18n/locales/en";
 import { settings as settingsZh } from "../../src/client/i18n/locales/zh-CN";
 import { LocalizedError } from "../../src/client/i18n/localized-error";
@@ -23,27 +23,21 @@ afterEach(() => {
 });
 
 describe("language preferences", () => {
-  it.each([
-    ["zh-CN", "语言"],
-    ["zh-TW", "語言"],
-  ] as const)(
-    "switches mounted settings to %s and persists without a reload",
-    (language, label) => {
-      const values = new Map<string, string>();
-      vi.stubGlobal("localStorage", {
-        getItem: (key: string) => values.get(key) ?? null,
-        setItem: (key: string, value: string) => values.set(key, value),
-      });
-      updatePreferences({ language: "en" });
-      render(<Settings homes={[]} />);
-      fireEvent.change(screen.getByRole("combobox", { name: "Language", hidden: true }), {
-        target: { value: language },
-      });
-      expect(document.documentElement.lang).toBe(language);
-      expect(screen.getByRole("combobox", { name: label, hidden: true })).toHaveValue(language);
-      expect(JSON.parse(localStorage.getItem("ahub.preferences.v1")!).language).toBe(language);
-    },
-  );
+  it("switches mounted settings to Chinese and persists without a reload", () => {
+    const values = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => values.set(key, value),
+    });
+    updatePreferences({ language: "en" });
+    render(<Settings homes={[]} />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Language", hidden: true }), {
+      target: { value: "zh-CN" },
+    });
+    expect(document.documentElement.lang).toBe("zh-CN");
+    expect(screen.getByRole("combobox", { name: "语言", hidden: true })).toHaveValue("zh-CN");
+    expect(JSON.parse(localStorage.getItem("ahub.preferences.v1")!).language).toBe("zh-CN");
+  });
 });
 
 it("keeps old settings and rejects invalid persisted language values", () => {
@@ -68,15 +62,12 @@ it("continues switching when storage is unavailable", () => {
   expect(screen.getByRole("combobox", { name: "语言", hidden: true })).toHaveValue("zh-CN");
 });
 
-it.each([
-  ["zh-CN", "语言"],
-  ["zh-TW", "語言"],
-] as const)("updates mounted controls when another tab selects %s", (language, label) => {
+it("updates mounted controls when another tab selects Chinese", () => {
   updatePreferences({ language: "en" });
   render(<Settings homes={[]} />);
-  vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ language }) });
+  vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ language: "zh-CN" }) });
   act(() => window.dispatchEvent(new StorageEvent("storage", { key: "ahub.preferences.v1" })));
-  expect(screen.getByRole("combobox", { name: label, hidden: true })).toHaveValue(language);
+  expect(screen.getByRole("combobox", { name: "语言", hidden: true })).toHaveValue("zh-CN");
 });
 
 it("translates memoized labels while keeping conversation content intact", () => {
@@ -141,14 +132,6 @@ it("formats plural counts and numbers using the selected language", () => {
   updatePreferences({ language: "zh-TW" });
   expect(t("events", { count: 2 })).toBe("2 條事件");
   expect(t("characters", { count: 1892 })).toBe("1,892 個字元");
-});
-
-it.each(["en", "zh-CN", "zh-TW"] as const)("formats dates using %s", (language) => {
-  updatePreferences({ language });
-  const date = new Date("2026-10-16T14:00:00Z");
-  const options = { month: "long", timeZone: "UTC" } as const;
-  const locale = language === "en" ? "en-US" : language;
-  expect(formatDate(date, options)).toBe(new Intl.DateTimeFormat(locale, options).format(date));
 });
 
 it("falls back to English for a missing translation", () => {

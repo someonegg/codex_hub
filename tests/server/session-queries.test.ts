@@ -8,6 +8,7 @@ import type {
 import type { CatalogSnapshot } from "../../src/server/repository/catalog-snapshot-store.js";
 import {
   MAX_ITEM_PAGE_BYTES,
+  RepositoryQueryError,
   SessionQueries,
 } from "../../src/server/repository/session-queries.js";
 import { deriveTimelinePrefixIndex } from "../../src/server/repository/timeline-prefix-index.js";
@@ -331,4 +332,48 @@ it("inspect latest byte pagination follows through hidden gaps and oversized rec
   }
   expect(collected).toEqual([timeline[1], timeline[3], timeline[4]]);
   expect(page.nextAfter).toBe(20);
+});
+
+it("defaults to 100 items and accepts the maximum page length", () => {
+  const queries = new SessionQueries();
+  const state = snapshot(normalized(Array.from({ length: 301 }, (_, index) => message(index))));
+  expect(queries.items(state, session.id, {})!.items).toHaveLength(100);
+  const maximum = queries.items(state, session.id, { limit: 300 })!;
+  expect(maximum.items).toHaveLength(300);
+  expect(maximum.context.hasMore).toBe(true);
+  expect(queries.items(state, session.id, { cursor: maximum.context.cursor })!.items).toEqual([
+    message(300),
+  ]);
+});
+
+it.each([0, 301, 1.5, NaN])("rejects invalid item limit %s", (limit) => {
+  const queries = new SessionQueries();
+  expect(() => queries.items(snapshot(normalized([])), session.id, { limit })).toThrow(
+    RepositoryQueryError,
+  );
+  expect(() => queries.items(snapshot(normalized([])), session.id, { limit })).toThrow(
+    expect.objectContaining({ code: "invalid_query" }),
+  );
+});
+
+it("fills byte-bounded pages and reads every long UTF-8 message exactly once", () => {
+  const queries = new SessionQueries();
+  const timeline = Array.from({ length: 10 }, (_, index) => ({
+    ...message(index),
+    markdown: "界".repeat(333_333),
+  }));
+  const state = snapshot(normalized(timeline));
+  const first = queries.items(state, session.id, { limit: 200 })!;
+  const second = queries.items(state, session.id, { limit: 200, cursor: first.context.cursor })!;
+  const last = queries.items(state, session.id, { limit: 200, cursor: second.context.cursor })!;
+  expect(first.items).toHaveLength(4);
+  expect(second.items).toHaveLength(4);
+  expect(last.items).toHaveLength(2);
+  expect(first.context.hasMore).toBe(true);
+  expect(second.context.hasMore).toBe(true);
+  expect(last.context.hasMore).toBe(false);
+  expect(Buffer.byteLength(JSON.stringify(first.items))).toBeLessThanOrEqual(
+    MAX_ITEM_PAGE_BYTES + 2,
+  );
+  expect([...first.items, ...second.items, ...last.items]).toEqual(timeline);
 });

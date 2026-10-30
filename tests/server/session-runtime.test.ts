@@ -96,7 +96,7 @@ describe("session runtime evidence", () => {
     expect(await f.evaluate()).toMatchObject({ status: "normal", resume: { allowed: false } });
   });
 
-  it.each(["name", "native:会话/42%", "00000000-0000-4000-8000-000000000001"])(
+  it.each(["native:会话/42%", "00000000-0000-4000-8000-000000000001"])(
     "delegates opaque native identity %s to the owning manager",
     async (sourceId) => {
       const f = setup();

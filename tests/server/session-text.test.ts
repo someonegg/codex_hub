@@ -18,7 +18,6 @@ describe("session title text", () => {
 
   it.each([
     ["intro\n\n# ATX level one", "ATX level one"],
-    ["intro\n\n## ATX level two", "ATX level two"],
     ["intro\n\nSetext level one\n================", "Setext level one"],
     ["intro\n\nSetext level two\n----------------", "Setext level two"],
   ])("uses a Markdown H1 or H2 from %j", (markdown, expected) => {

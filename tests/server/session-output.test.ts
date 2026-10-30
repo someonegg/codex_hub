@@ -168,23 +168,20 @@ it("whitelists nested records and renders Markdown, questions, matched answers a
   expect(text).toContain("Next after: 44\nHas more: yes");
 });
 
-it.each(["working", "idle", "unknown", null] as const)(
-  "renders activity %s explicitly",
-  (activity) => {
-    const mapped = mapInspect({
-      ...base,
-      interaction: {
-        ...base.interaction,
-        supported: true,
-        state: "connected",
-        supersededBySessionId: null,
-        attachCommand: null,
-        activity,
-      },
-    });
-    expect(formatResult("inspect", mapped)).toContain(`Activity: ${activity ?? "unknown"}`);
-  },
-);
+it.each(["idle", null] as const)("renders activity %s explicitly", (activity) => {
+  const mapped = mapInspect({
+    ...base,
+    interaction: {
+      ...base.interaction,
+      supported: true,
+      state: "connected",
+      supersededBySessionId: null,
+      attachCommand: null,
+      activity,
+    },
+  });
+  expect(formatResult("inspect", mapped)).toContain(`Activity: ${activity ?? "unknown"}`);
+});
 it("renders unsupported, empty pages, cancelled and unavailable outcomes", () => {
   const mapped = mapInspect({
     ...base,

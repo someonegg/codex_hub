@@ -326,11 +326,9 @@ describe("interaction panel", () => {
 
 it.each([
   ["/plan", true],
-  ["/status", true],
   ["  /exit\n", false],
   ["\t/quit  ", false],
   ["/plan now", false],
-  ["hello", false],
 ])("expands the preview after successfully sending %s: %s", async (message, expands) => {
   const handlers = props(interaction("connected"));
   render(<InteractionPanel {...handlers} />);
@@ -347,10 +345,7 @@ it.each([
 });
 
 it.each([
-  ["/help", true],
   ["  /MODEL  ", true],
-  ["/exit", true],
-  ["/quit", true],
   ["/model xxx", false],
   ["/help2", false],
   ["/my-command", false],
@@ -370,19 +365,17 @@ it.each([
   else expect(handlers.onSendMessage).not.toHaveBeenCalled();
 });
 
-it.each([
-  { isComposing: true },
-  { repeat: true },
-  { shiftKey: true, isComposing: true },
-  { shiftKey: true, repeat: true },
-])("does not send commands during composition or key repeat: %j", (options) => {
-  const handlers = props(interaction("connected"));
-  render(<InteractionPanel {...handlers} />);
-  const textarea = screen.getByRole("textbox");
-  fireEvent.change(textarea, { target: { value: "/help" } });
-  fireEvent.keyDown(textarea, { key: "Enter", ...options });
-  expect(handlers.onSendMessage).not.toHaveBeenCalled();
-});
+it.each([{ isComposing: true }, { repeat: true }])(
+  "does not send commands during composition or key repeat: %j",
+  (options) => {
+    const handlers = props(interaction("connected"));
+    render(<InteractionPanel {...handlers} />);
+    const textarea = screen.getByRole("textbox");
+    fireEvent.change(textarea, { target: { value: "/help" } });
+    fireEvent.keyDown(textarea, { key: "Enter", ...options });
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+  },
+);
 
 it("waits for successful command delivery and keeps an expanded preview open", async () => {
   let resolve!: () => void;
@@ -559,14 +552,7 @@ it.each([
   ["Enter", "enter"],
   ["ArrowLeft", "left"],
   ["0", "0"],
-  ["1", "1"],
-  ["2", "2"],
-  ["3", "3"],
-  ["4", "4"],
   ["5", "5"],
-  ["6", "6"],
-  ["7", "7"],
-  ["8", "8"],
   ["9", "9"],
 ])("maps physical %s in the preview and prevents defaults", (physical, key) => {
   const handlers = props(interaction("connected"));

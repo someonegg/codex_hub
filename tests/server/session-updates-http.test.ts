@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
+import { HttpQueryError } from "../../src/server/http/query-params.js";
+import { parseUpdatesQuery } from "../../src/server/http/session-updates-routes.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { TimelineCursor, UpdateRevision } from "../../src/shared/api-contract.js";
 import { startHttpServer } from "../helpers/http-server.js";
@@ -39,9 +41,6 @@ describe("automatic update HTTP API", () => {
     expect(
       (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/updates?after=${REVISION}`)).status,
     ).toBe(400);
-    expect(
-      (await fetch(`${base}/api/v1/sessions/${SESSION_ID}/updates?cursor=x&after=bad`)).status,
-    ).toBe(400);
     getSessionUpdates.mockResolvedValue(null);
     expect((await fetch(url(base, OTHER_REVISION))).status).toBe(404);
   });
@@ -52,17 +51,18 @@ describe("automatic update HTTP API", () => {
     ["cursor=x&after=REV&after=REV", "after must appear once"],
     ["after=REV", "cursor is required for automatic updates"],
     ["cursor=x", "after is required for automatic updates"],
-  ])("preserves query validation for %s", async (query, message) => {
-    const getSessionUpdates = vi
-      .fn<SessionReader["getSessionUpdates"]>()
-      .mockResolvedValue(snapshot(false));
-    const { base } = await start(getSessionUpdates, {});
-    const response = await fetch(
-      `${base}/api/v1/sessions/${SESSION_ID}/updates?${query.replaceAll("REV", REVISION)}`,
-    );
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: { code: "invalid_query", message } });
-    expect(getSessionUpdates).not.toHaveBeenCalled();
+    ["cursor=x&after=bad", "after is malformed"],
+  ])("preserves query validation for %s", (query, message) => {
+    const params = new URLSearchParams(query.replaceAll("REV", REVISION));
+    expect(() => parseUpdatesQuery(params)).toThrow(HttpQueryError);
+    expect(() => parseUpdatesQuery(params)).toThrow(message);
+  });
+
+  it("parses valid updates without applying adapter identity rules", () => {
+    expect(parseUpdatesQuery(new URLSearchParams({ cursor: CURSOR, after: REVISION }))).toEqual({
+      cursor: CURSOR,
+      after: REVISION,
+    });
   });
 
   it("returns 429 at capacity and releases the slot when the client disconnects", async () => {

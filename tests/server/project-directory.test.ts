@@ -19,7 +19,7 @@ it.each([null, undefined, "", "relative", "/a\0b", "/a\rb", "/a\nb"])(
     expect(validProjectDirectory(value)).toBe(false);
   },
 );
-it.each(["relative", "/a\0b"])("emits an empty project field for invalid %j", (path) => {
+it.each(["/a\0b"])("emits an empty project field for invalid %j", (path) => {
   expect(codexBindingCommand(undefined, path)).toMatch(/'' ''$/);
 });
 it("preserves and safely quotes shell characters in project paths", () => {

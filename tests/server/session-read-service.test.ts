@@ -15,10 +15,8 @@ import { PaneBindingManager } from "../../src/server/interaction/pane-binding-ma
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
-import { MAX_ITEM_PAGE_BYTES } from "../../src/server/repository/session-queries.js";
 import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
-import type { TimelineCursor } from "../../src/shared/api-contract.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
@@ -331,41 +329,6 @@ describe("SessionReadService", () => {
     ).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
-  it("defaults to 100 items, supports 300, and rejects limits above 300", async () => {
-    const timeline: DomainTimelineRecord[] = Array.from({ length: 301 }, (_, index) => ({
-      kind: "message",
-      id: `message-${index + 1}`,
-      ordinal: index + 1,
-      timestamp: "2026-07-28T00:00:00Z",
-      role: "assistant",
-      phase: "update",
-      itemType: null,
-      markdown: `Message ${index + 1}`,
-    }));
-    const repository = new SessionReadService([
-      staticSource("timeline-default", [
-        sourceEntry(
-          "timeline-default",
-          normalizedSession("timeline-default", "Timeline default", null, timeline),
-        ),
-      ]),
-    ]);
-    const session = (await repository.list()).sessions[0]!;
-    const page = await repository.getItems(session.id, {});
-
-    expect(page?.items).toHaveLength(100);
-    expect(page?.hasMore).toBe(true);
-    const maximum = (await repository.getItems(session.id, { limit: 300 }))!;
-    expect(maximum.items).toHaveLength(300);
-    expect(maximum.hasMore).toBe(true);
-    const tail = (await repository.getItems(session.id, { cursor: maximum.cursor }))!;
-    expect(tail.items).toEqual([timeline[300]]);
-    expect(tail.hasMore).toBe(false);
-    await expect(repository.getItems(session.id, { limit: 301 })).rejects.toMatchObject({
-      code: "invalid_query",
-    });
-  });
-
   it("discovers an archived root created after repository startup", async () => {
     const home = await createTempDirectory("codex-late-archive-");
     await mkdir(join(home, "sessions"), { recursive: true });
@@ -430,46 +393,32 @@ describe("SessionReadService", () => {
     expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
   });
 
-  it("fills byte-bounded pages and reads every long message exactly once", async () => {
-    const longText = "x".repeat(1_000_000);
-    const timeline: DomainTimelineRecord[] = Array.from({ length: 10 }, (_, index) => ({
+  it("maps public identity and passes cursors across consecutive reads", async () => {
+    const timeline: DomainTimelineRecord[] = [1, 2, 3].map((ordinal) => ({
       kind: "message",
-      id: `message-${index + 1}`,
-      ordinal: index + 1,
-      timestamp: "2026-07-28T00:00:00Z",
+      id: `message-${ordinal}`,
+      ordinal,
+      timestamp: null,
       role: "assistant",
       phase: "update",
       itemType: null,
-      markdown: longText,
+      markdown: `Message ${ordinal}`,
     }));
     const repository = new SessionReadService([
-      staticSource("long", [
-        sourceEntry(
-          "long-session",
-          normalizedSession("long-session", "Long session", null, timeline),
-        ),
+      staticSource("small", [
+        sourceEntry("native", normalizedSession("native", "Small session", null, timeline)),
       ]),
     ]);
-
-    const list = await repository.list();
-    const sessionId = list.sessions[0]!.id;
-    const ids: string[] = [];
-    let cursor: TimelineCursor | undefined;
-    // Four million-character messages fit under 4 MiB; a fifth does not.
-    for (const [index, count] of [4, 4, 2].entries()) {
-      const page = await repository.getItems(sessionId, { limit: 200, cursor });
-      expect(page).not.toBeNull();
-      expect(page!.items).toHaveLength(count);
-      expect(page!.hasMore).toBe(index < 2);
-      expect(page!.cursor).toEqual(expect.any(String));
-      expect(page!.cursor).not.toBe(cursor);
-      expect(Buffer.byteLength(JSON.stringify(page!.items), "utf8")).toBeLessThanOrEqual(
-        MAX_ITEM_PAGE_BYTES + 2,
-      );
-      ids.push(...page!.items.map((item) => item.id));
-      cursor = page!.cursor;
-    }
-    expect(ids).toEqual(timeline.map((item) => item.id));
+    const session = (await repository.list()).sessions[0]!;
+    expect(session.id).not.toBe("native");
+    const first = (await repository.getItems(session.id, { limit: 2 }))!;
+    expect(first.session.id).toBe(session.id);
+    expect(first.items).toEqual(timeline.slice(0, 2));
+    expect(first.hasMore).toBe(true);
+    const tail = (await repository.getItems(session.id, { cursor: first.cursor }))!;
+    expect(tail.session.id).toBe(session.id);
+    expect(tail.items).toEqual([timeline[2]]);
+    expect(tail.hasMore).toBe(false);
   });
 });
 
