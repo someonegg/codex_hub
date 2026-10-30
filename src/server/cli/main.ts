@@ -4,6 +4,7 @@ import { outputFailure } from "./output.js";
 const help = `Usage: ahub-cli <command> [options]
   page      Publish, list, or delete local hosted pages
   diff      Publish, list, or delete local review diffs
+  skill     Locate bundled skills
   session   Manage sessions through an existing Hub HTTP server
 Run ahub-cli <command> --help for details.`;
 
@@ -13,7 +14,10 @@ async function main(): Promise<void> {
     console.log(help);
     return;
   }
-  if (command === "session") {
+  if (command === "skill") {
+    const { runSkillCommand } = await import("./skill.js");
+    await runSkillCommand(args);
+  } else if (command === "session") {
     const { runSessionCommand } = await import("./session.js");
     await runSessionCommand(args);
   } else if (command === "page" || command === "diff") {

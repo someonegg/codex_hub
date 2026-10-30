@@ -121,8 +121,10 @@ codex-hub \
 发布后打印相对 URL 和 Markdown 链接。默认存储在 `~/.codex-hub/hosting`；如需自定义位置，
 命令与服务器需使用相同的 `--home-dir /path`。加 `--json` 获取结构化输出。
 
-如需智能体协助发布，可安装 [`ahub-publish` skill](https://github.com/someonegg/devkit/tree/main/skills/ahub-publish)，
+如需智能体协助发布，可安装 [`ahub-publish` skill](../skills/ahub-publish)，
 并明确按名称请求使用，将静态网页或审阅差异发布到已有 Hub。
+
+npm 包附带此技能；运行 `ahub-cli skill path ahub-publish` 查看目录。`npx` 返回缓存路径，长期使用请复制该目录。
 
 ### 发布网页
 
