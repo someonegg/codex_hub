@@ -413,7 +413,7 @@ it("accepts opaque Unicode, UUID and percent-containing item IDs with one decodi
       };
     },
   };
-  const reader = new SessionReadService([source], undefined, undefined, {
+  const reader = new SessionReadService([source], {
     diagnosticLogger: { log() {} },
   });
   const { base } = await startApi(undefined, reader);

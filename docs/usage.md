@@ -13,60 +13,6 @@ to stop it. For installation and requirements, see the [README](../README.md#qui
 
 By default, the hub reads `~/.codex` and listens only on this machine.
 
-## Management CLI
-
-`codex-hub` starts the server; `ahub-cli` provides `page`, `diff`, and `session` commands.
-To run without installing globally:
-
-```sh
-npx --package=@someonegg/codex-hub@latest ahub-cli --help
-```
-
-Commands default to human-readable text. Add `--json` for structured results and errors. See the [CLI output contract](technical-reference.md#cli-output-contract) for output channels and error codes.
-
-### Sessions
-
-Start the hub separately, then use the HTTP client from another terminal:
-
-```bash
-ahub-cli session list --project /path/to/project
-ahub-cli session create --project /path/to/project --home default
-ahub-cli session send <id> --message "Explain the failing tests"
-ahub-cli session inspect <id>
-ahub-cli session inspect <id> --after <nextAfter> --limit 20
-ahub-cli session terminal <id>
-ahub-cli session keys <id> down enter
-ahub-cli session interrupt <id>
-ahub-cli session exit <id>
-ahub-cli session resume <id>
-ahub-cli session archive <id>
-ahub-cli session delete <id>
-```
-
-`list` shows top-level sessions only and filters by associated project. Explicit
-session IDs, including child sessions, go directly to the server. `inspect` shows
-a session summary, messages and structured questions/answers, then pagination;
-pass `Next after` to `--after` for the next page. JSON uses the same public results,
-with resolved Home/project labels and no internal association fields. See the
-[public session output schema](technical-reference.md#public-session-cli-results).
-
-Use `send <id> --stdin` for piped input, and `handoff <id>` after a terminal
-switches sessions. Create accepts `--worktree` and `--yolo`; resume accepts
-`--yolo` and keeps the original home. Omitting `--home` selects the first
-configured home. Delete requires an archived session.
-
-All session commands accept `--url`, `--json`, and `--timeout <seconds>` (default
-360). The URL defaults to `CODEX_HUB_URL`, then `http://127.0.0.1:4173`; this client
-supports HTTP only. Create and resume wait for a live, idle connection; send and
-ordinary keys require idle. Idle reflects recent terminal output, not task
-completion. Successful input or handoff means sent, without confirming the result.
-
-Exit codes are `0` for success, `1` for a definite failure, and `2` for an unknown
-write result. After an unknown result, use list, inspect, or terminal to check the
-actual state; timeout or interruption does not cancel a submitted operation.
-See `ahub-cli session --help` for commands and the [CLI and observation contract](technical-reference.md#session-cli-and-observation)
-for pagination and failure semantics.
-
 ## Reading and managing sessions
 
 Choose a project and session in the sidebar. Conversations update automatically;
@@ -85,9 +31,8 @@ session URL with another device that can access the hub.
 
 Creating and resuming sessions use tmux. If startup needs login, permission, or
 trust confirmation, use **Tmux access** in the session's **…** menu or the attach
-command shown by the hub to
-finish in the terminal. Before resuming a session started elsewhere, make sure
-its original process has exited.
+command shown by the hub to finish in the terminal. Before resuming a session
+started elsewhere, make sure its original process has exited.
 
 The latest loaded plan opens automatically and collapses earlier plans. Use
 **Show** or **Hide** to review plans individually; you can open several at once.
@@ -118,11 +63,12 @@ are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
 support depends on the agent. If the session becomes disconnected or busy while
 taking a photo, reconnect or retry later.
 
-Open **Upload history** from the session header to browse,
-preview, download, or delete uploads, including unsent files and files removed
-from drafts. Deleting a file removes it from the current draft. Attachment deletion
-and cleanup are best effort. Session deletion triggers background cleanup; archive
-and exit retain uploads. [Preview upload history](images/ahub-uploads.png).
+Open **Upload history** from the session header to preview, download, or delete
+uploads, including unsent files and files removed from drafts. Deleting a file
+also removes it from the current draft. [Preview upload history](images/ahub-uploads.png).
+
+Deleting a session requests background upload cleanup; archive and exit retain
+uploads. If cleanup fails, remove the remaining files from the Hub data root.
 
 Uploads persist under `uploads/` in the [Hub data root](#server-options), which
 must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
@@ -132,7 +78,52 @@ for API and storage guarantees.
 
 Open **Settings** at the bottom of the sidebar to choose language, the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
 
-The interface defaults to English. Choose **Language → 简体中文 / 繁體中文** to switch immediately without reloading; the choice also updates same-origin tabs. Language affects Hub controls, dates, and numbers; conversation text, terminal output, filenames, paths, and commands retain their original content.
+By default, **Shift+Enter** sends and **Enter** inserts a newline. Enable **Enter to send** in Settings to send with **Enter** and insert a newline with **Shift+Enter**.
+A bare slash command such as `/help`, with no arguments or attachments, also sends with **Enter**.
+
+The interface defaults to English. Choose **Language → 简体中文 / 繁體中文** to switch immediately without reloading; other open Hub tabs also update. Language affects Hub controls, dates, and numbers; conversation text, terminal output, filenames, paths, and commands retain their original content.
+
+## Management CLI
+
+`codex-hub` starts the server; `ahub-cli` provides `page`, `diff`, and `session` commands.
+To run without installing globally:
+
+```sh
+npx --package=@someonegg/codex-hub@latest ahub-cli --help
+```
+
+Commands default to human-readable text. Add `--json` for structured results and errors. See the [CLI output contract](technical-reference.md#cli-output-contract) for output channels and error codes.
+
+### Sessions
+
+Start the hub, then run session commands from another terminal:
+
+```sh
+ahub-cli session list --project /path/to/project
+ahub-cli session send <id> --message "Explain the failing tests"
+ahub-cli session inspect <id>
+```
+
+Use an ID from `list` to send input or inspect a conversation. `list` shows
+main sessions; `inspect` also accepts child session IDs. To read the next page,
+pass the returned `Next after` value as `--after <value>`. Use `send <id> --stdin`
+for piped input and `terminal <id>` to check the terminal. After a terminal switches
+sessions, use `handoff <id>` to transfer its binding.
+
+For lifecycle commands, run `ahub-cli session --help`. Create accepts `--home`,
+`--worktree`, and `--yolo`; resume keeps the original home and accepts `--yolo`.
+Omitting `--home` selects the first configured home. Archive a session before deleting it.
+
+Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
+or pass `--url` to use another HTTP address; HTTPS is not supported by this client.
+Use `--timeout <seconds>` to change the default 360-second timeout.
+
+Create and resume wait for a live, idle terminal. Sending input and ordinary keys
+requires idle; successful input or `handoff` confirms sending, not task completion.
+After a timeout or exit code `2` (unknown write result), check with `list`, `inspect`,
+or `terminal` before retrying. Stopping the client does not cancel a submitted operation.
+See the [CLI reference](technical-reference.md#session-cli-and-observation) for
+output fields, exit codes, and failure semantics.
 
 ## Multiple homes
 

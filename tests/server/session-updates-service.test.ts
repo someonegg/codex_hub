@@ -220,10 +220,8 @@ it("updates update revisions on takeover and replacement deletion without changi
           id === "replacement" && !replacementExists ? null : current.interactionSession,
         ),
       },
-      true,
       { connect: vi.fn(async () => pane) } as unknown as InteractionTransport,
-      bindings,
-      createTestPreviewListener(),
+      { enabled: true, bindings, listener: createTestPreviewListener() },
     ),
   );
   const updates = new SessionUpdatesService(

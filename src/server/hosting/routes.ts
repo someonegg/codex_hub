@@ -2,6 +2,13 @@ import { createReadStream } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 
+import type { ApiRouterOptions } from "../http/api-router.js";
+import {
+  decodePath,
+  isMissingFile,
+  reportRequestError,
+  requestUrl,
+} from "../http/request-errors.js";
 import { type ApiRouter, sendJson } from "../http/router.js";
 import { DiffStore } from "./diff-store.js";
 import { HostingStore } from "./store.js";
@@ -34,11 +41,11 @@ const types: Record<string, string> = {
   ".webm": "video/webm",
   ".mp3": "audio/mpeg",
 };
-export function hostingRoutes(directory?: string): ApiRouter {
+export function hostingRoutes(directory?: string, options: ApiRouterOptions = {}): ApiRouter {
   const store = directory === undefined ? undefined : new HostingStore(directory);
   const diffs = directory === undefined ? undefined : new DiffStore(directory);
   return async (request, response) => {
-    const url = new URL(request.url ?? "/", "http://localhost");
+    const url = requestUrl(request);
     const path = url.pathname;
     const head = request.method === "HEAD";
     if (path === "/api/v1/capabilities" && request.method === "GET") {
@@ -116,14 +123,22 @@ export function hostingRoutes(directory?: string): ApiRouter {
       return true;
     }
     try {
-      const relative = decodeURIComponent(match[3]);
-      if (relative.split(/[\\/]/).some((part) => part === "..") || relative.includes("\0"))
-        throw new Error("Invalid path");
+      const relative = decodePath(match[3]);
+      if (relative.split(/[\\/]/).some((part) => part === "..") || relative.includes("\0")) {
+        missing();
+        return true;
+      }
       const snapshotRoot = resolve(entry.directory, "snapshots", match[2]);
       const root = await realpath(snapshotRoot);
-      if (root !== snapshotRoot) throw new Error("Snapshot aliases are not allowed");
+      if (root !== snapshotRoot) {
+        missing();
+        return true;
+      }
       let file = await realpath(resolve(root, relative || "index.html"));
-      if (!file.startsWith(root + sep)) throw new Error("Invalid path");
+      if (!file.startsWith(root + sep)) {
+        missing();
+        return true;
+      }
       if ((await stat(file)).isDirectory()) {
         if (!path.endsWith("/")) {
           response.statusCode = 302;
@@ -133,9 +148,15 @@ export function hostingRoutes(directory?: string): ApiRouter {
         }
         file = await realpath(join(file, "index.html"));
       }
-      if (!file.startsWith(root + sep)) throw new Error("Invalid path");
+      if (!file.startsWith(root + sep)) {
+        missing();
+        return true;
+      }
       const info = await stat(file);
-      if (!info.isFile()) throw new Error("Not a file");
+      if (!info.isFile()) {
+        missing();
+        return true;
+      }
       response.setHeader(
         "Content-Type",
         types[extname(file).toLowerCase()] ?? "application/octet-stream",
@@ -144,9 +165,13 @@ export function hostingRoutes(directory?: string): ApiRouter {
       if (head) response.end();
       else
         createReadStream(file)
-          .on("error", () => response.destroy())
+          .on("error", (error) => {
+            response.destroy();
+            reportRequestError(request, response, error, options);
+          })
           .pipe(response);
-    } catch {
+    } catch (error) {
+      if (!isMissingFile(error)) throw error;
       missing();
     }
     return true;

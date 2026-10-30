@@ -1,5 +1,5 @@
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
-import type { RolloutDescriptor } from "./path-policy.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 
 export interface CatalogEntry {
   descriptor: RolloutDescriptor;

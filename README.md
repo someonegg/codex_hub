@@ -26,12 +26,6 @@ Runtime requirements:
 - Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
 
-Use the latest security patch for your Node.js release line; security update
-recommendations are separate from the minimum supported runtime version.
-
-Development and full checks require Node.js `^22.22.2 || ^24.15.0 || >=26.0.0`
-because of the test toolchain (including jsdom). See [Development](docs/development.md).
-
 Try it without a global installation:
 
 ```sh
@@ -46,29 +40,7 @@ codex-hub
 ```
 
 Open <http://127.0.0.1:4173>. Choose **Settings → Language** to switch between English (the default), 简体中文, and 繁體中文. Press `Ctrl-C` to stop the server.
-To use a different Codex home or port:
-
-```sh
-codex-hub --codex-home 'personal=/path/to/codex-home' --port 4180
-```
-
-To use multiple Codex homes:
-
-```sh
-codex-hub \
-  --codex-home 'personal=~/.codex' \
-  --codex-home 'work=/path/to/codex-work'
-```
-
-See [home configuration and usage](docs/usage.md#multiple-homes) for configuration.
-
-To host static web pages and review diffs, enable optional hosting:
-
-```sh
-codex-hub --hosting
-```
-
-See [Publish resources](docs/usage.md#publish-resources) for publishing and management.
+For home configuration, ports, and optional page/diff hosting, see [Usage](docs/usage.md).
 
 To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
 For running from source, see [Development](docs/development.md).

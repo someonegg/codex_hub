@@ -59,21 +59,17 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
   const source = await createCodexSessionSource(home, bindings);
   const reader = new SessionReadService([source]);
   const homeNickname = source.descriptor.home;
-  const interaction = new SessionInteractionService(
-    reader,
-    true,
-    new TmuxInteractionService(),
+  const interaction = new SessionInteractionService(reader, new TmuxInteractionService(), {
+    enabled: true,
     bindings,
-  );
+  });
   const socket = join(root, "tmux.sock");
   const manager = new CodexSessionManager(home, new TmuxLauncher(socket));
   const operations = new OperationService(
     reader,
     interaction,
     new SessionManagerRegistry(homeNickname).register(homeNickname, manager),
-    undefined,
-    undefined,
-    bindings,
+    { bindings: bindings },
   );
   try {
     const first = operations.create({ directory, worktree: false, requestId: "native-first" });
@@ -256,7 +252,10 @@ it("reports the native refusal for a running unbound session and archives it aft
   const reader = new SessionReadService([source]);
   const homeNickname = source.descriptor.home;
   const transport = new TmuxInteractionService();
-  const interaction = new SessionInteractionService(reader, true, transport, bindings);
+  const interaction = new SessionInteractionService(reader, transport, {
+    enabled: true,
+    bindings,
+  });
   const operations = new OperationService(
     reader,
     interaction,
@@ -264,9 +263,7 @@ it("reports the native refusal for a running unbound session and archives it aft
       homeNickname,
       new CodexSessionManager(home, new TmuxLauncher(socket)),
     ),
-    undefined,
-    undefined,
-    bindings,
+    { bindings: bindings },
   );
   try {
     const binding = await new TmuxLauncher(socket).launch(randomUUID(), directory, [
@@ -331,13 +328,13 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
   });
   const emptyHome = join(root, "empty-home");
   await mkdir(emptyHome);
-  const hub = await createCodexHub(
-    [
+  const hub = await createCodexHub({
+    homes: [
       { nickname: "empty", path: emptyHome },
       { nickname: "work", path: home },
     ],
     socket,
-  );
+  });
   const catalog = await hub.sessions.list();
   expect(catalog.homes).toHaveLength(2);
   const nickname = catalog.homes.find((entry) => entry.nickname === "work")!.nickname;
@@ -427,7 +424,7 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const hub = await createCodexHub([{ nickname: "work", path: home }], socket);
+  const hub = await createCodexHub({ homes: [{ nickname: "work", path: home }], socket: socket });
   const { base } = await startHttpServer(createApiRouter(hub), hub.close);
   const cli = async (...args: string[]) => {
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [

@@ -16,13 +16,11 @@ import { createCodexSessionReadService } from "./codex-read-helper.js";
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
   const home = await createTempDirectory("management-http-");
   const sessions = await createCodexSessionReadService(home);
-  const interaction = new SessionInteractionService(
-    sessions,
-    true,
-    new TmuxInteractionService(),
-    paneBindings,
-    createTestPreviewListener(),
-  );
+  const interaction = new SessionInteractionService(sessions, new TmuxInteractionService(), {
+    enabled: true,
+    bindings: paneBindings,
+    listener: createTestPreviewListener(),
+  });
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async () => ({ directory: home })),
@@ -36,7 +34,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     sessions,
     interaction,
     new SessionManagerRegistry("test").register("test", manager),
-    () => now,
+    { now: () => now },
   );
   const catalogService = new SessionCatalogService(sessions);
   const updates = new SessionUpdatesService(sessions, { interaction });

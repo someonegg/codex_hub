@@ -6,7 +6,7 @@ export async function createCodexSessionReadService(
   codexHome: string,
 ): Promise<SessionReadService> {
   const source = await createCodexSessionSource(codexHome, paneBindings);
-  return new SessionReadService([source], undefined, undefined, {
+  return new SessionReadService([source], {
     resolveDisplayTitle: (session) => source.displayTitleFor(session),
     homes: [{ nickname: "default" }],
   });

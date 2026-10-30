@@ -219,3 +219,65 @@ it("validates IDs, directory identity and metadata without following aliases", a
   expect(await store.entries()).toEqual([]);
   expect(diagnostics).toHaveBeenCalled();
 });
+
+it("classifies malformed paths, missing files and storage failures with correlated logs", async () => {
+  const { root, source, project, store } = await fixture();
+  const artifact = await store.publish(source, project);
+  const client = join(root, "client");
+  await mkdir(client);
+  await writeFile(join(client, "index.html"), "hub");
+  const logger = { error: vi.fn() };
+  const server = createServer(
+    {
+      homes: [],
+      host: "127.0.0.1",
+      port: 0,
+      clientDirectory: client,
+      tls: { enabled: false },
+      interactionEnabled: false,
+      hostingDirectory: store.root,
+    },
+    undefined,
+    undefined,
+    undefined,
+    { logger, requestId: () => "hosting-request" },
+  );
+  await listenServer(server, 0, "127.0.0.1");
+  cleanup.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("No address");
+  const base = `http://127.0.0.1:${address.port}`;
+  const snapshot = `/web/${artifact.id}/${artifact.snapshotId}/`;
+  expect((await fetch(base + snapshot + "%FF")).status).toBe(400);
+  expect((await fetch(base + snapshot + "missing")).status).toBe(404);
+  expect(logger.error).not.toHaveBeenCalled();
+  const failure = Object.assign(new Error("private /storage/secret"), { code: "EACCES" });
+  const scan = vi.spyOn(HostingStore.prototype, "entries").mockRejectedValueOnce(failure);
+  try {
+    const response = await fetch(base + "/api/v1/artifacts?secret=hidden");
+    expect(response.status).toBe(500);
+    const body = await response.json();
+    expect(body.error).toMatchObject({ code: "internal_error", requestId: "hosting-request" });
+    expect(JSON.stringify(body)).not.toContain("secret");
+    expect(logger.error).toHaveBeenCalledExactlyOnceWith("HTTP request failed", {
+      requestId: "hosting-request",
+      method: "GET",
+      path: "/api/v1/artifacts",
+      error: failure,
+    });
+  } finally {
+    scan.mockRestore();
+  }
+  const id = "00000000-0000-4000-8000-000000000001";
+  await mkdir(join(store.root, "diffs", id), { recursive: true });
+  await writeFile(join(store.root, "diffs", id, "metadata.json"), "broken json");
+  expect((await fetch(base + `/api/v1/diffs/${id}`)).status).toBe(500);
+  const deletion = vi.spyOn(HostingStore.prototype, "delete").mockRejectedValueOnce(failure);
+  try {
+    expect(
+      (await fetch(base + `/api/v1/artifacts/${artifact.id}`, { method: "DELETE" })).status,
+    ).toBe(500);
+  } finally {
+    deletion.mockRestore();
+  }
+});

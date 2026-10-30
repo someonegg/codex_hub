@@ -6,6 +6,7 @@ import { browserStorage } from "./browser-storage";
 import { projectForSession } from "./catalog-groups";
 
 const NAVIGATION_KEY = "ahub.navigation";
+const SCROLL_SAVE_DELAY_MS = 250;
 interface NavigationState {
   includeArchived: boolean;
   expanded: string[];
@@ -35,6 +36,7 @@ export function useHubNavigation(list: SessionListResponse | null) {
   const [sessionId, setSessionId] = useState(() => sessionIdFromPath(window.location.pathname));
   const [navigation, setNavigation] = useState(readNavigation);
   const navigationRef = useRef(navigation);
+  const scrollSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   navigationRef.current = { ...navigation, scroll: navigationRef.current.scroll };
   const sidebar = useRef<HTMLElement>(null);
   const projectNav = useRef<HTMLElement>(null);
@@ -60,8 +62,28 @@ export function useHubNavigation(list: SessionListResponse | null) {
     return () => window.removeEventListener("popstate", pop);
   }, []);
   useEffect(() => {
+    if (scrollSaveTimer.current !== null) {
+      clearTimeout(scrollSaveTimer.current);
+      scrollSaveTimer.current = null;
+    }
     saveNavigation(navigationRef.current);
   }, [navigation]);
+  useEffect(() => {
+    const flushScroll = () => {
+      if (scrollSaveTimer.current === null) return;
+      clearTimeout(scrollSaveTimer.current);
+      scrollSaveTimer.current = null;
+      saveNavigation(navigationRef.current);
+    };
+    const onVisibilityChange = () => {
+      if (document.hidden) flushScroll();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      flushScroll();
+    };
+  }, []);
   const catalogLoaded = list !== null;
   useLayoutEffect(() => {
     if (projectNav.current?.getClientRects().length)
@@ -97,7 +119,11 @@ export function useHubNavigation(list: SessionListResponse | null) {
   const persistScroll = (element: HTMLElement) => {
     if (!element.getClientRects().length) return;
     navigationRef.current.scroll = element.scrollTop;
-    saveNavigation(navigationRef.current);
+    if (scrollSaveTimer.current !== null) clearTimeout(scrollSaveTimer.current);
+    scrollSaveTimer.current = setTimeout(() => {
+      scrollSaveTimer.current = null;
+      saveNavigation(navigationRef.current);
+    }, SCROLL_SAVE_DELAY_MS);
   };
   return {
     sessionId,

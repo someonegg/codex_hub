@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 
 import { createCodexSessionSource } from "../src/server/adapters/codex/codex-session-source.js";
+import { DefaultSessionNormalizer } from "../src/server/adapters/codex/session-normalizer.js";
 import { SessionReadService } from "../src/server/application/session-read-service.js";
 import { DEFAULT_CATALOG_FRESHNESS_MS } from "../src/server/repository/catalog-snapshot-store.js";
 import {
@@ -16,6 +17,7 @@ const SESSION_COUNT = 3_000;
 const MIN_CORPUS_BYTES = 100 * 1024 * 1024;
 const FILLER_CHARS = 18_000;
 const APPEND_PREFIX_ITEMS = 1_000;
+const MAP_HISTORY_ITEMS = 50_000;
 const PRIOR_SINGLE_APPEND_BASELINE_MS = 266.8;
 
 interface Measurement {
@@ -40,42 +42,39 @@ try {
   const prefixIndexBytesBySession = new Map<string, number>();
   const timelineItemsBySession = new Map<string, number>();
   const source = await createCodexSessionSource(root);
-  const repository = new SessionReadService(
-    [source],
-    DEFAULT_CATALOG_FRESHNESS_MS,
-    performance.now.bind(performance),
-    {
-      timelinePrefixIndexBuilder(normalized, prefixKey, previous) {
-        derivationCalls += 1;
-        const startedAt = performance.now();
-        const append =
-          previous !== undefined &&
-          extendsTimelinePrefix(previous.normalized, normalized) &&
-          previous.normalized.timeline.length < normalized.timeline.length;
-        const mode = append ? "append" : "full";
-        prefixCalls[mode] += 1;
-        const result = append
-          ? extendTimelinePrefixIndex(
-              previous.timelinePrefixIndex,
-              previous.normalized,
-              normalized,
-              prefixKey,
-              true,
-            )
-          : deriveTimelinePrefixIndex(normalized, prefixKey);
-        prefixMs[mode] += performance.now() - startedAt;
-        const expectedPrefixBytes = (normalized.timeline.length + 1) * 24;
-        if (result.byteLength !== expectedPrefixBytes) {
-          throw new Error(
-            `Prefix index used ${result.byteLength} bytes; ` + `expected ${expectedPrefixBytes}`,
-          );
-        }
-        prefixIndexBytesBySession.set(normalized.session.id, result.byteLength);
-        timelineItemsBySession.set(normalized.session.id, normalized.timeline.length);
-        return result;
-      },
+  const repository = new SessionReadService([source], {
+    freshnessMs: DEFAULT_CATALOG_FRESHNESS_MS,
+    now: performance.now.bind(performance),
+    timelinePrefixIndexBuilder(normalized, prefixKey, previous) {
+      derivationCalls += 1;
+      const startedAt = performance.now();
+      const append =
+        previous !== undefined &&
+        extendsTimelinePrefix(previous.normalized, normalized) &&
+        previous.normalized.timeline.length < normalized.timeline.length;
+      const mode = append ? "append" : "full";
+      prefixCalls[mode] += 1;
+      const result = append
+        ? extendTimelinePrefixIndex(
+            previous.timelinePrefixIndex,
+            previous.normalized,
+            normalized,
+            prefixKey,
+            true,
+          )
+        : deriveTimelinePrefixIndex(normalized, prefixKey);
+      prefixMs[mode] += performance.now() - startedAt;
+      const expectedPrefixBytes = (normalized.timeline.length + 1) * 24;
+      if (result.byteLength !== expectedPrefixBytes) {
+        throw new Error(
+          `Prefix index used ${result.byteLength} bytes; ` + `expected ${expectedPrefixBytes}`,
+        );
+      }
+      prefixIndexBytesBySession.set(normalized.session.id, result.byteLength);
+      timelineItemsBySession.set(normalized.session.id, normalized.timeline.length);
+      return result;
     },
-  );
+  });
   const coldCatalog = await measure(() => repository.list());
   const coldSourceTelemetry = source.lastRefreshTelemetry();
   assertDerivationDelta("cold catalog", 0, derivationCalls, SESSION_COUNT);
@@ -197,12 +196,12 @@ try {
   if (!replacementConflict) throw new Error("Replacement did not reject the old timeline cursor");
   await assertCursorReadable(repository, unrelated.id, unrelatedCursor);
 
-  let permissionProbe: "hidden" | "portable-skip" = "portable-skip";
+  const permissionProbe = "cached";
   try {
     await chmod(specialPath, 0);
     await repository.refresh();
     const unavailable = await repository.getSession(selected.id);
-    if (unavailable === null) permissionProbe = "hidden";
+    if (unavailable === null) throw new Error("Permission-only change invalidated cached content");
   } finally {
     await chmod(specialPath, 0o600);
   }
@@ -303,6 +302,64 @@ try {
       },
     },
   };
+  const normalizer = new DefaultSessionNormalizer();
+  const history = normalizer.append(
+    normalizer.create({
+      id: "map-history",
+      path: "/synthetic/map-history.jsonl",
+      sourceRelativePath: "sessions/map-history.jsonl",
+      archived: false,
+      size: 1,
+      mtimeMs: 1,
+    }),
+    Array.from({ length: MAP_HISTORY_ITEMS }, (_, index) => ({
+      ordinal: index + 1,
+      value: {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: `call-${index}`,
+          name: "inspect",
+          arguments: "{}",
+        },
+      },
+    })),
+    [],
+  );
+  const ordinaryAppend = await measure(async () =>
+    normalizer.append(
+      history,
+      [
+        {
+          ordinal: MAP_HISTORY_ITEMS + 1,
+          value: {
+            type: "event_msg",
+            payload: { type: "agent_message", message: "ordinary append" },
+          },
+        },
+      ],
+      [],
+    ),
+  );
+  for (const key of [
+    "directiveDetails",
+    "internalDetails",
+    "toolDetails",
+    "pendingToolCalls",
+    "pendingUserInputRequests",
+  ] as const) {
+    if (ordinaryAppend.value[key] !== history[key])
+      throw new Error(`Ordinary append copied ${key}`);
+  }
+  Object.assign(result, {
+    longMapHistoryAppend: {
+      historyItems: history.timeline.length,
+      toolDetails: history.toolDetails.size,
+      pendingToolCalls: history.pendingToolCalls.size,
+      mapsReused: 5,
+      ...ordinaryAppend.measurement,
+    },
+  });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } finally {
   await rm(root, { recursive: true, force: true });

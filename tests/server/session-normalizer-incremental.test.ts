@@ -7,7 +7,7 @@ import { sessionMetadata } from "./session-normalizer.fixtures.js";
 
 const descriptor = {
   id: "incremental",
-  canonicalPath: "/synthetic/rollout-matching-thread.jsonl",
+  path: "/synthetic/rollout-matching-thread.jsonl",
   sourceRelativePath: "sessions/rollout-matching-thread.jsonl",
   archived: false,
   size: 1,
@@ -254,3 +254,39 @@ function binding(ordinal: number, tmux: string, pane: string): DecodedRecord {
     },
   });
 }
+
+it("reuses untouched maps and copies only changed maps, including same-batch matches", () => {
+  const normalizer = new DefaultSessionNormalizer();
+  const empty = normalizer.create(descriptor);
+  const message = normalizer.append(empty, [eventMessage(1, "agent_message", "hello")], []);
+  const keys = [
+    "directiveDetails",
+    "internalDetails",
+    "toolDetails",
+    "pendingToolCalls",
+    "pendingUserInputRequests",
+  ] as const;
+  for (const key of keys) expect(message[key]).toBe(empty[key]);
+  const unmatched = normalizer.append(message, [toolOutput(2, "absent", "result")], []);
+  expect(unmatched.pendingToolCalls).toBe(message.pendingToolCalls);
+  expect(unmatched.pendingUserInputRequests).toBe(message.pendingUserInputRequests);
+  expect(unmatched.toolDetails).not.toBe(message.toolDetails);
+  expect(message.toolDetails.size).toBe(0);
+  const matched = normalizer.append(
+    message,
+    [
+      toolCall(2, "call", "inspect", "input"),
+      toolOutput(3, "call", "output"),
+      userInputRequest(4, "question"),
+      toolOutput(5, "question", "{}"),
+    ],
+    [],
+  );
+  expect(matched.pendingToolCalls.size).toBe(0);
+  expect(matched.pendingUserInputRequests.size).toBe(0);
+  expect(matched.pendingToolCalls).not.toBe(message.pendingToolCalls);
+  expect(matched.pendingUserInputRequests).not.toBe(message.pendingUserInputRequests);
+  expect(matched.directiveDetails).toBe(message.directiveDetails);
+  expect(matched.internalDetails).toBe(message.internalDetails);
+  expect(empty.timeline).toHaveLength(0);
+});

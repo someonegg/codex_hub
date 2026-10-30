@@ -11,14 +11,6 @@ npx @someonegg/codex-hub@latest
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
 安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex`，且僅監聽本機。
 
-`ahub-cli` 預設輸出便於閱讀的文字，加入 `--json` 可取得結構化結果和錯誤。輸出通道與錯誤碼見 [CLI 輸出約定](technical-reference.md#cli-output-contract)。
-
-`ahub-cli session list --project /path/to/project` 僅列出主工作階段，依關聯專案篩選。
-明確指定任意工作階段 ID（包括子工作階段）時直接交由伺服器處理。
-`ahub-cli session inspect <id>` 依序顯示摘要、訊息與結構化問答、分頁資訊；
-將 `Next after` 的值傳給 `--after` 繼續讀取。文字與 `--json` 使用相同公開結果，
-不暴露內部關聯欄位；完整欄位見[公開輸出契約](technical-reference.md#public-session-cli-results)。
-
 ## 閱讀與管理工作階段
 
 在側邊欄選擇專案和工作階段。工作階段內容自動更新，勾選**已封存**可瀏覽封存工作階段。
@@ -37,7 +29,7 @@ npx @someonegg/codex-hub@latest
 ## 與 Codex 互動
 
 綠色**執行中**標記表示終端已連線。透過訊息輸入框傳送提示，展開**終端預覽**檢視 CLI。
-點選**中斷**，或在預覽中按 **Esc** 中斷執行。**工作中**和**閒置**反映終端輸出，不表示任務是否完成。
+點選**中斷**，或在預覽中按 **Ctrl+C** 中斷執行；按 **Esc** 收起預覽。**工作中**和**閒置**反映終端輸出，不表示任務是否完成。
 
 如果 Codex 透過 `/clear`、`/resume` 或執行計畫在同一終端切換工作階段，在舊工作階段的已連線頁面
 點選**移交繫結**。顯示**已被替代**後點選**前往已繫結工作階段**；未傳送的草稿保留在舊頁面。
@@ -52,9 +44,10 @@ npx @someonegg/codex-hub@latest
 相機行為取決於瀏覽器，可能退回檔案選擇器。圖片按原樣上傳，包括 EXIF 中繼資料，單一檔案上限
 20 MiB；HEIC/HEIF 支援取決於代理程式。拍照時工作階段若斷開或正忙，請重新連線或稍後重試。
 
-點選工作階段標題區域的**上傳記錄**，瀏覽、預覽、下載或刪除上傳檔案，包括未傳送檔案和從草稿移除的檔案。
-刪除檔案也會將其從目前草稿移除。附件刪除和清理盡力執行；刪除工作階段觸發背景清理，封存與退出保留附件。
-[檢視上傳記錄截圖](images/zh-TW/ahub-uploads.png)。
+點選工作階段標題區域的**上傳記錄**，預覽、下載或刪除上傳檔案，包括未傳送檔案和從草稿移除的檔案。
+刪除檔案也會將其從目前草稿移除。[檢視上傳記錄截圖](images/zh-TW/ahub-uploads.png)。
+
+刪除工作階段會請求背景清理上傳檔案，封存與退出保留附件。清理失敗時，可從 Hub 資料目錄刪除殘留檔案。
 
 上傳檔案儲存在 [Hub 資料目錄](#伺服器選項)的 `uploads/` 下，代理程式必須能存取此目錄。
 API 與儲存保證見[技術參考（英文）](technical-reference.md#file-uploads)。
@@ -64,8 +57,49 @@ API 與儲存保證見[技術參考（英文）](technical-reference.md#file-upl
 在側邊欄底部開啟**設定**，選擇語言、主題、新工作階段預設 Home，以及預設 worktree 和 YOLO 選項。
 修改自動儲存在目前瀏覽器。YOLO 預設值也用於恢復工作階段，啟動對話方塊可覆寫預設值。
 
-介面預設英文；選擇 **Language → 简体中文 / 繁體中文** 後立即生效，不需要重新整理，同源分頁同步更新。
+預設使用 **Shift+Enter** 傳送、**Enter** 換行。在設定中開啟 **Enter 傳送** 後，改為 **Enter** 傳送、**Shift+Enter** 換行。
+不含參數或附件的單獨斜線命令（如 `/help`）也可直接按 **Enter** 傳送。
+
+介面預設英文；選擇 **Language → 简体中文 / 繁體中文** 後立即生效，不需要重新整理，其他已開啟的 Hub 分頁同步更新。
 語言僅影響 Hub 介面及日期、數字顯示，不翻譯工作階段原文、終端輸出、檔名、路徑或命令。
+
+## 管理 CLI
+
+`codex-hub` 啟動伺服器；`ahub-cli` 提供 `page`、`diff` 和 `session` 命令。
+不需全域安裝即可執行：
+
+```sh
+npx --package=@someonegg/codex-hub@latest ahub-cli --help
+```
+
+`ahub-cli` 預設輸出便於閱讀的文字，加入 `--json` 可取得結構化結果和錯誤。輸出通道與錯誤碼見 [CLI 輸出約定](technical-reference.md#cli-output-contract)。
+
+### 工作階段
+
+先啟動 Hub，再從另一終端執行工作階段命令：
+
+```sh
+ahub-cli session list --project /path/to/project
+ahub-cli session send <id> --message "Explain the failing tests"
+ahub-cli session inspect <id>
+```
+
+使用 `list` 傳回的 ID 傳送輸入或檢視工作階段。`list` 列出主工作階段，`inspect` 也接受子工作階段 ID。
+將傳回的 `Next after` 值傳給 `--after <value>` 繼續讀取下一頁。
+使用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端。
+終端切換工作階段後，用 `handoff <id>` 移交繫結。
+
+建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立支援 `--home`、`--worktree`
+和 `--yolo`；恢復保留原 Home，支援 `--yolo`。省略 `--home` 時選擇第一個已設定 Home。
+刪除前必須先封存工作階段。
+
+工作階段命令預設連線至 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
+HTTP 位址；此用戶端不支援 HTTPS。用 `--timeout <seconds>` 修改預設的 360 秒逾時。
+
+建立和恢復等待終端已連線且閒置；傳送輸入和一般按鍵要求閒置。輸入或 `handoff` 成功僅表示
+已傳送，不代表任務完成。逾時或結束代碼為 `2`（寫入結果不明）時，先用 `list`、`inspect`
+或 `terminal` 核查，再決定是否重試。停止用戶端不會取消已提交操作。
+輸出欄位、結束代碼與失敗語意見 [CLI 參考（英文）](technical-reference.md#session-cli-and-observation)。
 
 ## 多個 Home
 

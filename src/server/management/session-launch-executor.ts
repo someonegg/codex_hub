@@ -1,7 +1,7 @@
 import type { CreateSessionRequest } from "../../shared/api-contract.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
 import type { PaneBindingManager } from "../interaction/pane-binding-manager.js";
-import type { SessionRuntime } from "../interaction/session-runtime.js";
+import type { RuntimeEvaluator } from "../interaction/runtime-capabilities.js";
 import {
   AssociationError,
   type OperationControl,
@@ -20,7 +20,7 @@ export class SessionLaunchExecutor {
     private readonly control: OperationControl,
     private readonly now: () => number,
     private readonly waitMs: OperationTimeouts,
-    private readonly runtime?: SessionRuntime,
+    private readonly runtime?: RuntimeEvaluator,
   ) {}
   async create(entry: OperationEntry, input: Extract<CreateSessionRequest, { directory: string }>) {
     try {
@@ -59,51 +59,27 @@ export class SessionLaunchExecutor {
 
     try {
       if (!this.runtime) throw new Error("Resume is unavailable");
-      let snapshot = await this.sessions.managementSnapshot();
-      let session = snapshot.byId.get(sessionId);
+      const snapshot = await this.sessions.managementSnapshot();
+      const session = snapshot.byId.get(sessionId);
       if (!session) throw new Error("Session not found");
-      let capability = await this.runtime.evaluate(session);
+      const attempt = this.bindings.latest(session.id);
+      const replacement = this.bindings.replacement(session.id);
+      const capability = await this.runtime.evaluate(session);
       if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
       entry.home = session.origin.home;
       entry.resumeNativeId = session.sourceId ?? undefined;
       const manager = this.managers.get(entry.home);
-      const attempt = this.bindings.latest(session.id);
-      const replacement = this.bindings.replacement(session.id);
-      // Refresh the source after asynchronous checks, then revalidate immediately before launch.
-      snapshot = await this.sessions.managementSnapshot();
-      const latest = snapshot.byId.get(sessionId);
+      const directory = capability.directory!;
       if (
-        !latest ||
-        latest.sourceId !== session.sourceId ||
-        latest.origin.home !== entry.home ||
-        latest.workingDirectory !== session.workingDirectory ||
-        latest.projectDirectory !== session.projectDirectory ||
         attempt !== this.bindings.latest(session.id) ||
         replacement !== this.bindings.replacement(session.id)
       )
-        throw new Error("Session identity or directory changed during validation");
-      session = latest;
-      capability = await this.runtime.evaluate(session);
-      if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-      const resolved = { directory: capability.directory! };
-      const finalSnapshot = await this.sessions.managementSnapshot();
-      const finalSession = finalSnapshot.byId.get(sessionId);
-      if (
-        !finalSession ||
-        finalSession.sourceId !== session.sourceId ||
-        finalSession.origin.home !== session.origin.home ||
-        finalSession.archived ||
-        finalSession.workingDirectory !== session.workingDirectory ||
-        finalSession.projectDirectory !== session.projectDirectory ||
-        attempt !== this.bindings.latest(session.id) ||
-        replacement !== this.bindings.replacement(session.id)
-      )
-        throw new Error("Session identity, binding or directory changed during validation");
+        throw new Error("Session binding changed during validation");
       if (!this.control.pending(entry)) return;
       this.control.transition(entry, { kind: "create", phase: "launching" });
       const target = await manager.launch({
         operationId: entry.metadata.operationId,
-        directory: resolved.directory,
+        directory,
         worktree: false,
         yolo: input.yolo ?? false,
         resumeNativeId: session.sourceId!,
@@ -116,7 +92,7 @@ export class SessionLaunchExecutor {
           kind: "create",
           phase: "observing",
           target,
-          project: session.projectDirectory ?? resolved.directory,
+          project: session.projectDirectory ?? directory,
           startedAt: this.now(),
         },
         this.now() + this.waitMs.create,
