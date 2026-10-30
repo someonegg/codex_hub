@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { isPreviewableUploadType, MAX_UPLOAD_BYTES } from "../../shared/uploads.js";
 import type { SessionReader } from "../application/session-reader.js";
 import { resolveHomeDirectory } from "../config.js";
-import { validAttachmentId, type UploadStore } from "../uploads/store.js";
+import { type UploadStore, validAttachmentId } from "../uploads/store.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { RequestBodyError } from "./request-body.js";
-import { isOpaqueId } from "./session-path.js";
 import { sendJson } from "./router.js";
+import { isOpaqueId } from "./session-path.js";
 
 const SESSION_UPLOAD_PATH = /^\/api\/v1\/sessions\/([^/]+)\/uploads(?:\/([^/]+)(\/content)?)?$/;
 

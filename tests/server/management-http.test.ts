@@ -1,7 +1,6 @@
 import { expect, it, vi } from "vitest";
 
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "./codex-read-helper.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { paneBindings } from "../../src/server/interaction/pane-binding-manager.js";
@@ -12,6 +11,7 @@ import { SessionUpdatesService } from "../../src/server/updates/session-updates-
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
   const home = await createTempDirectory("management-http-");

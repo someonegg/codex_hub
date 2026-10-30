@@ -9,11 +9,11 @@ import {
   CatalogCapacityError,
   SessionCatalogService,
 } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "./codex-read-helper.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 import { normalizeFixture } from "./session-normalizer.fixtures.js";
 
 async function startApi(existingHome?: string, override?: SessionReadService) {

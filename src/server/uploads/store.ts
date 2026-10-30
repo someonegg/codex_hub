@@ -1,16 +1,16 @@
 import { randomUUID } from "node:crypto";
 import {
+  lstat,
   mkdir,
   open,
   readdir,
   readFile,
+  realpath,
   rename,
   rm,
   writeFile,
-  lstat,
-  realpath,
 } from "node:fs/promises";
-import { extname, join, resolve, dirname, basename, isAbsolute } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 
 import type { UploadAttachment } from "../../shared/uploads.js";
 import { isOpaqueId } from "../security/opaque-id.js";

@@ -26,8 +26,8 @@ import type {
   SessionItemPageResponse,
   SessionReadDetailResponse,
   SessionReader,
-  SessionUpdatesSnapshot,
   SessionUpdatesRead,
+  SessionUpdatesSnapshot,
 } from "./session-reader.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {

@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from "vitest";
 import { codexInteraction } from "../../src/server/adapters/codex/interaction-parser.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "./codex-read-helper.js";
 import type {
   DomainTimelineRecord,
   NormalizedSession,
@@ -23,6 +22,7 @@ import type { TimelineCursor } from "../../src/shared/api-contract.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 async function fixtureRepository() {
   const home = await createTempDirectory("codex-repository-");

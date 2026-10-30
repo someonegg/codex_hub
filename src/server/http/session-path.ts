@@ -1,7 +1,7 @@
 import type { IncomingMessage } from "node:http";
 
 export const SESSION_ROOT = "/api/v1/sessions";
-export { SESSION_ID_PATTERN, isOpaqueId } from "../security/opaque-id.js";
+export { isOpaqueId, SESSION_ID_PATTERN } from "../security/opaque-id.js";
 export function sessionPath(pathname: string): { id: string; segments: string[] } {
   const [id = "", ...segments] = pathname.slice(SESSION_ROOT.length + 1).split("/");
   return { id, segments };
