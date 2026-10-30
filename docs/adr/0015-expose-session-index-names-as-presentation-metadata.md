@@ -5,11 +5,12 @@ date: 2026-09-04
 
 # Expose session index names as presentation metadata
 
-Current scope (updated 2026-10-16): [ADR-0021](0021-split-catalog-structure-and-activity.md) replaces the
-catalog behavior below. Catalog titles are resolved on the server, and title
-changes wake structural long polls. Reader details retain separate `title` and
-`nickname` fields; nickname-only changes do not wake reader updates. List pagination
-is historical. See the [catalog reference](../technical-reference.md#catalog).
+Current scope: the server resolves display titles for catalog, detail, inspect,
+and updates responses. Title changes affect catalog and reader revisions.
+The Codex adapter owns advisory index reading; API mapping applies title precedence.
+See the [catalog reference](../technical-reference.md#catalog) and
+[reader reference](../technical-reference.md#reader-and-automatic-updates). The decision below records
+its introduction.
 
 ## Context and Problem Statement
 

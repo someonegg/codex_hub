@@ -37,7 +37,6 @@ export interface SessionDetail {
   id: SessionId;
   origin: SessionOrigin;
   title: string;
-  nickname: string | null;
   workingDirectory: string | null;
   projectDirectory: string | null;
   createdAt: string | null;

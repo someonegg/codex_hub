@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
@@ -14,7 +12,7 @@ import type {
   ToolDetailResponse,
 } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionId } from "../../shared/domain.js";
-import { SessionApiMapper, type SessionNicknameResolver } from "../api/session-api-mapper.js";
+import { SessionApiMapper, type SessionDisplayTitleResolver } from "../api/session-api-mapper.js";
 import type { SessionRuntime } from "../interaction/session-runtime.js";
 import {
   CatalogSnapshotStore,
@@ -33,7 +31,7 @@ import type {
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
   readonly homes?: SessionHome[];
-  readonly resolveNickname?: SessionNicknameResolver;
+  readonly resolveDisplayTitle?: SessionDisplayTitleResolver;
 }
 
 export class SessionReadService implements SessionReader {
@@ -48,8 +46,8 @@ export class SessionReadService implements SessionReader {
     now: () => number = performance.now.bind(performance),
     dependencies: SessionReadServiceDependencies = {},
   ) {
-    const { resolveNickname, homes, ...storeDependencies } = dependencies;
-    this.#mapper = new SessionApiMapper(resolveNickname, homes);
+    const { resolveDisplayTitle, homes, ...storeDependencies } = dependencies;
+    this.#mapper = new SessionApiMapper(resolveDisplayTitle, homes);
     this.#store = new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
     this.#queries = new SessionQueries();
   }
@@ -68,21 +66,12 @@ export class SessionReadService implements SessionReader {
   async list(): Promise<SessionListResponse> {
     const snapshot = await this.#store.current();
     const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
-    const result = this.#mapper.list(sessions);
-    if (!this.runtime) return result;
+    if (!this.runtime) return this.#mapper.list(sessions);
     const states = await Promise.all(
       sessions.map((session) => this.runtime!.evaluate(session, sessions, false)),
     );
     const byId = new Map(sessions.map((session, index) => [session.id, states[index]!.status]));
-    result.sessions.forEach((session) => {
-      session.status = byId.get(session.id)!;
-    });
-    result.revision = createHash("sha256")
-      .update(
-        JSON.stringify([result.revision, result.sessions.map(({ id, status }) => [id, status])]),
-      )
-      .digest("base64url");
-    return result;
+    return this.#mapper.list(sessions, byId);
   }
 
   async getSession(id: SessionId): Promise<SessionReadDetailResponse | null> {

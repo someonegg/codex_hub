@@ -12,7 +12,7 @@ export type UpdateRevisionFactory = (
   interaction: InteractionResponse,
 ) => UpdateRevision;
 
-export type UpdateRevisionSession = Omit<SessionDetail, "nickname">;
+export type UpdateRevisionSession = SessionDetail;
 
 export function createProcessUpdateRevisionFactory(
   secret: Uint8Array = randomBytes(32),
@@ -32,10 +32,9 @@ export function withUpdateRevision<
   value: T,
   createRevision: UpdateRevisionFactory,
 ): T & Pick<SessionUpdatesResponse, "updateRevision"> {
-  const { nickname: _nickname, ...revisionSession } = value.session;
   return {
     ...value,
-    updateRevision: createRevision(revisionSession, value.interaction),
+    updateRevision: createRevision(value.session, value.interaction),
   };
 }
 

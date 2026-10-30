@@ -44,6 +44,8 @@ it("isolates native identities, names and relationships while merging projects a
     expect(personal.projectId).toBe(work.projectId);
     for (const parent of [personal, work]) {
       const detail = (await hub.sessions.getSession(parent.id))!.session;
+      expect(detail.title).toBe(parent.title);
+      expect(detail).not.toHaveProperty("nickname");
       expect(detail.childIds).toHaveLength(1);
       const child = (await hub.sessions.getSession(detail.childIds[0]!))!.session;
       expect(child.parentId).toBe(parent.id);
@@ -71,7 +73,7 @@ it("isolates native identities, names and relationships while merging projects a
     await rename(join(homes[0]!.path, "sessions"), join(root, "offline"));
     await writeFile(join(homes[0]!.path, "sessions"), "unavailable");
     await hub.sessions.refresh();
-    expect((await hub.sessions.getSession(work.id))!.session.nickname).toBe("work title");
+    expect((await hub.sessions.getSession(work.id))!.session.title).toBe("work title");
   } finally {
     hub.close();
   }

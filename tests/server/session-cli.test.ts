@@ -49,6 +49,12 @@ const reply = (res: ServerResponse, value: unknown, status = 200) => {
 };
 
 it.each([
+  ["unknown"],
+  ["list", "--unknown"],
+  ["inspect", "id", "--after", "-1"],
+  ["list", "extra"],
+  ["list", "--url", "bad-url"],
+  ["send", "id", "--message", "  "],
   ["send", "id"],
   ["send", "id", "--stdin", "--message", "x"],
   ["keys", "id", "interrupt"],
@@ -58,9 +64,15 @@ it.each([
   ["list", "--url", "https://example.com"],
   ["list", "--timeout", "0"],
 ])("rejects invalid arguments before submission: %j", async (...args) => {
-  const result = await cli([...args, "--json"]);
+  let requests = 0;
+  const base = await serve((_req, res) => {
+    requests++;
+    res.end();
+  });
+  const result = await cli([...args, "--json"], "", { CODEX_HUB_URL: base });
   expect(result.code).toBe(1);
-  expect(JSON.parse(result.stdout).error).toBeDefined();
+  expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
+  expect(requests).toBe(0);
 });
 
 it("uses explicit URL over the environment and filters by associated project", async () => {
@@ -284,7 +296,6 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
           parentId: "parent",
           childIds: [],
           title: "Child",
-          nickname: null,
           status: "normal",
           origin: { sourceType: "codex", agentName: "Codex", home: "work" },
           resume: { allowed: true, reason: null },
@@ -342,4 +353,10 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
     "POST /api/v1/sessions",
     "GET /api/v1/sessions/child/inspect?limit=1",
   ]);
+});
+
+it("keeps connection failures classified as query_failed", async () => {
+  const result = await cli(["list", "--json"]);
+  expect(result.code).toBe(1);
+  expect(JSON.parse(result.stdout).error.code).toBe("query_failed");
 });

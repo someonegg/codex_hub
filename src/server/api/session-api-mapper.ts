@@ -10,7 +10,7 @@ import type {
   TimelineCursor,
   ToolDetailResponse,
 } from "../../shared/api-contract.js";
-import type { SessionDetail, TimelineItem } from "../../shared/domain.js";
+import type { SessionDetail, SessionStatus, TimelineItem } from "../../shared/domain.js";
 import type { DomainSession, DomainTimelineRecord } from "../domain/session-domain.js";
 import type {
   DirectiveDetailResult,
@@ -20,15 +20,18 @@ import type {
 } from "../repository/session-queries.js";
 import { opaqueIdForParts } from "../security/opaque-id.js";
 
-export type SessionNicknameResolver = (session: DomainSession) => string | null;
+export type SessionDisplayTitleResolver = (session: DomainSession) => string | null;
 
 export class SessionApiMapper {
   constructor(
-    private readonly resolveNickname: SessionNicknameResolver = () => null,
+    private readonly resolveDisplayTitle: SessionDisplayTitleResolver = () => null,
     private readonly homes: SessionHome[] = [],
   ) {}
 
-  list(sessions: readonly DomainSession[]): SessionListResponse {
+  list(
+    sessions: readonly DomainSession[],
+    effectiveStates?: ReadonlyMap<string, SessionStatus>,
+  ): SessionListResponse {
     const projects = new Map<string, { id: string; directory: string }>();
     const summaries = sessions
       .map((session) => {
@@ -40,9 +43,11 @@ export class SessionApiMapper {
         return {
           id: session.id,
           home: session.origin.home,
-          title: this.resolveNickname(session) ?? session.title,
+          title: this.resolveDisplayTitle(session) ?? session.title,
           projectId,
-          status: session.archived ? ("archived" as const) : ("normal" as const),
+          status:
+            effectiveStates?.get(session.id) ??
+            (session.archived ? ("archived" as const) : ("normal" as const)),
           parentId: session.parentId,
           isChild,
           updatedAt: session.updatedAt,
@@ -102,8 +107,7 @@ export class SessionApiMapper {
       resume: { allowed: false, reason: "Runtime validation unavailable" },
       id: session.id,
       origin: { ...session.origin },
-      title: session.title,
-      nickname: this.resolveNickname(session),
+      title: this.resolveDisplayTitle(session) ?? session.title,
       workingDirectory: session.workingDirectory,
       projectDirectory: session.projectDirectory,
       createdAt: session.createdAt,

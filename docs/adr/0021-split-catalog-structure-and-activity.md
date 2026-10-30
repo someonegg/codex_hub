@@ -33,7 +33,7 @@ would add another request lifecycle merely to keep advisory timestamps current.
 
 Return complete `{ revision, projects, sessions }` snapshots. Each session carries
 nullable `updatedAt`, but the revision hashes only the structure after canonical ID
-sorting. Resolve display titles with the existing nickname resolver on each probe;
+sorting. Resolve display titles with the display-title resolver on each probe;
 the underlying snapshot signature cannot substitute for the presentation revision.
 `isChild` reflects a declared parent relationship; `parentId` reflects only a
 resolved link. Details retain a separate type with full metadata.

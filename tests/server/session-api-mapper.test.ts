@@ -79,4 +79,25 @@ describe("session API mapping", () => {
     ]);
     expect(mapper.list([{ ...session, isChild: true }]).projects).toEqual([]);
   });
+
+  it("resolves display titles consistently and falls back to the original title", () => {
+    const mapper = new SessionApiMapper(() => "Index title");
+    const detail = mapper.detail(session).session;
+    expect(mapper.list([session]).sessions[0]!.title).toBe("Index title");
+    expect(detail.title).toBe("Index title");
+    expect(detail).not.toHaveProperty("nickname");
+    expect(new SessionApiMapper().detail(session).session.title).toBe(session.title);
+  });
+
+  it("hashes resolved titles and effective status while excluding timestamps", () => {
+    const mapper = new SessionApiMapper(() => "Index title");
+    const baseline = mapper.list([session]).revision;
+    expect(mapper.list([{ ...session, updatedAt: "later" }]).revision).toBe(baseline);
+    expect(new SessionApiMapper(() => "Renamed").list([session]).revision).not.toBe(baseline);
+    const live = new Map([[session.id, "live" as const]]);
+    const liveRevision = mapper.list([session], live).revision;
+    expect(liveRevision).not.toBe(baseline);
+    expect(mapper.list([{ ...session, archived: true }], live).revision).toBe(liveRevision);
+    expect(mapper.list([session], new Map()).revision).toBe(baseline);
+  });
 });

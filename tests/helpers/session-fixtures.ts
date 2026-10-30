@@ -13,7 +13,6 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
       formatVersion: null,
     },
     title: "Session",
-    nickname: null,
     workingDirectory: null,
     projectDirectory: null,
     createdAt: null,
@@ -32,7 +31,7 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
 }
 
 export function domainSession(overrides: Partial<DomainSession> = {}): DomainSession {
-  const { nickname: _nickname, status: _status, resume: _resume, ...session } = sessionDetail();
+  const { status: _status, resume: _resume, ...session } = sessionDetail();
   return { ...session, archived: false, diagnostics: [], warningCount: 0, ...overrides };
 }
 

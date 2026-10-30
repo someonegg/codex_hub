@@ -60,7 +60,7 @@ timeline responses.
 | Other typed record                             | Safe `internal` event type                                            |
 
 Response and event records are retained independently; normalization does not
-match or remove duplicates. Internal compatibility summaries always use
+match or remove duplicates. Internal event summaries use
 `Internal event: <eventType>`; reasoning summaries are not semantically parsed.
 
 ### Messages and directives
@@ -69,7 +69,7 @@ Response messages accept only roles `user`, `assistant`, and `developer`, and
 content parts `input_text`, `output_text`, and `text`. Messages without accepted
 text are dropped; accepted messages become directives.
 
-Legacy `user_message` and `agent_message` events with an invalid `message` become
+`user_message` and `agent_message` events with an invalid `message` become
 safe internal summaries of their event type.
 
 For `item_completed`, only these item shapes become conversation messages:

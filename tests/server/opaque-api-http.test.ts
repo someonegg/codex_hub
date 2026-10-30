@@ -224,7 +224,7 @@ describe("opaque cursor API", () => {
       response.json(),
     );
     expect(metadata).toEqual({
-      session: expect.objectContaining({ title: "Synthetic trace", nickname: "Current nickname" }),
+      session: expect.objectContaining({ title: "Current nickname" }),
       interaction: { supported: false, attachCommand: null },
       updateRevision: expect.any(String),
     });
@@ -234,8 +234,7 @@ describe("opaque cursor API", () => {
     );
     expect(first).toEqual({
       session: expect.objectContaining({
-        title: "Synthetic trace",
-        nickname: "Current nickname",
+        title: "Current nickname",
       }),
       interaction: { supported: false, attachCommand: null },
       items: expect.any(Array),
