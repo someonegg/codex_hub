@@ -39,6 +39,113 @@ Options: --url <http-url> --json --timeout <seconds> (default 360)
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}`;
 
+export function parseSessionArguments(args: string[], environmentUrl?: string) {
+  const { values, positionals } = validateArguments(() =>
+    parseArgs({
+      args,
+      allowPositionals: true,
+      options: {
+        url: { type: "string" },
+        json: { type: "boolean" },
+        timeout: { type: "string" },
+        project: { type: "string" },
+        home: { type: "string" },
+        worktree: { type: "boolean" },
+        yolo: { type: "boolean" },
+        message: { type: "string" },
+        stdin: { type: "boolean" },
+        limit: { type: "string" },
+        after: { type: "string" },
+        help: { type: "boolean" },
+      },
+    }),
+  );
+  if (values.help || positionals.length === 0) {
+    return { values, positionals, help: true as const };
+  }
+  const [command, id, ...keys] = positionals;
+  const allowed: Record<string, string[]> = {
+    list: ["project"],
+    create: ["project", "home", "worktree", "yolo"],
+    resume: ["yolo"],
+    send: ["message", "stdin"],
+    inspect: ["limit", "after"],
+    terminal: [],
+    keys: [],
+    interrupt: [],
+    handoff: [],
+    exit: [],
+    archive: [],
+    delete: [],
+  };
+  if (!Object.hasOwn(allowed, command))
+    throw new CommandError("invalid_arguments", "Unknown session command");
+  for (const key of Object.keys(values)) {
+    if (!["url", "json", "timeout", "help", ...allowed[command]!].includes(key))
+      throw new CommandError("invalid_arguments", `--${key} is not supported by ${command}`);
+  }
+  const acceptsSessionId = command !== "list" && command !== "create";
+  const invalidPositionals = acceptsSessionId
+    ? !id || (command !== "keys" && positionals.length !== 2)
+    : positionals.length !== 1;
+  if (invalidPositionals)
+    throw new CommandError("invalid_arguments", "Invalid session command arguments");
+  if (command === "create" && !values.project)
+    throw new CommandError("invalid_arguments", "create requires --project");
+  if (
+    command === "send" &&
+    Number(values.message !== undefined) + Number(values.stdin === true) !== 1
+  )
+    throw new CommandError(
+      "invalid_arguments",
+      "send requires exactly one of --message and --stdin",
+    );
+  if (
+    command === "keys" &&
+    (keys.length === 0 ||
+      keys.length > MAX_INTERACTION_KEY_SEQUENCE_LENGTH ||
+      keys.some(
+        (key) => key === "interrupt" || !(INTERACTION_KEYS as readonly string[]).includes(key),
+      ))
+  )
+    throw new CommandError(
+      "invalid_arguments",
+      "Unsupported key sequence; use session interrupt for interruption",
+    );
+  const seconds = values.timeout === undefined ? 360 : Number(values.timeout);
+  if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
+    throw new CommandError(
+      "invalid_arguments",
+      "timeout must be a positive number of seconds within the supported range",
+    );
+  const base = validateArguments(
+    () => new URL(values.url ?? environmentUrl ?? "http://127.0.0.1:4173"),
+  );
+  if (base.protocol !== "http:")
+    throw new CommandError(
+      "invalid_arguments",
+      "Only HTTP URLs are supported; HTTPS is not supported yet",
+    );
+  if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
+    throw new CommandError("invalid_arguments", "URL must contain only an HTTP origin");
+
+  if (command === "inspect") {
+    for (const name of ["limit", "after"] as const) {
+      const value = values[name];
+      if (value === undefined) continue;
+      if (
+        !/^\d+$/.test(value) ||
+        !Number.isSafeInteger(Number(value)) ||
+        (name === "limit" && (Number(value) < 1 || Number(value) > 300))
+      )
+        throw new CommandError("invalid_arguments", `Invalid ${name}`);
+    }
+  }
+  if (command === "send" && values.message !== undefined)
+    validateArguments(() => normalizeMessage(values.message!));
+  return { values, positionals, command, id, keys, seconds, base, help: false as const };
+}
+
 /** One invocation owns one deadline and never retries a submitted mutation. */
 export async function runSessionCommand(args: string[]): Promise<void> {
   let json = args.includes("--json");
@@ -49,96 +156,14 @@ export async function runSessionCommand(args: string[]): Promise<void> {
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
-    const { values, positionals } = validateArguments(() =>
-      parseArgs({
-        args,
-        allowPositionals: true,
-        options: {
-          url: { type: "string" },
-          json: { type: "boolean" },
-          timeout: { type: "string" },
-          project: { type: "string" },
-          home: { type: "string" },
-          worktree: { type: "boolean" },
-          yolo: { type: "boolean" },
-          message: { type: "string" },
-          stdin: { type: "boolean" },
-          limit: { type: "string" },
-          after: { type: "string" },
-          help: { type: "boolean" },
-        },
-      }),
-    );
+    const parsed = parseSessionArguments(args, process.env.CODEX_HUB_URL);
+    const { values } = parsed;
     json = values.json ?? false;
-    if (values.help || positionals.length === 0) {
+    if (parsed.help) {
       console.log(sessionHelp);
       return;
     }
-    const [command, id, ...keys] = positionals;
-    const allowed: Record<string, string[]> = {
-      list: ["project"],
-      create: ["project", "home", "worktree", "yolo"],
-      resume: ["yolo"],
-      send: ["message", "stdin"],
-      inspect: ["limit", "after"],
-      terminal: [],
-      keys: [],
-      interrupt: [],
-      handoff: [],
-      exit: [],
-      archive: [],
-      delete: [],
-    };
-    if (!Object.hasOwn(allowed, command))
-      throw new CommandError("invalid_arguments", "Unknown session command");
-    for (const key of Object.keys(values)) {
-      if (!["url", "json", "timeout", "help", ...allowed[command]!].includes(key))
-        throw new CommandError("invalid_arguments", `--${key} is not supported by ${command}`);
-    }
-    const acceptsSessionId = command !== "list" && command !== "create";
-    const invalidPositionals = acceptsSessionId
-      ? !id || (command !== "keys" && positionals.length !== 2)
-      : positionals.length !== 1;
-    if (invalidPositionals)
-      throw new CommandError("invalid_arguments", "Invalid session command arguments");
-    if (command === "create" && !values.project)
-      throw new CommandError("invalid_arguments", "create requires --project");
-    if (
-      command === "send" &&
-      Number(values.message !== undefined) + Number(values.stdin === true) !== 1
-    )
-      throw new CommandError(
-        "invalid_arguments",
-        "send requires exactly one of --message and --stdin",
-      );
-    if (
-      command === "keys" &&
-      (keys.length === 0 ||
-        keys.length > MAX_INTERACTION_KEY_SEQUENCE_LENGTH ||
-        keys.some(
-          (key) => key === "interrupt" || !(INTERACTION_KEYS as readonly string[]).includes(key),
-        ))
-    )
-      throw new CommandError(
-        "invalid_arguments",
-        "Unsupported key sequence; use session interrupt for interruption",
-      );
-    const seconds = values.timeout === undefined ? 360 : Number(values.timeout);
-    if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
-      throw new CommandError(
-        "invalid_arguments",
-        "timeout must be a positive number of seconds within the supported range",
-      );
-    const base = validateArguments(
-      () => new URL(values.url ?? process.env.CODEX_HUB_URL ?? "http://127.0.0.1:4173"),
-    );
-    if (base.protocol !== "http:")
-      throw new CommandError(
-        "invalid_arguments",
-        "Only HTTP URLs are supported; HTTPS is not supported yet",
-      );
-    if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
-      throw new CommandError("invalid_arguments", "URL must contain only an HTTP origin");
+    const { command, id, keys, seconds, base } = parsed;
     timer = setTimeout(() => abort.abort(), seconds * 1000);
     client = new SessionClient(base, abort.signal);
     const api = client.request;
@@ -151,15 +176,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     } else if (command === "inspect") {
       const query = new URLSearchParams();
       for (const name of ["limit", "after"] as const) {
-        const value = values[name];
-        if (value === undefined) continue;
-        if (
-          !/^\d+$/.test(value) ||
-          !Number.isSafeInteger(Number(value)) ||
-          (name === "limit" && (Number(value) < 1 || Number(value) > 300))
-        )
-          throw new CommandError("invalid_arguments", `Invalid ${name}`);
-        query.set(name, value);
+        if (values[name] !== undefined) query.set(name, values[name]);
       }
       result = mapInspect(await api<InspectResponse>(`${path}/inspect?${query}`));
     } else if (command === "terminal")

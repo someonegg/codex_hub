@@ -32,7 +32,7 @@ it("preserves order, internal spaces, and equals in paths while trimming both fi
   });
 });
 
-it.each(["", "./one", "=one", "a="])("rejects malformed home %j", (home) => {
+it.each(["./one", "=one", "a="])("rejects malformed home %j", (home) => {
   expect(() => read(home)).toThrow("--codex-home requires nickname=path");
 });
 

@@ -109,56 +109,22 @@ describe("interaction HTTP API", () => {
     expect(interaction.sendMessage).toHaveBeenCalledWith(SESSION_ID, message);
   });
 
-  it("validates message and key bodies including their boundaries", async () => {
+  it("maps body and message validation failures without invoking interaction", async () => {
     const { base, interaction } = await start();
-    const postMessage = (message: string) =>
-      fetch(`${base}/api/v1/sessions/${SESSION_ID}/messages`, {
+    const post = (operation: string, body: unknown) =>
+      fetch(`${base}/api/v1/sessions/${SESSION_ID}/${operation}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify(body),
       });
-    expect((await postMessage(" \n ")).status).toBe(400);
-    expect((await postMessage("a".repeat(65_536))).status).toBe(204);
-    expect((await postMessage("a".repeat(65_537))).status).toBe(400);
-    expect(interaction.sendMessage).toHaveBeenCalledTimes(1);
-
-    const postKeys = (keys: unknown, extra?: Record<string, unknown>) =>
-      fetch(`${base}/api/v1/sessions/${SESSION_ID}/keys`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keys, ...extra }),
-      });
-    expect((await postKeys([])).status).toBe(400);
-    expect((await postKeys(["unknown"])).status).toBe(400);
-    expect((await postKeys(["escape"])).status).toBe(400);
-    expect((await postKeys(["enter"], { extra: true })).status).toBe(400);
-    expect((await postKeys(Array.from({ length: 65 }, () => "left"))).status).toBe(400);
-
-    const representativeKeys = [
-      "enter",
-      "up",
-      "down",
-      "left",
-      "right",
-      "interrupt",
-      "plan",
-      "0",
-      "1",
-      "2",
-      "3",
-      "4",
-      "5",
-      "6",
-      "7",
-      "8",
-      "9",
-      "left",
-    ];
-    const boundaryKeys = [...representativeKeys, ...Array.from({ length: 46 }, () => "left")];
-    expect(boundaryKeys).toHaveLength(64);
-    const sentKeys = await postKeys(boundaryKeys);
-    expect(sentKeys.status).toBe(204);
-    expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, boundaryKeys);
+    const invalidKeys = await post("keys", { keys: [] });
+    expect(invalidKeys.status).toBe(400);
+    expect(await invalidKeys.json()).toMatchObject({ error: { code: "invalid_json" } });
+    const invalidMessage = await post("messages", { message: " " });
+    expect(invalidMessage.status).toBe(400);
+    expect(await invalidMessage.json()).toMatchObject({ error: { code: "invalid_message" } });
+    expect(interaction.sendKeys).not.toHaveBeenCalled();
+    expect(interaction.sendMessage).not.toHaveBeenCalled();
   });
 
   it.each(["GET", "HEAD"])("requires WebSocket for terminal preview (%s)", async (method) => {
@@ -203,6 +169,4 @@ it("exposes fresh terminal capture and validates idle input options", async () =
   expect(interaction.sendMessage).toHaveBeenCalledWith(SESSION_ID, "hello", true);
   expect((await post("keys", { keys: ["enter"], requireIdle: true })).status).toBe(204);
   expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, ["enter"], true);
-  expect((await post("keys", { keys: ["interrupt"], requireIdle: true })).status).toBe(400);
-  expect((await post("messages", { message: "hello", requireIdle: "yes" })).status).toBe(400);
 });

@@ -6,67 +6,61 @@ import { promisify } from "node:util";
 
 import { expect, it } from "vitest";
 
+import { parseResourceArguments, validateResourcePublish } from "../../src/server/cli/resource.js";
+import { CommandError } from "../../src/server/cli/command-error.js";
+
 const exec = promisify(execFile);
 it.each([
-  ["unknown"],
-  ["page", "list", "--unknown"],
-  ["page", "list", "--home-dir"],
-  ["diff", "delete", "not-a-uuid"],
-  ["diff", "publish", "."],
-  ["page", "publish", ".", "--project", ".", "--name", " "],
-  ["page", "nonsense"],
-  ["page", "delete"],
-  ["page", "publish", "."],
-  ["diff", "nonsense"],
-  ["diff", "delete"],
-  ["diff", "list", "extra"],
-])("reports invalid resource arguments: %j", async (...args) => {
+  ["page", "list", ["--unknown"]],
+  ["page", "list", ["--home-dir"]],
+  ["diff", "publish", []],
+  ["page", "nonsense", []],
+  ["page", "delete", []],
+  ["diff", "list", ["extra"]],
+] as const)("rejects invalid resource arguments: %s %s %j", (resource, action, args) => {
+  expect(() => parseResourceArguments(resource, action, [...args])).toThrow(CommandError);
+  expect(() => parseResourceArguments(resource, action, [...args])).toThrow(
+    expect.objectContaining({ code: "invalid_arguments" }),
+  );
+});
+
+it.each([true, false])("wires resource errors to the correct stream (json=%s)", async (json) => {
   const result = await exec(process.execPath, [
     "--import",
     "tsx",
     "src/server/cli/main.ts",
-    ...args,
-    "--json",
+    "page",
+    "list",
+    "--unknown",
+    ...(json ? ["--json"] : []),
   ]).catch((error) => error);
   expect(result.code).toBe(1);
-  expect(result.stderr).toBe("");
-  expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
+  if (json) {
+    expect(result.stderr).toBe("");
+    expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
+  } else {
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("--unknown");
+  }
 });
 
-const invalidOptionCases = [
-  { resource: "page", action: "list", options: ["project", "name", "title"] },
-  { resource: "page", action: "delete", options: ["project", "name", "title"] },
-  { resource: "diff", action: "publish", options: ["project", "name"] },
-  { resource: "diff", action: "list", options: ["project", "name", "title"] },
-  { resource: "diff", action: "delete", options: ["project", "name", "title"] },
+// Cover each resource/action policy and restricted option directly.
+// Process tests above own output stream selection.
+const invalidOptions = [
+  { resource: "page", action: "list", option: "project" },
+  { resource: "page", action: "delete", option: "name" },
+  { resource: "diff", action: "publish", option: "project" },
+  { resource: "diff", action: "publish", option: "name" },
+  { resource: "diff", action: "list", option: "title" },
+  { resource: "diff", action: "delete", option: "title" },
 ];
-const invalidOptions = invalidOptionCases.flatMap(({ resource, action, options }) =>
-  options.flatMap((option) => [false, true].map((json) => ({ resource, action, option, json }))),
-);
-it.each(invalidOptions)(
-  "rejects inapplicable options: %j",
-  async ({ resource, action, option, json }) => {
-    const result = await exec(process.execPath, [
-      "--import",
-      "tsx",
-      "src/server/cli/main.ts",
-      resource,
-      action,
-      ...(action === "list" ? [] : ["/missing-source"]),
-      `--${option}`,
-      "value",
-      ...(json ? ["--json"] : []),
-    ]).catch((error) => error);
-    expect(result.code).toBe(1);
-    const message = json ? JSON.parse(result.stdout).error.message : result.stderr;
-    expect(message).toContain(`--${option}`);
-    expect(message).toContain(`${resource} ${action}`);
-    if (json) {
-      expect(result.stderr).toBe("");
-      expect(JSON.parse(result.stdout).error.code).toBe("invalid_arguments");
-    } else expect(result.stdout).toBe("");
-  },
-);
+it.each(invalidOptions)("rejects inapplicable options: %j", ({ resource, action, option }) => {
+  const args = [...(action === "list" ? [] : ["/missing-source"]), `--${option}`, "value"];
+  expect(() => parseResourceArguments(resource, action, args)).toThrow(
+    `Option --${option} is not supported for ${resource} ${action}`,
+  );
+  expect(() => parseResourceArguments(resource, action, args)).toThrow(CommandError);
+});
 
 it.each(["page", "diff"])(
   "accepts legal %s options through publish, list and delete",
@@ -111,18 +105,45 @@ it.each(["page", "diff"])(
   },
 );
 
-it("preserves help before checking inapplicable options", async () => {
+it("preserves help before checking inapplicable options", () => {
+  expect(
+    parseResourceArguments("diff", "list", ["--project", "unused", "--help", "--json"]).help,
+  ).toBe(true);
+});
+
+it("parses publication options and requires a project for pages", () => {
+  expect(
+    parseResourceArguments("page", "publish", [
+      "source",
+      "--project",
+      "project",
+      "--title",
+      "Title",
+      "--json",
+    ]),
+  ).toMatchObject({
+    help: false,
+    positionals: ["source"],
+    values: { project: "project", title: "Title", json: true },
+  });
+  expect(() => validateResourcePublish("page", undefined)).toThrow(
+    "page publish requires --project",
+  );
+  expect(validateResourcePublish("page", ".")).toBeUndefined();
+  expect(validateResourcePublish("diff", undefined)).toBeUndefined();
+});
+it("rejects unknown top-level commands", async () => {
   const result = await exec(process.execPath, [
     "--import",
     "tsx",
     "src/server/cli/main.ts",
-    "diff",
-    "list",
-    "--project",
-    "unused",
-    "--help",
+    "unknown",
     "--json",
-  ]);
-  expect(result.stdout).toContain("Usage: ahub-cli diff");
+  ]).catch((error) => error);
+  expect(result.code).toBe(1);
   expect(result.stderr).toBe("");
+  expect(JSON.parse(result.stdout).error).toMatchObject({
+    code: "invalid_arguments",
+    message: expect.stringContaining("Unknown command: unknown"),
+  });
 });

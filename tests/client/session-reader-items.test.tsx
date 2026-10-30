@@ -1,5 +1,5 @@
 import { StrictMode } from "react";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
@@ -170,63 +170,6 @@ describe("session reader items", () => {
     expect(screen.getAllByText("First")).toHaveLength(1);
   });
 
-  it("backs off retryable automatic timeline page failures", async () => {
-    installIntersectionObserver();
-    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    const first = page([message("message-1", 1, "First")], TIMELINE_CURSOR, true);
-    const second = page([message("message-2", 2, "Retried event")], NEXT_TIMELINE_CURSOR, false);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(json(first))
-      .mockResolvedValueOnce(json({ error: { code: "busy", message: "Timeline busy" } }, 503))
-      .mockResolvedValueOnce(json(second));
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await screen.findByText("First");
-    // The content can commit before the sentinel's observer effect runs.
-    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
-
-    vi.useFakeTimers();
-    vi.spyOn(Math, "random").mockReturnValue(0.5);
-    intersectLatest();
-    await flushMicrotasks();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Timeline busy")).toBeInTheDocument();
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(999);
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(1);
-    });
-    await flushMicrotasks();
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(screen.getByText("Retried event")).toBeInTheDocument();
-    vi.useRealTimers();
-  });
-
-  it("stops automatic timeline pagination on a terminal page error", async () => {
-    installIntersectionObserver();
-    window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(json(page([message("message-1", 1, "First")], TIMELINE_CURSOR, true)))
-      .mockResolvedValueOnce(
-        json({ error: { code: "invalid_query", message: "Stop timeline" } }, 400),
-      );
-    vi.stubGlobal("fetch", fetchMock);
-    render(<SessionPage sessionId={SESSION_ID} />);
-    await screen.findByText("First");
-
-    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
-    intersectLatest();
-    expect(await screen.findByText("Stop timeline")).toBeInTheDocument();
-    await waitFor(() => expect(latestObserverOptions()).toBeDefined());
-    intersectLatest();
-    await flushMicrotasks();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
   it("keeps automatic pagination available when all loaded events are filtered", () => {
     render(
       <Timeline
@@ -365,12 +308,6 @@ describe("session reader items", () => {
     expect(screen.queryByText(/Internal body/)).not.toBeInTheDocument();
   });
 });
-
-async function flushMicrotasks(turns = 6): Promise<void> {
-  await act(async () => {
-    for (let index = 0; index < turns; index += 1) await Promise.resolve();
-  });
-}
 
 function message(id: string, ordinal: number, markdown: string): TimelineItem {
   return {

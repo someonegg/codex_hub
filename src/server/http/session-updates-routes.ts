@@ -78,7 +78,7 @@ export function createSessionUpdatesRoutes(updates: SessionUpdatesService): ApiR
   };
 }
 
-function parseUpdatesQuery(params: URLSearchParams): SessionUpdatesQuery {
+export function parseUpdatesQuery(params: URLSearchParams): SessionUpdatesQuery {
   only(params, ["cursor", "after"]);
   const cursor = optional(params, "cursor");
   const after = optional(params, "after");

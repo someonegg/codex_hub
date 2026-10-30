@@ -281,3 +281,10 @@ it("classifies malformed paths, missing files and storage failures with correlat
     deletion.mockRestore();
   }
 });
+
+it("rejects a blank artifact name", async () => {
+  const { source, project, store } = await fixture();
+  await expect(store.publish(source, project, " ")).rejects.toThrow(
+    "Artifact name must not be empty",
+  );
+});
