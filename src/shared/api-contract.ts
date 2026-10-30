@@ -51,7 +51,6 @@ export interface InspectResponse {
   live: boolean;
   interaction: InteractionResponse;
   items: TimelineItem[];
-  latestNumber: number | null;
   nextAfter: number;
   hasMore: boolean;
 }

@@ -265,7 +265,7 @@ List retains its table; terminal and operation confirmations remain concise.
 
 `GET /api/v1/sessions/:id/inspect?limit=N&after=number` uses the existing source
 snapshot and runtime state assembly. It returns `session`, `live`, `interaction`,
-`items`, `latestNumber`, `nextAfter`, and `hasMore`. Interaction follows the existing
+`items`, `nextAfter`, and `hasMore`. Interaction follows the existing
 [connection and activity contracts](#tmux-interaction). Log and runtime observations
 are not atomic. A missing session returns `404`, distinct from an empty page.
 
@@ -281,13 +281,15 @@ Limit defaults to 10 and accepts 1–300 visible records, returned in original o
 Without `after`, the page starts at the latest N; older history does not set
 `hasMore`. With `after`, it starts at the earliest visible record beyond that
 number; `after=0` starts at the beginning. The existing [item-page byte budget](session-jsonl-filtering.md#truncation-and-paging)
-can yield fewer records without additional body truncation.
+can yield fewer records without additional body truncation; a single oversized record is still returned.
+Latest reads scan backward for N visible records before applying the byte budget in
+original order. Reads with `after` use binary search to skip earlier ordinals,
+then stop at the first unreturned visible record. No persistent visibility index is maintained.
 
-| Field          | Meaning                                                                                       |
-| -------------- | --------------------------------------------------------------------------------------------- |
-| `latestNumber` | Latest visible ordinal, or null                                                               |
-| `nextAfter`    | Consumed raw timeline boundary; may cross hidden records but never an unreturned visible item |
-| `hasMore`      | Visible records remain after that boundary                                                    |
+| Field       | Meaning                                                                                       |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| `nextAfter` | Consumed raw timeline boundary; may cross hidden records but never an unreturned visible item |
+| `hasMore`   | Visible records remain after that boundary                                                    |
 
 An empty page still advances through hidden tail records and supplies current
 state. Numbers refer to the current timeline: rewrites are not detected, and

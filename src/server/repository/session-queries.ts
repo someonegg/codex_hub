@@ -70,29 +70,40 @@ export class SessionQueries {
     const end = timeline.at(-1)?.ordinal ?? 0;
     if ((query.after ?? 0) > end)
       throw new RepositoryQueryError("invalid_query", "after exceeds the current timeline range");
-    const visible = timeline.filter(
-      (item) => item.kind === "message" || item.kind === "user_input",
-    );
     const limit = query.limit ?? 10;
-    const candidates =
-      query.after === undefined
-        ? visible.slice(-limit)
-        : visible.filter((item) => item.ordinal > query.after!);
+    let start = 0;
+    if (query.after === undefined) {
+      let remaining = limit;
+      start = timeline.length;
+      while (start > 0 && remaining > 0) {
+        start--;
+        if (isInspectVisible(timeline[start]!)) remaining--;
+      }
+    } else {
+      let upper = timeline.length;
+      while (start < upper) {
+        const middle = start + Math.floor((upper - start) / 2);
+        if (timeline[middle]!.ordinal <= query.after) start = middle + 1;
+        else upper = middle;
+      }
+    }
     const items: DomainTimelineRecord[] = [];
     let bytes = 0;
-    for (const item of candidates) {
+    let index = start;
+    for (; index < timeline.length; index++) {
+      const item = timeline[index]!;
+      if (!isInspectVisible(item)) continue;
+      if (items.length >= limit) break;
       const size = Buffer.byteLength(JSON.stringify(item), "utf8") + (items.length ? 1 : 0);
-      if (items.length >= limit || (items.length > 0 && bytes + size > MAX_ITEM_PAGE_BYTES)) break;
+      if (items.length > 0 && bytes + size > MAX_ITEM_PAGE_BYTES) break;
       items.push(item);
       bytes += size;
     }
-    const next = candidates[items.length];
     return {
       session: versioned.normalized.session,
       items,
-      latestNumber: visible.at(-1)?.ordinal ?? null,
-      nextAfter: next ? (timeline[timeline.indexOf(next) - 1]?.ordinal ?? 0) : end,
-      hasMore: next !== undefined,
+      nextAfter: index < timeline.length ? (timeline[index - 1]?.ordinal ?? 0) : end,
+      hasMore: index < timeline.length,
     };
   }
 
@@ -282,4 +293,8 @@ function validateItemQuery(query: ItemPageCriteria): void {
       `limit must be between 1 and ${MAX_ITEM_LIMIT}`,
     );
   }
+}
+
+function isInspectVisible(item: DomainTimelineRecord): boolean {
+  return item.kind === "message" || item.kind === "user_input";
 }

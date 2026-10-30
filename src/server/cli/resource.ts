@@ -38,6 +38,21 @@ export async function runResourceCommand(
       "invalid_arguments",
       "Expected page/diff publish <source>, list, or delete <id>",
     );
+  const allowed = new Set(["home-dir", "json", "help"]);
+  if (action === "publish") {
+    allowed.add("title");
+    if (resource === "page") {
+      allowed.add("project");
+      allowed.add("name");
+    }
+  }
+  for (const option of Object.keys(values)) {
+    if (!allowed.has(option))
+      throw new CommandError(
+        "invalid_arguments",
+        `Option --${option} is not supported for ${resource} ${action}`,
+      );
+  }
   const directory = join(resolveHomeDirectory(values["home-dir"]), "hosting");
   const pages = new HostingStore(directory);
   const diffs = new DiffStore(directory);

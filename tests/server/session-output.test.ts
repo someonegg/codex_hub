@@ -33,7 +33,6 @@ const base = {
     itemCount: 9,
   },
   live: true,
-  latestNumber: 100,
   nextAfter: 44,
   hasMore: true,
   interaction: {
