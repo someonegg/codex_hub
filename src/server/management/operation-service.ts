@@ -120,7 +120,8 @@ export class OperationService {
     const fingerprint = JSON.stringify([
       home,
       "create",
-      input.directory,
+      input.projectDirectory,
+      input.workingDirectory ?? input.projectDirectory,
       input.worktree,
       input.yolo ?? false,
     ]);

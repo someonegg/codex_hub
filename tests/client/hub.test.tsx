@@ -39,7 +39,7 @@ beforeEach(() => {
   sessionStorage.clear();
   browserStorage.setItem(
     "ahub.navigation",
-    JSON.stringify({ includeArchived: false, expanded: ["project-reader"], scroll: 0 }),
+    JSON.stringify({ includeArchived: false, expanded: ["/project/reader"], scroll: 0 }),
   );
   Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
@@ -504,7 +504,7 @@ it("requires explicit creation home in aggregate view and restores a stored filt
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ home: "work", directory: "/project" }),
+    expect.objectContaining({ home: "work", projectDirectory: "/project" }),
   );
   fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });
   view.unmount();
@@ -534,7 +534,7 @@ it("preselects the default creation home and respects an explicit home filter", 
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ home: "default", directory: "/project" }),
+    expect.objectContaining({ home: "default", projectDirectory: "/project" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close new session" }));
   fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });

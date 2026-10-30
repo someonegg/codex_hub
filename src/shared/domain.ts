@@ -25,7 +25,7 @@ export interface SessionSummary {
   home: string;
   id: SessionId;
   title: string;
-  projectId: string | null;
+  projectDirectory: string | null;
   status: SessionStatus;
   parentId: SessionId | null;
   isChild: boolean;

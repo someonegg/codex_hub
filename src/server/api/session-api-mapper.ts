@@ -18,7 +18,6 @@ import type {
   ItemPageResult,
   ToolDetailResult,
 } from "../repository/session-queries.js";
-import { opaqueIdForParts } from "../security/opaque-id.js";
 
 export type SessionDisplayTitleResolver = (session: DomainSession) => string | null;
 
@@ -32,19 +31,17 @@ export class SessionApiMapper {
     sessions: readonly DomainSession[],
     effectiveStates?: ReadonlyMap<string, SessionStatus>,
   ): SessionListResponse {
-    const projects = new Map<string, { id: string; directory: string }>();
+    const projectDirectories = new Set<string>();
     const summaries = sessions
       .map((session) => {
-        const directory = session.projectDirectory;
-        const projectId = directory === null ? null : opaqueIdForParts("project", directory);
+        const projectDirectory = session.projectDirectory;
         const isChild = session.isChild ?? session.parentId !== null;
-        if (!isChild && directory !== null && projectId !== null)
-          projects.set(projectId, { id: projectId, directory });
+        if (!isChild && projectDirectory !== null) projectDirectories.add(projectDirectory);
         return {
           id: session.id,
           home: session.origin.home,
           title: this.resolveDisplayTitle(session) ?? session.title,
-          projectId,
+          projectDirectory,
           status:
             effectiveStates?.get(session.id) ??
             (session.archived ? ("archived" as const) : ("normal" as const)),
@@ -56,7 +53,7 @@ export class SessionApiMapper {
       .sort((a, b) => compareIds(a.id, b.id));
     const structure = {
       homes: [...this.homes].sort((a, b) => compareIds(a.nickname, b.nickname)),
-      projects: [...projects.values()].sort((a, b) => compareIds(a.id, b.id)),
+      projects: [...projectDirectories].sort(compareIds).map((directory) => ({ directory })),
       sessions: summaries.map(({ updatedAt, ...summary }) => summary),
     };
     return {

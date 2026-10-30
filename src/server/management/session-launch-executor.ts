@@ -22,18 +22,25 @@ export class SessionLaunchExecutor {
     private readonly waitMs: OperationTimeouts,
     private readonly runtime?: RuntimeEvaluator,
   ) {}
-  async create(entry: OperationEntry, input: Extract<CreateSessionRequest, { directory: string }>) {
+  async create(
+    entry: OperationEntry,
+    input: Extract<CreateSessionRequest, { projectDirectory: string }>,
+  ) {
     try {
       const manager = this.managers.get(entry.home);
-      const resolved = await manager.resolveDirectory(input.directory);
+      const project = await manager.resolveDirectory(input.projectDirectory);
+      const working =
+        input.workingDirectory === undefined || input.workingDirectory === input.projectDirectory
+          ? project
+          : await manager.resolveDirectory(input.workingDirectory);
       if (!this.control.pending(entry)) return;
       this.control.transition(entry, { kind: "create", phase: "launching" });
       const target = await manager.launch({
         operationId: entry.metadata.operationId,
-        directory: resolved.directory,
+        workingDirectory: working.directory,
         worktree: input.worktree,
         yolo: input.yolo ?? false,
-        projectDirectory: resolved.directory,
+        projectDirectory: project.directory,
       });
       if (!this.control.pending(entry)) return;
       this.control.transition(
@@ -41,7 +48,7 @@ export class SessionLaunchExecutor {
         {
           kind: "create",
           phase: "observing",
-          project: resolved.directory,
+          project: project.directory,
           target,
           startedAt: this.now(),
         },
@@ -79,7 +86,7 @@ export class SessionLaunchExecutor {
       this.control.transition(entry, { kind: "create", phase: "launching" });
       const target = await manager.launch({
         operationId: entry.metadata.operationId,
-        directory,
+        workingDirectory: directory,
         worktree: false,
         yolo: input.yolo ?? false,
         resumeNativeId: session.sourceId!,

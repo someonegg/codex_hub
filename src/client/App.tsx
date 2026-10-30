@@ -94,7 +94,7 @@ function SessionHub() {
               <span aria-hidden="true">/</span>
               <strong>
                 {catalog.list?.projects
-                  .find((project) => project.id === selectedProject)
+                  .find((project) => project.directory === selectedProject)
                   ?.directory.split(/[\\/]/)
                   .filter(Boolean)
                   .at(-1) ?? t("unknownProject")}

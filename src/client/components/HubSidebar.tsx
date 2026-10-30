@@ -114,8 +114,8 @@ export function HubSidebar({
           <p className="hub-empty">{t("noMainSessionsYet")}</p>
         ) : null}
         {groups.map((group) => {
-          const groupName = group.id === null ? t("unknownProject") : group.name;
-          const key = group.id ?? "unknown";
+          const groupName = group.directory === null ? t("unknownProject") : group.name;
+          const key = group.directory ?? "unknown";
           const expanded = navigation.expanded.includes(key);
           return (
             <section className="hub-project" key={key} data-project={key}>

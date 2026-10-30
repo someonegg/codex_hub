@@ -41,7 +41,7 @@ describe("session API mapping", () => {
       id: session.id,
       home: session.origin.home,
       title: session.title,
-      projectId: expect.any(String),
+      projectDirectory: "/project",
       status: "normal",
       parentId: null,
       isChild: false,
@@ -70,7 +70,7 @@ describe("session API mapping", () => {
       { ...session, id: "shared-child", parentId: session.id },
     ]);
 
-    expect(catalog.projects).toEqual([{ id: expect.any(String), directory: "/project" }]);
+    expect(catalog.projects).toEqual([{ directory: "/project" }]);
     expect(catalog.sessions).toHaveLength(4);
     expect(catalog.sessions.filter((item) => item.isChild).map((item) => item.id)).toEqual([
       "child",

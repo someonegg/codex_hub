@@ -4,10 +4,10 @@ import type { SessionListResponse } from "../../src/shared/api-contract";
 
 import { catalogGroups, projectForSession } from "../../src/client/state/catalog-groups";
 
-const session = (id: string, projectId: string | null, extra = {}) => ({
+const session = (id: string, projectDirectory: string | null, extra = {}) => ({
   id,
   home: "default",
-  projectId,
+  projectDirectory,
   title: id,
   status: "normal" as const,
   parentId: null,
@@ -18,35 +18,33 @@ const session = (id: string, projectId: string | null, extra = {}) => ({
 const list: SessionListResponse = {
   revision: "revision",
   homes: [],
-  projects: [
-    { id: "p1", directory: "/one/app" },
-    { id: "p2", directory: "/two/app" },
-    { id: "empty", directory: "/empty" },
-  ],
+  projects: [{ directory: "/one/app" }, { directory: "/two/app" }, { directory: "/empty" }],
   sessions: [
-    session("a", "p1"),
-    session("b", "p1"),
-    session("c", "p2", { status: "archived" as const }),
-    session("orphan", "p2", { isChild: true }),
+    session("a", "/one/app"),
+    session("b", "/one/app"),
+    session("c", "/two/app", { status: "archived" as const }),
+    session("orphan", "/two/app", { isChild: true }),
     session("unknown", null),
-    session("child", "p1", { isChild: true, parentId: "a" }),
+    session("child", "/one/app", { isChild: true, parentId: "a" }),
   ],
 };
 describe("project navigation derivation", () => {
   it("counts only visible main sessions, hides empty projects, and disambiguates names", () => {
     expect(
       catalogGroups(list, false).map((group) => [
-        group.id,
+        group.directory,
         group.name,
         group.sessions.map((item) => item.id),
       ]),
     ).toEqual([
       [null, "Unknown project", ["unknown"]],
-      ["p1", "app · /one/app", ["a", "b"]],
+      ["/one/app", "app · /one/app", ["a", "b"]],
     ]);
     const all = catalogGroups(list, true);
-    expect(all.map((group) => group.id)).toEqual([null, "p1", "p2"]);
-    expect(all.find((group) => group.id === "p2")?.sessions.map((item) => item.id)).toEqual(["c"]);
+    expect(all.map((group) => group.directory)).toEqual([null, "/one/app", "/two/app"]);
+    expect(
+      all.find((group) => group.directory === "/two/app")?.sessions.map((item) => item.id),
+    ).toEqual(["c"]);
   });
   it("sorts by updatedAt with deterministic ID ties and missing times last", () => {
     const groups = catalogGroups(
@@ -64,7 +62,7 @@ describe("project navigation derivation", () => {
       },
       true,
     );
-    expect(groups.map((group) => group.id)).toEqual(["p2", "p1", null]);
+    expect(groups.map((group) => group.directory)).toEqual(["/two/app", "/one/app", null]);
     expect(groups[1]?.sessions.map((item) => item.id)).toEqual(["b", "a"]);
     expect(
       catalogGroups(
@@ -77,7 +75,7 @@ describe("project navigation derivation", () => {
         },
         false,
       )
-        .find((group) => group.id === "p1")
+        .find((group) => group.directory === "/one/app")
         ?.sessions.map((item) => item.id),
     ).toEqual(["a", "b"]);
   });
@@ -88,11 +86,11 @@ it("locates a child under its main ancestor project and terminates broken parent
     ...list,
     sessions: [
       ...list.sessions,
-      session("different-directory", "p2", { isChild: true, parentId: "a" }),
-      session("cycle", "p2", { isChild: true, parentId: "cycle" }),
+      session("different-directory", "/two/app", { isChild: true, parentId: "a" }),
+      session("cycle", "/two/app", { isChild: true, parentId: "cycle" }),
     ],
   };
-  expect(projectForSession(children, "different-directory")).toBe("p1");
-  expect(projectForSession(children, "orphan")).toBe("p2");
-  expect(projectForSession(children, "cycle")).toBe("p2");
+  expect(projectForSession(children, "different-directory")).toBe("/one/app");
+  expect(projectForSession(children, "orphan")).toBe("/two/app");
+  expect(projectForSession(children, "cycle")).toBe("/two/app");
 });

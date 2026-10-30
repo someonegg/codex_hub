@@ -263,6 +263,9 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
     `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/socket\n%1\n\n${path}\n</user_shell_command>`;
   await appendFile(file, message(1, bind("/missing/project ' $()")));
   expect(await project()).toBe("/missing/project ' $()");
+  expect((await source.refresh()).sessions[0]!.normalized.session.workingDirectory).toBe(
+    "/missing/working",
+  );
   await appendFile(file, message(2, bind("relative")));
   expect(await project()).toBe("/missing/project ' $()");
   await appendFile(file, message(3, shell("/tmp/socket", "%2")));

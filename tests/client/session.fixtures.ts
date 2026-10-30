@@ -48,14 +48,14 @@ export const listBody = {
       home: "default",
       id: SESSION_ID,
       title: baseSession.title,
-      projectId: "project-reader",
+      projectDirectory: "/project/reader",
       status: "normal" as const,
       parentId: null,
       isChild: false,
       updatedAt: baseSession.updatedAt,
     },
   ],
-  projects: [{ id: "project-reader", directory: "/project/reader" }],
+  projects: [{ directory: "/project/reader" }],
 };
 
 export function readContext(cursor: TimelineCursor = TIMELINE_CURSOR, hasMore = true) {

@@ -89,9 +89,10 @@ ahub-cli session inspect <id>
 使用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端。
 終端切換工作階段後，用 `handoff <id>` 移交繫結。
 
-建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立支援 `--home`、`--worktree`
+建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立需要 `--project`，支援 `--cwd`、`--home`、`--worktree`
 和 `--yolo`；恢復保留原 Home，支援 `--yolo`。省略 `--home` 時選擇第一個已設定 Home。
-刪除前必須先封存工作階段。
+省略 `--cwd` 時從專案目錄啟動；明確指定其他工作目錄時仍保留 `--project` 的專案歸屬。
+兩個目錄均可使用相對路徑，CLI 會將其轉為絕對路徑。刪除前必須先封存工作階段。
 
 工作階段命令預設連線至 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
 HTTP 位址；此用戶端不支援 HTTPS。用 `--timeout <seconds>` 修改預設的 360 秒逾時。

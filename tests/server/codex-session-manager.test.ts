@@ -18,7 +18,7 @@ it.each([
     const manager = new CodexSessionManager("/codex-home", tmux);
     await manager.launch({
       operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
-      directory: "/project with spaces",
+      workingDirectory: "/project with spaces",
       worktree,
       yolo,
     });
@@ -36,7 +36,7 @@ it("resumes an explicit UUID in the original CODEX_HOME with an operation bindin
   const nativeId = "00000000-0000-4000-8000-000000000001";
   await manager.launch({
     operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
-    directory: "/project",
+    workingDirectory: "/project",
     worktree: false,
     yolo: true,
     resumeNativeId: nativeId,
@@ -58,7 +58,7 @@ it("resumes an explicit UUID in the original CODEX_HOME with an operation bindin
     expect(() =>
       manager.launch({
         operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
-        directory: "/project",
+        workingDirectory: "/project",
         worktree: false,
         yolo: false,
         resumeNativeId,

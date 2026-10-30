@@ -67,7 +67,7 @@ const request = {
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
   const list = mapList({
     homes: [{ nickname: "default" }],
-    projects: [{ id: "p", directory: "/project" }],
+    projects: [{ directory: "/project" }],
     revision: "secret",
     sessions: [
       {
@@ -75,15 +75,22 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         title: "title",
         status: "normal",
         home: "default",
-        projectId: "p",
+        projectDirectory: "/project",
         updatedAt: null,
         isChild: false,
         parentId: null,
         secret: "secret",
       },
-      { id: "child", isChild: true, parentId: "main", projectId: "p" },
-      { id: "orphan", isChild: true, parentId: null, projectId: "p" },
-      { id: "missing", title: "missing", status: "archived", home: "work", updatedAt: null },
+      { id: "child", isChild: true, parentId: "main", projectDirectory: "/project" },
+      { id: "orphan", isChild: true, parentId: null, projectDirectory: "/project" },
+      {
+        id: "missing",
+        title: "missing",
+        status: "archived",
+        home: "work",
+        projectDirectory: null,
+        updatedAt: null,
+      },
     ],
   } as unknown as SessionListResponse);
   expect(list).toEqual({

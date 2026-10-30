@@ -89,9 +89,10 @@ ahub-cli session inspect <id>
 使用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端。
 终端切换会话后，用 `handoff <id>` 移交绑定。
 
-创建、恢复、退出、归档等命令见 `ahub-cli session --help`。创建支持 `--home`、`--worktree`
+创建、恢复、退出、归档等命令见 `ahub-cli session --help`。创建要求 `--project`，支持 `--cwd`、`--home`、`--worktree`
 和 `--yolo`；恢复保留原 Home，支持 `--yolo`。省略 `--home` 时选择第一个已配置 Home。
-删除前必须先归档会话。
+省略 `--cwd` 时从项目目录启动；显式指定其他工作目录时仍保留 `--project` 的项目归属。
+两个目录均可使用相对路径，CLI 会将其转为绝对路径。删除前必须先归档会话。
 
 会话命令默认连接 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
 HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默认的 360 秒超时。

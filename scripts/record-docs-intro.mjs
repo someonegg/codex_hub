@@ -100,7 +100,7 @@ async function record(
         const body = route.request().postDataJSON();
         if (
           body.home !== "default" ||
-          body.directory !== "/projects/atlas-dashboard" ||
+          body.projectDirectory !== "/projects/atlas-dashboard" ||
           body.worktree
         ) {
           throw new Error("Unexpected create request");
@@ -122,9 +122,16 @@ async function record(
       return json({
         revision: String(created),
         homes: [{ nickname: "work" }, { nickname: "default" }],
-        projects: [{ id: "atlas", directory: "/projects/atlas-dashboard" }],
+        projects: [{ directory: "/projects/atlas-dashboard" }],
         sessions: created
-          ? [{ ...session(), home: "default", projectId: "atlas", isChild: false }]
+          ? [
+              {
+                ...session(),
+                home: "default",
+                projectDirectory: "/projects/atlas-dashboard",
+                isChild: false,
+              },
+            ]
           : [],
       });
     }
@@ -175,7 +182,9 @@ async function record(
     await demo.waitForFunction(
       () =>
         document
-          .querySelector('.hub-project[data-project="atlas"] button[aria-expanded]')
+          .querySelector(
+            '.hub-project[data-project="/projects/atlas-dashboard"] button[aria-expanded]',
+          )
           ?.getAttribute("aria-expanded") === "true",
     );
     await capture(1200);

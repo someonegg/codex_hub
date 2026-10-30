@@ -71,17 +71,26 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
         }
         if (
           Object.keys(body).some(
-            (key) => !["directory", "worktree", "yolo", "requestId", "home"].includes(key),
+            (key) =>
+              ![
+                "projectDirectory",
+                "workingDirectory",
+                "worktree",
+                "yolo",
+                "requestId",
+                "home",
+              ].includes(key),
           ) ||
           (body.home !== undefined && typeof body.home !== "string") ||
-          typeof body.directory !== "string" ||
+          typeof body.projectDirectory !== "string" ||
+          (body.workingDirectory !== undefined && typeof body.workingDirectory !== "string") ||
           typeof body.worktree !== "boolean" ||
           (body.yolo !== undefined && typeof body.yolo !== "boolean")
         ) {
           throw new RequestBodyError(
             400,
             "invalid_json",
-            "directory and worktree are required; yolo must be a boolean if provided",
+            "projectDirectory and worktree are required; yolo must be a boolean if provided",
           );
         }
         sendJson(
@@ -89,7 +98,10 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           202,
           operations.create({
             ...(typeof body.home === "string" ? { home: body.home } : {}),
-            directory: body.directory,
+            projectDirectory: body.projectDirectory,
+            ...(typeof body.workingDirectory === "string"
+              ? { workingDirectory: body.workingDirectory }
+              : {}),
             worktree: body.worktree,
             yolo: body.yolo ?? false,
             requestId: body.requestId,

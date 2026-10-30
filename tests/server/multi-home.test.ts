@@ -41,7 +41,7 @@ it("isolates native identities, names and relationships while merging projects a
     expect(personal.id).not.toBe(work.id);
     expect(personal.home).toBe("personal");
     expect(work.home).toBe("work");
-    expect(personal.projectId).toBe(work.projectId);
+    expect(personal.projectDirectory).toBe(work.projectDirectory);
     for (const parent of [personal, work]) {
       const detail = (await hub.sessions.getSession(parent.id))!.session;
       expect(detail.title).toBe(parent.title);

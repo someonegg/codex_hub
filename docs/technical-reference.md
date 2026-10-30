@@ -77,14 +77,14 @@ Creation defaults `home` to the first configured nickname. Unknown nicknames ret
 `GET /api/v1/sessions` returns `{ revision, homes, projects, sessions }` without
 pagination or server filtering:
 
-| Collection | Fields                                                                           |
-| ---------- | -------------------------------------------------------------------------------- |
-| `homes`    | `nickname`, including empty homes                                                |
-| `projects` | `id`, `directory`                                                                |
-| `sessions` | `id`, `home`, `title`, `projectId`, `status`, `parentId`, `isChild`, `updatedAt` |
+| Collection | Fields                                                                                  |
+| ---------- | --------------------------------------------------------------------------------------- |
+| `homes`    | `nickname`, including empty homes                                                       |
+| `projects` | `directory`                                                                             |
+| `sessions` | `id`, `home`, `title`, `projectDirectory`, `status`, `parentId`, `isChild`, `updatedAt` |
 
 Reads/updates resolve titles from valid owning-Home `thread_name`, then original title. Missing directories yield
-`projectId: null`; `isChild` preserves declared parentage even without `parentId`.
+`projectDirectory: null`; `isChild` preserves declared parentage even without `parentId`.
 
 Only `after` (43-character base64url revision) is accepted; invalid/extra queries return `400`.
 
@@ -187,6 +187,10 @@ include socketPath, paneId, and sessionName (null when unknown).
 | `terminal`        | `{ content, truncated, capturedAt }`                                                                                                          |
 | Input/handoff     | `{ sessionId, status: "sent" }`                                                                                                               |
 | Lifecycle         | `{ sessionId, status: "succeeded" }`; create/resume also include `tmux`                                                                       |
+
+CLI `create --project <directory> [--cwd <directory>]` resolves both paths
+to absolute paths. `--project` sets association; `--cwd` selects the launch
+location and defaults to the project. Resume accepts no directory overrides.
 
 `list` excludes all `isChild` sessions, including orphans; `--project` filters the
 associated directory, not launch/worktree location. Missing associations and
@@ -387,13 +391,21 @@ backoff. See [service](../src/server/interaction/terminal-preview-service.ts) an
 
 ## Asynchronous management
 
-| Endpoint                              | Body / result                                                                                                              |
-| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions`               | New: `{ home?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
-| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                     |
-| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                     |
-| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                     |
-| `GET /api/v1/operations/:operationId` | Current operation                                                                                                          |
+| Endpoint                              | Body / result                                                                                                                                        |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ home?, projectDirectory, workingDirectory?, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                               |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                               |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                               |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                                    |
+
+Creation requires `projectDirectory`; optional `workingDirectory` defaults to it.
+The adapter validates both as absolute existing local directories and resolves
+symlinks, without checking Git relationships. The working directory controls
+process launch; the project directory controls binding and association checks.
+Idempotency includes both directories and launch options; omitted working
+directory equals an explicit project directory. `worktree` remains an independent
+agent launch option.
 
 ### Service responsibilities
 
@@ -430,7 +442,7 @@ external-change scan or filesystem/tmux atomicity. Native commands use owning
 
 | Operation | Validation and confirmation                                                                                                                                                                                                    |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Create    | Existing directory resolves to real launch/project path, including worktrees. Confirm operation marker, target, project, valid bind within 300 seconds after launch.                                                           |
+| Create    | Project and effective working directories independently resolve to existing real paths; equal inputs share resolution. Confirm operation marker, target, project, valid bind within 300 seconds after launch.                  |
 | Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.           |
 | Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks. |
 | Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                |
@@ -440,7 +452,7 @@ Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
 `--worktree`/`--yolo` (off by default), and initial binding instruction. Resume uses
 `codex resume <UUID>`, trying Working then Project Directory: skip invalid paths,
 fall back only on missing/non-directory paths. Launch from chosen real path,
-retain original project association; reject home/directory/worktree overrides.
+retain original project association; reject home/projectDirectory/workingDirectory/worktree overrides.
 Users must ensure unbound sessions' original processes have exited.
 
 Attach appears after 30 seconds and survives timeout, using known target or

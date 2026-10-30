@@ -56,7 +56,7 @@ it("validates create directories, resolves symlinks and passes the explicit proj
     await expect(manager.resolveDirectory(path)).rejects.toThrow("absolute local path");
   await manager.launch({
     operationId: "00000000-0000-4000-8000-000000000001",
-    directory: resolved.directory,
+    workingDirectory: resolved.directory,
     worktree: true,
     yolo: false,
     projectDirectory: "/original/project",

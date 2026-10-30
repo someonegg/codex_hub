@@ -20,7 +20,6 @@ export interface SessionListQuery {
 }
 
 export interface SessionProject {
-  id: string;
   directory: string;
 }
 
@@ -181,7 +180,8 @@ export type CreateSessionRequest =
   | {
       resumeSessionId: string;
       home?: never;
-      directory?: never;
+      projectDirectory?: never;
+      workingDirectory?: never;
       worktree?: never;
       yolo?: boolean;
       requestId: string;
@@ -189,7 +189,8 @@ export type CreateSessionRequest =
   | {
       resumeSessionId?: never;
       home?: string;
-      directory: string;
+      projectDirectory: string;
+      workingDirectory?: string;
       worktree: boolean;
       yolo?: boolean;
       requestId: string;

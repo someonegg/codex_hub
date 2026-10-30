@@ -2,7 +2,6 @@ import type { SessionListResponse } from "../../shared/api-contract";
 import type { SessionSummary } from "../../shared/domain";
 
 interface ProjectGroup {
-  id: string | null;
   directory: string | null;
   name: string;
   sessions: SessionSummary[];
@@ -18,8 +17,7 @@ export function catalogGroups(
   for (const project of list.projects) {
     const name = project.directory.split(/[\\/]/).filter(Boolean).at(-1) ?? project.directory;
     names.set(name, (names.get(name) ?? 0) + 1);
-    groups.set(project.id, {
-      id: project.id,
+    groups.set(project.directory, {
       directory: project.directory,
       name,
       sessions: [],
@@ -27,7 +25,6 @@ export function catalogGroups(
     });
   }
   groups.set(null, {
-    id: null,
     directory: null,
     name: "Unknown project",
     sessions: [],
@@ -35,7 +32,7 @@ export function catalogGroups(
   });
   for (const session of list.sessions) {
     if (session.isChild || (!includeArchived && session.status === "archived")) continue;
-    const group = groups.get(session.projectId) ?? groups.get(null)!;
+    const group = groups.get(session.projectDirectory) ?? groups.get(null)!;
     group.sessions.push(session);
   }
   for (const group of groups.values()) {
@@ -52,7 +49,10 @@ export function catalogGroups(
   }
   return [...groups.values()]
     .filter((group) => group.sessions.length > 0)
-    .sort((a, b) => compareTime(a.updatedAt, b.updatedAt) || compareId(a.id ?? "", b.id ?? ""));
+    .sort(
+      (a, b) =>
+        compareTime(a.updatedAt, b.updatedAt) || compareId(a.directory ?? "", b.directory ?? ""),
+    );
 }
 function compareTime(a: number, b: number) {
   return a === b ? 0 : a > b ? -1 : 1;
@@ -76,5 +76,5 @@ export function projectForSession(
     if (!parent) break;
     current = parent;
   }
-  return current?.projectId;
+  return current?.projectDirectory;
 }

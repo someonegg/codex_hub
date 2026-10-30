@@ -67,7 +67,7 @@ describe("session catalog long polling", () => {
           home: "default",
           id: "one",
           title: "One",
-          projectId: null,
+          projectDirectory: null,
           status: "normal",
           parentId: null,
           isChild: false,

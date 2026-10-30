@@ -23,7 +23,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   });
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
-    resolveDirectory: vi.fn(async () => ({ directory: home })),
+    resolveDirectory: vi.fn(async (directory: string) => ({ directory })),
     launch: vi.fn(async () => ({ socketPath: "/tmp/test", paneId: "%1" })),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
@@ -48,7 +48,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     },
   );
   const base = `${origin}/api/v1`;
-  const body = { directory: home, worktree: false, requestId: "http-request-one" };
+  const body = { projectDirectory: home, worktree: false, requestId: "http-request-one" };
   const post = (path: string, value: unknown, extra: RequestInit = {}) =>
     fetch(`${base}${path}`, {
       method: "POST",
@@ -119,7 +119,8 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     yolo: false,
   };
   for (const extra of [
-    { directory: home },
+    { projectDirectory: home },
+    { workingDirectory: home },
     { home: "test" },
     { worktree: false },
     { yolo: "true" },
@@ -139,6 +140,9 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     operationId: resumeOp.operationId,
   });
   expect((await post("/sessions", { ...resumeBody, yolo: true })).status).toBe(409);
+  for (const workingDirectory of [null, 123, false]) {
+    expect((await post("/sessions", { ...body, workingDirectory })).status).toBe(400);
+  }
   const created = await post("/sessions", body);
   expect(created.status).toBe(202);
   const operation = await created.json();
@@ -146,6 +150,10 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   expect(await (await post("/sessions", body)).json()).toMatchObject({
     operationId: operation.operationId,
   });
+  expect(await (await post("/sessions", { ...body, workingDirectory: home })).json()).toMatchObject(
+    { operationId: operation.operationId },
+  );
+  expect((await post("/sessions", { ...body, workingDirectory: "/other" })).status).toBe(409);
   expect((await post("/sessions", { ...body, worktree: true })).status).toBe(409);
   const retrieved = await fetch(`${base}/operations/${operation.operationId}`);
   expect(retrieved.status).toBe(200);
@@ -167,6 +175,17 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   expect(manager.launch).toHaveBeenCalledOnce();
   expect((await post("/sessions", { ...body, requestId: "http-request-two" })).status).toBe(202);
   expect(manager.launch).toHaveBeenCalledTimes(2);
+  const split = await post("/sessions", {
+    ...body,
+    workingDirectory: "/other",
+    requestId: "http-split-directory",
+  });
+  expect(split.status).toBe(202);
+  await vi.waitFor(() =>
+    expect(manager.launch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ projectDirectory: home, workingDirectory: "/other" }),
+    ),
+  );
   const id = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
   expect((await post(`/sessions/${id}/archive`, {})).status).toBe(202);
   expect((await post(`/sessions/${id}other`, {}, { method: "DELETE" })).status).toBe(202);
@@ -178,5 +197,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       })
     ).status,
   ).toBe(403);
-  expect((await post("/sessions", { directory: home, requestId: "bad-request" })).status).toBe(400);
+  expect(
+    (await post("/sessions", { projectDirectory: home, requestId: "bad-request" })).status,
+  ).toBe(400);
 });
