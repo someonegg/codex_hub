@@ -6,7 +6,6 @@ import { describe, expect, it, vi } from "vitest";
 import { codexInteraction } from "../../src/server/adapters/codex/interaction-parser.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "../../src/server/create-hub.js";
 import type {
   DomainTimelineRecord,
   NormalizedSession,
@@ -23,6 +22,7 @@ import type { TimelineCursor } from "../../src/shared/api-contract.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 async function fixtureRepository() {
   const home = await createTempDirectory("codex-repository-");
@@ -668,4 +668,28 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     updates.close();
     catalog.close();
   }
+});
+
+it("binds update cursor decisions to the captured snapshot across refreshes", async () => {
+  const { repository, rollout, session } = await basicFixtureSession();
+  const page = (await repository.getItems(session.id, { limit: 300 }))!;
+  const read = (await repository.readSessionUpdates(session.id))!;
+  expect(read(page.cursor).hasMore).toBe(false);
+  await appendFile(
+    rollout,
+    JSON.stringify({
+      timestamp: "2026-07-28T12:00:00Z",
+      type: "response_item",
+      payload: {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: "appended" }],
+      },
+    }) + "\n",
+  );
+  await repository.refresh();
+  expect(read(page.cursor).hasMore).toBe(false);
+  expect((await repository.getSessionUpdates(session.id, page.cursor))!.hasMore).toBe(true);
+  const latest = (await repository.getItems(session.id, { cursor: page.cursor }))!;
+  expect(() => read(latest.cursor)).toThrow();
 });

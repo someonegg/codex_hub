@@ -26,6 +26,7 @@ import type {
   SessionItemPageResponse,
   SessionReadDetailResponse,
   SessionReader,
+  SessionUpdatesRead,
   SessionUpdatesSnapshot,
 } from "./session-reader.js";
 
@@ -54,9 +55,10 @@ export class SessionReadService implements SessionReader {
 
   async managementSnapshot() {
     const snapshot = await this.#store.refresh();
-    return {
-      sessions: [...snapshot.sessions.values()].map(({ normalized }) => normalized.session),
-    };
+    const byId = new Map(
+      [...snapshot.sessions].map(([id, value]) => [id, value.normalized.session]),
+    );
+    return { sessions: [...byId.values()], byId };
   }
 
   async refresh(): Promise<void> {
@@ -68,7 +70,7 @@ export class SessionReadService implements SessionReader {
     const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
     if (!this.runtime) return this.#mapper.list(sessions);
     const states = await Promise.all(
-      sessions.map((session) => this.runtime!.evaluate(session, sessions, false)),
+      sessions.map((session) => this.runtime!.evaluate(session, false)),
     );
     const byId = new Map(sessions.map((session, index) => [session.id, states[index]!.status]));
     return this.#mapper.list(sessions, byId);
@@ -110,17 +112,26 @@ export class SessionReadService implements SessionReader {
     id: SessionId,
     cursor: TimelineCursor,
   ): Promise<SessionUpdatesSnapshot | null> {
+    const read = await this.readSessionUpdates(id);
+    return read?.(cursor) ?? null;
+  }
+
+  async readSessionUpdates(id: SessionId): Promise<SessionUpdatesRead | null> {
     const snapshot = await this.#store.current();
-    const context = this.#queries.updates(snapshot, id, cursor);
-    if (context === null) return null;
-    const session = this.#mapper.sessionDetail(context.session);
+    const current = snapshot.sessions.get(id);
+    if (!current) return null;
+    const session = this.#mapper.sessionDetail(current.normalized.session);
     const interactionSession = await this.#runtimeDetail(session, snapshot);
-    return {
-      session,
-      cursor: context.cursor as TimelineCursor,
-      hasMore: context.hasMore,
-      interactionSession,
+    const read = (cursor: TimelineCursor): SessionUpdatesSnapshot => {
+      const context = this.#queries.updates(snapshot, id, cursor)!;
+      return {
+        session,
+        cursor: context.cursor as TimelineCursor,
+        hasMore: context.hasMore,
+        interactionSession,
+      };
     };
+    return Object.assign(read, { state: { session, interactionSession } });
   }
 
   async getToolDetail(
@@ -166,11 +177,8 @@ export class SessionReadService implements SessionReader {
     const observation = normalized.session.archived
       ? undefined
       : await this.runtime.observe(detail.id);
-    const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
-    Object.assign(
-      detail,
-      await this.runtime.evaluate(normalized.session, sessions, true, observation),
-    );
+    const { status, resume } = await this.runtime.evaluate(normalized.session, true, observation);
+    Object.assign(detail, { status, resume });
     return { ...interactionSession, observation };
   }
 

@@ -4,6 +4,7 @@ import type { TmuxBinding } from "../interaction/transport.js";
 
 export interface ManagementSnapshot {
   readonly sessions: readonly DomainSession[];
+  readonly byId: ReadonlyMap<string, DomainSession>;
 }
 
 export interface SessionExitStep {

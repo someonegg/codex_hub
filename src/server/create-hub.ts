@@ -23,16 +23,6 @@ function createSessionReadService(
   return new SessionReadService(sources, undefined, undefined, dependencies);
 }
 
-export async function createCodexSessionReadService(
-  codexHome: string,
-): Promise<SessionReadService> {
-  const source = await createCodexSessionSource(codexHome, paneBindings);
-  return createSessionReadService([source], {
-    resolveDisplayTitle: (session) => source.displayTitleFor(session),
-    homes: [{ nickname: "default" }],
-  });
-}
-
 /** Compose reading and management using the adapter's published Home nickname. */
 export async function createCodexHub(
   homes: readonly CodexHomeConfig[],

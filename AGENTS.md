@@ -14,6 +14,6 @@
 
 ## Session adapter boundaries
 
-- Shared services treat native session IDs as opaque strings: check presence and source-local uniqueness, but delegate format validation to the owning adapter. Never impose Codex UUID formats, CLI arguments, or storage conventions on shared runtime or management code. Adapter preflight and execution must reuse the same native identity rules.
+- Shared services treat native session IDs as opaque strings: check presence, but delegate format validation to the owning adapter. Never impose Codex UUID formats, CLI arguments, or storage conventions on shared runtime or management code. Adapter preflight and execution must reuse the same native identity rules.
 - Session operations are limited to a unified create/resume launch, archive, delete, and exit. Worktree and YOLO are launch options, not separate operations. Identity validation, directory resolution, and exit steps are supporting adapter contracts. Before adding a business capability, explicitly establish its abstraction boundary.
 - Keep launch working directory separate from project association: creation starts in the selected project; resume uses an available original working/project directory while retaining the original project association, including worktree sessions.

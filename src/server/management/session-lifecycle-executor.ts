@@ -29,7 +29,7 @@ export class SessionLifecycleExecutor {
     try {
       const snapshot = await this.sessions.managementSnapshot();
       if (!this.control.pending(entry)) return;
-      const session = snapshot.sessions.find((item) => item.id === sessionId);
+      const session = snapshot.byId.get(sessionId);
       if (!session) {
         if (type === "delete") {
           this.control.finish(entry, "succeeded", null);
@@ -50,8 +50,6 @@ export class SessionLifecycleExecutor {
       }
       const nativeId = session.sourceId;
       if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
-      if (this.#matches(snapshot, entry, nativeId).length !== 1)
-        throw new Error("Native session identity is ambiguous");
       if (type === "delete") {
         if (!session.archived) throw new Error("Only archived sessions can be deleted");
         this.control.transition(entry, { kind: "delete", phase: "deleting", nativeId });

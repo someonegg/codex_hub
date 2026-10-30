@@ -33,6 +33,7 @@ function repository(snapshot: InteractionSessionSnapshot | null): SessionReader 
     getSession: vi.fn(),
     inspect: async () => null,
     getItems: vi.fn(),
+    readSessionUpdates: vi.fn(),
     getSessionUpdates: vi.fn(),
     getToolDetail: vi.fn(),
     getDirectiveDetail: vi.fn(),

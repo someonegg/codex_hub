@@ -55,9 +55,12 @@ function session(id = "session", operationId?: string): DomainSession {
     },
   };
 }
+function managementSnapshot(value: Pick<ManagementSnapshot, "sessions">): ManagementSnapshot {
+  return { ...value, byId: new Map(value.sessions.map((session) => [session.id, session])) };
+}
 function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
   bindings = new PaneBindingManager();
-  let snapshot: ManagementSnapshot = { sessions: [] };
+  let snapshot = managementSnapshot({ sessions: [] });
   let now = 0;
   const reader = { managementSnapshot: vi.fn(async () => snapshot) };
   const interaction = {
@@ -109,8 +112,8 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
     probe: resolveTarget,
     reader,
     interaction,
-    set: (next: ManagementSnapshot) => {
-      snapshot = next;
+    set: (next: Pick<ManagementSnapshot, "sessions">) => {
+      snapshot = managementSnapshot(next);
     },
     time: (value: number) => {
       now = value;
@@ -563,14 +566,14 @@ it.each(["timeout", "command_failed"])(
     expect(manager.archive).not.toHaveBeenCalled();
   },
 );
-it("rejects ambiguous native UUIDs before exit", async () => {
+it("delegates duplicate native identities to the adapter", async () => {
   const { service, interaction, manager, set } = setup();
   set({ sessions: [session(), session("duplicate")] });
   const op = service.manage("archive", "session");
   await flush();
-  expect(await service.get(op.operationId)).toMatchObject({ status: "failed" });
+  expect(manager.archive).toHaveBeenCalled();
   expect(interaction.sendExitKeys).not.toHaveBeenCalled();
-  expect(manager.archive).not.toHaveBeenCalled();
+  expect(await service.get(op.operationId)).toMatchObject({ status: "pending" });
 });
 
 it.each(["not_started", "unknown"] as const)(
@@ -893,6 +896,7 @@ describe("safe resume operations", () => {
       resumeNativeId: f.original.sourceId,
       projectDirectory: f.original.projectDirectory,
     });
+    expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(2);
     bindings.submit({
       sessionId: "original",
       time: 2,
@@ -907,6 +911,29 @@ describe("safe resume operations", () => {
       target,
     });
     expect(f.interaction.setBusy).toHaveBeenLastCalledWith("original", false);
+  });
+
+  it("resumes the original public session even when another session shares its native ID", async () => {
+    const f = resumable();
+    const duplicate = { ...f.original, id: "duplicate" };
+    f.set({ sessions: [f.original, duplicate] });
+    const op = f.service.create(request);
+    await flush();
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      expect.objectContaining({ resumeNativeId: f.original.sourceId }),
+    );
+    bindings.submit({
+      sessionId: "original",
+      time: 2,
+      ordinal: 2,
+      position: 0,
+      attempt: { valid: true, ordinal: 2, ...target, operationId: op.operationId },
+    });
+    await f.service.poll();
+    expect(await f.service.get(op.operationId)).toMatchObject({
+      status: "succeeded",
+      sessionId: "original",
+    });
   });
 
   it("launches an unbound session through the existing resume operation", async () => {
@@ -943,7 +970,7 @@ describe("safe resume operations", () => {
   it("rechecks safety after refreshing the source and never launches on changed bindings", async () => {
     const f = resumable();
     f.reader.managementSnapshot
-      .mockImplementationOnce(async () => ({ sessions: [f.original] }))
+      .mockImplementationOnce(async () => managementSnapshot({ sessions: [f.original] }))
       .mockImplementationOnce(async () => {
         bindings.submit({
           sessionId: "original",
@@ -952,7 +979,7 @@ describe("safe resume operations", () => {
           position: 0,
           attempt: { valid: false, ordinal: 3 },
         });
-        return { sessions: [f.original] };
+        return managementSnapshot({ sessions: [f.original] });
       });
     const op = f.service.create(request);
     await flush();
@@ -960,14 +987,22 @@ describe("safe resume operations", () => {
     expect(f.manager.launch).not.toHaveBeenCalled();
   });
 
-  it.each(["workingDirectory", "projectDirectory", "sourceId"] as const)(
+  it.each(["workingDirectory", "projectDirectory", "sourceId", "archived", "origin"] as const)(
     "rejects a changed %s immediately before launch",
     async (field) => {
       const f = resumable();
+      const changes = {
+        workingDirectory: { workingDirectory: "/changed" },
+        projectDirectory: { projectDirectory: "/changed" },
+        sourceId: { sourceId: "/changed" },
+        archived: { archived: true },
+        origin: { origin: { ...f.original.origin, home: "changed" } },
+      };
+      const changed = { ...f.original, ...changes[field] };
       f.reader.managementSnapshot
-        .mockResolvedValueOnce({ sessions: [f.original] })
-        .mockResolvedValueOnce({ sessions: [f.original] })
-        .mockResolvedValueOnce({ sessions: [{ ...f.original, [field]: "/changed" }] });
+        .mockResolvedValueOnce(managementSnapshot({ sessions: [f.original] }))
+        .mockResolvedValueOnce(managementSnapshot({ sessions: [f.original] }))
+        .mockResolvedValueOnce(managementSnapshot({ sessions: [changed] }));
       const op = f.service.create(request);
       await flush();
       expect((await f.service.get(op.operationId))?.status).toBe("failed");

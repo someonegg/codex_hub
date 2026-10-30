@@ -1,10 +1,7 @@
 import type { IncomingMessage } from "node:http";
 
 export const SESSION_ROOT = "/api/v1/sessions";
-export const SESSION_ID_PATTERN = "[A-Za-z0-9_-]{20,100}";
-export function isOpaqueId(value: string): boolean {
-  return new RegExp(`^${SESSION_ID_PATTERN}$`).test(value);
-}
+export { isOpaqueId, SESSION_ID_PATTERN } from "../security/opaque-id.js";
 export function sessionPath(pathname: string): { id: string; segments: string[] } {
   const [id = "", ...segments] = pathname.slice(SESSION_ROOT.length + 1).split("/");
   return { id, segments };

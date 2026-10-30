@@ -149,8 +149,8 @@ describe("SessionUpdatesService", () => {
     const rightAbort = new AbortController();
     const left = service.wait("session", { cursor: CURSOR, after: REVISION }, leftAbort.signal);
     const right = service.wait("session", { cursor: CURSOR, after: REVISION }, rightAbort.signal);
-    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(2));
-    expect(describeSnapshot).toHaveBeenCalledTimes(2);
+    await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(describeSnapshot).toHaveBeenCalledTimes(1));
     resolvers.forEach((resolve) => resolve({ supported: false, attachCommand: null }));
     await Promise.resolve();
     leftAbort.abort();
@@ -161,11 +161,15 @@ describe("SessionUpdatesService", () => {
 });
 
 function createService(
-  getSessionUpdates: ReturnType<typeof vi.fn>,
+  getSessionUpdates: ReturnType<typeof vi.fn<SessionReader["getSessionUpdates"]>>,
   options: ConstructorParameters<typeof SessionUpdatesService>[1] = {},
 ) {
   const repository = {
     getSessionUpdates,
+    readSessionUpdates: async (id: string) => {
+      const value = await getSessionUpdates(id, CURSOR);
+      return value && Object.assign(() => value, { state: value });
+    },
     getInteractionSession: vi.fn().mockResolvedValue(null),
   } as unknown as SessionReader;
   return closeAfterEach(
@@ -223,7 +227,7 @@ it("updates update revisions on takeover and replacement deletion without changi
     ),
   );
   const updates = new SessionUpdatesService(
-    { getSessionUpdates: vi.fn(async () => current) },
+    { readSessionUpdates: vi.fn(async () => Object.assign(() => current, { state: current })) },
     { interaction },
   );
   try {
@@ -340,4 +344,134 @@ it("returns a long-poll update when only activity changes", async () => {
   expect(describeSnapshot).toHaveBeenCalledTimes(2);
   expect(result?.interaction).toMatchObject({ activity: "idle" });
   expect(result?.updateRevision).not.toBe(after);
+});
+
+it("shares each session probe while isolating cursor errors, backlog and cancellation", async () => {
+  vi.useFakeTimers();
+  const progress = vi.fn((cursor: TimelineCursor) => {
+    if (cursor === "bad") throw new Error("bad cursor");
+    return { ...snapshot(cursor === "backlog"), cursor };
+  });
+  const readSessionUpdates = vi.fn(async () => Object.assign(progress, { state: snapshot(false) }));
+  const describeSnapshot = vi.fn(async () => ({ supported: false as const, attachCommand: null }));
+  const createRevision = vi.fn(() => REVISION);
+  const service = closeAfterEach(
+    new SessionUpdatesService(
+      { readSessionUpdates },
+      {
+        interaction: { describeSnapshot },
+        createRevision,
+        probeIntervalMs: 3,
+        waitTimeoutMs: 12,
+      },
+    ),
+  );
+  const abort = new AbortController();
+  const first = service.wait("same", { cursor: CURSOR, after: REVISION }, abort.signal);
+  const canceled = expect(first).rejects.toMatchObject({ name: "AbortError" });
+  const second = service.wait("same", { cursor: CURSOR, after: REVISION });
+  const bad = expect(
+    service.wait("same", { cursor: "bad" as TimelineCursor, after: REVISION }),
+  ).rejects.toThrow("bad cursor");
+  const backlog = service.wait("same", { cursor: "backlog" as TimelineCursor, after: REVISION });
+  const changed = service.wait("same", { cursor: CURSOR, after: OTHER_REVISION });
+  await vi.advanceTimersByTimeAsync(0);
+  await bad;
+  expect(await backlog).toMatchObject({ cursor: "backlog", hasMore: true });
+  expect(await changed).toMatchObject({ updateRevision: REVISION });
+  expect(readSessionUpdates).toHaveBeenCalledTimes(1);
+  expect(describeSnapshot).toHaveBeenCalledTimes(1);
+  expect(createRevision).toHaveBeenCalledTimes(1);
+  abort.abort();
+  await canceled;
+  await vi.advanceTimersByTimeAsync(3);
+  expect(readSessionUpdates).toHaveBeenCalledTimes(2);
+  expect(describeSnapshot).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(9);
+  expect(await second).toBeNull();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("reserves capacity before an initial read and releases it on cancellation, failure and close", async () => {
+  let rejectRead!: (error: unknown) => void;
+  const readSessionUpdates = vi.fn(
+    () =>
+      new Promise<null>((_, reject) => {
+        rejectRead = reject;
+      }),
+  );
+  const service = new SessionUpdatesService({ readSessionUpdates }, { maxWaiters: 1 });
+  const abort = new AbortController();
+  const pending = service.wait("one", { cursor: CURSOR, after: OTHER_REVISION }, abort.signal);
+  const canceled = expect(pending).rejects.toMatchObject({ name: "AbortError" });
+  await expect(
+    service.wait("two", { cursor: CURSOR, after: OTHER_REVISION }),
+  ).rejects.toMatchObject({ code: "updates_capacity_exceeded" });
+  expect(readSessionUpdates).toHaveBeenCalledTimes(1);
+  abort.abort();
+  await canceled;
+  rejectRead(new Error("obsolete read"));
+  const next = service.wait("two", { cursor: CURSOR, after: REVISION });
+  const failed = expect(next).rejects.toThrow("source failure");
+  rejectRead(new Error("source failure"));
+  await failed;
+  const last = service.wait("three", { cursor: CURSOR, after: REVISION });
+  const closed = expect(last).rejects.toMatchObject({ name: "AbortError" });
+  service.close();
+  await closed;
+  rejectRead(new Error("closed read"));
+});
+
+it("times out and frees capacity even while its initial read is unresolved", async () => {
+  vi.useFakeTimers();
+  const readSessionUpdates = vi.fn(() => new Promise<null>(() => {}));
+  const service = new SessionUpdatesService(
+    { readSessionUpdates },
+    { maxWaiters: 1, waitTimeoutMs: 5 },
+  );
+  const first = service.wait("one", { cursor: CURSOR, after: REVISION });
+  await vi.advanceTimersByTimeAsync(5);
+  expect(await first).toBeNull();
+  const second = service.wait("one", { cursor: CURSOR, after: REVISION });
+  const closed = expect(second).rejects.toMatchObject({ name: "AbortError" });
+  expect(readSessionUpdates).toHaveBeenCalledTimes(2);
+  service.close();
+  await closed;
+  expect(vi.getTimerCount()).toBe(0);
+});
+
+it("shares a failing probe, frees its waiters, and reads fresh state for later requests", async () => {
+  vi.useFakeTimers();
+  const readSessionUpdates = vi.fn(async () =>
+    Object.assign(() => snapshot(false), { state: snapshot(false) }),
+  );
+  const service = closeAfterEach(
+    new SessionUpdatesService(
+      { readSessionUpdates },
+      {
+        createRevision: () => REVISION,
+        probeIntervalMs: 2,
+        maxWaiters: 2,
+      },
+    ),
+  );
+  const first = service.wait("same", { cursor: CURSOR, after: REVISION });
+  const second = service.wait("same", { cursor: CURSOR, after: REVISION });
+  const failed = Promise.all([
+    expect(first).rejects.toThrow("source unavailable"),
+    expect(second).rejects.toThrow("source unavailable"),
+  ]);
+  await vi.advanceTimersByTimeAsync(0);
+  readSessionUpdates.mockRejectedValueOnce(new Error("source unavailable"));
+  await vi.advanceTimersByTimeAsync(2);
+  await failed;
+  expect(readSessionUpdates).toHaveBeenCalledTimes(2);
+  expect(vi.getTimerCount()).toBe(0);
+  await expect(
+    service.wait("same", { cursor: CURSOR, after: OTHER_REVISION }),
+  ).resolves.toMatchObject({ updateRevision: REVISION });
+  await expect(
+    service.wait("same", { cursor: CURSOR, after: OTHER_REVISION }),
+  ).resolves.toMatchObject({ updateRevision: REVISION });
+  expect(readSessionUpdates).toHaveBeenCalledTimes(4);
 });

@@ -1,10 +1,25 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, open, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import {
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 
 import type { UploadAttachment } from "../../shared/uploads.js";
+import { isOpaqueId } from "../security/opaque-id.js";
 
-const ATTACHMENT_ID_PATTERN = /^[a-f0-9-]{36}$/;
+const ATTACHMENT_ID_PATTERN =
+  /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
+export function validAttachmentId(id: string) {
+  return ATTACHMENT_ID_PATTERN.test(id);
+}
 
 export interface UploadCleanup {
   cleanup(id: string): Promise<void>;
@@ -13,11 +28,15 @@ export interface UploadCleanup {
 export class UploadStore implements UploadCleanup {
   constructor(readonly directory: string) {}
   private folder(id: string) {
-    return join(this.directory, id);
+    if (!isOpaqueId(id)) throw new Error("Invalid session ID");
+    return resolve(this.directory, id);
   }
   async cleanup(id: string) {
-    const tombstone = this.folder(id) + ".deleting";
-    await rename(this.folder(id), tombstone).catch((error: NodeJS.ErrnoException) => {
+    const folder = this.folder(id);
+    await this.safeFolder(folder);
+    const tombstone = folder + ".deleting";
+    await this.safeFolder(tombstone);
+    await rename(folder, tombstone).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
     await rm(tombstone, { recursive: true, force: true });
@@ -25,6 +44,7 @@ export class UploadStore implements UploadCleanup {
   async upload(id: string, filename: string, type: string, chunks: AsyncIterable<Uint8Array>) {
     const folder = this.folder(id);
     await mkdir(folder, { recursive: true, mode: 0o700 });
+    await this.safeFolder(folder);
     const attachmentId = randomUUID();
     const extension = extname(filename);
     const path = join(
@@ -68,9 +88,10 @@ export class UploadStore implements UploadCleanup {
     for (const folder of await readdir(this.directory, { withFileTypes: true })) {
       if (!folder.isDirectory()) continue;
       try {
-        if (/^[A-Za-z0-9_-]+\.deleting$/.test(folder.name)) {
+        if (folder.name.endsWith(".deleting") && isOpaqueId(folder.name.slice(0, -9))) {
+          await this.safeFolder(join(this.directory, folder.name));
           await rm(join(this.directory, folder.name), { recursive: true, force: true });
-        } else if (/^[A-Za-z0-9_-]+$/.test(folder.name)) {
+        } else if (isOpaqueId(folder.name)) {
           await this.recover(join(this.directory, folder.name));
         }
       } catch (error) {
@@ -81,6 +102,7 @@ export class UploadStore implements UploadCleanup {
   }
 
   private async recover(folder: string) {
+    await this.safeFolder(folder);
     const names = await readdir(folder);
     for (const name of names) {
       if (name.endsWith(".meta.deleting")) {
@@ -97,6 +119,7 @@ export class UploadStore implements UploadCleanup {
   }
   async list(id: string) {
     const folder = this.folder(id);
+    await this.safeFolder(folder);
     const names = await readdir(folder).catch((error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") return [];
       throw error;
@@ -105,7 +128,7 @@ export class UploadStore implements UploadCleanup {
     for (const name of names) {
       if (!name.endsWith(".meta.json")) continue;
       try {
-        entries.push(JSON.parse(await readFile(join(folder, name), "utf8")) as UploadAttachment);
+        entries.push(await this.metadata(join(folder, name), id, name.slice(0, -10)));
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
@@ -114,27 +137,95 @@ export class UploadStore implements UploadCleanup {
     return entries;
   }
   async get(id: string, attachmentId: string): Promise<UploadAttachment | null> {
-    if (!ATTACHMENT_ID_PATTERN.test(attachmentId)) return null;
+    const folder = this.folder(id);
+    if (!validAttachmentId(attachmentId)) throw new Error("Invalid attachment ID");
     try {
-      return JSON.parse(await readFile(join(this.folder(id), attachmentId + ".meta.json"), "utf8"));
+      return await this.metadata(join(folder, attachmentId + ".meta.json"), id, attachmentId);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
       throw error;
     }
   }
   async delete(id: string, attachmentId: string) {
-    if (!ATTACHMENT_ID_PATTERN.test(attachmentId)) return;
-    const metadata = join(this.folder(id), attachmentId + ".meta.json");
-    const tombstone = join(this.folder(id), attachmentId + ".meta.deleting");
+    const folder = this.folder(id);
+    if (!validAttachmentId(attachmentId)) throw new Error("Invalid attachment ID");
+    await this.get(id, attachmentId);
+    const metadata = join(folder, attachmentId + ".meta.json");
+    const tombstone = join(folder, attachmentId + ".meta.deleting");
     await rename(metadata, tombstone).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
     await this.finishDeletion(tombstone);
   }
+  private async safeFolder(folder: string) {
+    let root: string;
+    try {
+      root = await realpath(this.directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    if (dirname(resolve(folder)) !== resolve(this.directory))
+      throw new Error("Invalid upload directory");
+    try {
+      const stat = await lstat(folder);
+      if (!stat.isDirectory() || stat.isSymbolicLink() || dirname(await realpath(folder)) !== root)
+        throw new Error("Unsafe upload directory");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  private async safeFile(path: string, folder: string) {
+    await this.safeFolder(folder);
+    if (dirname(resolve(path)) !== resolve(folder)) throw new Error("Invalid upload path");
+    try {
+      const stat = await lstat(path);
+      if (
+        !stat.isFile() ||
+        stat.isSymbolicLink() ||
+        dirname(await realpath(path)) !== (await realpath(folder))
+      )
+        throw new Error("Unsafe upload file");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    }
+  }
+  private async metadata(
+    path: string,
+    id: string,
+    attachmentId: string,
+  ): Promise<UploadAttachment> {
+    const folder = this.folder(id);
+    if (!validAttachmentId(attachmentId)) throw new Error("Invalid attachment metadata ID");
+    await this.safeFile(path, folder);
+    const value = JSON.parse(await readFile(path, "utf8")) as UploadAttachment;
+    if (
+      !value ||
+      value.id !== attachmentId ||
+      value.sessionId !== id ||
+      typeof value.filename !== "string" ||
+      typeof value.type !== "string" ||
+      !Number.isSafeInteger(value.size) ||
+      value.size < 0 ||
+      typeof value.uploadedAt !== "string" ||
+      !Number.isFinite(Date.parse(value.uploadedAt)) ||
+      typeof value.path !== "string" ||
+      !isAbsolute(value.path) ||
+      dirname(resolve(value.path)) !== folder ||
+      !new RegExp("^" + attachmentId + "(?:\\.[a-zA-Z0-9]{1,16})?$").test(basename(value.path))
+    )
+      throw new Error("Corrupt upload metadata");
+    await this.safeFile(value.path, folder);
+    return value;
+  }
   private async finishDeletion(tombstone: string) {
     let attachment: UploadAttachment;
     try {
-      attachment = JSON.parse(await readFile(tombstone, "utf8")) as UploadAttachment;
+      attachment = await this.metadata(
+        tombstone,
+        basename(dirname(tombstone)),
+        basename(tombstone).replace(/\.meta\.deleting$/, ""),
+      );
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
       throw error;
