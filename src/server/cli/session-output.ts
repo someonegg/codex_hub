@@ -1,8 +1,8 @@
 import type {
-  TmuxTarget,
   InspectResponse,
   SessionListResponse,
   TerminalResponse,
+  TmuxTarget,
 } from "../../shared/api-contract.js";
 import { formatTmux, singleLine } from "./output.js";
 

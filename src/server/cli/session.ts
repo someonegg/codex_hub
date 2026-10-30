@@ -4,18 +4,19 @@ import { parseArgs } from "node:util";
 
 import {
   type HubOperation,
-  type TmuxTarget,
   type InspectResponse,
   INTERACTION_KEYS,
   MAX_INTERACTION_KEY_SEQUENCE_LENGTH,
   MAX_INTERACTION_MESSAGE_BYTES,
   type SessionListResponse,
   type TerminalResponse,
+  type TmuxTarget,
 } from "../../shared/api-contract.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { CommandError, commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
 import { SessionClient } from "./session-client.js";
+import { followInspect } from "./session-follow.js";
 import {
   type CliResult,
   formatResult,
@@ -23,7 +24,6 @@ import {
   mapList,
   mapTerminal,
 } from "./session-output.js";
-import { followInspect } from "./session-follow.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
