@@ -130,7 +130,7 @@ it("keeps the known target when post-launch setup fails", async () => {
     .mockImplementationOnce(fails(new Error("set-option failed")));
   await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
     outcome: "unknown",
-    target: { socketPath: "/actual/socket", paneId: "%7" },
+    target: { socketPath: "/actual/socket", paneId: "%7", sessionName: "ahub-id" },
     attachCommand: attachCommand("/actual/socket", "ahub-id"),
   });
   expect(execute).toHaveBeenCalledTimes(2);
@@ -142,7 +142,7 @@ it("keeps the known target when post-launch connection validation fails", async 
   );
   await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
     outcome: "unknown",
-    target: { socketPath: "/actual/tmux.sock", paneId: "%7" },
+    target: { socketPath: "/actual/tmux.sock", paneId: "%7", sessionName: "ahub-id" },
   });
   expect(execute).toHaveBeenCalledTimes(2);
 });

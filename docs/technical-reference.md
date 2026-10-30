@@ -154,8 +154,10 @@ control, server discovery/startup, or persisted recovery state. `codex-hub` star
 the server; `ahub-cli page`/`diff` access local hosting storage via `--home-dir`.
 
 URL precedence: `--url`, `CODEX_HUB_URL`, `http://127.0.0.1:4173`. Only HTTP origins
-are accepted (server TLS support is unaffected). One `--timeout` deadline
-(default 360 seconds) covers stdin, requests, operation polling, and readiness.
+are accepted (server TLS support is unaffected). Except in
+[continuous inspection](#cli-continuous-inspection), one `--timeout` deadline covers
+stdin, requests, operation polling, and readiness. The default is 15 seconds;
+create, resume, exit, archive, and delete use 45 seconds.
 Lifecycle commands await [management](#asynchronous-management); create/resume
 also inspect until live, connected, and idle. Input success does not prove task
 completion or answer correctness.
@@ -173,17 +175,18 @@ No CLI confirmation prompt is added; [execution rules](#execution-and-confirmati
 ### Public session CLI results
 
 Text/JSON whitelists are independent of HTTP types; extra fields never pass through. Readiness uses API `live` and interaction before
-mapping. Operation/request IDs, tmux targets, and attach commands are excluded.
+mapping. Operation/request IDs and attach commands are excluded. Tmux diagnostics
+include socketPath, paneId, and sessionName (null when unknown).
 
 | Command/result    | Public fields                                                                                                                                 |
 | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `list`            | `{ sessions }`; entries: `id`, `title`, `status`, `home`, `projectDirectory`, `updatedAt`                                                     |
 | `inspect`         | `{ session, interaction, items, nextAfter, hasMore }`                                                                                         |
 | Inspect `session` | `id`, `title`, `status`, `home`, `agentName`, `workingDirectory`, `projectDirectory`, `createdAt`, `updatedAt`, `resume: { allowed, reason }` |
-| `interaction`     | `{ supported: false }` or `{ supported: true, state, activity, supersededBySessionId }`                                                       |
+| `interaction`     | `{ supported: false, tmux: null }` or `{ supported: true, state, activity, supersededBySessionId, tmux }`                                     |
 | `terminal`        | `{ content, truncated, capturedAt }`                                                                                                          |
 | Input/handoff     | `{ sessionId, status: "sent" }`                                                                                                               |
-| Lifecycle         | `{ sessionId, status: "succeeded" }`                                                                                                          |
+| Lifecycle         | `{ sessionId, status: "succeeded" }`; create/resume also include `tmux`                                                                       |
 
 `list` excludes all `isChild` sessions, including orphans; `--project` filters the
 associated directory, not launch/worktree location. Missing associations and
@@ -225,6 +228,35 @@ Neither maintains a persistent visibility index.
 unreturned visible items. `hasMore` means visible records remain beyond it. Empty
 pages consume hidden tails and return current state. Rewrites are undetected;
 out-of-range numbers fail rather than reset. Browser cursors are unaffected.
+
+### CLI continuous inspection
+
+`session inspect --follow` immediately reads the first page, drains pagination
+sequentially, then waits `--interval` seconds (default 3) before the next round.
+`--count` is a positive safe integer counting rounds, including empty rounds;
+the final round drains every page. Both options require `--follow`. Without a
+count observation continues until canceled, including while idle, disconnected,
+or after an assistant response. Stopping observation does not stop the session.
+Task completion is judged by the caller against requirements and deliverables.
+Follow has no overall deadline; `--timeout` limits each HTTP request.
+
+The first result always prints. Later results print only for visible new items
+or changes to session/interaction fields. JSON output is NDJSON with the same
+complete shape as single inspection and only that page's incremental items.
+Text output uses fixed separators and marks state changes without new messages.
+Position-only advances remain silent. Numeric `after / nextAfter` positions do
+not guarantee history consistency. Pagination without forward progress fails
+with exit code 1. API/network/request timeout errors end observation without
+retrying; Ctrl+C cancels reads and timers and exits normally.
+
+CLI inspection exposes `interaction.tmux: { socketPath, paneId, sessionName } | null`, using
+the current observation and ownership checks. When sessionName is known, attach
+with `tmux -S <socketPath> attach-session -t <sessionName>`, quoting each argument
+for the shell. This attaches the containing session; it does not select a pane.
+
+Launch success exposes `tmux`; launch errors include known `sessionId` and `tmux`
+inside `error` (unknown values are null), retaining backend diagnostics and the
+latest launch target even when waiting for idle times out.
 
 ## File uploads
 
@@ -375,7 +407,7 @@ shutdown reuses the exit service.
 
 Operations include `operationId`, `type`, `status`, `createdAt`, `updatedAt`,
 nullable `sessionId`, `error`, `phase`, `attachCommand`, optional
-`target: { socketPath, paneId }`, and launch `mode: new | resume`.
+`target: { socketPath, paneId, sessionName }`, and launch `mode: new | resume`.
 Types: `create`, `exit`, `archive`, `delete`; statuses: `pending`, `succeeded`,
 `failed`, `unknown`. Exit phases are `sending_exit`, `waiting_exit`; archive adds
 `archiving`, `confirming_archive`.

@@ -118,10 +118,13 @@ export interface InternalDetailQuery {
 
 export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected" | "superseded";
 
+export type TmuxTarget = { socketPath: string; paneId: string; sessionName: string | null };
+
 export type InteractionResponse =
-  | { supported: false; attachCommand: string | null }
+  | { supported: false; tmux?: TmuxTarget | null; attachCommand: string | null }
   | {
       supported: true;
+      tmux?: TmuxTarget | null;
       state: InteractionState;
       activity: "working" | "idle" | "unknown" | null;
       supersededBySessionId: string | null;
@@ -163,7 +166,7 @@ export type TerminalPreviewMessage = TerminalPreviewFrame | TerminalPreviewError
 
 export interface HubOperation {
   mode?: "new" | "resume";
-  target?: { socketPath: string; paneId: string };
+  target?: { socketPath: string; paneId: string; sessionName?: string | null };
   phase: "sending_exit" | "waiting_exit" | "archiving" | "confirming_archive" | null;
   attachCommand: string | null;
   operationId: string;

@@ -77,7 +77,7 @@ export class TmuxLauncher {
     ) {
       throw new SessionLaunchError("unknown", "Invalid launched tmux target", fallbackAttach);
     }
-    const target = { socketPath, paneId };
+    const target = { socketPath, paneId, sessionName: `ahub-${id}` };
     try {
       await execute(
         "tmux",
