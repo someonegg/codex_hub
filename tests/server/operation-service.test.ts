@@ -80,7 +80,7 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
   };
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
-    resolveDirectory: vi.fn(async () => ({ directory: "/project" })),
+    resolveDirectory: vi.fn(async (directory: string) => ({ directory })),
     launch: vi.fn(async () => target),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
@@ -120,7 +120,7 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
 describe("observed management operations", () => {
   it("deduplicates requests and binds concurrent creations only by marker and launched target", async () => {
     const { service, manager, set } = setup();
-    const input = { directory: "/project", worktree: false, requestId: "request-one" };
+    const input = { projectDirectory: "/project", worktree: false, requestId: "request-one" };
     const a = service.create(input);
     expect(service.create(input).operationId).toBe(a.operationId);
     expect(() => service.create({ ...input, worktree: true })).toThrow(/different parameters/);
@@ -145,7 +145,11 @@ describe("observed management operations", () => {
     "retains %s request deduplication until 30 minutes after completion",
     async (status) => {
       const { service, manager, set, time } = setup();
-      const input = { directory: "/project", worktree: false, requestId: "retained-request" };
+      const input = {
+        projectDirectory: "/project",
+        worktree: false,
+        requestId: "retained-request",
+      };
       if (status === "failed") manager.launch.mockRejectedValueOnce(new Error("launch failed"));
       const op = service.create(input);
       expect(service.create(input).operationId).toBe(op.operationId);
@@ -172,7 +176,7 @@ describe("observed management operations", () => {
         expect(() => service.create({ ...input, worktree: true })).toThrow(
           expect.objectContaining({ status: 409 }),
         );
-        expect(() => service.create({ ...input, directory: "/other" })).toThrow(
+        expect(() => service.create({ ...input, projectDirectory: "/other" })).toThrow(
           expect.objectContaining({ status: 409 }),
         );
         await flush();
@@ -199,7 +203,7 @@ describe("observed management operations", () => {
     async (scenario) => {
       const { service, set, interaction } = setup();
       const op = service.create({
-        directory: "/project",
+        projectDirectory: "/project",
         worktree: false,
         requestId: "request-one",
       });
@@ -240,14 +244,14 @@ describe("observed management operations", () => {
   );
   it("defaults yolo off, forwards opt-in, and includes it in request deduplication", async () => {
     const { service, manager } = setup();
-    const input = { directory: "/project", worktree: false, requestId: "yolo-request" };
+    const input = { projectDirectory: "/project", worktree: false, requestId: "yolo-request" };
     const first = service.create(input);
     expect(service.create({ ...input, yolo: false })).toEqual(first);
     expect(() => service.create({ ...input, yolo: true })).toThrow(/different parameters/);
     await flush();
     expect(manager.launch).toHaveBeenLastCalledWith({
       operationId: first.operationId,
-      directory: "/project",
+      workingDirectory: "/project",
       worktree: false,
       yolo: false,
       projectDirectory: "/project",
@@ -256,7 +260,7 @@ describe("observed management operations", () => {
     await flush();
     expect(manager.launch).toHaveBeenLastCalledWith({
       operationId: second.operationId,
-      directory: "/project",
+      workingDirectory: "/project",
       worktree: false,
       yolo: true,
       projectDirectory: "/project",
@@ -264,7 +268,11 @@ describe("observed management operations", () => {
   });
   it("keeps timeout terminal and never relaunches on queries", async () => {
     const { service, manager, set, time } = setup();
-    const op = service.create({ directory: "/project", worktree: true, requestId: "request-one" });
+    const op = service.create({
+      projectDirectory: "/project",
+      worktree: true,
+      requestId: "request-one",
+    });
     await flush();
     await service.poll();
     time(300_001);
@@ -471,7 +479,7 @@ it("starts the binding budget after launch and exposes attach only after 30 seco
         launched = resolve;
       }),
   );
-  const input = { directory: "/project", worktree: false, requestId: "timing-request" };
+  const input = { projectDirectory: "/project", worktree: false, requestId: "timing-request" };
   const op = service.create(input);
   await flush();
   time(400_000);
@@ -581,7 +589,7 @@ it.each(["not_started", "unknown"] as const)(
     manager.launch.mockRejectedValueOnce(
       new SessionLaunchError(outcome, "launch error", attach, target),
     );
-    const input = { directory: "/project", worktree: false, requestId: "launch-outcome" };
+    const input = { projectDirectory: "/project", worktree: false, requestId: "launch-outcome" };
     const op = service.create(input);
     await flush();
     const result = await service.get(op.operationId);
@@ -719,7 +727,7 @@ it("isolates creation association and fingerprints the selected source", async (
     delete: vi.fn(async () => undefined),
   };
   registry.register("other", other);
-  const input = { directory: "/project", worktree: false, requestId: "multi-home-create" };
+  const input = { projectDirectory: "/project", worktree: false, requestId: "multi-home-create" };
   expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
   const operation = service.create({ ...input, home: "other" });
   expect(() => service.create({ ...input, home: "test" })).toThrow("different parameters");
@@ -887,7 +895,7 @@ describe("safe resume operations", () => {
     await flush();
     expect(f.manager.launch).toHaveBeenCalledWith({
       operationId: op.operationId,
-      directory: "/project",
+      workingDirectory: "/project",
       worktree: false,
       yolo: false,
       resumeNativeId: f.original.sourceId,
@@ -945,7 +953,7 @@ describe("safe resume operations", () => {
       expect.objectContaining({
         operationId: op.operationId,
         resumeNativeId: original.sourceId,
-        directory: "/project",
+        projectDirectory: "/project",
       }),
     );
   });
@@ -1060,13 +1068,15 @@ describe("safe resume operations", () => {
     await flush();
     expect(f.manager.launch).toHaveBeenCalledWith({
       operationId: op.operationId,
-      directory: "/project",
+      workingDirectory: "/project",
       worktree: false,
       yolo: true,
       resumeNativeId: f.original.sourceId,
       projectDirectory: f.original.projectDirectory,
     });
-    expect(() => f.service.create({ ...request, directory: "/other" } as never)).toThrow(/only/);
+    expect(() => f.service.create({ ...request, projectDirectory: "/other" } as never)).toThrow(
+      /only/,
+    );
   });
 });
 
@@ -1142,7 +1152,7 @@ it("defaults to the first configured home and resolves explicit nicknames withou
   const { service, manager, registry } = setup();
   const other = { ...manager, launch: vi.fn(async () => target) };
   registry.register("secondary", other);
-  const input = { directory: "/project", worktree: false, requestId: "default-home-test" };
+  const input = { projectDirectory: "/project", worktree: false, requestId: "default-home-test" };
   service.create(input);
   service.create({ ...input, requestId: "explicit-home-test", home: "secondary" });
   expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
@@ -1161,7 +1171,7 @@ it("prunes batches while retaining recent results and active request identities"
   const { service, manager, time } = setup();
   manager.launch.mockRejectedValue(new Error("failed"));
   const inputs = Array.from({ length: 40 }, (_, index) => ({
-    directory: "/project",
+    projectDirectory: "/project",
     worktree: false,
     requestId: `batch-request-${index}`,
   }));
@@ -1183,4 +1193,113 @@ it("prunes batches while retaining recent results and active request identities"
   );
   for (const [index, input] of inputs.entries())
     expect(service.create(input).operationId).not.toBe(old[index]!.operationId);
+});
+
+describe("creation project and working directories", () => {
+  it.each([undefined, "/project"])(
+    "reuses project resolution for cwd %s and normalizes idempotency",
+    async (workingDirectory) => {
+      const f = setup();
+      const input = { projectDirectory: "/project", worktree: false, requestId: "directories" };
+      const op = f.service.create({ ...input, workingDirectory });
+      expect(f.service.create({ ...input, workingDirectory: "/project" })).toEqual(op);
+      expect(() => f.service.create({ ...input, workingDirectory: "/other" })).toThrow(
+        /different parameters/,
+      );
+      expect(() => f.service.create({ ...input, projectDirectory: "/other" })).toThrow(
+        /different parameters/,
+      );
+      await flush();
+      expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(1);
+      expect(f.manager.launch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          workingDirectory: "/project",
+          projectDirectory: "/project",
+        }),
+      );
+    },
+  );
+
+  it.each([false, true])(
+    "launches in an existing working directory independently of project, worktree=%s",
+    async (worktree) => {
+      const f = setup();
+      f.manager.resolveDirectory.mockImplementation(async (directory) => ({
+        directory: directory + "/real",
+      }));
+      const op = f.service.create({
+        projectDirectory: "/project",
+        workingDirectory: "/existing-worktree",
+        worktree,
+        requestId: "split-directories",
+      });
+      await flush();
+      expect(f.manager.resolveDirectory.mock.calls).toEqual([["/project"], ["/existing-worktree"]]);
+      expect(f.manager.launch).toHaveBeenCalledWith({
+        operationId: op.operationId,
+        workingDirectory: "/existing-worktree/real",
+        projectDirectory: "/project/real",
+        worktree,
+        yolo: false,
+      });
+      f.set({
+        sessions: [
+          {
+            ...session("created", op.operationId),
+            workingDirectory: "/existing-worktree/real",
+            projectDirectory: "/project/real",
+          },
+        ],
+      });
+      await f.service.poll();
+      expect(await f.service.get(op.operationId)).toMatchObject({
+        status: "succeeded",
+        sessionId: "created",
+      });
+    },
+  );
+
+  it.each(["/project", "/working"])("does not launch when %s is unavailable", async (missing) => {
+    const f = setup();
+    f.manager.resolveDirectory.mockImplementation(async (directory) => {
+      if (directory === missing)
+        throw Object.assign(new Error("Missing directory"), { code: "ENOENT" });
+      return { directory };
+    });
+    const op = f.service.create({
+      projectDirectory: "/project",
+      workingDirectory: "/working",
+      worktree: false,
+      requestId: "missing-directory",
+    });
+    await flush();
+    expect(await f.service.get(op.operationId)).toMatchObject({ status: "failed" });
+    expect(f.manager.launch).not.toHaveBeenCalled();
+  });
+
+  it("resumes from the original working directory while retaining project association", async () => {
+    const f = setup();
+    const original = {
+      ...session("original"),
+      workingDirectory: "/working",
+      projectDirectory: "/project",
+    };
+    f.set({ sessions: [original] });
+    const op = f.service.create({ resumeSessionId: original.id, requestId: "split-resume" });
+    await flush();
+    expect(f.manager.resolveDirectory).toHaveBeenCalledWith("/working");
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workingDirectory: "/working",
+        projectDirectory: "/project",
+        resumeNativeId: original.sourceId,
+      }),
+    );
+    f.set({ sessions: [{ ...session("original", op.operationId), ...original }] });
+    await f.service.poll();
+    expect(await f.service.get(op.operationId)).toMatchObject({
+      status: "succeeded",
+      sessionId: "original",
+    });
+  });
 });

@@ -187,7 +187,7 @@ export function CreateSession({
           void controller.start(() =>
             api.createSession({
               ...(home ? { home } : {}),
-              directory,
+              projectDirectory: directory,
               worktree,
               yolo,
               requestId: request.current!.id,

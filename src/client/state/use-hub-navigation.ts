@@ -95,7 +95,9 @@ export function useHubNavigation(list: SessionListResponse | null) {
   const selectedProject = projectForSession(list, sessionId);
   let projectKey: string | undefined;
   if (selectedProject !== undefined) {
-    projectKey = list?.projects.find((project) => project.id === selectedProject)?.id ?? "unknown";
+    projectKey =
+      list?.projects.find((project) => project.directory === selectedProject)?.directory ??
+      "unknown";
   }
   useEffect(() => {
     if (projectKey === undefined) return;

@@ -85,7 +85,6 @@ export interface CliOperation {
 export type CliResult = CliSessionList | CliInspect | CliTerminal | CliOperation;
 
 export function mapList(list: SessionListResponse, project?: string): CliSessionList {
-  const projects = new Map(list.projects.map((project) => [project.id, project.directory]));
   return {
     sessions: list.sessions
       .filter((s) => !s.isChild)
@@ -94,7 +93,7 @@ export function mapList(list: SessionListResponse, project?: string): CliSession
         title: s.title,
         status: s.status,
         home: s.home,
-        projectDirectory: projects.get(s.projectId ?? "") ?? null,
+        projectDirectory: s.projectDirectory,
         updatedAt: s.updatedAt,
       }))
       .filter((s) => project === undefined || s.projectDirectory === project),

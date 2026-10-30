@@ -28,7 +28,7 @@ import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
   list [--project <directory>]
-  create --project <directory> [--home <nickname>] [--worktree] [--yolo]
+  create --project <directory> [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin)
   inspect <id> [--limit 1-300] [--after <number>] [--follow [--interval <seconds>] [--count <N>]]
@@ -52,6 +52,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         json: { type: "boolean" },
         timeout: { type: "string" },
         project: { type: "string" },
+        cwd: { type: "string" },
         home: { type: "string" },
         worktree: { type: "boolean" },
         yolo: { type: "boolean" },
@@ -72,7 +73,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   const [command, id, ...keys] = positionals;
   const allowed: Record<string, string[]> = {
     list: ["project"],
-    create: ["project", "home", "worktree", "yolo"],
+    create: ["cwd", "project", "home", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin"],
     inspect: ["limit", "after", "follow", "interval", "count"],
@@ -240,7 +241,8 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       if (command === "create") {
         operationPath = "/api/v1/sessions";
         body = {
-          directory: resolve(values.project!),
+          projectDirectory: resolve(values.project!),
+          ...(values.cwd === undefined ? {} : { workingDirectory: resolve(values.cwd) }),
           worktree: values.worktree ?? false,
           yolo: values.yolo ?? false,
           ...(values.home === undefined ? {} : { home: values.home }),

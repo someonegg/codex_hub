@@ -72,9 +72,17 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     { bindings: bindings },
   );
   try {
-    const first = operations.create({ directory, worktree: false, requestId: "native-first" });
+    const first = operations.create({
+      projectDirectory: directory,
+      worktree: false,
+      requestId: "native-first",
+    });
     expect(first.attachCommand).toBeNull();
-    const second = operations.create({ directory, worktree: true, requestId: "native-second" });
+    const second = operations.create({
+      projectDirectory: directory,
+      worktree: true,
+      requestId: "native-second",
+    });
     for (const op of [first, second]) {
       await until(async () => {
         const value = await operations.get(op.operationId);
@@ -82,7 +90,11 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
         return value?.status === "succeeded";
       });
     }
-    const third = operations.create({ directory, worktree: false, requestId: "native-third" });
+    const third = operations.create({
+      projectDirectory: directory,
+      worktree: false,
+      requestId: "native-third",
+    });
     await until(async () => {
       const value = await operations.get(third.operationId);
       if (value?.status === "failed") throw new Error(value.error!);
@@ -340,7 +352,7 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
   const nickname = catalog.homes.find((entry) => entry.nickname === "work")!.nickname;
   try {
     const operation = hub.operations.create({
-      directory,
+      projectDirectory: directory,
       worktree: false,
       requestId: "hub-composition",
       home: nickname,

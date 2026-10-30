@@ -111,9 +111,11 @@ pass the returned `Next after` value as `--after <value>`. Use `send <id> --stdi
 for piped input and `terminal <id>` to check the terminal. After a terminal switches
 sessions, use `handoff <id>` to transfer its binding.
 
-For lifecycle commands, run `ahub-cli session --help`. Create accepts `--home`,
-`--worktree`, and `--yolo`; resume keeps the original home and accepts `--yolo`.
-Omitting `--home` selects the first configured home. Archive a session before deleting it.
+For lifecycle commands, run `ahub-cli session --help`. Create requires `--project`
+and accepts `--cwd`, `--home`, `--worktree`, and `--yolo`. Omitting `--cwd` starts
+in the project directory; specifying it starts elsewhere while retaining the
+`--project` association. Omitting `--home` selects the first configured home.
+Resume keeps the original home and accepts `--yolo`. Archive a session before deleting it.
 
 Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
 or pass `--url` to use another HTTP address; HTTPS is not supported by this client.

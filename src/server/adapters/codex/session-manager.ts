@@ -26,7 +26,7 @@ export class CodexSessionManager implements SessionManager {
   }
   launch({
     operationId,
-    directory,
+    workingDirectory,
     worktree,
     yolo,
     resumeNativeId,
@@ -34,7 +34,7 @@ export class CodexSessionManager implements SessionManager {
   }: SessionLaunchOptions) {
     if (resumeNativeId !== undefined && !this.isValidNativeId(resumeNativeId))
       throw new Error("Invalid resume identity");
-    return this.tmux.launch(operationId, directory, [
+    return this.tmux.launch(operationId, workingDirectory, [
       "env",
       `CODEX_HOME=${this.home}`,
       "codex",

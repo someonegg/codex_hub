@@ -181,22 +181,27 @@ async function capture(
           revision: "demo-catalog",
           homes: [{ nickname: "default" }],
           projects: [
-            { id: "atlas", directory: session.projectDirectory },
-            { id: "harbor", directory: "/projects/harbor-api" },
-            { id: "notes", directory: "/projects/field-notes" },
+            { directory: session.projectDirectory },
+            { directory: "/projects/harbor-api" },
+            { directory: "/projects/field-notes" },
           ],
           sessions: [
-            { ...session, home: "default", projectId: "atlas", isChild: false },
+            {
+              ...session,
+              home: "default",
+              projectDirectory: session.projectDirectory,
+              isChild: false,
+            },
             ...[
-              ["docs-demo-session-keyboard", "Add keyboard navigation", "atlas"],
-              ["release", "Review the release checklist", "harbor"],
-              ["api", "Document the API endpoints", "harbor"],
-              ["guide", "Outline the getting started guide", "notes"],
-            ].map(([id, title, projectId]) => ({
+              ["docs-demo-session-keyboard", "Add keyboard navigation", session.projectDirectory],
+              ["release", "Review the release checklist", "/projects/harbor-api"],
+              ["api", "Document the API endpoints", "/projects/harbor-api"],
+              ["guide", "Outline the getting started guide", "/projects/field-notes"],
+            ].map(([id, title, projectDirectory]) => ({
               ...session,
               id,
               title,
-              projectId,
+              projectDirectory,
               home: "default",
               isChild: false,
               status: "normal",

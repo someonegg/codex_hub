@@ -147,7 +147,11 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
     await flush();
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ directory: "/project with spaces", worktree: true, yolo: true }),
+      expect.objectContaining({
+        projectDirectory: "/project with spaces",
+        worktree: true,
+        yolo: true,
+      }),
     );
     expect(screen.getByRole("status")).toHaveTextContent("pending");
     expect(screen.getByRole("button", { name: "Creating…" })).toBeDisabled();

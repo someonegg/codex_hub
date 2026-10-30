@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
+import { resolve } from "node:path";
 
 import { afterEach, expect, it } from "vitest";
 
@@ -114,19 +115,19 @@ it("uses explicit URL over the environment and filters by associated project", a
     reply(res, {
       homes: [],
       revision: "private",
-      projects: [{ id: "p", directory: "/project" }],
+      projects: [{ directory: "/project" }],
       sessions: [
         {
           id: "yes",
-          projectId: "p",
+          projectDirectory: "/project",
           title: "Title",
           status: "normal",
           home: "work",
           updatedAt: null,
         },
-        { id: "child", projectId: "p", isChild: true, parentId: "yes" },
-        { id: "orphan", projectId: "p", isChild: true, parentId: null },
-        { id: "no", projectId: "q" },
+        { id: "child", projectDirectory: "/project", isChild: true, parentId: "yes" },
+        { id: "orphan", projectDirectory: "/project", isChild: true, parentId: null },
+        { id: "no", projectDirectory: "/other-project" },
       ],
     });
   });
@@ -175,7 +176,8 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
     if (req.method === "POST") {
       submits++;
       expect(body).toMatchObject({
-        directory: "/project",
+        projectDirectory: "/project",
+        workingDirectory: resolve("relative-working"),
         home: "second",
         worktree: true,
         yolo: true,
@@ -214,6 +216,8 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
     "create",
     "--project",
     "/project",
+    "--cwd",
+    "relative-working",
     "--home",
     "second",
     "--worktree",
@@ -311,8 +315,10 @@ it("renders human output and sends human diagnostics to stderr", async () => {
     else
       reply(res, {
         homes: [{ nickname: "work" }],
-        projects: [{ id: "p", directory: "/project" }],
-        sessions: [{ id: "id", status: "live", home: "work", projectId: "p", title: "Title" }],
+        projects: [{ directory: "/project" }],
+        sessions: [
+          { id: "id", status: "live", home: "work", projectDirectory: "/project", title: "Title" },
+        ],
       });
   });
   const list = await cli(["list", "--url", base]);

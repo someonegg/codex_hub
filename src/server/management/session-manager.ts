@@ -20,7 +20,7 @@ export interface SessionExitCapability {
 export interface SessionLaunchOptions {
   readonly operationId: string;
   /** Actual process working directory, resolved before launch. */
-  readonly directory: string;
+  readonly workingDirectory: string;
   readonly worktree: boolean;
   readonly yolo: boolean;
   /** Present for resume; absent for creation. */

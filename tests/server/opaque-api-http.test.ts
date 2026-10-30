@@ -143,7 +143,7 @@ describe("opaque cursor API", () => {
       "id",
       "isChild",
       "parentId",
-      "projectId",
+      "projectDirectory",
       "status",
       "title",
       "updatedAt",
