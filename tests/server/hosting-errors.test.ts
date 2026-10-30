@@ -1,16 +1,17 @@
 import type * as NodeFs from "node:fs";
 import { createReadStream } from "node:fs";
 import type * as NodeFsPromises from "node:fs/promises";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 import { PassThrough } from "node:stream";
 
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { hostingRoutes } from "../../src/server/hosting/routes.js";
 import { HostingStore } from "../../src/server/hosting/store.js";
 import { reportRequestError } from "../../src/server/http/request-errors.js";
+import { createTempDirectory } from "../helpers/temp-directories.js";
 
 vi.mock("node:fs", async (original) => {
   const fs = await original<typeof NodeFs>();
@@ -20,14 +21,8 @@ vi.mock("node:fs/promises", async (original) => {
   const fs = await original<typeof NodeFsPromises>();
   return { ...fs, readFile: vi.fn(fs.readFile) };
 });
-const cleanup: (() => Promise<unknown>)[] = [];
-afterEach(async () => {
-  for (const action of cleanup.splice(0)) await action();
-});
-
 async function publishedArtifact() {
-  const root = await mkdtemp("/private/tmp/hosting-errors-");
-  cleanup.push(() => rm(root, { recursive: true, force: true }));
+  const root = await createTempDirectory("hosting-errors-");
   const source = join(root, "source");
   await mkdir(source);
   await writeFile(join(source, "index.html"), "page");
