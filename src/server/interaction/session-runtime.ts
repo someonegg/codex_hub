@@ -66,12 +66,12 @@ export class SessionRuntime {
 
   async evaluate(
     session: DomainSession,
-    sessions: readonly DomainSession[],
     detail = true,
     observation?: RuntimeObservation,
   ): Promise<{
     status: SessionStatus;
     resume: ResumeCapability;
+    directory?: string;
   }> {
     let status: SessionStatus = session.archived ? "archived" : "normal";
     const deny = (reason: string) => ({ status, resume: { allowed: false, reason } });
@@ -88,15 +88,9 @@ export class SessionRuntime {
       const manager = this.managers.get(session.origin.home);
       if (!session.sourceId?.trim() || !manager.isValidNativeId(session.sourceId))
         return deny("Session has no valid native identity");
-      if (
-        sessions.filter(
-          (item) => item.origin.home === session.origin.home && item.sourceId === session.sourceId,
-        ).length !== 1
-      )
-        return deny("Native session identity is ambiguous");
-      await resolveResumeDirectory(manager, session);
+      const resolved = await resolveResumeDirectory(manager, session);
       if (!this.isCurrent(observed)) return deny("Pane binding changed during validation");
-      return { status, resume: { allowed: true, reason: null } };
+      return { status, resume: { allowed: true, reason: null }, directory: resolved.directory };
     } catch {
       status = "normal";
       return deny("Runtime or working directory validation failed");

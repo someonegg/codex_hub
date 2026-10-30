@@ -20,6 +20,7 @@ async function start() {
     }),
     inspect: async () => null,
     getItems: unavailable,
+    readSessionUpdates: unavailable,
     getSessionUpdates: unavailable,
     getToolDetail: unavailable,
     getDirectiveDetail: unavailable,

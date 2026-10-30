@@ -8,11 +8,7 @@ import {
   type OperationEntry,
   type OperationTimeouts,
 } from "./operation-state.js";
-import {
-  type ManagementSnapshot,
-  resolveResumeDirectory,
-  type SessionManagerRegistry,
-} from "./session-manager.js";
+import { type ManagementSnapshot, type SessionManagerRegistry } from "./session-manager.js";
 
 /** Adapter launch and association checks; OperationService owns idempotency and occupancy. */
 export class SessionLaunchExecutor {
@@ -64,19 +60,18 @@ export class SessionLaunchExecutor {
     try {
       if (!this.runtime) throw new Error("Resume is unavailable");
       let snapshot = await this.sessions.managementSnapshot();
-      let session = snapshot.sessions.find((item) => item.id === sessionId);
+      let session = snapshot.byId.get(sessionId);
       if (!session) throw new Error("Session not found");
-      let capability = await this.runtime.evaluate(session, snapshot.sessions);
+      let capability = await this.runtime.evaluate(session);
       if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
       entry.home = session.origin.home;
       entry.resumeNativeId = session.sourceId ?? undefined;
       const manager = this.managers.get(entry.home);
       const attempt = this.bindings.latest(session.id);
       const replacement = this.bindings.replacement(session.id);
-      await resolveResumeDirectory(manager, session);
       // Refresh the source after asynchronous checks, then revalidate immediately before launch.
       snapshot = await this.sessions.managementSnapshot();
-      const latest = snapshot.sessions.find((item) => item.id === sessionId);
+      const latest = snapshot.byId.get(sessionId);
       if (
         !latest ||
         latest.sourceId !== session.sourceId ||
@@ -88,11 +83,11 @@ export class SessionLaunchExecutor {
       )
         throw new Error("Session identity or directory changed during validation");
       session = latest;
-      capability = await this.runtime.evaluate(session, snapshot.sessions);
+      capability = await this.runtime.evaluate(session);
       if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-      const resolved = await resolveResumeDirectory(manager, session);
+      const resolved = { directory: capability.directory! };
       const finalSnapshot = await this.sessions.managementSnapshot();
-      const finalSession = finalSnapshot.sessions.find((item) => item.id === sessionId);
+      const finalSession = finalSnapshot.byId.get(sessionId);
       if (
         !finalSession ||
         finalSession.sourceId !== session.sourceId ||
@@ -100,9 +95,6 @@ export class SessionLaunchExecutor {
         finalSession.archived ||
         finalSession.workingDirectory !== session.workingDirectory ||
         finalSession.projectDirectory !== session.projectDirectory ||
-        finalSnapshot.sessions.filter(
-          (item) => item.sourceId === session.sourceId && item.origin.home === session.origin.home,
-        ).length !== 1 ||
         attempt !== this.bindings.latest(session.id) ||
         replacement !== this.bindings.replacement(session.id)
       )
@@ -156,10 +148,9 @@ export class SessionLaunchExecutor {
       (match.id !== entry.metadata.sessionId ||
         match.archived ||
         match.sourceId !== entry.resumeNativeId ||
-        !match.sourceId ||
-        this.#matches(snapshot, entry, match.sourceId).length !== 1)
+        !match.sourceId)
     )
-      throw new AssociationError("Resume did not bind the original unique session");
+      throw new AssociationError("Resume did not bind the original session");
     const attempt = this.bindings.latest(match.id);
     if (
       !attempt?.valid ||
@@ -179,11 +170,5 @@ export class SessionLaunchExecutor {
     if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
     entry.metadata.sessionId = match.id;
     this.control.finish(entry, "succeeded", null);
-  }
-
-  #matches(snapshot: ManagementSnapshot, entry: OperationEntry, nativeId: string) {
-    return snapshot.sessions.filter(
-      (session) => session.origin.home === entry.home && session.sourceId === nativeId,
-    );
   }
 }

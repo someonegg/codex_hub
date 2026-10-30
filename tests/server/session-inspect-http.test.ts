@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { expect, it } from "vitest";
 
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "../../src/server/create-hub.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { startHttpServer } from "../helpers/http-server.js";

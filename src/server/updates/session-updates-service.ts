@@ -34,16 +34,21 @@ export interface SessionUpdatesServiceOptions {
   readonly waitTimeoutMs?: number;
   readonly maxWaiters?: number;
   readonly maxWaitersPerSession?: number;
-  readonly now?: () => number;
 }
 
-interface WaiterEntry {
-  readonly sessionId: string;
-  readonly externalSignal?: AbortSignal;
-  readonly externalAbort: () => void;
+interface Waiter {
+  readonly query: SessionUpdatesQuery;
+  readonly finish: (value: SessionUpdatesResponse | null) => void;
+  readonly fail: (error: unknown) => void;
 }
+type UpdatesProbe = (query: SessionUpdatesQuery) => SessionUpdatesResponse;
 
-type SessionUpdatesReader = Pick<SessionReader, "getSessionUpdates">;
+interface ProbeGroup {
+  readonly waiters: Set<Waiter>;
+  pending: Promise<UpdatesProbe> | null;
+  timer?: ReturnType<typeof setTimeout>;
+}
+type SessionUpdatesReader = Pick<SessionReader, "readSessionUpdates">;
 
 export class SessionUpdatesService {
   readonly #createRevision: UpdateRevisionFactory;
@@ -51,9 +56,8 @@ export class SessionUpdatesService {
   readonly #waitTimeoutMs: number;
   readonly #maxWaiters: number;
   readonly #maxWaitersPerSession: number;
-  readonly #now: () => number;
-  readonly #waiters = new Map<AbortController, WaiterEntry>();
-  readonly #waitersBySession = new Map<string, number>();
+  readonly #groups = new Map<string, ProbeGroup>();
+  #waiterCount = 0;
   #closed = false;
 
   constructor(
@@ -65,7 +69,6 @@ export class SessionUpdatesService {
     this.#waitTimeoutMs = options.waitTimeoutMs ?? UPDATES_WAIT_TIMEOUT_MS;
     this.#maxWaiters = options.maxWaiters ?? MAX_UPDATES_WAITERS;
     this.#maxWaitersPerSession = options.maxWaitersPerSession ?? MAX_UPDATES_WAITERS_PER_SESSION;
-    this.#now = options.now ?? Date.now;
   }
 
   revision(session: UpdateRevisionSession, interaction: InteractionResponse) {
@@ -77,93 +80,123 @@ export class SessionUpdatesService {
     query: SessionUpdatesQuery,
     signal?: AbortSignal,
   ): Promise<SessionUpdatesResponse | null> {
-    this.#throwIfAborted(signal);
-    const initial = await this.#probe(sessionId, query);
-    if (initial.updateRevision !== query.after || initial.hasMore) return initial;
-    if (initial.session.status === "archived") return null;
-    const waiter = this.#acquire(sessionId, signal);
-    const deadline = this.#now() + this.#waitTimeoutMs;
-    try {
-      while (true) {
-        const remaining = deadline - this.#now();
-        if (remaining <= 0) return null;
-        await delay(Math.min(this.#probeIntervalMs, remaining), waiter.signal);
-        const current = await this.#probe(sessionId, query);
-        if (current.updateRevision !== query.after || current.hasMore) return current;
-      }
-    } finally {
-      this.#release(waiter);
+    if (this.#closed || signal?.aborted) throw abortError();
+    let group = this.#groups.get(sessionId);
+    if (
+      this.#waiterCount >= this.#maxWaiters ||
+      (group?.waiters.size ?? 0) >= this.#maxWaitersPerSession
+    )
+      throw new SessionUpdatesError(
+        "updates_capacity_exceeded",
+        "Too many automatic update requests are already waiting",
+      );
+    if (!group) {
+      group = { waiters: new Set(), pending: null };
+      this.#groups.set(sessionId, group);
     }
+    const current = group;
+    this.#waiterCount++;
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const cleanup = () => {
+        settled = true;
+        clearTimeout(timeout);
+        signal?.removeEventListener("abort", abort);
+        current.waiters.delete(waiter);
+        this.#waiterCount--;
+        if (current.waiters.size === 0) {
+          clearTimeout(current.timer);
+          if (this.#groups.get(sessionId) === current) this.#groups.delete(sessionId);
+        }
+      };
+      const waiter: Waiter = {
+        query,
+        finish: (value) => {
+          if (!settled) {
+            cleanup();
+            resolve(value);
+          }
+        },
+        fail: (error) => {
+          if (!settled) {
+            cleanup();
+            reject(error);
+          }
+        },
+      };
+      const abort = () => waiter.fail(abortError());
+      const timeout = setTimeout(() => waiter.finish(null), this.#waitTimeoutMs);
+      current.waiters.add(waiter);
+      signal?.addEventListener("abort", abort, { once: true });
+      // Only in-flight initial reads are reused, never completed runtime results.
+      void this.#read(sessionId, current).then(
+        (read) => {
+          if (current.waiters.has(waiter)) this.#evaluate(waiter, read);
+          this.#schedule(sessionId, current);
+        },
+        (error) => waiter.fail(error),
+      );
+    });
+  }
+
+  #evaluate(waiter: Waiter, read: UpdatesProbe) {
+    try {
+      const result = read(waiter.query);
+      if (result.updateRevision !== waiter.query.after || result.hasMore) waiter.finish(result);
+      else if (result.session.status === "archived") waiter.finish(null);
+    } catch (error) {
+      waiter.fail(error);
+    }
+  }
+
+  #read(sessionId: string, group: ProbeGroup) {
+    if (group.pending) return group.pending;
+    const pending = (async () => {
+      const read = await this.sessions.readSessionUpdates(sessionId);
+      if (!read) throw new SessionUpdatesError("session_not_found", "Session not found");
+      const assembled = await assembleSessionResponse(
+        read.state,
+        this.options.interaction,
+        this.#createRevision,
+      );
+      return (query: SessionUpdatesQuery): SessionUpdatesResponse => {
+        const progress = read(query.cursor);
+        return { ...assembled, cursor: progress.cursor, hasMore: progress.hasMore };
+      };
+    })();
+    group.pending = pending;
+    const clearPending = () => {
+      group.pending = null;
+    };
+    void pending.then(clearPending, clearPending);
+    return pending;
+  }
+
+  #schedule(sessionId: string, group: ProbeGroup) {
+    if (this.#closed || !group.waiters.size || group.timer !== undefined || group.pending) return;
+    group.timer = setTimeout(async () => {
+      group.timer = undefined;
+      // Requests joining during this read share its immutable snapshot.
+      const waiters = [...group.waiters];
+      try {
+        const read = await this.#read(sessionId, group);
+        for (const waiter of waiters) if (group.waiters.has(waiter)) this.#evaluate(waiter, read);
+      } catch (error) {
+        for (const waiter of waiters) waiter.fail(error);
+      } finally {
+        this.#schedule(sessionId, group);
+      }
+    }, this.#probeIntervalMs);
   }
 
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    for (const waiter of this.#waiters.keys()) waiter.abort();
-  }
-
-  async #probe(sessionId: string, query: SessionUpdatesQuery): Promise<SessionUpdatesResponse> {
-    this.#throwIfAborted();
-    const snapshot = await this.sessions.getSessionUpdates(sessionId, query.cursor);
-    if (snapshot === null) {
-      throw new SessionUpdatesError("session_not_found", "Session not found");
+    for (const group of this.#groups.values()) {
+      clearTimeout(group.timer);
+      for (const waiter of group.waiters) waiter.fail(abortError());
     }
-    return assembleSessionResponse(snapshot, this.options.interaction, this.#createRevision);
   }
-
-  #acquire(sessionId: string, signal?: AbortSignal): AbortController {
-    this.#throwIfAborted(signal);
-    const sessionCount = this.#waitersBySession.get(sessionId) ?? 0;
-    if (this.#waiters.size >= this.#maxWaiters || sessionCount >= this.#maxWaitersPerSession) {
-      throw new SessionUpdatesError(
-        "updates_capacity_exceeded",
-        "Too many automatic update requests are already waiting",
-      );
-    }
-    const controller = new AbortController();
-    const abort = () => controller.abort(signal?.reason);
-    signal?.addEventListener("abort", abort, { once: true });
-    if (signal?.aborted) controller.abort(signal.reason);
-    this.#waiters.set(controller, {
-      sessionId,
-      externalSignal: signal,
-      externalAbort: abort,
-    });
-    this.#waitersBySession.set(sessionId, sessionCount + 1);
-    return controller;
-  }
-
-  #release(controller: AbortController): void {
-    const entry = this.#waiters.get(controller);
-    if (entry === undefined) return;
-    this.#waiters.delete(controller);
-    const { sessionId } = entry;
-    const count = (this.#waitersBySession.get(sessionId) ?? 1) - 1;
-    if (count === 0) this.#waitersBySession.delete(sessionId);
-    else this.#waitersBySession.set(sessionId, count);
-    entry.externalSignal?.removeEventListener("abort", entry.externalAbort);
-  }
-
-  #throwIfAborted(signal?: AbortSignal): void {
-    if (this.#closed || signal?.aborted) throw abortError();
-  }
-}
-
-function delay(milliseconds: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal.aborted) return reject(abortError());
-    const timer = setTimeout(done, milliseconds);
-    const abort = () => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", abort);
-      reject(abortError());
-    };
-    function done() {
-      signal.removeEventListener("abort", abort);
-      resolve();
-    }
-    signal.addEventListener("abort", abort, { once: true });
-  });
 }
 
 function abortError(): Error {

@@ -5,9 +5,10 @@ import { join } from "node:path";
 import { isPreviewableUploadType, MAX_UPLOAD_BYTES } from "../../shared/uploads.js";
 import type { SessionReader } from "../application/session-reader.js";
 import { resolveHomeDirectory } from "../config.js";
-import type { UploadStore } from "../uploads/store.js";
+import { validAttachmentId, type UploadStore } from "../uploads/store.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { RequestBodyError } from "./request-body.js";
+import { isOpaqueId } from "./session-path.js";
 import { sendJson } from "./router.js";
 
 const SESSION_UPLOAD_PATH = /^\/api\/v1\/sessions\/([^/]+)\/uploads(?:\/([^/]+)(\/content)?)?$/;
@@ -41,8 +42,16 @@ export function createUploadRoutes(
     async handle(request, response, url) {
       const match = SESSION_UPLOAD_PATH.exec(url.pathname);
       const [, encodedSessionId, attachmentId, contentPath] = match ?? [];
-      const id = match ? decodeURIComponent(encodedSessionId!) : url.searchParams.get("sessionId");
+      let id: string | null;
+      try {
+        id = match ? decodeURIComponent(encodedSessionId!) : url.searchParams.get("sessionId");
+      } catch {
+        throw new RequestBodyError(400, "invalid_session", "Invalid sessionId");
+      }
       if (!id) throw new RequestBodyError(400, "invalid_session", "sessionId is required");
+      if (!isOpaqueId(id)) throw new RequestBodyError(400, "invalid_session", "Invalid sessionId");
+      if (attachmentId && !validAttachmentId(attachmentId))
+        throw new RequestBodyError(400, "invalid_session", "Invalid attachment ID");
       const method = request.method;
       if (method === "POST" || method === "DELETE") {
         const protocol =

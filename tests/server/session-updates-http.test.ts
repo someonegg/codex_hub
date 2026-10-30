@@ -66,8 +66,15 @@ describe("automatic update HTTP API", () => {
   });
 
   it("returns 429 at capacity and releases the slot when the client disconnects", async () => {
+    let resolveInitial!: (value: ReturnType<typeof snapshot>) => void;
     const getSessionUpdates = vi
       .fn<SessionReader["getSessionUpdates"]>()
+      .mockImplementationOnce(
+        () =>
+          new Promise<ReturnType<typeof snapshot>>((resolve) => {
+            resolveInitial = resolve;
+          }),
+      )
       .mockResolvedValue(snapshot(false));
     const { base, updates } = await start(getSessionUpdates, {
       waitTimeoutMs: 5_000,
@@ -79,7 +86,10 @@ describe("automatic update HTTP API", () => {
     const abort = new AbortController();
     const pending = fetch(url(base, REVISION), { signal: abort.signal });
     await vi.waitFor(() => expect(getSessionUpdates).toHaveBeenCalled());
+    // Keep the initial read pending so background probes cannot race this assertion.
+    const beforeLimit = getSessionUpdates.mock.calls.length;
     const limited = await fetch(url(base, REVISION));
+    expect(getSessionUpdates).toHaveBeenCalledTimes(beforeLimit);
     expect(limited.status).toBe(429);
     expect(await limited.json()).toMatchObject({
       error: { code: "updates_capacity_exceeded" },
@@ -91,9 +101,10 @@ describe("automatic update HTTP API", () => {
     abort.abort();
     await expect(pending).rejects.toMatchObject({ name: "AbortError" });
     await released;
+    resolveInitial(snapshot(false));
 
     // The replacement must enter the wait path before a later probe reports backlog.
-    // An immediately changed snapshot would bypass capacity and hide a leaked slot.
+    // This verifies the replacement can remain registered for a later shared probe.
     getSessionUpdates.mockResolvedValueOnce(snapshot(false)).mockResolvedValue(snapshot(true));
     const probes = getSessionUpdates.mock.calls.length;
     const recovered = await fetch(url(base, REVISION));
@@ -113,6 +124,10 @@ async function start(
     inspect: async () => null,
     getItems: unavailable,
     getSessionUpdates,
+    readSessionUpdates: async (id: string) => {
+      const value = await getSessionUpdates(id, CURSOR);
+      return value && Object.assign(() => value, { state: value });
+    },
     getToolDetail: unavailable,
     getDirectiveDetail: unavailable,
     getInternalDetail: unavailable,

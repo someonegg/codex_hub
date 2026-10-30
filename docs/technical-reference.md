@@ -42,9 +42,9 @@ existing path order when initially selecting or replacing it. Ignored duplicates
 publish no sessions or binding events and retain no decode cache. Rollouts without
 native IDs use path-based identity.
 
-Shared services treat native IDs as opaque strings and check presence and
-source-local uniqueness. Format validation belongs to the adapter; Codex requires
-UUIDs. Parent relationships never cross homes.
+Shared services treat native IDs as opaque strings and check identity presence.
+Format validation belongs to the adapter; Codex requires UUIDs. Parent
+relationships never cross homes.
 
 ### Adapter publication and diagnostics
 
@@ -144,7 +144,13 @@ Update requests validate the cursor without advancing it or returning items;
 backlog loads through the items endpoint. Probes run every 1.5 seconds for up to
 25 seconds, then return `204` if unchanged. Capacity is 100 waiters per process
 and 10 per session; excess requests receive `429` with `Retry-After: 2`.
-Disconnect and shutdown release waiters.
+Capacity is reserved before the first read, including requests that could return
+immediately. Requests for one session share each state read, interaction assembly
+and revision calculation; cursor validation and backlog decisions use that same
+immutable snapshot independently for each request. Only in-flight initial reads
+are shared; completed runtime observations are not cached. A bad cursor or
+cancellation affects only its request. Disconnect, timeout and shutdown release
+capacity, including during an unfinished initial read.
 
 Reader metadata exposes `resume: { allowed, reason }`, with null `reason` when
 allowed. The full public session, including resolved title and `updatedAt`, and
@@ -296,7 +302,13 @@ and other non-preview types always download; all content uses `nosniff` and a
 sandbox CSP.
 
 Storage is `<home-dir>/uploads/<Hub session ID>/`.
-Metadata commits use atomic rename and record absolute content paths.
+Metadata commits use atomic rename and record absolute content paths. HTTP and
+storage entry points validate public session IDs; attachment IDs are UUID v4.
+Metadata identities must match the request, and content must be a direct file in
+that session directory with the generated attachment ID and supported extension.
+Reads, deletion and deletion recovery validate real locations and reject symlink
+escapes or corrupt metadata. Invalid request IDs return `400`; missing attachments
+retain their normal not-found/idempotent-delete behavior.
 
 Deletion first renames metadata to a tombstone, hiding the attachment, then removes
 content and tombstone. Failed cleanup retries on deletion or startup. Startup also

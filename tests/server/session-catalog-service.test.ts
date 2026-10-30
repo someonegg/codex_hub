@@ -129,3 +129,33 @@ describe("session catalog long polling", () => {
     service.close();
   });
 });
+
+it("counts unresolved initial reads and releases slots on cancellation and close", async () => {
+  vi.useFakeTimers();
+  let resolve!: (value: SessionListResponse) => void;
+  const sessions = {
+    refresh: vi.fn(),
+    list: vi.fn(
+      () =>
+        new Promise<SessionListResponse>((done) => {
+          resolve = done;
+        }),
+    ),
+  };
+  const service = new SessionCatalogService(sessions);
+  const abort = new AbortController();
+  const first = service.wait(undefined, abort.signal);
+  const canceled = expect(first).rejects.toMatchObject({ name: "AbortError" });
+  const others = Array.from({ length: MAX_CATALOG_WAITERS - 1 }, () => service.wait());
+  await expect(service.wait()).rejects.toBeInstanceOf(CatalogCapacityError);
+  expect(sessions.list).toHaveBeenCalledTimes(1);
+  abort.abort();
+  await canceled;
+  const replacement = service.wait();
+  service.close();
+  expect(await replacement).toBeNull();
+  expect(await Promise.all(others)).toEqual(Array(MAX_CATALOG_WAITERS - 1).fill(null));
+  resolve(initial);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(vi.getTimerCount()).toBe(0);
+});

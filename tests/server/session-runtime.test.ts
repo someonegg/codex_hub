@@ -54,7 +54,7 @@ function setup() {
       position: 0,
       attempt: valid ? { valid: true, ordinal: time, ...pane } : { valid: false, ordinal: time },
     });
-  const evaluate = (value = session, all = [value]) => runtime.evaluate(value, all);
+  const evaluate = (value = session) => runtime.evaluate(value);
   return {
     isValidNativeId,
     runtime,
@@ -109,26 +109,11 @@ describe("session runtime evidence", () => {
     },
   );
 
-  it("rejects invalid identities, duplicate identities in one home and unavailable directories", async () => {
+  it("rejects invalid identities and unavailable directories", async () => {
     const f = setup();
     expect((await f.evaluate({ ...f.session, sourceId: "" })).resume.allowed).toBe(false);
     expect((await f.evaluate({ ...f.session, sourceId: null })).resume.allowed).toBe(false);
     expect((await f.evaluate({ ...f.session, sourceId: "   " })).resume.allowed).toBe(false);
-    expect(
-      (await f.evaluate(f.session, [f.session, { ...f.session, id: "duplicate" }])).resume.allowed,
-    ).toBe(false);
-    expect(
-      (
-        await f.evaluate(f.session, [
-          f.session,
-          {
-            ...f.session,
-            id: "other-home",
-            origin: { ...f.session.origin, home: "other" },
-          },
-        ])
-      ).resume.allowed,
-    ).toBe(true);
     f.resolveDirectory.mockRejectedValue(new Error("ENOENT"));
     expect((await f.evaluate()).resume.allowed).toBe(false);
   });

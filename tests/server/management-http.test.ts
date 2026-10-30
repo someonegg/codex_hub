@@ -1,7 +1,7 @@
 import { expect, it, vi } from "vitest";
 
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
-import { createCodexSessionReadService } from "../../src/server/create-hub.js";
+import { createCodexSessionReadService } from "./codex-read-helper.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { paneBindings } from "../../src/server/interaction/pane-binding-manager.js";

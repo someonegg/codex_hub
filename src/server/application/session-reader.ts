@@ -17,7 +17,13 @@ import type { SessionId } from "../../shared/domain.js";
 import type { DomainAgentInteraction } from "../domain/session-domain.js";
 import type { RuntimeObservation } from "../interaction/pane-observation.js";
 
+/** Cursor checks remain bound to the same published snapshot as runtime state. */
+export type SessionUpdatesRead = ((cursor: TimelineCursor) => SessionUpdatesSnapshot) & {
+  readonly state: Pick<SessionUpdatesSnapshot, "session" | "interactionSession">;
+};
+
 export interface SessionReader {
+  readSessionUpdates(id: SessionId): Promise<SessionUpdatesRead | null>;
   inspect(id: SessionId, query: InspectQuery): Promise<SessionInspectResponse | null>;
   list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionReadDetailResponse | null>;
