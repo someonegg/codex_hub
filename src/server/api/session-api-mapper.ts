@@ -39,7 +39,7 @@ export class SessionApiMapper {
           projects.set(projectId, { id: projectId, directory });
         return {
           id: session.id,
-          sourceInstanceId: session.origin.sourceInstanceId,
+          home: session.origin.home,
           title: this.resolveNickname(session) ?? session.title,
           projectId,
           status: session.archived ? ("archived" as const) : ("normal" as const),
@@ -50,7 +50,7 @@ export class SessionApiMapper {
       })
       .sort((a, b) => compareIds(a.id, b.id));
     const structure = {
-      homes: [...this.homes].sort((a, b) => compareIds(a.sourceInstanceId, b.sourceInstanceId)),
+      homes: [...this.homes].sort((a, b) => compareIds(a.nickname, b.nickname)),
       projects: [...projects.values()].sort((a, b) => compareIds(a.id, b.id)),
       sessions: summaries.map(({ updatedAt, ...summary }) => summary),
     };

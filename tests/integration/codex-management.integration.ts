@@ -58,7 +58,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
   const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(home, bindings);
   const reader = new SessionReadService([source]);
-  const sourceId = source.descriptor.sourceInstanceId;
+  const homeNickname = source.descriptor.home;
   const interaction = new SessionInteractionService(
     reader,
     true,
@@ -70,7 +70,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
   const operations = new OperationService(
     reader,
     interaction,
-    new SessionManagerRegistry(sourceId).register(sourceId, manager),
+    new SessionManagerRegistry(homeNickname).register(homeNickname, manager),
     undefined,
     undefined,
     bindings,
@@ -254,14 +254,14 @@ it("reports the native refusal for a running unbound session and archives it aft
   const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(home, bindings);
   const reader = new SessionReadService([source]);
-  const sourceId = source.descriptor.sourceInstanceId;
+  const homeNickname = source.descriptor.home;
   const transport = new TmuxInteractionService();
   const interaction = new SessionInteractionService(reader, true, transport, bindings);
   const operations = new OperationService(
     reader,
     interaction,
-    new SessionManagerRegistry(sourceId).register(
-      sourceId,
+    new SessionManagerRegistry(homeNickname).register(
+      homeNickname,
       new CodexSessionManager(home, new TmuxLauncher(socket)),
     ),
     undefined,
@@ -340,15 +340,13 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
   );
   const catalog = await hub.sessions.list();
   expect(catalog.homes).toHaveLength(2);
-  const sourceInstanceId = catalog.homes.find(
-    (entry) => entry.nickname === "work",
-  )!.sourceInstanceId;
+  const nickname = catalog.homes.find((entry) => entry.nickname === "work")!.nickname;
   try {
     const operation = hub.operations.create({
       directory,
       worktree: false,
       requestId: "hub-composition",
-      sourceInstanceId,
+      home: nickname,
     });
     await until(async () => {
       const result = await hub.operations.get(operation.operationId);
@@ -356,9 +354,7 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
       return result?.status === "succeeded";
     });
     const result = (await hub.operations.get(operation.operationId))!;
-    expect(
-      (await hub.sessions.getSession(result.sessionId!))!.session.origin.sourceInstanceId,
-    ).toBe(sourceInstanceId);
+    expect((await hub.sessions.getSession(result.sessionId!))!.session.origin.home).toBe(nickname);
     expect(await readdir(emptyHome)).toEqual([]);
     expect(await hub.interaction.describe(result.sessionId!)).toMatchObject({ state: "connected" });
     const originalId = result.sessionId!;
@@ -465,7 +461,9 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     await until(async () =>
       (await hub.interaction.captureTerminal(id)).content.includes("AHUB-CLI-ROUNDTRIP"),
     );
-    expect((await cli("inspect", id)).live).toBe(true);
+    const inspected = await cli("inspect", id);
+    expect(inspected.interaction).toMatchObject({ supported: true, state: "connected" });
+    expect(inspected.session.home).toBe("work");
     expect((await cli("terminal", id)).content).toContain("AHUB-CLI-ROUNDTRIP");
     await until(async () => {
       const state = await hub.interaction.describe(id);

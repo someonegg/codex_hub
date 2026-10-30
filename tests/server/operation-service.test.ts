@@ -48,7 +48,7 @@ function session(id = "session", operationId?: string): DomainSession {
     diagnostics: [],
     origin: {
       sourceType: "codex-jsonl",
-      sourceInstanceId: "test",
+      home: "test",
       agentName: "Codex",
       agentVersion: null,
       formatVersion: null,
@@ -615,7 +615,7 @@ it.each(["archive", "delete"] as const)(
     const remote = {
       ...local,
       id: "remote",
-      origin: { ...local.origin, sourceInstanceId: "other" },
+      origin: { ...local.origin, home: "other" },
     };
     set({ sessions: [local, remote] });
     const op = service.manage(type, "remote");
@@ -636,7 +636,7 @@ it("never falls back to a default manager for an unregistered source", async () 
   const { service, manager, interaction, set } = setup();
   const record = session();
   set({
-    sessions: [{ ...record, origin: { ...record.origin, sourceInstanceId: "unregistered" } }],
+    sessions: [{ ...record, origin: { ...record.origin, home: "unregistered" } }],
   });
   const op = service.manage("archive", record.id);
   await flush();
@@ -720,13 +720,9 @@ it("isolates creation association and fingerprints the selected source", async (
   };
   registry.register("other", other);
   const input = { directory: "/project", worktree: false, requestId: "multi-home-create" };
-  expect(() => service.create({ ...input, sourceInstanceId: "missing" })).toThrow(
-    "Unknown sourceInstanceId",
-  );
-  const operation = service.create({ ...input, sourceInstanceId: "other" });
-  expect(() => service.create({ ...input, sourceInstanceId: "test" })).toThrow(
-    "different parameters",
-  );
+  expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
+  const operation = service.create({ ...input, home: "other" });
+  expect(() => service.create({ ...input, home: "test" })).toThrow("different parameters");
   await flush();
   expect(other.launch).toHaveBeenCalledTimes(1);
   expect(manager.launch).not.toHaveBeenCalled();
@@ -736,7 +732,7 @@ it("isolates creation association and fingerprints the selected source", async (
   expect((await service.get(operation.operationId))!.status).toBe("pending");
   expect(interaction.describe).not.toHaveBeenCalled();
   const candidate = session("right-home", operation.operationId);
-  const correct = { ...candidate, origin: { ...candidate.origin, sourceInstanceId: "other" } };
+  const correct = { ...candidate, origin: { ...candidate.origin, home: "other" } };
   set({ sessions: [wrong, correct] });
   await service.poll();
   expect((await service.get(operation.operationId))!.sessionId).toBe(correct.id);
@@ -1115,15 +1111,18 @@ describe("session upload cleanup", () => {
 it("defaults to the first configured home and resolves explicit nicknames without fallback", async () => {
   const { service, manager, registry } = setup();
   const other = { ...manager, launch: vi.fn(async () => target) };
-  registry.register("other", other, "secondary");
+  registry.register("secondary", other);
   const input = { directory: "/project", worktree: false, requestId: "default-home-test" };
   service.create(input);
   service.create({ ...input, requestId: "explicit-home-test", home: "secondary" });
   expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
-  expect(() => service.create({ ...input, home: "secondary", sourceInstanceId: "other" })).toThrow(
-    "mutually exclusive",
-  );
   await flush();
   expect(manager.launch).toHaveBeenCalledOnce();
   expect(other.launch).toHaveBeenCalledOnce();
+});
+
+it("rejects empty and duplicate management home nicknames", () => {
+  const { manager, registry } = setup();
+  expect(() => registry.register(" ", manager)).toThrow("Empty home nickname");
+  expect(() => registry.register("test", manager)).toThrow("Duplicate home nickname");
 });

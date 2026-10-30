@@ -25,7 +25,7 @@ export const baseSession: SessionDetail = {
   projectDirectory: "/project/reader",
   origin: {
     sourceType: "codex-jsonl",
-    sourceInstanceId: "source-instance",
+    home: "default",
     agentName: "Codex",
     agentVersion: null,
     formatVersion: null,
@@ -42,11 +42,11 @@ export const baseSession: SessionDetail = {
 };
 
 export const listBody = {
-  homes: [{ sourceInstanceId: "source-instance", nickname: "default" }],
+  homes: [{ nickname: "default" }],
   revision: "a".repeat(43),
   sessions: [
     {
-      sourceInstanceId: "source-instance",
+      home: "default",
       id: SESSION_ID,
       title: baseSession.title,
       projectId: "project-reader",

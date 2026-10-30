@@ -139,11 +139,11 @@ describe("opaque cursor API", () => {
     expect(first.sessions).toHaveLength(4);
     expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
     expect(Object.keys(first.sessions[0]).sort()).toEqual([
+      "home",
       "id",
       "isChild",
       "parentId",
       "projectId",
-      "sourceInstanceId",
       "status",
       "title",
       "updatedAt",
@@ -395,7 +395,7 @@ it("accepts opaque Unicode, UUID and percent-containing item IDs with one decodi
     descriptor: {
       sourceType: "test",
       instanceKey: "ids",
-      sourceInstanceId: "ids",
+      home: "ids",
       displayName: "Test",
     },
     async refresh() {

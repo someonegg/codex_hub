@@ -64,7 +64,7 @@ describe("session catalog long polling", () => {
       ...initial,
       sessions: [
         {
-          sourceInstanceId: "source-instance",
+          home: "default",
           id: "one",
           title: "One",
           projectId: null,

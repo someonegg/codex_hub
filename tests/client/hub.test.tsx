@@ -443,18 +443,14 @@ it("feeds displayed session updatedAt back into sidebar ordering without refresh
 function multiHomeCatalog(): SessionListResponse {
   return {
     ...catalog,
-    homes: [
-      { sourceInstanceId: "source-instance", nickname: "personal" },
-      { sourceInstanceId: "work", nickname: "work" },
-      { sourceInstanceId: "empty", nickname: "empty" },
-    ],
+    homes: [{ nickname: "personal" }, { nickname: "work" }, { nickname: "empty" }],
     sessions: [
-      ...catalog.sessions,
+      ...catalog.sessions.map((session) => ({ ...session, home: "personal" })),
       {
         ...catalog.sessions[0]!,
         id: "work-session",
         title: "Work trace",
-        sourceInstanceId: "work",
+        home: "work",
       },
     ],
   };
@@ -472,7 +468,7 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
   expect(within(sidebar).getAllByRole("button", { name: /reader, 2 main sessions/ })).toHaveLength(
     1,
   );
-  expect(screen.getByText("Home: personal")).toBeInTheDocument();
+  expect(screen.getByText("Home: default")).toBeInTheDocument();
   fireEvent.change(screen.getByRole("combobox", { name: "Filter by home" }), {
     target: { value: "work" },
   });
@@ -508,7 +504,7 @@ it("requires explicit creation home in aggregate view and restores a stored filt
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ sourceInstanceId: "work", directory: "/project" }),
+    expect.objectContaining({ home: "work", directory: "/project" }),
   );
   fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });
   view.unmount();
@@ -524,7 +520,7 @@ it("requires explicit creation home in aggregate view and restores a stored filt
 it("preselects the default creation home and respects an explicit home filter", async () => {
   window.history.replaceState(null, "", "/");
   const list = multiHomeCatalog();
-  list.homes[2] = { sourceInstanceId: "empty", nickname: "default" };
+  list.homes[2] = { nickname: "default" };
   vi.mocked(api.sessions)
     .mockReset()
     .mockResolvedValueOnce(list)
@@ -532,13 +528,13 @@ it("preselects the default creation home and respects an explicit home filter", 
   render(<App />);
   await flush();
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
-  expect(screen.getByLabelText("Session home")).toHaveValue("empty");
+  expect(screen.getByLabelText("Session home")).toHaveValue("default");
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/project" } });
   const create = vi.spyOn(api, "createSession").mockRejectedValue(new Error("Test stopped"));
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ sourceInstanceId: "empty", directory: "/project" }),
+    expect.objectContaining({ home: "default", directory: "/project" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close new session" }));
   fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });

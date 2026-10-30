@@ -101,14 +101,14 @@ export class OperationService {
 
   create(input: CreateSessionRequest): HubOperation {
     if (input.resumeSessionId !== undefined) return this.#resume(input);
-    let sourceInstanceId: string;
+    let home: string;
     try {
-      sourceInstanceId = this.managers.resolveCreateSource(input.sourceInstanceId, input.home);
+      home = this.managers.resolveCreateHome(input.home);
     } catch (error) {
       throw new ManagementError(400, (error as Error).message);
     }
     const fingerprint = JSON.stringify([
-      sourceInstanceId,
+      home,
       "create",
       input.directory,
       input.worktree,
@@ -118,7 +118,7 @@ export class OperationService {
     if (duplicate) return { ...duplicate };
     const entry = this.#new("create", null);
     entry.metadata.mode = "new";
-    entry.sourceInstanceId = sourceInstanceId;
+    entry.home = home;
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
     void this.#launch.create(entry, input);
     return this.#project(entry);
@@ -330,7 +330,7 @@ export class OperationService {
         createdAt: timestamp,
         updatedAt: timestamp,
       },
-      sourceInstanceId: this.managers.defaultSourceInstanceId,
+      home: this.managers.defaultHome,
       stage:
         type === "create"
           ? { kind: "create", phase: "resolving", deadline: null }

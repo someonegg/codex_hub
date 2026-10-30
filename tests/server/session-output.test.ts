@@ -17,7 +17,7 @@ const base = {
     origin: {
       sourceType: "codex",
       agentName: "Codex",
-      sourceInstanceId: "secret",
+      home: "work",
       agentVersion: "secret",
       formatVersion: "secret",
     },
@@ -67,7 +67,7 @@ const request = {
 
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
   const list = mapList({
-    homes: [{ sourceInstanceId: "h", nickname: "default" }],
+    homes: [{ nickname: "default" }],
     projects: [{ id: "p", directory: "/project" }],
     revision: "secret",
     sessions: [
@@ -75,7 +75,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "main",
         title: "title",
         status: "normal",
-        sourceInstanceId: "h",
+        home: "default",
         projectId: "p",
         updatedAt: null,
         isChild: false,
@@ -84,7 +84,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
       },
       { id: "child", isChild: true, parentId: "main", projectId: "p" },
       { id: "orphan", isChild: true, parentId: null, projectId: "p" },
-      { id: "missing", title: "missing", status: "archived", updatedAt: null },
+      { id: "missing", title: "missing", status: "archived", home: "work", updatedAt: null },
     ],
   } as unknown as SessionListResponse);
   expect(list).toEqual({
@@ -101,7 +101,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "missing",
         title: "missing",
         status: "archived",
-        home: null,
+        home: "work",
         projectDirectory: null,
         updatedAt: null,
       },
@@ -158,6 +158,7 @@ it("whitelists nested records and renders Markdown, questions, matched answers a
   ]);
   expect(mapped.items).toHaveLength(3);
   expect(JSON.stringify(mapped)).not.toContain("secret");
+  expect(mapped.session.home).toBe("work");
   const text = formatResult("inspect", mapped);
   expect(text).not.toContain("secret");
   expect(text).toContain(

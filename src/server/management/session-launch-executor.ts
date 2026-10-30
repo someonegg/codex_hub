@@ -28,7 +28,7 @@ export class SessionLaunchExecutor {
   ) {}
   async create(entry: OperationEntry, input: Extract<CreateSessionRequest, { directory: string }>) {
     try {
-      const manager = this.managers.get(entry.sourceInstanceId);
+      const manager = this.managers.get(entry.home);
       const resolved = await manager.resolveDirectory(input.directory);
       if (!this.control.pending(entry)) return;
       this.control.transition(entry, { kind: "create", phase: "launching" });
@@ -68,9 +68,9 @@ export class SessionLaunchExecutor {
       if (!session) throw new Error("Session not found");
       let capability = await this.runtime.evaluate(session, snapshot.sessions);
       if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-      entry.sourceInstanceId = session.origin.sourceInstanceId;
+      entry.home = session.origin.home;
       entry.resumeNativeId = session.sourceId ?? undefined;
-      const manager = this.managers.get(entry.sourceInstanceId);
+      const manager = this.managers.get(entry.home);
       const attempt = this.bindings.latest(session.id);
       const replacement = this.bindings.replacement(session.id);
       await resolveResumeDirectory(manager, session);
@@ -80,7 +80,7 @@ export class SessionLaunchExecutor {
       if (
         !latest ||
         latest.sourceId !== session.sourceId ||
-        latest.origin.sourceInstanceId !== entry.sourceInstanceId ||
+        latest.origin.home !== entry.home ||
         latest.workingDirectory !== session.workingDirectory ||
         latest.projectDirectory !== session.projectDirectory ||
         attempt !== this.bindings.latest(session.id) ||
@@ -96,14 +96,12 @@ export class SessionLaunchExecutor {
       if (
         !finalSession ||
         finalSession.sourceId !== session.sourceId ||
-        finalSession.origin.sourceInstanceId !== session.origin.sourceInstanceId ||
+        finalSession.origin.home !== session.origin.home ||
         finalSession.archived ||
         finalSession.workingDirectory !== session.workingDirectory ||
         finalSession.projectDirectory !== session.projectDirectory ||
         finalSnapshot.sessions.filter(
-          (item) =>
-            item.sourceId === session.sourceId &&
-            item.origin.sourceInstanceId === session.origin.sourceInstanceId,
+          (item) => item.sourceId === session.sourceId && item.origin.home === session.origin.home,
         ).length !== 1 ||
         attempt !== this.bindings.latest(session.id) ||
         replacement !== this.bindings.replacement(session.id)
@@ -144,7 +142,7 @@ export class SessionLaunchExecutor {
     const matches = snapshot.sessions.filter((session) => {
       const attempt = this.bindings.latest(session.id);
       return (
-        session.origin.sourceInstanceId === entry.sourceInstanceId &&
+        session.origin.home === entry.home &&
         attempt?.valid &&
         attempt.operationId === entry.metadata.operationId
       );
@@ -185,8 +183,7 @@ export class SessionLaunchExecutor {
 
   #matches(snapshot: ManagementSnapshot, entry: OperationEntry, nativeId: string) {
     return snapshot.sessions.filter(
-      (session) =>
-        session.origin.sourceInstanceId === entry.sourceInstanceId && session.sourceId === nativeId,
+      (session) => session.origin.home === entry.home && session.sourceId === nativeId,
     );
   }
 }

@@ -5,7 +5,7 @@ export const docsSession = {
   title: "Design the project dashboard",
   origin: {
     sourceType: "codex",
-    sourceInstanceId: "docs-demo",
+    home: "default",
     agentName: "Codex",
     agentVersion: null,
     formatVersion: null,

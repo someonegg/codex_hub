@@ -81,14 +81,7 @@ export function SessionPage({
     <div className="reader-page">
       {reader.context ? (
         <SessionReader
-          homeNickname={
-            homes.length > 1
-              ? homes.find(
-                  (home) =>
-                    home.sourceInstanceId === reader.context!.session.origin.sourceInstanceId,
-                )?.nickname
-              : undefined
-          }
+          homeNickname={homes.length > 1 ? reader.context.session.origin.home : undefined}
           managementBusy={operation.busy}
           operationStatus={
             !showManagementStatus ? <OperationStatus controller={operation} /> : null

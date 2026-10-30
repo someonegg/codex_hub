@@ -71,7 +71,14 @@ it("uses explicit URL over the environment and filters by associated project", a
       revision: "private",
       projects: [{ id: "p", directory: "/project" }],
       sessions: [
-        { id: "yes", projectId: "p", title: "Title", status: "normal", updatedAt: null },
+        {
+          id: "yes",
+          projectId: "p",
+          title: "Title",
+          status: "normal",
+          home: "work",
+          updatedAt: null,
+        },
         { id: "child", projectId: "p", isChild: true, parentId: "yes" },
         { id: "orphan", projectId: "p", isChild: true, parentId: null },
         { id: "no", projectId: "q" },
@@ -85,7 +92,7 @@ it("uses explicit URL over the environment and filters by associated project", a
       id: "yes",
       title: "Title",
       status: "normal",
-      home: null,
+      home: "work",
       projectDirectory: "/project",
       updatedAt: null,
     },
@@ -249,11 +256,9 @@ it("renders human output and sends human diagnostics to stderr", async () => {
       });
     else
       reply(res, {
-        homes: [{ sourceInstanceId: "h", nickname: "work" }],
+        homes: [{ nickname: "work" }],
         projects: [{ id: "p", directory: "/project" }],
-        sessions: [
-          { id: "id", status: "live", sourceInstanceId: "h", projectId: "p", title: "Title" },
-        ],
+        sessions: [{ id: "id", status: "live", home: "work", projectId: "p", title: "Title" }],
       });
   });
   const list = await cli(["list", "--url", base]);
@@ -281,7 +286,7 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
           title: "Child",
           nickname: null,
           status: "normal",
-          origin: { sourceType: "codex", agentName: "Codex", sourceInstanceId: "private" },
+          origin: { sourceType: "codex", agentName: "Codex", home: "work" },
           resume: { allowed: true, reason: null },
           workingDirectory: null,
           projectDirectory: null,

@@ -71,14 +71,9 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
         }
         if (
           Object.keys(body).some(
-            (key) =>
-              !["directory", "worktree", "yolo", "requestId", "sourceInstanceId", "home"].includes(
-                key,
-              ),
+            (key) => !["directory", "worktree", "yolo", "requestId", "home"].includes(key),
           ) ||
-          (body.sourceInstanceId !== undefined && typeof body.sourceInstanceId !== "string") ||
           (body.home !== undefined && typeof body.home !== "string") ||
-          (body.home !== undefined && body.sourceInstanceId !== undefined) ||
           typeof body.directory !== "string" ||
           typeof body.worktree !== "boolean" ||
           (body.yolo !== undefined && typeof body.yolo !== "boolean")
@@ -93,9 +88,6 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           response,
           202,
           operations.create({
-            ...(typeof body.sourceInstanceId === "string"
-              ? { sourceInstanceId: body.sourceInstanceId }
-              : {}),
             ...(typeof body.home === "string" ? { home: body.home } : {}),
             directory: body.directory,
             worktree: body.worktree,

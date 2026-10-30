@@ -99,7 +99,7 @@ async function record(
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON();
         if (
-          body.sourceInstanceId !== "docs-demo" ||
+          body.home !== "default" ||
           body.directory !== "/projects/atlas-dashboard" ||
           body.worktree
         ) {
@@ -121,13 +121,10 @@ async function record(
       await new Promise((resolve) => setTimeout(resolve, 200));
       return json({
         revision: String(created),
-        homes: [
-          { sourceInstanceId: "docs-work", nickname: "work" },
-          { sourceInstanceId: "docs-demo", nickname: "default" },
-        ],
+        homes: [{ nickname: "work" }, { nickname: "default" }],
         projects: [{ id: "atlas", directory: "/projects/atlas-dashboard" }],
         sessions: created
-          ? [{ ...session(), sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false }]
+          ? [{ ...session(), home: "default", projectId: "atlas", isChild: false }]
           : [],
       });
     }
@@ -166,7 +163,7 @@ async function record(
       .first()
       .click();
     await demo.waitForFunction(
-      () => document.querySelector("select[required]")?.value === "docs-demo",
+      () => document.querySelector("select[required]")?.value === "default",
     );
     await capture(900);
     const directory = demo.getByRole("combobox", { name: label("Project directory") });

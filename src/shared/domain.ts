@@ -9,7 +9,7 @@ export interface AgentIdentity {
 
 export interface SessionOrigin {
   sourceType: string;
-  sourceInstanceId: string;
+  home: string;
   agentName: string;
   agentVersion: string | null;
   formatVersion: string | null;
@@ -22,7 +22,7 @@ export interface ResumeCapability {
 }
 
 export interface SessionSummary {
-  sourceInstanceId: string;
+  home: string;
   id: SessionId;
   title: string;
   projectId: string | null;

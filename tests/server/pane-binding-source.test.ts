@@ -51,7 +51,7 @@ it.each([false, true])(
     // Both claims occur in a single record; only the last is C's current binding.
     await writeFile(fileC, meta + message(2, shell(socket, "%1") + "\n" + shell(socket, "%2")));
     const sources = await Promise.all(
-      homes.map((home) => createCodexSessionSource(home, bindings)),
+      homes.map((home, index) => createCodexSessionSource(home, bindings, String(index))),
     );
     const sessions = new SessionReadService(reverse ? [...sources].reverse() : sources);
     const transport = {

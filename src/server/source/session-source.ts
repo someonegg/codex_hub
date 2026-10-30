@@ -7,7 +7,7 @@ import type {
 export interface SessionSourceDescriptor {
   readonly sourceType: string;
   readonly instanceKey: string;
-  readonly sourceInstanceId: string;
+  readonly home: string;
   readonly displayName: string;
 }
 

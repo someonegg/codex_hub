@@ -25,7 +25,6 @@ export interface SessionProject {
 }
 
 export interface SessionHome {
-  sourceInstanceId: string;
   nickname: string;
 }
 
@@ -179,7 +178,6 @@ export interface HubOperation {
 export type CreateSessionRequest =
   | {
       resumeSessionId: string;
-      sourceInstanceId?: never;
       home?: never;
       directory?: never;
       worktree?: never;
@@ -188,7 +186,6 @@ export type CreateSessionRequest =
     }
   | {
       resumeSessionId?: never;
-      sourceInstanceId?: string;
       home?: string;
       directory: string;
       worktree: boolean;

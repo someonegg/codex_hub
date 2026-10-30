@@ -8,7 +8,7 @@ const session = domainSession({
   sourceId: "private-source-id",
   origin: {
     sourceType: "test",
-    sourceInstanceId: "test-source",
+    home: "test-source",
     agentName: "Test Agent",
     agentVersion: "1.0.0",
     formatVersion: null,
@@ -39,7 +39,7 @@ describe("session API mapping", () => {
     const catalog = mapper.list([session]);
     expect(catalog.sessions[0]).toEqual({
       id: session.id,
-      sourceInstanceId: session.origin.sourceInstanceId,
+      home: session.origin.home,
       title: session.title,
       projectId: expect.any(String),
       status: "normal",

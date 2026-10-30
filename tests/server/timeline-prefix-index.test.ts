@@ -259,7 +259,7 @@ function normalized(markdown: string[]): NormalizedSession {
       sourceId: "source",
       origin: {
         sourceType: "test",
-        sourceInstanceId: "test",
+        home: "test",
         agentName: "test",
         agentVersion: null,
         formatVersion: null,

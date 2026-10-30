@@ -51,7 +51,7 @@ describe("SessionReadService", () => {
       descriptor: {
         sourceType: "test",
         instanceKey: "test",
-        sourceInstanceId: "test",
+        home: "test",
         displayName: "Test",
       },
       async refresh() {
@@ -472,7 +472,7 @@ describe("SessionReadService", () => {
 
 const TEST_ORIGIN = {
   sourceType: "test",
-  sourceInstanceId: "test-source",
+  home: "test-source",
   agentName: "Test",
   agentVersion: null,
   formatVersion: null,
@@ -531,7 +531,7 @@ function staticSource(key: string, sessions: readonly SourceSessionEntry[]): Ses
     descriptor: {
       sourceType: "test",
       instanceKey: key,
-      sourceInstanceId: key,
+      home: key,
       displayName: "Test",
     },
     async refresh() {
@@ -613,17 +613,14 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
   const transport = { resolveTarget } as unknown as InteractionTransport;
   const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
-  const registry = new SessionManagerRegistry(domain.origin.sourceInstanceId).register(
-    domain.origin.sourceInstanceId,
-    {
-      isValidNativeId: vi.fn((_nativeId: string) => true),
-      resolveDirectory,
-      launch: vi.fn(),
-      archive: vi.fn(),
-      delete: vi.fn(),
-      exitSteps: () => [],
-    },
-  );
+  const registry = new SessionManagerRegistry(domain.origin.home).register(domain.origin.home, {
+    isValidNativeId: vi.fn((_nativeId: string) => true),
+    resolveDirectory,
+    launch: vi.fn(),
+    archive: vi.fn(),
+    delete: vi.fn(),
+    exitSteps: () => [],
+  });
   const runtime = new SessionRuntime(transport, registry, bindings);
   reader.runtime = runtime;
   const interaction = closeAfterEach(
