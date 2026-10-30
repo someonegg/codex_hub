@@ -27,7 +27,7 @@ it("isolates native identities, names and relationships while merging projects a
     );
   }
   await mkdir(homes[2]!.path);
-  const hub = await createCodexHub(homes);
+  const hub = await createCodexHub({ homes: homes });
   try {
     const list = await hub.sessions.list();
     expect(list.homes).toEqual([
@@ -51,9 +51,11 @@ it("isolates native identities, names and relationships while merging projects a
       expect(child.parentId).toBe(parent.id);
       expect(child.origin.home).toBe(parent.home);
     }
-    const reordered = await createCodexHub(
-      [...homes].reverse().map((home) => ({ ...home, nickname: `${home.nickname} renamed` })),
-    );
+    const reordered = await createCodexHub({
+      homes: [...homes]
+        .reverse()
+        .map((home) => ({ ...home, nickname: `${home.nickname} renamed` })),
+    });
     try {
       const next = await reordered.sessions.list();
       expect(next.sessions.map((session) => session.id)).toEqual(
@@ -107,7 +109,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
   const connect = vi
     .spyOn(TmuxInteractionService.prototype, "resolveTarget")
     .mockResolvedValue(target);
-  const hub = await createCodexHub(homes);
+  const hub = await createCodexHub({ homes: homes });
   try {
     const list = await hub.sessions.list();
     expect(list.homes).toEqual(homes.map(({ nickname }) => ({ nickname })));

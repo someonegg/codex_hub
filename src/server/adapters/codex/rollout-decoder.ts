@@ -3,7 +3,7 @@ import { type FileHandle, open } from "node:fs/promises";
 
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
 import { DECODER_VERSION, MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
-import type { RolloutDescriptor } from "./path-policy.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 
 const PROBE_BYTES = 4 * 1024;
 
@@ -62,7 +62,7 @@ export class CheckpointedRolloutDecoder implements RolloutDecoder {
     descriptor: RolloutDescriptor,
     checkpoint?: RolloutCheckpoint,
   ): Promise<IncrementalDecodedRollout> {
-    const handle = await open(descriptor.canonicalPath, "r");
+    const handle = await open(descriptor.path, "r");
     try {
       const observedEof = (await handle.stat()).size;
       let probeBytes = 0;

@@ -18,11 +18,12 @@ import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 async function setup() {
   const bindings = new PaneBindingManager();
   const source = await createCodexSessionSource(resolve("tests/fixtures/codex-home"), bindings);
-  const reader = new SessionReadService([source], undefined, undefined, {
+  const bootstrapReader = new SessionReadService([source], {
     diagnosticLogger: { log: () => {} },
   });
-  const session = (await reader.list()).sessions.find((item) => item.title === "Synthetic trace")!;
-  const initialPage = (await reader.getItems(session.id, { limit: 300 }))!;
+  const session = (await bootstrapReader.list()).sessions.find(
+    (item) => item.title === "Synthetic trace",
+  )!;
   const pane = { socketPath: "/tmp/response.sock", paneId: "%1", sessionName: "response" };
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
   const sendKeys = vi.fn<InteractionTransport["sendKeys"]>().mockResolvedValue(undefined);
@@ -41,11 +42,18 @@ async function setup() {
     manager,
   );
   const runtime = new SessionRuntime(transport, managers, bindings);
-  reader.runtime = runtime;
+  const reader = new SessionReadService([source], { runtime, diagnosticLogger: { log: () => {} } });
+  const initialPage = (await reader.getItems(session.id, { limit: 300 }))!;
+  resolveDirectory.mockClear();
   const interaction = closeAfterEach(
-    new SessionInteractionService(reader, true, transport, bindings, createTestPreviewListener()),
+    new SessionInteractionService(reader, transport, {
+      enabled: true,
+      bindings,
+      listener: createTestPreviewListener(),
+      runtime,
+    }),
   );
-  interaction.runtime = runtime;
+
   const updates = new SessionUpdatesService(reader, { interaction });
   const bind = (valid = true, ordinal = 1) =>
     bindings.submit({

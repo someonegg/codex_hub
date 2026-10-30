@@ -13,7 +13,7 @@ import type {
 } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionId } from "../../shared/domain.js";
 import { SessionApiMapper, type SessionDisplayTitleResolver } from "../api/session-api-mapper.js";
-import type { SessionRuntime } from "../interaction/session-runtime.js";
+import type { RuntimeReader } from "../interaction/runtime-capabilities.js";
 import {
   CatalogSnapshotStore,
   type CatalogSnapshotStoreDependencies,
@@ -31,23 +31,29 @@ import type {
 } from "./session-reader.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
+  readonly freshnessMs?: number;
+  readonly now?: () => number;
+  readonly runtime?: RuntimeReader;
   readonly homes?: SessionHome[];
   readonly resolveDisplayTitle?: SessionDisplayTitleResolver;
 }
 
 export class SessionReadService implements SessionReader {
-  runtime?: SessionRuntime;
+  private readonly runtime?: RuntimeReader;
   readonly #store: CatalogSnapshotStore;
   readonly #queries: SessionQueries;
   readonly #mapper: SessionApiMapper;
 
-  constructor(
-    sources: readonly SessionSource[],
-    freshnessMs = DEFAULT_CATALOG_FRESHNESS_MS,
-    now: () => number = performance.now.bind(performance),
-    dependencies: SessionReadServiceDependencies = {},
-  ) {
-    const { resolveDisplayTitle, homes, ...storeDependencies } = dependencies;
+  constructor(sources: readonly SessionSource[], options: SessionReadServiceDependencies = {}) {
+    const {
+      resolveDisplayTitle,
+      homes,
+      freshnessMs = DEFAULT_CATALOG_FRESHNESS_MS,
+      now = performance.now.bind(performance),
+      runtime,
+      ...storeDependencies
+    } = options;
+    this.runtime = runtime;
     this.#mapper = new SessionApiMapper(resolveDisplayTitle, homes);
     this.#store = new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
     this.#queries = new SessionQueries();

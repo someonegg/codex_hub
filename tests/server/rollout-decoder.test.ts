@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MAX_JSONL_LINE_BYTES } from "../../src/server/adapters/codex/limits.js";
-import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
+import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -16,8 +16,7 @@ describe("CheckpointedRolloutDecoder", () => {
     const path = join(directory, "rollout-decoder.jsonl");
     const fixture = await readFile("tests/fixtures/codex-home/partial-tail.fragment", "utf8");
     await writeFile(path, fixture.trimEnd());
-    const policy = await PathPolicy.create(home);
-    const descriptor = await policy.register(path);
+    const descriptor = await rolloutDescriptor(home, path);
     expect(descriptor).not.toBeNull();
 
     const decoded = await new CheckpointedRolloutDecoder().decode(descriptor!);
@@ -118,8 +117,7 @@ describe("CheckpointedRolloutDecoder", () => {
     const path = join(directory, "rollout-decoder-limit.jsonl");
     const malformedLines = Array.from({ length: 60 }, (_, index) => `malformed-${index + 1}`);
     await writeFile(path, `${malformedLines.join("\n")}\n{"type":"valid"}\n`);
-    const policy = await PathPolicy.create(home);
-    const descriptor = await policy.register(path);
+    const descriptor = await rolloutDescriptor(home, path);
     expect(descriptor).not.toBeNull();
 
     const decoded = await new CheckpointedRolloutDecoder().decode(descriptor!);
@@ -265,8 +263,7 @@ async function rollout(name: string, contents: string | Uint8Array) {
   await mkdir(directory, { recursive: true });
   const path = join(directory, `rollout-${name}.jsonl`);
   await writeFile(path, contents);
-  const policy = await PathPolicy.create(home);
-  const descriptor = await policy.register(path);
+  const descriptor = await rolloutDescriptor(home, path);
   if (descriptor === null) throw new Error("Fixture path was rejected");
   return { path, descriptor };
 }

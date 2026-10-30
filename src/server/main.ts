@@ -18,12 +18,12 @@ async function main(): Promise<void> {
   const { config } = command;
   const uploads = new UploadStore(await uploadDirectory(config.uploadDirectory));
   await uploads.initialize();
-  const hub = await createCodexHub(
-    config.homes,
-    config.tmuxSocket,
-    config.interactionEnabled,
+  const hub = await createCodexHub({
+    homes: config.homes,
+    socket: config.tmuxSocket,
+    interactionEnabled: config.interactionEnabled,
     uploads,
-  );
+  });
   const server = await startServer(
     config,
     createApiRouter({ ...hub, uploads }),

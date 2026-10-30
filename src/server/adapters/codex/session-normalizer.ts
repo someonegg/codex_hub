@@ -14,7 +14,7 @@ import { codexInteraction } from "./interaction-parser.js";
 import { internalDetail, internalItem, internalItemFromPayload } from "./internal-event-parser.js";
 import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import { eventMessage } from "./message-normalizer.js";
-import type { RolloutDescriptor } from "./path-policy.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import { type ParsedResponseItem, parseResponseItem } from "./response-item-parser.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
@@ -100,11 +100,11 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     }
 
     const items: DomainTimelineRecord[] = [];
-    const directiveDetails = new Map(state.directiveDetails);
-    const internalDetails = new Map(state.internalDetails);
-    const toolDetails = new Map(state.toolDetails);
-    const pendingToolCalls = new Map(state.pendingToolCalls);
-    const pendingUserInputRequests = new Map(state.pendingUserInputRequests);
+    const directiveDetails = new LazyMap(state.directiveDetails);
+    const internalDetails = new LazyMap(state.internalDetails);
+    const toolDetails = new LazyMap(state.toolDetails);
+    const pendingToolCalls = new LazyMap(state.pendingToolCalls);
+    const pendingUserInputRequests = new LazyMap(state.pendingUserInputRequests);
     const normalizerDiagnostics = [...state.normalizerDiagnostics];
     for (const record of records) {
       consumeRecord(
@@ -138,15 +138,11 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     return {
       ...state,
       timeline: items.length === 0 ? state.timeline : [...state.timeline, ...items],
-      directiveDetails: sameMapEntries(state.directiveDetails, directiveDetails)
-        ? state.directiveDetails
-        : directiveDetails,
-      internalDetails: sameMapEntries(state.internalDetails, internalDetails)
-        ? state.internalDetails
-        : internalDetails,
-      toolDetails: sameMapEntries(state.toolDetails, toolDetails) ? state.toolDetails : toolDetails,
-      pendingToolCalls,
-      pendingUserInputRequests,
+      directiveDetails: directiveDetails.result,
+      internalDetails: internalDetails.result,
+      toolDetails: toolDetails.result,
+      pendingToolCalls: pendingToolCalls.result,
+      pendingUserInputRequests: pendingUserInputRequests.result,
       decoderDiagnostics: decoderDiagnosticsUnchanged
         ? state.decoderDiagnostics
         : nextDecoderDiagnostics,
@@ -234,12 +230,29 @@ function sameDiagnostics(
   );
 }
 
-function sameMapEntries<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boolean {
-  if (left.size !== right.size) return false;
-  for (const [key, value] of right) {
-    if (left.get(key) !== value) return false;
+interface MapOperations<K, V> {
+  get(key: K): V | undefined;
+  set(key: K, value: V): void;
+  delete(key: K): boolean;
+}
+
+class LazyMap<K, V> implements MapOperations<K, V> {
+  #copy?: Map<K, V>;
+  constructor(private readonly original: ReadonlyMap<K, V>) {}
+  get result(): ReadonlyMap<K, V> {
+    return this.#copy ?? this.original;
   }
-  return true;
+  get(key: K): V | undefined {
+    return this.result.get(key);
+  }
+  set(key: K, value: V): void {
+    if (this.result.has(key) && this.result.get(key) === value) return;
+    (this.#copy ??= new Map(this.original)).set(key, value);
+  }
+  delete(key: K): boolean {
+    if (!this.result.has(key)) return false;
+    return (this.#copy ??= new Map(this.original)).delete(key);
+  }
 }
 
 const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
@@ -253,11 +266,11 @@ const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
 function consumeRecord(
   record: DecodedRecord,
   items: DomainTimelineRecord[],
-  directiveDetails: Map<string, DomainDirectiveDetail>,
-  internalDetails: Map<string, DomainInternalDetail>,
-  toolDetails: Map<string, DomainToolDetail>,
-  pendingToolCalls: Map<string, ToolCall>,
-  pendingUserInputRequests: Map<string, UserInputRequest>,
+  directiveDetails: MapOperations<string, DomainDirectiveDetail>,
+  internalDetails: MapOperations<string, DomainInternalDetail>,
+  toolDetails: MapOperations<string, DomainToolDetail>,
+  pendingToolCalls: MapOperations<string, ToolCall>,
+  pendingUserInputRequests: MapOperations<string, UserInputRequest>,
   diagnostics: DomainDiagnostic[],
 ): void {
   const timestamp = string(record.value.timestamp);
@@ -315,7 +328,7 @@ function consumeRecord(
 function addInternalDetail(
   item: Extract<DomainTimelineRecord, { kind: "internal" }>,
   record: DecodedRecord,
-  details: Map<string, DomainInternalDetail>,
+  details: MapOperations<string, DomainInternalDetail>,
 ): void {
   const detail = internalDetail(record.value);
   details.set(item.id, detail);
@@ -330,10 +343,10 @@ function appendDiagnostic(diagnostics: DomainDiagnostic[], diagnostic: DomainDia
 function consumeParsedResponse(
   parsed: ParsedResponseItem,
   items: DomainTimelineRecord[],
-  directiveDetails: Map<string, DomainDirectiveDetail>,
-  toolDetails: Map<string, DomainToolDetail>,
-  pendingToolCalls: Map<string, ToolCall>,
-  pendingUserInputRequests: Map<string, UserInputRequest>,
+  directiveDetails: MapOperations<string, DomainDirectiveDetail>,
+  toolDetails: MapOperations<string, DomainToolDetail>,
+  pendingToolCalls: MapOperations<string, ToolCall>,
+  pendingUserInputRequests: MapOperations<string, UserInputRequest>,
   diagnostics: DomainDiagnostic[],
 ): void {
   switch (parsed.kind) {
@@ -388,7 +401,7 @@ function addUserInput(
 function addTool(
   tool: NormalizedTool,
   items: DomainTimelineRecord[],
-  details: Map<string, DomainToolDetail>,
+  details: MapOperations<string, DomainToolDetail>,
 ): void {
   items.push(tool.item);
   details.set(tool.item.id, tool.detail);

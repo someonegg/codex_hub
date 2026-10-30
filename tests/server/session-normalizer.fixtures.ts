@@ -4,7 +4,7 @@ import {
   IdentityResolver,
   type SessionMetadata,
 } from "../../src/server/adapters/codex/identity-resolver.js";
-import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
+import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import {
   CheckpointedRolloutDecoder,
   type DecodedRecord,
@@ -15,9 +15,11 @@ import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/sessio
 const fixtureHome = resolve("tests/fixtures/codex-home");
 
 export async function normalizeFixture(fileName: string) {
-  const policy = await PathPolicy.create(fixtureHome);
-  const descriptor = await policy.register(resolve(fixtureHome, "sessions/2026/07/28", fileName));
-  if (descriptor === null) throw new Error(`Fixture is outside the path policy: ${fileName}`);
+  const descriptor = await rolloutDescriptor(
+    fixtureHome,
+    resolve(fixtureHome, "sessions/2026/07/28", fileName),
+  );
+  if (descriptor === null) throw new Error(`Fixture rollout was not discovered: ${fileName}`);
   const decoded = await new CheckpointedRolloutDecoder().decode(descriptor);
   const metadata = new IdentityResolver().resolve(decoded);
   return new DefaultSessionNormalizer().normalize(decoded, metadata);
@@ -38,7 +40,7 @@ export function decodedRollout(id: string, records: DecodedRecord[]): DecodedRol
   return {
     descriptor: {
       id,
-      canonicalPath: `/synthetic/rollout-${id}.jsonl`,
+      path: `/synthetic/rollout-${id}.jsonl`,
       sourceRelativePath: `sessions/rollout-${id}.jsonl`,
       archived: false,
       size: 1,

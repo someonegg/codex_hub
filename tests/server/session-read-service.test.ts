@@ -60,7 +60,7 @@ describe("SessionReadService", () => {
         return { signature: "empty", sessions: [], diagnostics: [] };
       },
     };
-    const repository = new SessionReadService([source], undefined, () => now);
+    const repository = new SessionReadService([source], { now: () => now });
 
     const firstList = repository.list();
     const secondList = repository.list();
@@ -601,9 +601,9 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
       interaction: codexInteraction(),
     }),
   ]);
-  const reader = new SessionReadService([source]);
-  const initial = (await reader.list()).sessions[0]!;
-  const domain = (await reader.managementSnapshot()).sessions[0]!;
+  const bootstrapReader = new SessionReadService([source]);
+  const initial = (await bootstrapReader.list()).sessions[0]!;
+  const domain = (await bootstrapReader.managementSnapshot()).sessions[0]!;
   const bindings = new PaneBindingManager();
   const pane = { socketPath: "/tmp/runtime.sock", paneId: "%1", sessionName: "runtime" };
   bindings.submit({
@@ -625,11 +625,16 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     exitSteps: () => [],
   });
   const runtime = new SessionRuntime(transport, registry, bindings);
-  reader.runtime = runtime;
+  const reader = new SessionReadService([source], { runtime });
   const interaction = closeAfterEach(
-    new SessionInteractionService(reader, true, transport, bindings, createTestPreviewListener()),
+    new SessionInteractionService(reader, transport, {
+      enabled: true,
+      bindings,
+      listener: createTestPreviewListener(),
+      runtime,
+    }),
   );
-  interaction.runtime = runtime;
+
   const catalog = new SessionCatalogService(reader);
   const updates = new SessionUpdatesService(reader, { interaction, probeIntervalMs: 2 });
   try {

@@ -98,6 +98,8 @@ export class HostingStore {
       if (artifact.id !== id) throw new Error("Artifact identity does not match directory");
       return { artifact, directory: canonicalDirectory };
     } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code && code !== "ENOENT" && code !== "ENOTDIR" && code !== "ELOOP") throw error;
       if (directoryExists || (error as NodeJS.ErrnoException).code !== "ENOENT")
         console.warn(`Skipping damaged hosting entry ${directory}: ${String(error)}`);
       return undefined;

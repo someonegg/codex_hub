@@ -12,8 +12,8 @@ export function opaqueIdForParts(...parts: readonly string[]): OpaqueSessionId {
     .digest("base64url");
 }
 
-export function opaqueIdForPath(canonicalPath: string): OpaqueSessionId {
-  return createHash("sha256").update(canonicalPath, "utf8").digest("base64url");
+export function opaqueIdForPath(path: string): OpaqueSessionId {
+  return createHash("sha256").update(path, "utf8").digest("base64url");
 }
 
 export const SESSION_ID_PATTERN = "[A-Za-z0-9_-]{20,100}";

@@ -21,9 +21,18 @@ opaque values that clients must return unchanged.
 
 Codex discovery reads `rollout-*.jsonl` under `sessions/` and `archived_sessions/`.
 `session_index.jsonl` supplies advisory names; Codex databases are not read.
+The configured home is a trusted local data source. Discovery follows root, directory,
+and file symlinks, including targets outside the home. Each root is depth 0; files
+in directories through depth 8 are read, and depth 9 is not entered. There is no
+cycle detection or real-path deduplication; the depth limit bounds directory cycles.
+Descriptors, ordering, and fallback path IDs use logical absolute paths rather
+than canonical targets; cache keys remain source-relative logical paths.
 
-Unarchived rollouts use in-memory checkpoints. A growing file reuses its decoded
-prefix only when decoder/normalizer versions and SHA-256 probes match. Probes
+Unchanged unarchived rollouts reuse cached content by size and modification time,
+without probing read permissions. Changes to permissions alone do not invalidate
+cached content; actual metadata, traversal, open and read failures are recovered
+when those operations run. Unarchived rollouts use in-memory checkpoints. A growing
+file reuses its decoded prefix only when decoder/normalizer versions and SHA-256 probes match. Probes
 cover the first 4 KiB and up to 4 KiB before the previous EOF. Reads use one open
 handle and observed EOF, starting after the last committed newline. Truncation,
 same-size changes, probe mismatches, incompatible state, and restart require a
@@ -64,8 +73,8 @@ Per-source limits prevent one source from hiding another's diagnostics. Unchange
 cache hits do not traverse diagnostics; logging failures do not stop operations.
 
 `ENOENT`, `EACCES`, `EPERM`, `ESTALE`, `EISDIR`, and `ENOTDIR` cause unreadable
-portions to be skipped and diagnosed. Initially absent allowed directories are
-normal. Path/symlink restrictions still apply; unexpected exceptions propagate.
+portions to be skipped and diagnosed (`ELOOP` is also recoverable). Absent scan roots
+are normal; unexpected exceptions propagate.
 Successful snapshots have no completeness gate.
 
 ### Home identity and routing
@@ -476,13 +485,17 @@ request IDs cannot resume the same session concurrently.
 ### Execution and confirmation
 
 Create and resume share one launch operation. Worktree and YOLO are launch options.
+Resume occupies the session, refreshes the source once, records the binding baseline,
+and runs one complete runtime evaluation, reusing its resolved directory. Before
+launch it checks that the binding and operation remain valid. It does not scan again
+to detect external changes or guarantee atomicity between the filesystem and tmux.
 Native commands use the owning `CODEX_HOME`; the Hub never moves or deletes rollout
 files directly.
 
 | Operation | Validation and confirmation                                                                                                                                                                                                                                                          |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Create    | Resolve an existing directory to its real path for launch and project association, including worktrees. Match operation marker, launch target, project, and valid binding within 300 seconds after launch.                                                                           |
-| Resume    | Require an unarchived, unique valid native identity and no binding, confirmed pane death, or explicit transfer. Invalid bindings and uncertain checks deny resume. Revalidate before launch; confirm original identity, operation marker, project, and live owned target.            |
+| Resume    | Require an unarchived, unique valid native identity and no binding, confirmed pane death, or explicit transfer. Invalid bindings and uncertain checks deny resume. Validate once before launch; confirm original identity, operation marker, project, and live owned target.         |
 | Exit      | Validate latest binding; send interrupts/EOF, then force-close the whole pane if needed. Confirm dead/missing within 30 seconds. Query errors or changed ownership end as `unknown`. Unbound succeeds without effects; missing session fails; archived sessions use the same checks. |
 | Archive   | Reread source; already archived succeeds. Validate unique native identity, complete exit, then run native archive once (25-second command limit) and confirm within 30 seconds.                                                                                                      |
 | Delete    | Require archive, run native delete, and confirm same-source native identity absent within 30 seconds. Already absent in a successful initial snapshot succeeds.                                                                                                                      |
@@ -529,6 +542,12 @@ discard it. Submitted writes continue independently of page visibility.
 ## Optional hosting
 
 Hosting is adapter-independent and enabled only by `--hosting`.
+Malformed URLs or path encodings return `400`; missing resources return `404`.
+Unexpected storage, metadata, or deletion failures return `500` with a generic
+`internal_error` and `requestId`. Server logs correlate that ID with the method,
+path and original error, without request bodies. Errors after headers are sent
+(including file stream failures) are logged and terminate the response.
+Damaged artifact entries retain their existing skip policy.
 `GET /api/v1/capabilities` returns `{ hosting: boolean }`. Disabled hosting creates
 no storage and returns `404` for hosting pages/APIs. Offline resource commands use
 `--home-dir` and `--json`. Existing HTTPS/mTLS or proxy authentication applies;

@@ -64,13 +64,11 @@ it.each([false, true])(
       killPane: vi.fn(),
     } satisfies InteractionTransport;
     const service = closeAfterEach(
-      new SessionInteractionService(
-        sessions,
-        true,
-        transport,
+      new SessionInteractionService(sessions, transport, {
+        enabled: true,
         bindings,
-        createTestPreviewListener(),
-      ),
+        listener: createTestPreviewListener(),
+      }),
     );
     const catalog = (await sessions.list()).sessions;
     expect(catalog).toHaveLength(2);
@@ -156,7 +154,11 @@ it("consumes late-arriving older binds for their pane without changing the sessi
     connect: vi.fn(async (attempt) => attempt),
   } as unknown as InteractionTransport;
   const service = closeAfterEach(
-    new SessionInteractionService(sessions, true, transport, bindings, createTestPreviewListener()),
+    new SessionInteractionService(sessions, transport, {
+      enabled: true,
+      bindings,
+      listener: createTestPreviewListener(),
+    }),
   );
   expect(await service.describe(a)).toMatchObject({ state: "connected" });
   await appendFile(cFile, message(2, shell(socket, "%1")));
@@ -173,13 +175,11 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   const rebuiltBindings = new PaneBindingManager();
   const rebuilt = new SessionReadService([await createCodexSessionSource(home, rebuiltBindings)]);
   const rebuiltService = closeAfterEach(
-    new SessionInteractionService(
-      rebuilt,
-      true,
-      transport,
-      rebuiltBindings,
-      createTestPreviewListener(),
-    ),
+    new SessionInteractionService(rebuilt, transport, {
+      enabled: true,
+      bindings: rebuiltBindings,
+      listener: createTestPreviewListener(),
+    }),
   );
   await rebuilt.managementSnapshot();
   expect(rebuiltBindings.latest(c)).toEqual(bindings.latest(c));
@@ -203,7 +203,7 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   await writeFile(c, meta("C") + message(9, shell(socket, "%3")));
   const source = await createCodexSessionSource(home, bindings);
   const log = vi.fn();
-  const sessions = new SessionReadService([source], undefined, undefined, {
+  const sessions = new SessionReadService([source], {
     diagnosticLogger: { log },
   });
   const initial = (await sessions.managementSnapshot()).sessions;

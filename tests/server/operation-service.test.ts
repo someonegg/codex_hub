@@ -89,12 +89,9 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
   const registry = new SessionManagerRegistry("test").register("test", manager);
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
   const runtime = new SessionRuntime({ resolveTarget }, registry, bindings);
-  const service = new OperationService(
-    reader,
-    interaction,
-    registry,
-    () => now,
-    {
+  const service = new OperationService(reader, interaction, registry, {
+    now: () => now,
+    waitMs: {
       create: 300_000,
       archive: managementWaitMs,
       delete: managementWaitMs,
@@ -102,7 +99,7 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
     bindings,
     runtime,
     uploads,
-  );
+  });
   services.push(service);
   return {
     service,
@@ -896,7 +893,9 @@ describe("safe resume operations", () => {
       resumeNativeId: f.original.sourceId,
       projectDirectory: f.original.projectDirectory,
     });
-    expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(2);
+    expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(1);
+    expect(f.reader.managementSnapshot).toHaveBeenCalledTimes(1);
+    expect(f.manager.isValidNativeId).toHaveBeenCalledTimes(1);
     bindings.submit({
       sessionId: "original",
       time: 2,
@@ -967,48 +966,44 @@ describe("safe resume operations", () => {
     expect(() => f.service.create(request)).toThrow(/Another management/);
   });
 
-  it("rechecks safety after refreshing the source and never launches on changed bindings", async () => {
+  it("rejects binding changes during runtime validation", async () => {
     const f = resumable();
-    f.reader.managementSnapshot
-      .mockImplementationOnce(async () => managementSnapshot({ sessions: [f.original] }))
-      .mockImplementationOnce(async () => {
-        bindings.submit({
-          sessionId: "original",
-          time: 3,
-          ordinal: 3,
-          position: 0,
-          attempt: { valid: false, ordinal: 3 },
-        });
-        return managementSnapshot({ sessions: [f.original] });
+    f.manager.resolveDirectory.mockImplementationOnce(async () => {
+      bindings.submit({
+        sessionId: "original",
+        time: 3,
+        ordinal: 3,
+        position: 0,
+        attempt: { valid: false, ordinal: 3 },
       });
+      return { directory: "/project" };
+    });
+    const op = f.service.create(request);
+    await flush();
+    expect((await f.service.get(op.operationId))?.status).toBe("failed");
+    expect(f.manager.launch).not.toHaveBeenCalled();
+    expect(f.reader.managementSnapshot).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not launch an operation invalidated during validation", async () => {
+    const f = resumable();
+    f.manager.resolveDirectory.mockImplementationOnce(async () => {
+      f.service.close();
+      return { directory: "/project" };
+    });
+    f.service.create(request);
+    await flush();
+    expect(f.manager.launch).not.toHaveBeenCalled();
+  });
+
+  it("does not launch an archived session", async () => {
+    const f = resumable();
+    f.set({ sessions: [{ ...f.original, archived: true }] });
     const op = f.service.create(request);
     await flush();
     expect((await f.service.get(op.operationId))?.status).toBe("failed");
     expect(f.manager.launch).not.toHaveBeenCalled();
   });
-
-  it.each(["workingDirectory", "projectDirectory", "sourceId", "archived", "origin"] as const)(
-    "rejects a changed %s immediately before launch",
-    async (field) => {
-      const f = resumable();
-      const changes = {
-        workingDirectory: { workingDirectory: "/changed" },
-        projectDirectory: { projectDirectory: "/changed" },
-        sourceId: { sourceId: "/changed" },
-        archived: { archived: true },
-        origin: { origin: { ...f.original.origin, home: "changed" } },
-      };
-      const changed = { ...f.original, ...changes[field] };
-      f.reader.managementSnapshot
-        .mockResolvedValueOnce(managementSnapshot({ sessions: [f.original] }))
-        .mockResolvedValueOnce(managementSnapshot({ sessions: [f.original] }))
-        .mockResolvedValueOnce(managementSnapshot({ sessions: [changed] }));
-      const op = f.service.create(request);
-      await flush();
-      expect((await f.service.get(op.operationId))?.status).toBe("failed");
-      expect(f.manager.launch).not.toHaveBeenCalled();
-    },
-  );
 
   it("does not associate a resumed operation with a different session", async () => {
     const f = resumable();
@@ -1160,4 +1155,32 @@ it("rejects empty and duplicate management home nicknames", () => {
   const { manager, registry } = setup();
   expect(() => registry.register(" ", manager)).toThrow("Empty home nickname");
   expect(() => registry.register("test", manager)).toThrow("Duplicate home nickname");
+});
+
+it("prunes batches while retaining recent results and active request identities", async () => {
+  const { service, manager, time } = setup();
+  manager.launch.mockRejectedValue(new Error("failed"));
+  const inputs = Array.from({ length: 40 }, (_, index) => ({
+    directory: "/project",
+    worktree: false,
+    requestId: `batch-request-${index}`,
+  }));
+  const old = inputs.map((input) => service.create(input));
+  await flush();
+  time(30 * 60_000 - 1);
+  const recentInput = { ...inputs[0]!, requestId: "recent-request" };
+  const recent = service.create(recentInput);
+  await flush();
+  manager.launch.mockImplementation(() => new Promise(() => {}));
+  const activeInput = { ...inputs[0]!, requestId: "active-request" };
+  const active = service.create(activeInput);
+  time(30 * 60_000);
+  for (const operation of old) expect(await service.get(operation.operationId)).toBeNull();
+  expect(service.create(recentInput).operationId).toBe(recent.operationId);
+  expect(service.create(activeInput).operationId).toBe(active.operationId);
+  expect(() => service.create({ ...activeInput, worktree: true })).toThrow(
+    expect.objectContaining({ status: 409 }),
+  );
+  for (const [index, input] of inputs.entries())
+    expect(service.create(input).operationId).not.toBe(old[index]!.operationId);
 });

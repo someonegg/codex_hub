@@ -1,5 +1,3 @@
-import { constants } from "node:fs";
-import { access } from "node:fs/promises";
 import { resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
@@ -26,7 +24,7 @@ import { codexBindingAttemptsFrom, codexInteraction } from "./interaction-parser
 import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
 import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
-import { PathPolicy, type RolloutDescriptor } from "./path-policy.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import {
   CheckpointedRolloutDecoder,
   type RolloutCheckpoint,
@@ -81,7 +79,6 @@ const EMPTY_TELEMETRY: CodexRefreshTelemetry = {
 export class CodexSessionSource implements SessionSource {
   readonly descriptor: SessionSourceDescriptor;
   #cache = new Map<string, CodexCacheEntry>();
-  readonly #observedRoots = new Set<string>();
   #snapshot: SessionSourceSnapshot | null = null;
   #lastRefreshTelemetry: CodexRefreshTelemetry = EMPTY_TELEMETRY;
 
@@ -105,24 +102,12 @@ export class CodexSessionSource implements SessionSource {
 
   async refresh(): Promise<SessionSourceSnapshot> {
     await this.sessionIndex.refresh();
-    const policy = await PathPolicy.create(this.codexHome);
     const archivedDescriptors = new Map(
       [...this.#cache.values()]
         .filter((entry) => entry.descriptor.archived)
-        .map((entry) => [entry.descriptor.canonicalPath, entry.descriptor] as const),
+        .map((entry) => [entry.descriptor.path, entry.descriptor] as const),
     );
-    const discovery = await new JsonlCatalogSource(policy, archivedDescriptors).discover();
-    const presentRoots = new Set(policy.roots().map((root) => root.canonicalPath));
-    for (const root of this.#observedRoots) {
-      if (!presentRoots.has(root))
-        discovery.diagnostics.push({
-          code: "session_root_unreadable",
-          severity: "warning",
-          message: "A previously observed session directory is unavailable.",
-          ordinal: null,
-        });
-    }
-    for (const root of presentRoots) this.#observedRoots.add(root);
+    const discovery = await new JsonlCatalogSource(this.codexHome, archivedDescriptors).discover();
     const discoverySignature = JSON.stringify({
       diagnostics: discovery.diagnostics,
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
@@ -145,17 +130,7 @@ export class CodexSessionSource implements SessionSource {
       const cached = this.#cache.get(descriptor.sourceRelativePath);
       let loaded: CodexCacheEntry | null;
       if (cached !== undefined && sameFingerprint(cached.fingerprint, fingerprint)) {
-        if (descriptor.archived) {
-          loaded = cached;
-        } else {
-          try {
-            await access(descriptor.canonicalPath, constants.R_OK);
-            loaded = cached;
-          } catch (error) {
-            if (!isExpectedIoError(error)) throw error;
-            loaded = null;
-          }
-        }
+        loaded = cached;
       } else {
         loaded = await this.#load(descriptor, fingerprint, cached, telemetry, binds);
       }

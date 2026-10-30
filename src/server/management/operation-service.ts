@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { CreateSessionRequest, HubOperation } from "../../shared/api-contract.js";
 import type { SessionInteractionService } from "../interaction/interaction-service.js";
 import { type PaneBindingManager, paneBindings } from "../interaction/pane-binding-manager.js";
-import type { SessionRuntime } from "../interaction/session-runtime.js";
+import type { RuntimeEvaluator } from "../interaction/runtime-capabilities.js";
 import { attachCommand } from "../interaction/tmux-launcher.js";
 import type { UploadCleanup } from "../uploads/store.js";
 import {
@@ -32,7 +32,17 @@ export class ManagementError extends Error {
   }
 }
 
+export interface OperationServiceOptions {
+  readonly now?: () => number;
+  readonly waitMs?: OperationTimeouts;
+  readonly bindings?: PaneBindingManager;
+  readonly runtime?: RuntimeEvaluator;
+  readonly uploads?: UploadCleanup;
+}
+
 export class OperationService {
+  private readonly now: () => number;
+  private readonly waitMs: OperationTimeouts;
   readonly #entries = new Map<string, OperationEntry>();
   readonly #requests = new Map<string, RequestRecord>();
   readonly #active = new Map<string, OperationEntry>();
@@ -55,17 +65,17 @@ export class OperationService {
       | "setBusy"
     >,
     private readonly managers: SessionManagerRegistry,
-    private readonly now = Date.now,
-    private readonly waitMs: OperationTimeouts = {
-      create: 300_000,
-      exit: 30_000,
-      archive: 30_000,
-      delete: 30_000,
-    },
-    bindings: PaneBindingManager = paneBindings,
-    runtime?: SessionRuntime,
-    uploads?: UploadCleanup,
+    options: OperationServiceOptions = {},
   ) {
+    const {
+      now = Date.now,
+      waitMs = { create: 300_000, exit: 30_000, archive: 30_000, delete: 30_000 },
+      bindings = paneBindings,
+      runtime,
+      uploads,
+    } = options;
+    this.now = now;
+    this.waitMs = waitMs;
     const control: OperationControl = {
       pending: (entry): entry is OperationEntry & { stage: OperationStage } => this.#pending(entry),
       transition: (entry, context, deadline) => this.#transition(entry, context, deadline),
@@ -354,13 +364,13 @@ export class OperationService {
       : undefined;
   }
   #prune() {
+    const now = this.now();
     for (const [id, operation] of this.#results) {
-      if (this.now() - Date.parse(operation.updatedAt) >= 30 * 60_000) {
-        this.#results.delete(id);
-        for (const [requestId, record] of this.#requests) {
-          if (record.operationId === id) this.#requests.delete(requestId);
-        }
-      }
+      if (now - Date.parse(operation.updatedAt) >= 30 * 60_000) this.#results.delete(id);
+    }
+    for (const [requestId, record] of this.#requests) {
+      if (!this.#entries.has(record.operationId) && !this.#results.has(record.operationId))
+        this.#requests.delete(requestId);
     }
   }
 }

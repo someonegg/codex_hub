@@ -1,66 +1,86 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, stat } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
+import { opaqueIdForPath } from "../../security/opaque-id.js";
 import type { CatalogDiscovery, CatalogEntry, CodexCatalogSource } from "./catalog-source.js";
 import { isExpectedIoError } from "./io-errors.js";
-import type { PathPolicy, RolloutDescriptor } from "./path-policy.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
+
+const MAX_DEPTH = 8;
+const ROLLOUT_NAME = /^rollout-[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl$/;
 
 export class JsonlCatalogSource implements CodexCatalogSource {
   constructor(
-    private readonly policy: PathPolicy,
+    private readonly codexHome: string,
     private readonly archivedDescriptors: ReadonlyMap<string, RolloutDescriptor> = new Map(),
   ) {}
 
   async discover(): Promise<CatalogDiscovery> {
-    const descriptors = new Map<string, RolloutDescriptor>();
+    const entries: CatalogEntry[] = [];
     const diagnostics: Diagnostic[] = [];
-    for (const root of this.policy.roots()) {
-      await scan(
-        root.canonicalPath,
-        async (candidate, regularFile) => {
-          // Only reuse successfully loaded archives still enumerated as regular files
-          // under the same canonical root. New paths and symlinks retain validation.
-          const cached =
-            root.archived && regularFile ? this.archivedDescriptors.get(candidate) : undefined;
-          const descriptor = cached ?? (await this.policy.register(candidate));
-          if (descriptor !== null) descriptors.set(descriptor.canonicalPath, descriptor);
-        },
-        diagnostics,
-      );
-    }
-    const entries: CatalogEntry[] = [...descriptors.values()]
-      .sort((left, right) => left.canonicalPath.localeCompare(right.canonicalPath))
-      .map((descriptor) => ({ descriptor }));
-    return {
-      entries,
-      diagnostics: [...this.policy.diagnostics, ...diagnostics].slice(0, 50),
+    const unreadable = (code: string) => {
+      if (diagnostics.length < 50)
+        diagnostics.push({
+          code,
+          severity: "warning",
+          message: "A session directory or rollout could not be read.",
+          ordinal: null,
+        });
     };
-  }
-}
-
-async function scan(
-  directory: string,
-  visit: (path: string, regularFile: boolean) => Promise<void>,
-  diagnostics: Diagnostic[],
-): Promise<void> {
-  let entries;
-  try {
-    entries = await readdir(directory, { withFileTypes: true });
-  } catch (error) {
-    if (!isExpectedIoError(error)) throw error;
-    if (diagnostics.length < 50)
-      diagnostics.push({
-        code: "session_root_unreadable",
-        severity: "warning",
-        message: "An allowlisted session directory could not be read.",
-        ordinal: null,
-      });
-    return;
-  }
-  for (const entry of entries) {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) await scan(path, visit, diagnostics);
-    else if (entry.isFile() || entry.isSymbolicLink()) await visit(path, entry.isFile());
+    const scan = async (
+      directory: string,
+      relative: string,
+      archived: boolean,
+      depth: number,
+    ): Promise<void> => {
+      let children;
+      try {
+        children = await readdir(directory, { withFileTypes: true });
+      } catch (error) {
+        if (!isExpectedIoError(error)) throw error;
+        if (depth !== 0 || (error as NodeJS.ErrnoException).code !== "ENOENT")
+          unreadable("session_root_unreadable");
+        return;
+      }
+      for (const child of children) {
+        const path = join(directory, child.name);
+        const sourceRelativePath = `${relative}/${child.name}`;
+        try {
+          const linkedInfo = child.isSymbolicLink() ? await stat(path) : undefined;
+          const info = linkedInfo ?? child;
+          if (info.isDirectory()) {
+            if (depth < MAX_DEPTH) await scan(path, sourceRelativePath, archived, depth + 1);
+            continue;
+          }
+          if (!info.isFile() || !ROLLOUT_NAME.test(child.name)) continue;
+          const cached = archived ? this.archivedDescriptors.get(path) : undefined;
+          if (cached !== undefined) {
+            entries.push({ descriptor: cached });
+            continue;
+          }
+          const metadata = linkedInfo ?? (await stat(path));
+          if (!metadata.isFile()) continue;
+          entries.push({
+            descriptor: {
+              id: opaqueIdForPath(path),
+              path,
+              sourceRelativePath,
+              archived,
+              size: metadata.size,
+              mtimeMs: metadata.mtimeMs,
+            },
+          });
+        } catch (error) {
+          if (!isExpectedIoError(error)) throw error;
+          unreadable("rollout_unavailable");
+        }
+      }
+    };
+    for (const name of ["sessions", "archived_sessions"]) {
+      await scan(resolve(this.codexHome, name), name, name === "archived_sessions", 0);
+    }
+    entries.sort((a, b) => a.descriptor.path.localeCompare(b.descriptor.path));
+    return { entries, diagnostics };
   }
 }

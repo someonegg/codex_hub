@@ -22,7 +22,11 @@ beforeEach(() => {
 
 class TestSessionInteractionService extends SessionInteractionService {
   constructor(reader: SessionReader, enabled: boolean, tmux: TmuxInteractionService) {
-    super(reader, enabled, tmux, bindings, () => ({ ready: Promise.resolve(), close() {} }));
+    super(reader, tmux, {
+      enabled,
+      bindings,
+      listener: () => ({ ready: Promise.resolve(), close() {} }),
+    });
     services.push(this);
   }
 }
@@ -534,13 +538,11 @@ it.each([
       resolveTarget: vi.fn().mockResolvedValue(binding),
       captureTerminal: vi.fn(async () => ({ content, truncated: false })),
     } as unknown as TmuxInteractionService;
-    const service = new SessionInteractionService(
-      repository(snapshot),
-      true,
-      tmux,
+    const service = new SessionInteractionService(repository(snapshot), tmux, {
+      enabled: true,
       bindings,
-      listen,
-    );
+      listener: listen,
+    });
     services.push(service);
     const frame = vi.fn();
     const fail = vi.fn();
@@ -602,16 +604,14 @@ it("checks idle both before transport and at actual input, while allowing interr
       sendMessage: vi.fn(async (_target, _message, check) => check()),
       sendKeys: vi.fn(async (_target, _keys, check) => check()),
     } as unknown as TmuxInteractionService;
-    const service = new SessionInteractionService(
-      repository(snapshot),
-      true,
-      tmux,
+    const service = new SessionInteractionService(repository(snapshot), tmux, {
+      enabled: true,
       bindings,
-      (_binding, changed) => {
+      listener: (_binding, changed) => {
         output = changed;
         return { ready: Promise.resolve(), close() {} };
       },
-    );
+    });
     services.push(service);
     await expect(service.sendMessage("session", "hello", true)).rejects.toMatchObject({
       code: "session_busy",

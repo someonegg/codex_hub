@@ -44,7 +44,7 @@ it("logs during detail-only refreshes, deduplicates content and logs cleared dia
     diagnostics: [warning],
   };
   const source = { descriptor, refresh: vi.fn(async () => snapshot) };
-  const reader = new SessionReadService([source], undefined, undefined, {
+  const reader = new SessionReadService([source], {
     diagnosticLogger: { log },
   });
   const detail = await reader.getSession(id);
@@ -95,7 +95,7 @@ it("does not inspect diagnostic content on cached reads or unchanged diagnostic 
       return { signature: String(generation++), sessions: [normalized], diagnostics: [] };
     },
   };
-  const reader = new SessionReadService([source], undefined, undefined, {
+  const reader = new SessionReadService([source], {
     diagnosticLogger: { log() {} },
   });
   await reader.getSession(id);
@@ -164,7 +164,7 @@ it("isolates logger failures from reading and management snapshots", async () =>
       return { signature: "1", sessions: [entry([warning])], diagnostics: [warning] };
     },
   };
-  const reader = new SessionReadService([source], undefined, undefined, {
+  const reader = new SessionReadService([source], {
     diagnosticLogger: {
       log() {
         throw new Error("stderr unavailable");
@@ -186,8 +186,6 @@ it("does not wake automatic updates when session or source diagnostics change", 
         },
       },
     ],
-    undefined,
-    undefined,
     { diagnosticLogger: { log() {} } },
   );
   const updates = new SessionUpdatesService(reader, { probeIntervalMs: 1, waitTimeoutMs: 8 });

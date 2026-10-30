@@ -12,7 +12,7 @@ const faults = vi.hoisted(() => new Map<string, Error>());
 vi.mock("node:fs/promises", async (importOriginal) => {
   const fs = await importOriginal<typeof FsPromises>();
   const wrap =
-    (name: "realpath" | "stat" | "lstat" | "readdir" | "access") =>
+    (name: "realpath" | "stat" | "lstat" | "readdir" | "access" | "open") =>
     async (...args: unknown[]) => {
       const fault = faults.get(`${name}:${String(args[0])}`);
       if (fault) throw fault;
@@ -25,6 +25,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
     lstat: wrap("lstat"),
     readdir: wrap("readdir"),
     access: wrap("access"),
+    open: wrap("open"),
   };
 });
 afterEach(() => faults.clear());
@@ -54,22 +55,16 @@ it("skips all per-file checks for successfully cached archives", async () => {
   expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
 });
 
-it.each(codes)("recovers from %s in path checks, scanning and rollout loading", async (code) => {
+it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading", async (code) => {
   const { home, sessions, damaged } = await fixture();
   const source = new CodexSessionSource(home, "test");
   expect((await source.refresh()).sessions).toHaveLength(2);
-  for (const location of [
-    `realpath:${sessions}`,
-    `stat:${sessions}`,
-    `readdir:${sessions}`,
-    `lstat:${damaged}`,
-    `realpath:${damaged}`,
-    `stat:${damaged}`,
-  ]) {
+  for (const location of [`readdir:${sessions}`, `stat:${damaged}`]) {
     faults.set(location, Object.assign(new Error("injected IO failure"), { code }));
     const partial = await source.refresh();
     expect(partial.sessions.map((entry) => entry.nativeSessionId)).toEqual(["healthy"]);
-    expect(partial.diagnostics.length).toBeGreaterThan(0);
+    if (location !== `readdir:${sessions}` || code !== "ENOENT")
+      expect(partial.diagnostics.length).toBeGreaterThan(0);
     faults.clear();
     expect((await source.refresh()).sessions).toHaveLength(2);
   }
@@ -77,7 +72,7 @@ it.each(codes)("recovers from %s in path checks, scanning and rollout loading", 
   let failed = true;
   const loading = new CodexSessionSource(home, "load", {
     async decode(descriptor, checkpoint) {
-      if (failed && descriptor.canonicalPath === damaged)
+      if (failed && descriptor.path === damaged)
         throw Object.assign(new Error("injected load failure"), { code });
       return decoder.decode(descriptor, checkpoint);
     },
@@ -91,17 +86,12 @@ it.each(codes)("recovers from %s in path checks, scanning and rollout loading", 
   expect((await loading.refresh()).sessions).toHaveLength(2);
 });
 
-it.each(["realpath", "stat", "readdir", "lstat"])(
-  "propagates unexpected %s failures",
-  async (operation) => {
-    const { home, sessions, damaged } = await fixture();
-    const path = operation === "lstat" ? damaged : sessions;
-    faults.set(`${operation}:${path}`, new Error("program invariant"));
-    await expect(new CodexSessionSource(home, "test").refresh()).rejects.toThrow(
-      "program invariant",
-    );
-  },
-);
+it.each(["stat", "readdir"])("propagates unexpected %s failures", async (operation) => {
+  const { home, sessions, damaged } = await fixture();
+  const path = operation === "stat" ? damaged : sessions;
+  faults.set(`${operation}:${path}`, new Error("program invariant"));
+  await expect(new CodexSessionSource(home, "test").refresh()).rejects.toThrow("program invariant");
+});
 
 it("treats initially absent allowlisted directories as normal", async () => {
   const home = await createTempDirectory("codex-empty-io-");
@@ -109,4 +99,24 @@ it("treats initially absent allowlisted directories as normal", async () => {
     sessions: [],
     diagnostics: [],
   });
+});
+
+it("reuses unchanged active files without permission probes and retries actual open failures", async () => {
+  const { home, damaged } = await fixture();
+  const source = new CodexSessionSource(home, "active-permissions");
+  const initial = await source.refresh();
+  faults.set(`access:${damaged}`, new Error("Unexpected permission probe"));
+  faults.set(`open:${damaged}`, Object.assign(new Error("denied"), { code: "EACCES" }));
+  expect(await source.refresh()).toBe(initial);
+  await writeFile(damaged, '{"type":"session_meta","payload":{"id":"changed-id"}}\n');
+  const failed = await source.refresh();
+  expect(failed.sessions.map((entry) => entry.nativeSessionId)).toEqual(["healthy"]);
+  expect(failed.diagnostics).toContainEqual(
+    expect.objectContaining({ code: "rollout_unavailable" }),
+  );
+  faults.clear();
+  expect((await source.refresh()).sessions.map((entry) => entry.nativeSessionId)).toEqual([
+    "healthy",
+    "changed-id",
+  ]);
 });

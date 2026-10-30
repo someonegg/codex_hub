@@ -13,7 +13,7 @@ import type {
 import { normalizeMessage } from "./message.js";
 import { type PaneBindingManager, paneBindings } from "./pane-binding-manager.js";
 import { isCurrentObservation, observePaneBinding } from "./pane-observation.js";
-import type { SessionRuntime } from "./session-runtime.js";
+import type { RuntimeProbe } from "./runtime-capabilities.js";
 import { TerminalActivityService } from "./terminal-activity-service.js";
 import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
@@ -53,8 +53,17 @@ interface ResolvedBinding extends CheckedBinding {
 
 type InteractionSessionReader = Pick<SessionReader, "getInteractionSession">;
 
+export interface SessionInteractionOptions {
+  readonly enabled: boolean;
+  readonly bindings?: PaneBindingManager;
+  readonly listener?: PreviewListener;
+  readonly runtime?: RuntimeProbe;
+}
+
 export class SessionInteractionService {
-  runtime?: SessionRuntime;
+  private readonly runtime?: RuntimeProbe;
+  private readonly enabled: boolean;
+  private readonly bindings: PaneBindingManager;
   readonly #busy = new Set<string>();
   readonly #activity: TerminalActivityService;
   readonly #previews: TerminalPreviewService;
@@ -68,11 +77,18 @@ export class SessionInteractionService {
 
   constructor(
     private readonly sessions: InteractionSessionReader,
-    private readonly enabled: boolean,
     private readonly tmux: InteractionTransport,
-    private readonly bindings: PaneBindingManager = paneBindings,
-    listener: PreviewListener = createTmuxPreviewListener(),
+    options: SessionInteractionOptions,
   ) {
+    const {
+      enabled,
+      bindings = paneBindings,
+      listener = createTmuxPreviewListener(),
+      runtime,
+    } = options;
+    this.enabled = enabled;
+    this.bindings = bindings;
+    this.runtime = runtime;
     this.#activity = new TerminalActivityService(listener);
     this.#previews = new TerminalPreviewService(
       (binding, assertOwner) =>

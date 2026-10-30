@@ -3,7 +3,6 @@ import {
   cp,
   mkdir,
   readFile,
-  realpath,
   rename,
   stat,
   symlink,
@@ -20,29 +19,28 @@ import {
   createCodexSessionSource,
 } from "../../src/server/adapters/codex/codex-session-source.js";
 import { JsonlCatalogSource } from "../../src/server/adapters/codex/jsonl-catalog-source.js";
-import { PathPolicy } from "../../src/server/adapters/codex/path-policy.js";
 import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 
 describe("catalog discovery", () => {
-  it("scans only allowlisted JSONL roots", async () => {
+  it("scans configured JSONL roots and filters rollout names", async () => {
     const home = await createTempDirectory("codex-catalog-");
     await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
     await writeFile(join(home, "sessions/not-a-rollout.jsonl"), "{}\n");
     await writeFile(join(home, "rollout-outside-root.jsonl"), "{}\n");
-    const policy = await PathPolicy.create(home);
 
-    const discovery = await new JsonlCatalogSource(policy).discover();
+    const discovery = await new JsonlCatalogSource(home).discover();
 
     expect(discovery.entries).toHaveLength(4);
     expect(discovery.entries.filter((entry) => entry.descriptor.archived)).toHaveLength(1);
     expect(
       discovery.entries.every(
         (entry) =>
-          entry.descriptor.canonicalPath.includes("/sessions/") ||
-          entry.descriptor.canonicalPath.includes("/archived_sessions/"),
+          entry.descriptor.path.includes("/sessions/") ||
+          entry.descriptor.path.includes("/archived_sessions/"),
       ),
     ).toBe(true);
     expect(discovery.diagnostics).toEqual([]);
@@ -83,7 +81,7 @@ describe("catalog discovery", () => {
     expect(decode).toHaveBeenCalledTimes(3);
   });
 
-  it("keys decoded rollouts by source-relative path rather than canonical path", async () => {
+  it("keys decoded rollouts by source-relative path using logical paths across root link changes", async () => {
     const base = await createTempDirectory("codex-adapter-cache-identity-");
     const home = join(base, "home");
     const firstRoot = join(base, "first-sessions");
@@ -115,36 +113,38 @@ describe("catalog discovery", () => {
     const decodedPaths: string[] = [];
     const source = new CodexSessionSource(home, "codex-cache-identity", {
       async decode(descriptor) {
-        decodedPaths.push(descriptor.canonicalPath);
+        decodedPaths.push(descriptor.path);
         return decoder.decode(descriptor);
       },
     });
     const first = await source.refresh();
-    const firstDescriptor = await (
-      await PathPolicy.create(home)
-    ).register(join(sessionsLink, "rollout-stable.jsonl"));
+    const firstDescriptor = await rolloutDescriptor(
+      home,
+      join(sessionsLink, "rollout-stable.jsonl"),
+    );
 
     const nextLink = join(home, "next-sessions");
     await symlink(secondRoot, nextLink);
     await rename(nextLink, sessionsLink);
-    const secondDescriptor = await (
-      await PathPolicy.create(home)
-    ).register(join(sessionsLink, "rollout-stable.jsonl"));
+    const secondDescriptor = await rolloutDescriptor(
+      home,
+      join(sessionsLink, "rollout-stable.jsonl"),
+    );
     const second = await source.refresh();
 
     expect(firstDescriptor?.sourceRelativePath).toBe(secondDescriptor?.sourceRelativePath);
-    expect(firstDescriptor?.canonicalPath).toBe(await realpath(firstRollout));
-    expect(secondDescriptor?.canonicalPath).toBe(await realpath(secondRollout));
-    expect(secondDescriptor?.canonicalPath).not.toBe(firstDescriptor?.canonicalPath);
+    expect(firstDescriptor?.path).toBe(join(sessionsLink, "rollout-stable.jsonl"));
+    expect(secondDescriptor?.path).toBe(join(sessionsLink, "rollout-stable.jsonl"));
+    expect(secondDescriptor?.path).toBe(firstDescriptor?.path);
     expect(await stat(secondRollout)).toMatchObject({
       size: firstInfo.size,
       mtimeMs: firstInfo.mtimeMs,
     });
     expect(decodedPaths.filter((path) => path.endsWith("rollout-stable.jsonl"))).toEqual([
-      await realpath(firstRollout),
+      join(sessionsLink, "rollout-stable.jsonl"),
     ]);
     expect(decodedPaths.filter((path) => path.endsWith("rollout-new.jsonl"))).toEqual([
-      await realpath(join(secondRoot, "rollout-new.jsonl")),
+      join(sessionsLink, "rollout-new.jsonl"),
     ]);
     expect(first.sessions).toHaveLength(1);
     expect(second.sessions).toHaveLength(2);

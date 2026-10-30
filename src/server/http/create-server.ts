@@ -9,6 +9,14 @@ import { createServer as createHttpsServer } from "node:https";
 import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
+import type { ApiRouterOptions } from "./api-router.js";
+import {
+  decodePath,
+  isMissingFile,
+  MalformedRequestError,
+  reportRequestError,
+  requestUrl,
+} from "./request-errors.js";
 import type { ServerConfig } from "../config.js";
 import { DiffStore } from "../hosting/diff-store.js";
 import { hostingRoutes } from "../hosting/routes.js";
@@ -44,6 +52,7 @@ async function serveFile(
   filePath: string,
   headOnly: boolean,
   status = 200,
+  onStreamError: (error: unknown) => void = () => {},
 ): Promise<boolean> {
   try {
     const info = await stat(filePath);
@@ -58,11 +67,15 @@ async function serveFile(
       response.end();
     } else {
       createReadStream(filePath)
-        .on("error", () => response.destroy())
+        .on("error", (error) => {
+          response.destroy();
+          onStreamError(error);
+        })
         .pipe(response);
     }
     return true;
-  } catch {
+  } catch (error) {
+    if (!isMissingFile(error)) throw error;
     return false;
   }
 }
@@ -72,9 +85,10 @@ export function createServer(
   apiRouter: ApiRouter = emptyApiRouter,
   closeServices: () => void = () => {},
   upgrades?: ServerUpgradeHandler,
+  options: ApiRouterOptions = {},
 ) {
   const clientRoot = realpathSync(config.clientDirectory);
-  const hosting = hostingRoutes(config.hostingDirectory);
+  const hosting = hostingRoutes(config.hostingDirectory, options);
   const diffs = config.hostingDirectory ? new DiffStore(config.hostingDirectory) : undefined;
   const clientRootPrefix = `${clientRoot}${sep}`;
   const requestListener: RequestListener = async (request, response) => {
@@ -91,8 +105,8 @@ export function createServer(
         });
         return;
       }
-      const url = new URL(request.url ?? "/", "http://localhost");
-      const decodedPath = decodeURIComponent(url.pathname);
+      const url = requestUrl(request);
+      const decodedPath = decodePath(url.pathname);
       const sessionPage = /^\/sessions\/[A-Za-z0-9_-]{20,100}(?:\/uploads)?\/?$/.test(decodedPath);
       const diffPage = /^\/diffs\/([a-f0-9-]{36})$/.exec(decodedPath);
       const appPage =
@@ -106,19 +120,26 @@ export function createServer(
       let canonicalPath: string;
       try {
         canonicalPath = await realpath(requestedPath);
-      } catch {
+      } catch (error) {
+        if (!isMissingFile(error)) throw error;
         sendText(response, 404, "Not found", headOnly);
         return;
       }
 
       if (
         canonicalPath.startsWith(clientRootPrefix) &&
-        (await serveFile(response, canonicalPath, headOnly, pageStatus))
+        (await serveFile(response, canonicalPath, headOnly, pageStatus, (error) =>
+          reportRequestError(request, response, error, options),
+        ))
       ) {
         return;
       }
       sendText(response, 404, "Not found", headOnly);
-    } catch {
+    } catch (error) {
+      if (!(error instanceof MalformedRequestError) || response.headersSent) {
+        reportRequestError(request, response, error, options);
+        return;
+      }
       sendJson(
         response,
         400,
