@@ -4,6 +4,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import type { SessionListResponse } from "../../src/shared/api-contract";
 
+import { browserStorage } from "../../src/client/state/browser-storage";
 import { useHubNavigation } from "../../src/client/state/use-hub-navigation";
 import { CHILD_ID, listBody, SESSION_ID } from "./session.fixtures";
 
@@ -11,6 +12,47 @@ beforeEach(() => {
   sessionStorage.clear();
   window.history.replaceState(null, "", "/");
   vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+});
+
+it("debounces sidebar scroll saves and flushes pending positions when hidden or unmounted", () => {
+  vi.useFakeTimers();
+  const save = vi.spyOn(browserStorage, "setItem");
+  const { result, unmount } = renderHook(() => useHubNavigation(listBody));
+  const element = document.createElement("nav");
+  vi.spyOn(element, "getClientRects").mockReturnValue([{ height: 100 }] as unknown as DOMRectList);
+  const storedScroll = () => JSON.parse(browserStorage.getItem("ahub.navigation")!).scroll;
+  save.mockClear();
+  try {
+    element.scrollTop = 100;
+    act(() => result.current.persistScroll(element));
+    act(() => vi.advanceTimersByTime(200));
+    element.scrollTop = 200;
+    act(() => result.current.persistScroll(element));
+    act(() => vi.advanceTimersByTime(200));
+    expect(save).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(50));
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(storedScroll()).toBe(200);
+
+    element.scrollTop = 300;
+    act(() => result.current.persistScroll(element));
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(true);
+    act(() => document.dispatchEvent(new Event("visibilitychange")));
+    expect(storedScroll()).toBe(300);
+    hidden.mockRestore();
+
+    element.scrollTop = 400;
+    act(() => result.current.persistScroll(element));
+    unmount();
+    expect(storedScroll()).toBe(400);
+    expect(save).toHaveBeenCalledTimes(3);
+    act(() => vi.runOnlyPendingTimers());
+    expect(save).toHaveBeenCalledTimes(3);
+  } finally {
+    unmount();
+    save.mockRestore();
+    vi.useRealTimers();
+  }
 });
 
 it("expands a directly opened session once its catalog arrives, and allows manual collapse", () => {
