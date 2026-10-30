@@ -1,9 +1,10 @@
 import { expect, it } from "vitest";
+
+import { RequestBodyError } from "../../src/server/http/request-body.js";
 import {
   parseKeysBody,
   parseMessageBody,
 } from "../../src/server/http/session-interaction-routes.js";
-import { RequestBodyError } from "../../src/server/http/request-body.js";
 import { MessageValidationError } from "../../src/server/interaction/message.js";
 import { INTERACTION_KEYS } from "../../src/shared/api-contract.js";
 

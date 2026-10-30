@@ -2,13 +2,14 @@
 import { act, renderHook } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 
+import type { SessionUpdatesResponse } from "../../src/shared/api-contract";
+
 import { api, ApiClientError } from "../../src/client/api/client";
 import { useSessionUpdates } from "../../src/client/state/use-session-updates";
-import type { SessionUpdatesResponse } from "../../src/shared/api-contract";
 import {
   baseSession,
-  SESSION_ID,
   NEXT_TIMELINE_CURSOR,
+  SESSION_ID,
   TIMELINE_CURSOR,
   UPDATE_REVISION,
 } from "./session.fixtures";

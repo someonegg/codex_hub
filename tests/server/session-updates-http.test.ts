@@ -3,13 +3,12 @@ import { describe, expect, it, vi } from "vitest";
 import type { SessionReader } from "../../src/server/application/session-reader.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
+import { HttpQueryError } from "../../src/server/http/query-params.js";
+import { parseUpdatesQuery } from "../../src/server/http/session-updates-routes.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import type { TimelineCursor, UpdateRevision } from "../../src/shared/api-contract.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { sessionDetail } from "../helpers/session-fixtures.js";
-
-import { parseUpdatesQuery } from "../../src/server/http/session-updates-routes.js";
-import { HttpQueryError } from "../../src/server/http/query-params.js";
 
 const SESSION_ID = "abcdefghijklmnopqrstuvwx";
 const CURSOR = "opaque.timeline.cursor" as TimelineCursor;

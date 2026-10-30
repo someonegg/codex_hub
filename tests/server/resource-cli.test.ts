@@ -6,8 +6,8 @@ import { promisify } from "node:util";
 
 import { expect, it } from "vitest";
 
-import { parseResourceArguments, validateResourcePublish } from "../../src/server/cli/resource.js";
 import { CommandError } from "../../src/server/cli/command-error.js";
+import { parseResourceArguments, validateResourcePublish } from "../../src/server/cli/resource.js";
 
 const exec = promisify(execFile);
 it.each([

@@ -4,8 +4,8 @@ import type { AddressInfo } from "node:net";
 
 import { afterEach, expect, it } from "vitest";
 
-import { parseSessionArguments } from "../../src/server/cli/session.js";
 import { CommandError } from "../../src/server/cli/command-error.js";
+import { parseSessionArguments } from "../../src/server/cli/session.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => {

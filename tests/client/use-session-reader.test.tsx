@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 import { act, renderHook } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+
+import type { ItemPageResponse } from "../../src/shared/api-contract";
+
 import { api, ApiClientError } from "../../src/client/api/client";
 import { useSessionReader } from "../../src/client/state/use-session-reader";
-import type { ItemPageResponse } from "../../src/shared/api-contract";
 import { firstPage, NEXT_TIMELINE_CURSOR, SESSION_ID, TIMELINE_CURSOR } from "./session.fixtures";
 
 const initial = { ...firstPage, hasMore: true };
