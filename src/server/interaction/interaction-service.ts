@@ -158,7 +158,7 @@ export class SessionInteractionService {
   ): Promise<InteractionResponse> {
     if (!this.#supported(session)) {
       this.#activity.remove(sessionId);
-      return { supported: false, attachCommand: null };
+      return { supported: false, tmux: null, attachCommand: null };
     }
     const observed =
       session.observation ??
@@ -397,6 +397,13 @@ function response(
 ): Extract<InteractionResponse, { supported: true }> {
   return {
     supported: true,
+    tmux: binding
+      ? {
+          socketPath: binding.socketPath,
+          paneId: binding.paneId,
+          sessionName: binding.sessionName ?? null,
+        }
+      : null,
     state,
     activity: null,
     supersededBySessionId: null,

@@ -37,6 +37,7 @@ const base = {
   hasMore: true,
   interaction: {
     supported: true,
+    tmux: null,
     state: "connected",
     activity: "working",
     supersededBySessionId: null,
@@ -188,7 +189,7 @@ it("renders unsupported, empty pages, cancelled and unavailable outcomes", () =>
     interaction: { supported: false, attachCommand: "secret" },
     hasMore: false,
   });
-  expect(mapped.interaction).toEqual({ supported: false });
+  expect(mapped.interaction).toEqual({ supported: false, tmux: null });
   expect(formatResult("inspect", mapped)).toContain("Interaction: unsupported");
   expect(formatResult("inspect", mapped)).toContain(
     "No visible items.\n\nNext after: 44\nHas more: no",

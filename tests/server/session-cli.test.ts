@@ -101,7 +101,7 @@ it("parses valid session options and help without I/O", () => {
     help: false,
     command: "inspect",
     id: "opaque-native-id",
-    seconds: 360,
+    seconds: 15,
     values: { limit: "300", after: "0" },
   });
   expect(parsed.help ? undefined : parsed.base.origin).toBe("http://localhost:4173");
@@ -183,7 +183,11 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
       expect(body.requestId).toBeTruthy();
       reply(
         res,
-        { operationId: "secret-operation", target: { paneId: "%secret" }, status: "pending" },
+        {
+          operationId: "secret-operation",
+          target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+          status: "pending",
+        },
         202,
       );
     } else if (req.url === "/api/v1/operations/secret-operation")
@@ -219,7 +223,11 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
     "--json",
   ]);
   expect(result.code).toBe(0);
-  expect(JSON.parse(result.stdout)).toEqual({ sessionId: "session", status: "succeeded" });
+  expect(JSON.parse(result.stdout)).toEqual({
+    sessionId: "session",
+    status: "succeeded",
+    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+  });
   expect(result.stdout + result.stderr).not.toContain("secret");
   expect(submits).toBe(1);
   expect(inspections).toBe(2);
@@ -243,7 +251,8 @@ it("distinguishes failures from unknown writes and never retries or cancels", as
   );
   const failure = await cli(["exit", "id", "--url", failed, "--json"]);
   expect(failure.code).toBe(1);
-  expect(failure.stdout).not.toContain("secret");
+  expect(JSON.parse(failure.stdout).error.message).toBe("secret-operation");
+  expect(JSON.parse(failure.stdout).error.operationId).toBeUndefined();
 });
 
 it("treats backend unknown results as query failures unless a mutation was submitted", async () => {
@@ -392,4 +401,204 @@ it("keeps connection failures classified as query_failed", async () => {
   const result = await cli(["list", "--json"]);
   expect(result.code).toBe(1);
   expect(JSON.parse(result.stdout).error.code).toBe("query_failed");
+});
+
+it.each([
+  "list",
+  "inspect",
+  "terminal",
+  "send",
+  "keys",
+  "interrupt",
+  "handoff",
+  "create",
+  "resume",
+  "exit",
+  "archive",
+  "delete",
+])("sets the timeout tier for %s", (command) => {
+  const extra = command === "create" ? ["--project", "/project"] : command === "list" ? [] : ["id"];
+  if (command === "send") extra.push("--message", "hello");
+  if (command === "keys") extra.push("enter");
+  expect(parseSessionArguments([command, ...extra])).toMatchObject({
+    seconds: ["create", "resume", "exit", "archive", "delete"].includes(command) ? 45 : 15,
+  });
+  expect(parseSessionArguments([command, ...extra, "--timeout", "2"])).toMatchObject({
+    seconds: 2,
+  });
+});
+
+it.each([
+  ["--interval", "1"],
+  ["--count", "2"],
+  ["--follow", "--interval", "Infinity"],
+  ["--follow", "--interval", "0"],
+  ["--follow", "--count", "1.5"],
+  ["--follow", "--count", "0"],
+])("rejects invalid follow options %j", (...options) => {
+  expect(() => parseSessionArguments(["inspect", "id", ...options])).toThrow();
+});
+
+it("drains the last follow round and suppresses position-only updates", async () => {
+  const paths: string[] = [];
+  const base = await serve((req, res) => {
+    paths.push(req.url!);
+    const page = paths.length;
+    reply(res, {
+      session: { id: "id", origin: {}, resume: {} },
+      interaction: { supported: false },
+      items: [],
+      nextAfter: page,
+      hasMore: page === 2,
+    });
+  });
+  const result = await cli([
+    "inspect",
+    "id",
+    "--follow",
+    "--count",
+    "2",
+    "--interval",
+    "0.01",
+    "--url",
+    base,
+    "--json",
+  ]);
+  expect(result.code).toBe(0);
+  expect(paths).toHaveLength(3);
+  expect(paths[1]).toContain("after=1");
+  expect(paths[2]).toContain("after=2");
+  expect(
+    result.stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line)),
+  ).toHaveLength(1);
+});
+
+it("retains launch target on timeout without retry or cancellation", async () => {
+  let writes = 0;
+  const base = await serve((req, res) => {
+    if (req.method === "POST") writes++;
+    reply(res, {
+      operationId: "private",
+      status: "pending",
+      target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+    });
+  });
+  const result = await cli([
+    "create",
+    "--project",
+    "/project",
+    "--timeout",
+    "0.1",
+    "--json",
+    "--url",
+    base,
+  ]);
+  expect(result.code).toBe(2);
+  expect(JSON.parse(result.stdout).error).toMatchObject({
+    sessionId: null,
+    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+  });
+  expect(result.stdout).not.toContain("private");
+  expect(writes).toBe(1);
+});
+
+it("keeps launch diagnostics when readiness never reaches idle", async () => {
+  let writes = 0;
+  const base = await serve((req, res) => {
+    if (req.method === "POST") {
+      writes++;
+      reply(res, {
+        status: "succeeded",
+        sessionId: "id",
+        target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+        operationId: "private",
+      });
+    } else
+      reply(res, {
+        live: true,
+        interaction: { supported: true, state: "connected", activity: "working" },
+      });
+  });
+  const result = await cli(["resume", "id", "--timeout", "0.1", "--json", "--url", base]);
+  expect(result.code).toBe(2);
+  expect(JSON.parse(result.stdout).error).toMatchObject({
+    sessionId: "id",
+    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+  });
+  expect(writes).toBe(1);
+});
+
+it("stops follow normally on SIGINT without mutating the session", async () => {
+  const methods: string[] = [];
+  let read!: () => void;
+  const received = new Promise<void>((resolve) => {
+    read = resolve;
+  });
+  const base = await serve((req, _res) => {
+    methods.push(req.method!);
+    read();
+  });
+  const child = spawn(process.execPath, [
+    "--import",
+    "tsx",
+    "src/server/cli/main.ts",
+    "session",
+    "inspect",
+    "id",
+    "--follow",
+    "--url",
+    base,
+    "--json",
+  ]);
+  let stdout = "",
+    stderr = "";
+  child.stdout.on("data", (chunk) => {
+    stdout += chunk;
+  });
+  child.stderr.on("data", (chunk) => {
+    stderr += chunk;
+  });
+  const stopped = new Promise<number | null>((resolve) => child.on("close", resolve));
+  await received;
+  child.kill("SIGINT");
+  expect(await stopped).toBe(0);
+  expect(methods).toEqual(["GET"]);
+  expect(stdout + stderr).toBe("");
+});
+
+it("prints a follow error as a separate NDJSON line without retry", async () => {
+  let reads = 0;
+  const base = await serve((_req, res) => {
+    reads++;
+    if (reads === 1)
+      reply(res, {
+        session: { id: "id", origin: {}, resume: {} },
+        interaction: { supported: false },
+        items: [],
+        nextAfter: 0,
+        hasMore: false,
+      });
+    else reply(res, { error: { message: "Backend unavailable" } }, 503);
+  });
+  const result = await cli([
+    "inspect",
+    "id",
+    "--follow",
+    "--interval",
+    "0.01",
+    "--url",
+    base,
+    "--json",
+  ]);
+  expect(result.code).toBe(1);
+  const lines = result.stdout
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  expect(lines).toHaveLength(2);
+  expect(lines[1].error.message).toBe("Backend unavailable");
+  expect(reads).toBe(2);
 });

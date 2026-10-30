@@ -10,11 +10,13 @@ import {
   MAX_INTERACTION_MESSAGE_BYTES,
   type SessionListResponse,
   type TerminalResponse,
+  type TmuxTarget,
 } from "../../shared/api-contract.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { CommandError, commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
 import { SessionClient } from "./session-client.js";
+import { followInspect } from "./session-follow.js";
 import {
   type CliResult,
   formatResult,
@@ -29,13 +31,14 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
   create --project <directory> [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin)
-  inspect <id> [--limit 1-300] [--after <number>]
+  inspect <id> [--limit 1-300] [--after <number>] [--follow [--interval <seconds>] [--count <N>]]
   terminal <id>
   keys <id> <key...>
   interrupt <id>
   handoff <id>
   exit <id> | archive <id> | delete <id>
-Options: --url <http-url> --json --timeout <seconds> (default 360)
+Options: --url <http-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
+Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}`;
 
@@ -56,6 +59,9 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         stdin: { type: "boolean" },
         limit: { type: "string" },
         after: { type: "string" },
+        follow: { type: "boolean" },
+        interval: { type: "string" },
+        count: { type: "string" },
         help: { type: "boolean" },
       },
     }),
@@ -69,7 +75,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     create: ["project", "home", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin"],
-    inspect: ["limit", "after"],
+    inspect: ["limit", "after", "follow", "interval", "count"],
     terminal: [],
     keys: [],
     interrupt: [],
@@ -112,7 +118,10 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
       "invalid_arguments",
       "Unsupported key sequence; use session interrupt for interruption",
     );
-  const seconds = values.timeout === undefined ? 360 : Number(values.timeout);
+  const defaultSeconds = ["create", "resume", "exit", "archive", "delete"].includes(command)
+    ? 45
+    : 15;
+  const seconds = values.timeout === undefined ? defaultSeconds : Number(values.timeout);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
     throw new CommandError(
       "invalid_arguments",
@@ -129,6 +138,20 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
     throw new CommandError("invalid_arguments", "URL must contain only an HTTP origin");
 
+  if ((values.interval !== undefined || values.count !== undefined) && !values.follow)
+    throw new CommandError("invalid_arguments", "--interval and --count require --follow");
+  if (
+    values.interval !== undefined &&
+    (!Number.isFinite(Number(values.interval)) || Number(values.interval) <= 0)
+  )
+    throw new CommandError("invalid_arguments", "interval must be a finite positive number");
+  if (
+    values.count !== undefined &&
+    (!/^\d+$/.test(values.count) ||
+      !Number.isSafeInteger(Number(values.count)) ||
+      Number(values.count) < 1)
+  )
+    throw new CommandError("invalid_arguments", "count must be a positive safe integer");
   if (command === "inspect") {
     for (const name of ["limit", "after"] as const) {
       const value = values[name];
@@ -151,6 +174,8 @@ export async function runSessionCommand(args: string[]): Promise<void> {
   let json = args.includes("--json");
   let client: SessionClient | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let following = false;
+  let launchDiagnostics: { sessionId: string | null; tmux: TmuxTarget | null } | undefined;
   const abort = new AbortController();
   const interrupt = () => abort.abort();
   process.once("SIGINT", interrupt);
@@ -164,7 +189,8 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       return;
     }
     const { command, id, keys, seconds, base } = parsed;
-    timer = setTimeout(() => abort.abort(), seconds * 1000);
+    following = values.follow === true;
+    if (!following) timer = setTimeout(() => abort.abort(), seconds * 1000);
     client = new SessionClient(base, abort.signal);
     const api = client.request;
     const path = `/api/v1/sessions/${encodeURIComponent(id ?? "")}`;
@@ -177,6 +203,19 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       const query = new URLSearchParams();
       for (const name of ["limit", "after"] as const) {
         if (values[name] !== undefined) query.set(name, values[name]);
+      }
+      if (following) {
+        await followInspect({
+          path,
+          query,
+          base,
+          signal: abort.signal,
+          timeoutMs: seconds * 1000,
+          intervalMs: Number(values.interval ?? 3) * 1000,
+          count: values.count === undefined ? undefined : Number(values.count),
+          json,
+        });
+        return;
       }
       result = mapInspect(await api<InspectResponse>(`${path}/inspect?${query}`));
     } else if (command === "terminal")
@@ -211,18 +250,35 @@ export async function runSessionCommand(args: string[]): Promise<void> {
         operationPath = "/api/v1/sessions";
         body = { resumeSessionId: id, yolo: values.yolo ?? false, requestId: randomUUID() };
       }
+      if (launch) launchDiagnostics = { sessionId: command === "resume" ? id! : null, tmux: null };
       let operation = await api<HubOperation>(
         operationPath,
         command === "delete" ? "DELETE" : "POST",
         body,
       );
-      operation = await waitForOperation(operation, api, abort.signal);
+      operation = await waitForOperation(operation, api, abort.signal, (current) => {
+        if (launchDiagnostics) {
+          launchDiagnostics.sessionId = current.sessionId ?? launchDiagnostics.sessionId;
+          if (current.target)
+            launchDiagnostics.tmux = {
+              socketPath: current.target.socketPath,
+              paneId: current.target.paneId,
+              sessionName: current.target.sessionName ?? null,
+            };
+        }
+      });
       if (launch) await waitForLaunch(operation.sessionId, api, abort.signal);
-      result = { sessionId: operation.sessionId, status: "succeeded" };
+      result = {
+        sessionId: operation.sessionId,
+        status: "succeeded",
+        ...(launch ? { tmux: launchDiagnostics?.tmux ?? null } : {}),
+      };
     }
     output(result, json, json ? "" : formatResult(command, result));
   } catch (error) {
+    if (following && abort.signal.aborted) return;
     const failure = commandFailure(error, client?.mutationSubmitted ?? false);
+    if (launchDiagnostics) failure.diagnostics = launchDiagnostics;
     outputFailure(failure, json);
   } finally {
     clearTimeout(timer);

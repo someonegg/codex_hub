@@ -2,8 +2,9 @@ import type {
   InspectResponse,
   SessionListResponse,
   TerminalResponse,
+  TmuxTarget,
 } from "../../shared/api-contract.js";
-import { singleLine } from "./output.js";
+import { formatTmux, singleLine } from "./output.js";
 
 export interface CliSessionList {
   sessions: {
@@ -28,9 +29,10 @@ export interface CliSession {
   resume: { allowed: boolean; reason: string | null };
 }
 export type CliInteraction =
-  | { supported: false }
+  | { supported: false; tmux: TmuxTarget | null }
   | {
       supported: true;
+      tmux: TmuxTarget | null;
       state: string;
       activity: string | null;
       supersededBySessionId: string | null;
@@ -78,6 +80,7 @@ export interface CliTerminal {
 export interface CliOperation {
   sessionId: string | null;
   status: "sent" | "succeeded";
+  tmux?: TmuxTarget | null;
 }
 export type CliResult = CliSessionList | CliInspect | CliTerminal | CliOperation;
 
@@ -116,11 +119,18 @@ export function mapInspect(value: InspectResponse): CliInspect {
     interaction: i.supported
       ? {
           supported: true,
+          tmux: i.tmux
+            ? {
+                socketPath: i.tmux.socketPath,
+                paneId: i.tmux.paneId,
+                sessionName: i.tmux.sessionName ?? null,
+              }
+            : null,
           state: i.state,
           activity: i.activity,
           supersededBySessionId: i.supersededBySessionId,
         }
-      : { supported: false },
+      : { supported: false, tmux: null },
     items: value.items.flatMap((item): CliInspect["items"] => {
       const base = { id: item.id, ordinal: item.ordinal, timestamp: item.timestamp };
       if (item.kind === "message")
@@ -173,7 +183,11 @@ export function mapInspect(value: InspectResponse): CliInspect {
 export function mapTerminal(s: TerminalResponse): CliTerminal {
   return { content: s.content, truncated: s.truncated, capturedAt: s.capturedAt };
 }
-export function formatResult(command: string, result: CliResult): string {
+export function formatResult(
+  command: string,
+  result: CliResult,
+  options: { emptyItemsText?: string } = {},
+): string {
   if ("content" in result)
     return `${singleLine(result.capturedAt)}${result.truncated ? " (truncated)" : ""}\n${result.content}`;
   if ("sessions" in result)
@@ -186,12 +200,15 @@ export function formatResult(command: string, result: CliResult): string {
           .join("\t"),
       ),
     ].join("\n");
-  if (!("session" in result))
-    return `${command} ${singleLine(String(result.sessionId))}: ${result.status}`;
-  return formatInspect(result);
+  if (!("session" in result)) {
+    const lines = [`${command} ${singleLine(String(result.sessionId))}: ${result.status}`];
+    if (result.tmux) lines.push(`Tmux: ${formatTmux(result.tmux)}`);
+    return lines.join("\n");
+  }
+  return formatInspect(result, options.emptyItemsText ?? "No visible items.");
 }
 
-function formatInspect(result: CliInspect): string {
+function formatInspect(result: CliInspect, emptyItemsText: string): string {
   const { session, interaction } = result;
   const summary = [
     `Session: ${session.id}`,
@@ -200,6 +217,7 @@ function formatInspect(result: CliInspect): string {
     `Interaction: ${interaction.supported ? interaction.state : "unsupported"}`,
   ];
   if (interaction.supported) {
+    if (interaction.tmux) summary.push(`Tmux: ${formatTmux(interaction.tmux)}`);
     summary.push(`Activity: ${interaction.activity ?? "unknown"}`);
     if (interaction.supersededBySessionId)
       summary.push(`Superseded by: ${interaction.supersededBySessionId}`);
@@ -222,7 +240,7 @@ function formatInspect(result: CliInspect): string {
       formatHistoryItem(item, item.kind === "user_input" ? titles.get(item.callId) : undefined),
     )
     .join("\n\n");
-  return `${header}\n\n${items || "No visible items."}\n\nNext after: ${result.nextAfter}\nHas more: ${result.hasMore ? "yes" : "no"}`;
+  return `${header}\n\n${items || emptyItemsText}\n\nNext after: ${result.nextAfter}\nHas more: ${result.hasMore ? "yes" : "no"}`;
 }
 
 function formatHistoryItem(
@@ -230,7 +248,7 @@ function formatHistoryItem(
   questionTitles?: ReadonlyMap<string, string>,
 ): string {
   if (item.kind === "message") {
-    const phase = item.itemType ?? item.phase;
+    const phase = [item.phase, item.itemType].filter(Boolean).join(" · ");
     return `--- #${item.ordinal} ${item.role === "assistant" ? "Assistant" : "User"}${phase ? ` · ${singleLine(phase)}` : ""} ---\n${item.markdown}`;
   }
   if (item.stage === "request") {

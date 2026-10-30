@@ -86,14 +86,14 @@ describe("session interaction policy", () => {
         false,
         new TmuxInteractionService(),
       ).describe("session"),
-    ).toEqual({ supported: false, attachCommand: null });
+    ).toEqual({ supported: false, tmux: null, attachCommand: null });
     expect(
       await new TestSessionInteractionService(
         repository(session(true)),
         true,
         new TmuxInteractionService(),
       ).describe("session"),
-    ).toEqual({ supported: false, attachCommand: null });
+    ).toEqual({ supported: false, tmux: null, attachCommand: null });
   });
 
   it("reports unbound and rejects actions before transport", async () => {
@@ -104,6 +104,7 @@ describe("session interaction policy", () => {
     );
     expect(await service.describe("session")).toEqual({
       supported: true,
+      tmux: null,
       activity: null,
       supersededBySessionId: null,
       attachCommand: null,
@@ -124,6 +125,7 @@ describe("session interaction policy", () => {
     const binding = {
       socketPath: "/tmp/ahub.sock",
       paneId: "%7",
+      sessionName: "work",
     };
     const tmux = {
       connect: vi.fn().mockResolvedValue(binding),
@@ -139,9 +141,10 @@ describe("session interaction policy", () => {
 
     await expect(service.describe("session")).resolves.toEqual({
       supported: true,
+      tmux: binding,
       activity: "unknown",
       supersededBySessionId: null,
-      attachCommand: null,
+      attachCommand: "tmux -S '/tmp/ahub.sock' attach-session -t 'work'",
       state: "connected",
     });
     await service.sendMessage("session", "hello");
@@ -233,7 +236,7 @@ it("refreshes connection status after each completed query", async () => {
       .mockResolvedValue({ paneId: "%7" }),
   } as unknown as TmuxInteractionService;
   const service = new TestSessionInteractionService(repository(boundSession()), true, tmux);
-  expect(await service.describe("session")).toMatchObject({ state: "disconnected" });
+  expect(await service.describe("session")).toMatchObject({ state: "disconnected", tmux: null });
   expect(await service.describe("session")).toMatchObject({ state: "connected" });
   expect(tmux.connect).toHaveBeenCalledTimes(2);
 });
@@ -407,7 +410,7 @@ it.each([false, true])(
     } as unknown as TmuxInteractionService;
     expect(
       await new TestSessionInteractionService(reader, true, tmux).describe("session"),
-    ).toMatchObject({ state: "unknown", attachCommand: null });
+    ).toMatchObject({ state: "unknown", tmux: null, attachCommand: null });
     expect(tmux.connect).toHaveBeenCalledOnce();
   },
 );
@@ -436,7 +439,7 @@ it("does not recurse when a replacement changes during lookup", async () => {
   const tmux = { connect: vi.fn().mockResolvedValue(target) } as unknown as TmuxInteractionService;
   expect(
     await new TestSessionInteractionService(reader, true, tmux).describe("session"),
-  ).toMatchObject({ state: "unknown" });
+  ).toMatchObject({ state: "unknown", tmux: null });
   expect(reader.getInteractionSession).toHaveBeenCalledTimes(2);
   expect(tmux.connect).toHaveBeenCalledOnce();
 });
@@ -480,6 +483,7 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
           : scenario === "error" || scenario === "binding changed"
             ? "unknown"
             : "superseded",
+      tmux: null,
       supersededBySessionId: scenario === "present" ? "replacement" : null,
     });
     expect(tmux.connect).toHaveBeenCalledOnce();

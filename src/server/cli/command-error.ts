@@ -1,8 +1,14 @@
+import type { TmuxTarget } from "../../shared/api-contract.js";
+
 export class CommandError extends Error {
   constructor(
     readonly code: string,
     message: string,
     readonly exitCode = 1,
+    public diagnostics?: {
+      sessionId: string | null;
+      tmux: TmuxTarget | null;
+    },
   ) {
     super(message);
   }
@@ -34,7 +40,8 @@ export function httpFailure(
   if (unknown)
     return new CommandError(
       "operation_result_unknown",
-      "Operation result unknown; use list, inspect, or terminal to check the current state.",
+      error?.message ??
+        "Operation result unknown; use list, inspect, or terminal to check the current state.",
       2,
     );
   return new CommandError("request_failed", error?.message ?? `HTTP ${status}`);
