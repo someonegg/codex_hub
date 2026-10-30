@@ -14,14 +14,14 @@ import {
 import { normalizeMessage } from "../interaction/message.js";
 import { commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
+import { SessionClient } from "./session-client.js";
 import {
+  type CliResult,
   formatResult,
   mapInspect,
   mapList,
   mapTerminal,
-  type CliResult,
 } from "./session-output.js";
-import { SessionClient } from "./session-client.js";
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]

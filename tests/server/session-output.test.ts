@@ -1,11 +1,12 @@
 import { expect, it } from "vitest";
-import type { InspectResponse, SessionListResponse } from "../../src/shared/api-contract.js";
+
 import {
   formatResult,
   mapInspect,
   mapList,
   mapTerminal,
 } from "../../src/server/cli/session-output.js";
+import type { InspectResponse, SessionListResponse } from "../../src/shared/api-contract.js";
 
 const base = {
   session: {
