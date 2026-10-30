@@ -1,19 +1,23 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { PassThrough } from "node:stream";
+import type * as NodeFs from "node:fs";
 import { createReadStream } from "node:fs";
+import type * as NodeFsPromises from "node:fs/promises";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
+import { PassThrough } from "node:stream";
+
 import { afterEach, expect, it, vi } from "vitest";
-import { HostingStore } from "../../src/server/hosting/store.js";
+
 import { hostingRoutes } from "../../src/server/hosting/routes.js";
+import { HostingStore } from "../../src/server/hosting/store.js";
 import { reportRequestError } from "../../src/server/http/request-errors.js";
 
 vi.mock("node:fs", async (original) => {
-  const fs = await original<typeof import("node:fs")>();
+  const fs = await original<typeof NodeFs>();
   return { ...fs, createReadStream: vi.fn(fs.createReadStream) };
 });
 vi.mock("node:fs/promises", async (original) => {
-  const fs = await original<typeof import("node:fs/promises")>();
+  const fs = await original<typeof NodeFsPromises>();
   return { ...fs, readFile: vi.fn(fs.readFile) };
 });
 const cleanup: (() => Promise<unknown>)[] = [];

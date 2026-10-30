@@ -22,8 +22,8 @@ import { JsonlCatalogSource } from "../../src/server/adapters/codex/jsonl-catalo
 import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
-import { createTempDirectory } from "../helpers/temp-directories.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
+import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("catalog discovery", () => {
   it("scans configured JSONL roots and filters rollout names", async () => {

@@ -1,6 +1,8 @@
 import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+
 import { expect, it } from "vitest";
+
 import { JsonlCatalogSource } from "../../src/server/adapters/codex/jsonl-catalog-source.js";
 import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { opaqueIdForPath } from "../../src/server/security/opaque-id.js";

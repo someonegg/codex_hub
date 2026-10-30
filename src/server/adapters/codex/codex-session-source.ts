@@ -24,12 +24,12 @@ import { codexBindingAttemptsFrom, codexInteraction } from "./interaction-parser
 import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
 import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
-import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import {
   CheckpointedRolloutDecoder,
   type RolloutCheckpoint,
   type RolloutDecoder,
 } from "./rollout-decoder.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import { SessionIndexReader } from "./session-index-reader.js";
 import {
   DefaultSessionNormalizer,

@@ -4,13 +4,13 @@ import {
   IdentityResolver,
   type SessionMetadata,
 } from "../../src/server/adapters/codex/identity-resolver.js";
-import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import {
   CheckpointedRolloutDecoder,
   type DecodedRecord,
   type DecodedRollout,
 } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
+import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 
 const fixtureHome = resolve("tests/fixtures/codex-home");
 

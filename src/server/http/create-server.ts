@@ -9,6 +9,9 @@ import { createServer as createHttpsServer } from "node:https";
 import type { Server as NetServer } from "node:net";
 import { extname, resolve, sep } from "node:path";
 
+import type { ServerConfig } from "../config.js";
+import { DiffStore } from "../hosting/diff-store.js";
+import { hostingRoutes } from "../hosting/routes.js";
 import type { ApiRouterOptions } from "./api-router.js";
 import {
   decodePath,
@@ -17,9 +20,6 @@ import {
   reportRequestError,
   requestUrl,
 } from "./request-errors.js";
-import type { ServerConfig } from "../config.js";
-import { DiffStore } from "../hosting/diff-store.js";
-import { hostingRoutes } from "../hosting/routes.js";
 import { type ApiRouter, emptyApiRouter, sendJson } from "./router.js";
 import { applySecurityHeaders } from "./security.js";
 import type { ServerUpgradeHandler } from "./terminal-preview-websocket.js";

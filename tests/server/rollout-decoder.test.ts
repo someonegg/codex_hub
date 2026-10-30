@@ -4,8 +4,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MAX_JSONL_LINE_BYTES } from "../../src/server/adapters/codex/limits.js";
-import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
+import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("CheckpointedRolloutDecoder", () => {

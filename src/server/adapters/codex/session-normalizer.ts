@@ -14,10 +14,10 @@ import { codexInteraction } from "./interaction-parser.js";
 import { internalDetail, internalItem, internalItemFromPayload } from "./internal-event-parser.js";
 import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import { eventMessage } from "./message-normalizer.js";
-import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import { type ParsedResponseItem, parseResponseItem } from "./response-item-parser.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import {
   type NormalizedTool,
   normalizeToolCall,

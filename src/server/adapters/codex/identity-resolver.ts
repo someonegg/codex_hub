@@ -2,9 +2,9 @@ import { basename } from "node:path";
 
 import type { DomainAgentIdentity as AgentIdentity } from "../../domain/session-domain.js";
 import { nonEmptyAgentIdentity, taskNameFromAgentPath } from "./agent-identity.js";
-import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
+import type { RolloutDescriptor } from "./rollout-descriptor.js";
 
 export interface SessionMetadata {
   threadId: string | null;
