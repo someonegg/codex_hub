@@ -150,8 +150,10 @@ pass the same `--home-dir /path` to the commands and server. Add `--json`
 for structured output.
 
 For agent-assisted publishing, install the
-[`ahub-publish` skill](https://github.com/someonegg/devkit/tree/main/skills/ahub-publish)
+[`ahub-publish` skill](../skills/ahub-publish)
 and request it by name to publish static pages or review diffs to an existing Hub.
+
+The npm package includes the skill. Run `ahub-cli skill path ahub-publish` to locate it. With `npx`, the path is in a temporary cache; copy the directory for lasting use.
 
 ### Publish web pages
 

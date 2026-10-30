@@ -71,6 +71,7 @@
     "ahub-cli": "dist/server/server/cli/main.js"
   },
   "files": [
+    "skills/ahub-publish",
     "dist/client",
     "dist/server",
     "!dist/**/*.map"
