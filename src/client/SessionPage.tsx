@@ -10,7 +10,6 @@ import { InternalLink } from "./components/InternalLink";
 import { SessionReader } from "./components/SessionReader";
 import { StatusBadge } from "./components/StatusBadge";
 import { t } from "./i18n";
-import { sessionDisplayTitle } from "./session-title";
 import { browserStorage } from "./state/browser-storage";
 import { useHubOperation } from "./state/use-hub-operation";
 import { useSessionReader } from "./state/use-session-reader";
@@ -56,7 +55,7 @@ export function SessionPage({
   const showManagementStatus = operation.operation
     ? operation.operation.type === "archive" || operation.operation.type === "delete"
     : managementOperation;
-  const sessionTitle = reader.context === null ? null : sessionDisplayTitle(reader.context.session);
+  const sessionTitle = reader.context === null ? null : reader.context.session.title;
 
   const parentId = reader.context?.session.parentId ?? null;
   const parent = sessions.find((session) => session.id === parentId);

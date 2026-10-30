@@ -213,7 +213,7 @@ export class CodexSessionSource implements SessionSource {
     return { ...this.#lastRefreshTelemetry };
   }
 
-  nicknameFor(session: DomainSession): string | null {
+  displayTitleFor(session: DomainSession): string | null {
     if (session.origin.home !== this.descriptor.home || session.sourceId === null) return null;
     return this.sessionIndex.threadName(session.sourceId);
   }

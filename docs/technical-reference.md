@@ -91,8 +91,12 @@ snapshot. There is no pagination or server-side filtering.
 | `projects` | `id`, `directory`                                                                |
 | `sessions` | `id`, `home`, `title`, `projectId`, `status`, `parentId`, `isChild`, `updatedAt` |
 
-Titles are resolved display names. Missing directories yield `projectId: null`.
-`isChild` records a declared parent even when `parentId` cannot resolve.
+Public session titles use the valid `thread_name` from the owning Home's session
+index, falling back to the original session title. Lists, details, inspect, and
+updates expose this resolved `title`.
+
+Missing directories yield `projectId: null`. `isChild` records a declared parent
+even when `parentId` cannot resolve.
 
 The only query parameter is `after`, a 43-character base64url revision. Invalid or
 extra parameters return `400`.
@@ -106,8 +110,8 @@ extra parameters return `400`.
 
 Waiters share a 1.5-second source probe that stops when idle. Disconnect and
 shutdown release waiters. Revisions cover home metadata, titles, projects,
-status, and relationships; timestamps, content, statistics, and diagnostics do
-not wake catalog requests.
+effective runtime status, and relationships. Timestamps, content, statistics, and
+diagnostics do not wake catalog requests.
 
 The browser sorts by best-effort `updatedAt`, with projects ordered by their latest
 visible main session. It retains newer timestamps from snapshots and opened
@@ -143,8 +147,9 @@ and 10 per session; excess requests receive `429` with `Retry-After: 2`.
 Disconnect and shutdown release waiters.
 
 Reader metadata exposes `resume: { allowed, reason }`, with null `reason` when
-allowed. Status, resume, interaction, and `updatedAt` affect reader revisions,
-independently of catalog revisions. Each response shares one pane observation for
+allowed. The full public session, including resolved title and `updatedAt`, and
+effective interaction state affect reader revisions independently of catalog
+revisions. Each response shares one pane observation for
 runtime and interaction; effects validate ownership again at execution time.
 Only the opened, unarchived session subscribes. History paging coexists with
 updates while preserving reading position.
@@ -197,6 +202,9 @@ produced from explicit field-whitelist mappings; extra server properties are
 never passed through. Launch readiness still uses the original API `live` and
 interaction state, before public output mapping.
 
+Argument parsing and local validation return `invalid_arguments` before any request;
+connection failures remain `query_failed`.
+
 - `list`: `{ sessions }`, excluding every `isChild` session, including orphans.
   Each entry contains only `id`, `title`, `status`, `home`, `projectDirectory`,
   and `updatedAt`. `home` is the configured Home nickname. `projectDirectory`
@@ -204,8 +212,8 @@ interaction state, before public output mapping.
   `--project` filters by this directory. Association tables, keys and hierarchy
   are omitted.
 - `inspect`: `{ session, interaction, items, nextAfter, hasMore }`.
-  `session` contains only `id`, `title`, `nickname`, `status`, `home`,
-  `sourceType`, `agentName`, `workingDirectory`, `projectDirectory`, `createdAt`,
+  `session` contains only `id`, `title`, `status`, `home`,
+  `agentName`, `workingDirectory`, `projectDirectory`, `createdAt`,
   `updatedAt`, and `resume: { allowed, reason }`. Nullable metadata remains null.
   `home` comes directly from the session origin nickname, without a catalog
   request. Native IDs, hierarchy, agent identity details, versions and counts

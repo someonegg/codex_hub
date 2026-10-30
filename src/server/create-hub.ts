@@ -28,7 +28,7 @@ export async function createCodexSessionReadService(
 ): Promise<SessionReadService> {
   const source = await createCodexSessionSource(codexHome, paneBindings);
   return createSessionReadService([source], {
-    resolveNickname: (session) => source.nicknameFor(session),
+    resolveDisplayTitle: (session) => source.displayTitleFor(session),
     homes: [{ nickname: "default" }],
   });
 }
@@ -44,10 +44,10 @@ export async function createCodexHub(
     homes.map((home) => createCodexSessionSource(home.path, paneBindings, home.nickname)),
   );
   const sessions = createSessionReadService(sources, {
-    resolveNickname: (session) =>
+    resolveDisplayTitle: (session) =>
       sources
         .find((source) => source.descriptor.home === session.origin.home)
-        ?.nicknameFor(session) ?? null,
+        ?.displayTitleFor(session) ?? null,
     homes: sources.map((source) => ({ nickname: source.descriptor.home })),
   });
   const managers = new SessionManagerRegistry(sources[0]!.descriptor.home);

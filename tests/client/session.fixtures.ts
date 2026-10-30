@@ -20,7 +20,6 @@ export const baseSession: SessionDetail = {
   itemCount: 3,
   id: SESSION_ID,
   title: "Reader work",
-  nickname: null,
   workingDirectory: "/project/reader",
   projectDirectory: "/project/reader",
   origin: {

@@ -103,24 +103,27 @@ describe("SessionReadService", () => {
     const renamed = (await repository.list()).sessions.find(({ id }) => id === basic.id);
     expect(renamed).toMatchObject({ title: "Current nickname" });
 
+    const inspected = await repository.inspect(basic.id, { limit: 1 });
+    expect(inspected?.session.title).toBe("Current nickname");
+    expect(inspected?.session).not.toHaveProperty("nickname");
     const detail = await repository.getSession(basic.id);
     expect(detail?.session).toMatchObject({
-      title: "Synthetic trace",
-      nickname: "Current nickname",
+      title: "Current nickname",
     });
+    expect(detail?.session).not.toHaveProperty("nickname");
     const continuedItems = await repository.getItems(basic.id, {
       cursor: firstItems!.cursor,
       limit: 1,
     });
     expect(continuedItems?.session).toMatchObject({
-      title: "Synthetic trace",
-      nickname: "Current nickname",
+      title: "Current nickname",
     });
+    expect(continuedItems?.session).not.toHaveProperty("nickname");
     const updates = await repository.getSessionUpdates(basic.id, firstItems!.cursor);
     expect(updates?.session).toMatchObject({
-      title: "Synthetic trace",
-      nickname: "Current nickname",
+      title: "Current nickname",
     });
+    expect(updates?.session).not.toHaveProperty("nickname");
   });
 
   it("publishes linked summaries and pages timeline details", async () => {

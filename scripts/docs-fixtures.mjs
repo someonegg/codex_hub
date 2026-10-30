@@ -10,7 +10,6 @@ export const docsSession = {
     agentVersion: null,
     formatVersion: null,
   },
-  nickname: null,
   workingDirectory: "/projects/atlas-dashboard",
   projectDirectory: "/projects/atlas-dashboard",
   createdAt: docsTimestamp,

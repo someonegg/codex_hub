@@ -37,12 +37,6 @@ describe("SessionUpdatesService", () => {
     const first = revision(SESSION, { supported: false, attachCommand: null });
     expect(revision({ ...SESSION }, { supported: false, attachCommand: null })).toBe(first);
     expect(
-      revision(
-        { ...SESSION, nickname: "Presentation only" },
-        { supported: false, attachCommand: null },
-      ),
-    ).toBe(first);
-    expect(
       revision({ ...SESSION, title: "Changed" }, { supported: false, attachCommand: null }),
     ).not.toBe(first);
     expect(
@@ -289,8 +283,7 @@ it.each(["connected", "unknown", "disconnected", "superseded"] as const)(
     expect(coordinated.session.resume.allowed).toBe(!["connected", "unknown"].includes(state));
     const createRevision = vi.fn(() => REVISION);
     const response = withUpdateRevision(coordinated, createRevision);
-    const { nickname: _nickname, ...expected } = coordinated.session;
-    expect(createRevision).toHaveBeenCalledWith(expected, value.interaction);
+    expect(createRevision).toHaveBeenCalledWith(coordinated.session, value.interaction);
     expect(response.session).toBe(coordinated.session);
     expect(value).toEqual(before);
     // Revision attachment alone must not coordinate state.

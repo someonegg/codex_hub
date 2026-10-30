@@ -12,7 +12,6 @@ const base = {
   session: {
     id: "child",
     title: "修复\n登录\t问题",
-    nickname: "worker",
     status: "live",
     origin: {
       sourceType: "codex",
@@ -145,10 +144,8 @@ it("whitelists nested records and renders Markdown, questions, matched answers a
   expect(Object.keys(mapped.session)).toEqual([
     "id",
     "title",
-    "nickname",
     "status",
     "home",
-    "sourceType",
     "agentName",
     "workingDirectory",
     "projectDirectory",

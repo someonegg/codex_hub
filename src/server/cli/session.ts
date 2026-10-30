@@ -12,7 +12,7 @@ import {
   type TerminalResponse,
 } from "../../shared/api-contract.js";
 import { normalizeMessage } from "../interaction/message.js";
-import { commandFailure } from "./command-error.js";
+import { CommandError, commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
 import { SessionClient } from "./session-client.js";
 import {
@@ -49,24 +49,26 @@ export async function runSessionCommand(args: string[]): Promise<void> {
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
-    const { values, positionals } = parseArgs({
-      args,
-      allowPositionals: true,
-      options: {
-        url: { type: "string" },
-        json: { type: "boolean" },
-        timeout: { type: "string" },
-        project: { type: "string" },
-        home: { type: "string" },
-        worktree: { type: "boolean" },
-        yolo: { type: "boolean" },
-        message: { type: "string" },
-        stdin: { type: "boolean" },
-        limit: { type: "string" },
-        after: { type: "string" },
-        help: { type: "boolean" },
-      },
-    });
+    const { values, positionals } = validateArguments(() =>
+      parseArgs({
+        args,
+        allowPositionals: true,
+        options: {
+          url: { type: "string" },
+          json: { type: "boolean" },
+          timeout: { type: "string" },
+          project: { type: "string" },
+          home: { type: "string" },
+          worktree: { type: "boolean" },
+          yolo: { type: "boolean" },
+          message: { type: "string" },
+          stdin: { type: "boolean" },
+          limit: { type: "string" },
+          after: { type: "string" },
+          help: { type: "boolean" },
+        },
+      }),
+    );
     json = values.json ?? false;
     if (values.help || positionals.length === 0) {
       console.log(sessionHelp);
@@ -87,22 +89,28 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       archive: [],
       delete: [],
     };
-    if (!Object.hasOwn(allowed, command)) throw new Error("Unknown session command");
+    if (!Object.hasOwn(allowed, command))
+      throw new CommandError("invalid_arguments", "Unknown session command");
     for (const key of Object.keys(values)) {
       if (!["url", "json", "timeout", "help", ...allowed[command]!].includes(key))
-        throw new Error(`--${key} is not supported by ${command}`);
+        throw new CommandError("invalid_arguments", `--${key} is not supported by ${command}`);
     }
     const acceptsSessionId = command !== "list" && command !== "create";
     const invalidPositionals = acceptsSessionId
       ? !id || (command !== "keys" && positionals.length !== 2)
       : positionals.length !== 1;
-    if (invalidPositionals) throw new Error("Invalid session command arguments");
-    if (command === "create" && !values.project) throw new Error("create requires --project");
+    if (invalidPositionals)
+      throw new CommandError("invalid_arguments", "Invalid session command arguments");
+    if (command === "create" && !values.project)
+      throw new CommandError("invalid_arguments", "create requires --project");
     if (
       command === "send" &&
       Number(values.message !== undefined) + Number(values.stdin === true) !== 1
     )
-      throw new Error("send requires exactly one of --message and --stdin");
+      throw new CommandError(
+        "invalid_arguments",
+        "send requires exactly one of --message and --stdin",
+      );
     if (
       command === "keys" &&
       (keys.length === 0 ||
@@ -111,15 +119,26 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           (key) => key === "interrupt" || !(INTERACTION_KEYS as readonly string[]).includes(key),
         ))
     )
-      throw new Error("Unsupported key sequence; use session interrupt for interruption");
+      throw new CommandError(
+        "invalid_arguments",
+        "Unsupported key sequence; use session interrupt for interruption",
+      );
     const seconds = values.timeout === undefined ? 360 : Number(values.timeout);
     if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
-      throw new Error("timeout must be a positive number of seconds within the supported range");
-    const base = new URL(values.url ?? process.env.CODEX_HUB_URL ?? "http://127.0.0.1:4173");
+      throw new CommandError(
+        "invalid_arguments",
+        "timeout must be a positive number of seconds within the supported range",
+      );
+    const base = validateArguments(
+      () => new URL(values.url ?? process.env.CODEX_HUB_URL ?? "http://127.0.0.1:4173"),
+    );
     if (base.protocol !== "http:")
-      throw new Error("Only HTTP URLs are supported; HTTPS is not supported yet");
+      throw new CommandError(
+        "invalid_arguments",
+        "Only HTTP URLs are supported; HTTPS is not supported yet",
+      );
     if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
-      throw new Error("URL must contain only an HTTP origin");
+      throw new CommandError("invalid_arguments", "URL must contain only an HTTP origin");
     timer = setTimeout(() => abort.abort(), seconds * 1000);
     client = new SessionClient(base, abort.signal);
     const api = client.request;
@@ -139,7 +158,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           !Number.isSafeInteger(Number(value)) ||
           (name === "limit" && (Number(value) < 1 || Number(value) > 300))
         )
-          throw new Error(`Invalid ${name}`);
+          throw new CommandError("invalid_arguments", `Invalid ${name}`);
         query.set(name, value);
       }
       result = mapInspect(await api<InspectResponse>(`${path}/inspect?${query}`));
@@ -147,9 +166,8 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       result = mapTerminal(await api<TerminalResponse>(`${path}/terminal`));
     else if (["send", "keys", "interrupt", "handoff"].includes(command)) {
       if (command === "send") {
-        const message = normalizeMessage(
-          values.stdin ? await readStdin(abort.signal) : values.message!,
-        );
+        const input = values.stdin ? await readStdin(abort.signal) : values.message!;
+        const message = validateArguments(() => normalizeMessage(input));
         await api(`${path}/messages`, "POST", { message, requireIdle: true });
       } else if (command === "handoff") await api(`${path}/handoff-pane-binding`, "POST", {});
       else
@@ -214,7 +232,8 @@ async function readStdin(signal: AbortSignal): Promise<string> {
     const stop = () => fail(new Error("Command interrupted or timed out"));
     const data = (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_INTERACTION_MESSAGE_BYTES * 2) fail(new Error("Message exceeds 64 KiB"));
+      if (size > MAX_INTERACTION_MESSAGE_BYTES * 2)
+        fail(new CommandError("invalid_arguments", "Message exceeds 64 KiB"));
       else chunks.push(chunk);
     };
     const end = () => {
@@ -228,4 +247,15 @@ async function readStdin(signal: AbortSignal): Promise<string> {
     process.stdin.on("data", data).once("end", end).once("error", fail);
     signal.addEventListener("abort", stop, { once: true });
   });
+}
+
+function validateArguments<T>(validate: () => T): T {
+  try {
+    return validate();
+  } catch (error) {
+    throw new CommandError(
+      "invalid_arguments",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }

@@ -5,7 +5,6 @@ import type { SessionDetail } from "../../shared/domain";
 
 import type { PlainMessageKey } from "../i18n";
 import { formatDate, t } from "../i18n";
-import { sessionDisplayTitle } from "../session-title";
 import type { TimelineVisibility, TimelineVisibilityKey } from "../state/timeline-visibility";
 import { StatusBadge } from "./StatusBadge";
 import { UploadHistoryLink } from "./UploadHistoryLink";
@@ -33,7 +32,7 @@ export function SessionHeader({
       <div>
         <div className="session-title-row">
           <h2 id="session-title" tabIndex={-1}>
-            {sessionDisplayTitle(session)}
+            {session.title}
           </h2>
           {management}
         </div>

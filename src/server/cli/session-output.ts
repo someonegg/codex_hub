@@ -18,10 +18,8 @@ export interface CliSessionList {
 export interface CliSession {
   id: string;
   title: string;
-  nickname: string | null;
   status: string;
   home: string;
-  sourceType: string;
   agentName: string;
   workingDirectory: string | null;
   projectDirectory: string | null;
@@ -84,6 +82,7 @@ export interface CliOperation {
 export type CliResult = CliSessionList | CliInspect | CliTerminal | CliOperation;
 
 export function mapList(list: SessionListResponse, project?: string): CliSessionList {
+  const projects = new Map(list.projects.map((project) => [project.id, project.directory]));
   return {
     sessions: list.sessions
       .filter((s) => !s.isChild)
@@ -92,7 +91,7 @@ export function mapList(list: SessionListResponse, project?: string): CliSession
         title: s.title,
         status: s.status,
         home: s.home,
-        projectDirectory: list.projects.find((p) => p.id === s.projectId)?.directory ?? null,
+        projectDirectory: projects.get(s.projectId ?? "") ?? null,
         updatedAt: s.updatedAt,
       }))
       .filter((s) => project === undefined || s.projectDirectory === project),
@@ -105,10 +104,8 @@ export function mapInspect(value: InspectResponse): CliInspect {
     session: {
       id: s.id,
       title: s.title,
-      nickname: s.nickname,
       status: s.status,
       home: s.origin.home,
-      sourceType: s.origin.sourceType,
       agentName: s.origin.agentName,
       workingDirectory: s.workingDirectory,
       projectDirectory: s.projectDirectory,
