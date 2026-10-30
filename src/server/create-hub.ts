@@ -29,11 +29,11 @@ export async function createCodexSessionReadService(
   const source = await createCodexSessionSource(codexHome, paneBindings);
   return createSessionReadService([source], {
     resolveNickname: (session) => source.nicknameFor(session),
-    homes: [{ sourceInstanceId: source.descriptor.sourceInstanceId, nickname: "default" }],
+    homes: [{ nickname: "default" }],
   });
 }
 
-/** Compose reading and management using the adapter's published source identity. */
+/** Compose reading and management using the adapter's published Home nickname. */
 export async function createCodexHub(
   homes: readonly CodexHomeConfig[],
   socket?: string,
@@ -41,24 +41,20 @@ export async function createCodexHub(
   uploads?: UploadCleanup,
 ) {
   const sources = await Promise.all(
-    homes.map((home) => createCodexSessionSource(home.path, paneBindings)),
+    homes.map((home) => createCodexSessionSource(home.path, paneBindings, home.nickname)),
   );
   const sessions = createSessionReadService(sources, {
     resolveNickname: (session) =>
       sources
-        .find((source) => source.descriptor.sourceInstanceId === session.origin.sourceInstanceId)
+        .find((source) => source.descriptor.home === session.origin.home)
         ?.nicknameFor(session) ?? null,
-    homes: sources.map((source, index) => ({
-      sourceInstanceId: source.descriptor.sourceInstanceId,
-      nickname: homes[index]!.nickname,
-    })),
+    homes: sources.map((source) => ({ nickname: source.descriptor.home })),
   });
-  const managers = new SessionManagerRegistry(sources[0]!.descriptor.sourceInstanceId);
+  const managers = new SessionManagerRegistry(sources[0]!.descriptor.home);
   sources.forEach((source, index) =>
     managers.register(
-      source.descriptor.sourceInstanceId,
+      source.descriptor.home,
       createCodexSessionManager(homes[index]!.path, socket),
-      homes[index]!.nickname,
     ),
   );
   const transport = new TmuxInteractionService();

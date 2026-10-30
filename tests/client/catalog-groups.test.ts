@@ -6,7 +6,7 @@ import { catalogGroups, projectForSession } from "../../src/client/state/catalog
 
 const session = (id: string, projectId: string | null, extra = {}) => ({
   id,
-  sourceInstanceId: "source-instance",
+  home: "default",
   projectId,
   title: id,
   status: "normal" as const,

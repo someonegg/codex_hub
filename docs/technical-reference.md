@@ -51,7 +51,7 @@ UUIDs. Parent relationships never cross homes.
 Adapters publish immutable snapshots, including nested timeline and detail values.
 Reference reuse is optional and means unchanged content; equivalent fresh values
 are valid. Registration requires nonempty, independently unique `instanceKey` and
-`sourceInstanceId`. Adapters use server domain types.
+`home`. Adapters use server domain types.
 
 HTTP path IDs are decoded once after segment splitting. They must be nonempty,
 at most 1,024 UTF-8 bytes, and contain no controls, slashes, backslashes, or
@@ -70,27 +70,26 @@ Successful snapshots have no completeness gate.
 
 ### Home identity and routing
 
-Home identity follows its configured absolute path. Renaming or reordering homes
-preserves IDs; moving a home changes identity. Projects merge by directory across
-homes. Home paths remain private.
+Home nicknames identify configured homes in public responses and operation routing.
+Internal session and timeline namespaces follow the configured absolute path.
+Renaming or reordering homes preserves session IDs; moving a home changes them.
+Projects merge by directory across homes. Home paths remain private.
 
-Creation accepts either `home` (a configured nickname) or `sourceInstanceId`,
-never both. Omission selects the first home in configuration order for all callers.
-An explicit unknown home or source returns `400`, without fallback. The source
-is part of request idempotency, so reusing a request ID for another home returns
-`409`. Launch and lifecycle operations use the selected or owning home and its
-`CODEX_HOME`, with the same local `codex` executable. See [Multiple homes](usage.md#multiple-homes).
+Creation accepts an optional Home nickname in `home`; omission selects the first
+configured home. An unknown nickname returns `400` without fallback. Reusing a
+request ID for another home returns `409`. Launch and lifecycle operations use
+the selected or owning home and its `CODEX_HOME`, with the same local `codex` executable. See [Multiple homes](usage.md#multiple-homes).
 
 ## Catalog
 
 `GET /api/v1/sessions` returns the complete `{ revision, homes, projects, sessions }`
 snapshot. There is no pagination or server-side filtering.
 
-| Collection | Fields                                                                                       |
-| ---------- | -------------------------------------------------------------------------------------------- |
-| `homes`    | `sourceInstanceId`, `nickname`; includes empty homes                                         |
-| `projects` | `id`, `directory`                                                                            |
-| `sessions` | `id`, `sourceInstanceId`, `title`, `projectId`, `status`, `parentId`, `isChild`, `updatedAt` |
+| Collection | Fields                                                                           |
+| ---------- | -------------------------------------------------------------------------------- |
+| `homes`    | `nickname`; includes empty homes                                                 |
+| `projects` | `id`, `directory`                                                                |
+| `sessions` | `id`, `home`, `title`, `projectId`, `status`, `parentId`, `isChild`, `updatedAt` |
 
 Titles are resolved display names. Missing directories yield `projectId: null`.
 `isChild` records a declared parent even when `parentId` cannot resolve.
@@ -200,17 +199,17 @@ interaction state, before public output mapping.
 
 - `list`: `{ sessions }`, excluding every `isChild` session, including orphans.
   Each entry contains only `id`, `title`, `status`, `home`, `projectDirectory`,
-  and `updatedAt`. `home` resolves the Home nickname and `projectDirectory`
-  resolves the associated project directory; missing associations become null.
+  and `updatedAt`. `home` is the configured Home nickname. `projectDirectory`
+  resolves the associated project directory; missing project associations become null.
   `--project` filters by this directory. Association tables, keys and hierarchy
   are omitted.
 - `inspect`: `{ session, interaction, items, nextAfter, hasMore }`.
   `session` contains only `id`, `title`, `nickname`, `status`, `home`,
   `sourceType`, `agentName`, `workingDirectory`, `projectDirectory`, `createdAt`,
   `updatedAt`, and `resume: { allowed, reason }`. Nullable metadata remains null.
-  `home` is null because the inspect API supplies no Home nickname; the client
-  does not request the catalog to resolve it. Native IDs, hierarchy, agent
-  identity details, versions and counts are omitted.
+  `home` comes directly from the session origin nickname, without a catalog
+  request. Native IDs, hierarchy, agent identity details, versions and counts
+  are omitted.
 - `interaction`: `{ supported: false }` or
   `{ supported: true, state, activity, supersededBySessionId }`. No attach command
   is exposed. Null activity is rendered as `unknown`, never idle.
@@ -416,13 +415,13 @@ reconnect; explicit retry cancels backoff. See the
 
 ## Asynchronous management
 
-| Endpoint                              | Body / result                                                                                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions`               | New: `{ home?, sourceInstanceId?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
-| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                        |
-| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                        |
-| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                        |
-| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                             |
+| Endpoint                              | Body / result                                                                                                              |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ home?, directory, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                     |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                     |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                     |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                          |
 
 ### Service responsibilities
 

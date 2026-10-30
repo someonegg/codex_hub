@@ -13,7 +13,7 @@ export type OperationStage = OperationContext & { deadline: number | null };
 export interface OperationEntry {
   readonly metadata: Omit<HubOperation, "status" | "error" | "phase">;
   result?: Readonly<HubOperation>;
-  sourceInstanceId: string;
+  home: string;
   resumeNativeId?: string;
   stage: OperationStage | null;
   checking?: Promise<void>;

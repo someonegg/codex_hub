@@ -30,19 +30,24 @@ it("isolates native identities, names and relationships while merging projects a
   const hub = await createCodexHub(homes);
   try {
     const list = await hub.sessions.list();
-    expect(list.homes).toHaveLength(3);
+    expect(list.homes).toEqual([
+      { nickname: "empty" },
+      { nickname: "personal" },
+      { nickname: "work" },
+    ]);
     expect(JSON.stringify(list)).not.toContain(root);
     const personal = list.sessions.find((session) => session.title === "personal title")!;
     const work = list.sessions.find((session) => session.title === "work title")!;
     expect(personal.id).not.toBe(work.id);
-    expect(personal.sourceInstanceId).not.toBe(work.sourceInstanceId);
+    expect(personal.home).toBe("personal");
+    expect(work.home).toBe("work");
     expect(personal.projectId).toBe(work.projectId);
     for (const parent of [personal, work]) {
       const detail = (await hub.sessions.getSession(parent.id))!.session;
       expect(detail.childIds).toHaveLength(1);
       const child = (await hub.sessions.getSession(detail.childIds[0]!))!.session;
       expect(child.parentId).toBe(parent.id);
-      expect(child.origin.sourceInstanceId).toBe(parent.sourceInstanceId);
+      expect(child.origin.home).toBe(parent.home);
     }
     const reordered = await createCodexHub(
       [...homes].reverse().map((home) => ({ ...home, nickname: `${home.nickname} renamed` })),
@@ -53,6 +58,12 @@ it("isolates native identities, names and relationships while merging projects a
         list.sessions.map((session) => session.id),
       );
       expect(next.revision).not.toBe(list.revision);
+      expect(next.sessions.find((session) => session.id === personal.id)?.home).toBe(
+        "personal renamed",
+      );
+      expect((await reordered.sessions.getSession(personal.id))!.session.origin.home).toBe(
+        "personal renamed",
+      );
     } finally {
       reordered.close();
     }
@@ -97,13 +108,11 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
   const hub = await createCodexHub(homes);
   try {
     const list = await hub.sessions.list();
+    expect(list.homes).toEqual(homes.map(({ nickname }) => ({ nickname })));
     const parents = homes.map(
       (home) =>
         list.sessions.find(
-          (session) =>
-            session.sourceInstanceId ===
-              list.homes.find((item) => item.nickname === home.nickname)!.sourceInstanceId &&
-            session.title === "Synthetic trace",
+          (session) => session.home === home.nickname && session.title === "Synthetic trace",
         )!,
     );
     const [personal, work] = parents;
@@ -132,7 +141,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
       after: "unseen" as UpdateRevision,
     });
     expect(updates!.hasMore).toBe(true);
-    expect(updates!.session.origin.sourceInstanceId).toBe(personal!.sourceInstanceId);
+    expect(updates!.session.origin.home).toBe(personal!.home);
     const other = await hub.updates.wait(work!.id, {
       cursor: workPage.cursor,
       after: "unseen" as UpdateRevision,

@@ -19,7 +19,7 @@ const session: DomainSession = {
   archived: false,
   origin: {
     sourceType: "test",
-    sourceInstanceId: "test",
+    home: "test",
     agentName: "Test",
     agentVersion: null,
     formatVersion: null,

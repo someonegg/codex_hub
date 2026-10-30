@@ -69,11 +69,11 @@ export function Settings({ homes }: { homes: readonly SessionHome[] }) {
               >
                 <option value="">{t("auto")}</option>
                 {preferences.defaultHome &&
-                !homes.some((home) => home.sourceInstanceId === preferences.defaultHome) ? (
+                !homes.some((home) => home.nickname === preferences.defaultHome) ? (
                   <option value={preferences.defaultHome}>{t("unavailable")}</option>
                 ) : null}
                 {homes.map((home) => (
-                  <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                  <option key={home.nickname} value={home.nickname}>
                     {home.nickname}
                   </option>
                 ))}

@@ -620,16 +620,12 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
 });
 
 it("initializes creation options only when opening the dialog", () => {
-  const homes = [
-    { sourceInstanceId: "personal", nickname: "default" },
-    { sourceInstanceId: "work", nickname: "work" },
-    { sourceInstanceId: "other", nickname: "other" },
-  ];
-  act(() => updatePreferences({ defaultHome: "personal" }));
+  const homes = [{ nickname: "default" }, { nickname: "work" }, { nickname: "other" }];
+  act(() => updatePreferences({ defaultHome: "default" }));
   const props = { homes, project: "/project", projects: [], onCreated: vi.fn() };
   const view = render(<CreateSession {...props} open={false} />);
   view.rerender(<CreateSession {...props} open />);
-  expect(screen.getByLabelText("Session home")).toHaveValue("personal");
+  expect(screen.getByLabelText("Session home")).toHaveValue("default");
   fireEvent.change(screen.getByLabelText("Session home"), { target: { value: "work" } });
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/manual" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Enable worktree" }));

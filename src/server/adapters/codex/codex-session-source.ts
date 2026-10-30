@@ -93,11 +93,12 @@ export class CodexSessionSource implements SessionSource {
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
     private readonly bindings: PaneBindingManager = paneBindings,
+    home = "default",
   ) {
     this.descriptor = {
       sourceType: "codex-jsonl",
       instanceKey,
-      sourceInstanceId: opaqueIdForParts("source", instanceKey),
+      home,
       displayName: "Codex",
     };
   }
@@ -213,11 +214,7 @@ export class CodexSessionSource implements SessionSource {
   }
 
   nicknameFor(session: DomainSession): string | null {
-    if (
-      session.origin.sourceInstanceId !== this.descriptor.sourceInstanceId ||
-      session.sourceId === null
-    )
-      return null;
+    if (session.origin.home !== this.descriptor.home || session.sourceId === null) return null;
     return this.sessionIndex.threadName(session.sourceId);
   }
 
@@ -311,7 +308,7 @@ export class CodexSessionSource implements SessionSource {
   #origin(agentVersion: string | null): DomainSessionOrigin {
     return {
       sourceType: this.descriptor.sourceType,
-      sourceInstanceId: this.descriptor.sourceInstanceId,
+      home: this.descriptor.home,
       agentName: this.descriptor.displayName,
       agentVersion,
       formatVersion: null,
@@ -322,6 +319,7 @@ export class CodexSessionSource implements SessionSource {
 export async function createCodexSessionSource(
   codexHome: string,
   bindings: PaneBindingManager = paneBindings,
+  home = "default",
 ): Promise<CodexSessionSource> {
   const configured = resolve(codexHome);
   return new CodexSessionSource(
@@ -332,6 +330,7 @@ export async function createCodexSessionSource(
     undefined,
     undefined,
     bindings,
+    home,
   );
 }
 
@@ -400,7 +399,7 @@ function mutableTelemetry(): MutableCodexRefreshTelemetry {
 function sameOrigin(left: DomainSessionOrigin, right: DomainSessionOrigin): boolean {
   return (
     left.sourceType === right.sourceType &&
-    left.sourceInstanceId === right.sourceInstanceId &&
+    left.home === right.home &&
     left.agentName === right.agentName &&
     left.agentVersion === right.agentVersion &&
     left.formatVersion === right.formatVersion

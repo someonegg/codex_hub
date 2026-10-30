@@ -222,7 +222,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
       descriptor: {
         sourceType: "test",
         instanceKey: "relationship-failure",
-        sourceInstanceId: "relationship-failure",
+        home: "relationship-failure",
         displayName: "Test",
       },
       async refresh() {
@@ -265,7 +265,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
 
 const TEST_ORIGIN = {
   sourceType: "test",
-  sourceInstanceId: "test",
+  home: "test",
   agentName: "Test",
   agentVersion: null,
   formatVersion: null,
@@ -281,7 +281,7 @@ function mutableSource(
     descriptor: {
       sourceType: "test",
       instanceKey: "test",
-      sourceInstanceId: "test",
+      home: "test",
       displayName: "Test",
     },
     async refresh() {

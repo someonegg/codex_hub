@@ -179,14 +179,14 @@ async function capture(
       return route.fulfill({
         json: {
           revision: "demo-catalog",
-          homes: [{ sourceInstanceId: "docs-demo", nickname: "default" }],
+          homes: [{ nickname: "default" }],
           projects: [
             { id: "atlas", directory: session.projectDirectory },
             { id: "harbor", directory: "/projects/harbor-api" },
             { id: "notes", directory: "/projects/field-notes" },
           ],
           sessions: [
-            { ...session, sourceInstanceId: "docs-demo", projectId: "atlas", isChild: false },
+            { ...session, home: "default", projectId: "atlas", isChild: false },
             ...[
               ["docs-demo-session-keyboard", "Add keyboard navigation", "atlas"],
               ["release", "Review the release checklist", "harbor"],
@@ -197,7 +197,7 @@ async function capture(
               id,
               title,
               projectId,
-              sourceInstanceId: "docs-demo",
+              home: "default",
               isChild: false,
               status: "normal",
             })),

@@ -28,7 +28,7 @@ function SessionHub() {
   const catalog = useSessionList();
   const [homeFilter, setHomeFilter] = useState(() => browserStorage.getItem("ahub.home") ?? "");
   const homes = catalog.list?.homes ?? [];
-  const selectedHome = homes.some((home) => home.sourceInstanceId === homeFilter) ? homeFilter : "";
+  const selectedHome = homes.some((home) => home.nickname === homeFilter) ? homeFilter : "";
   useEffect(() => {
     if (!catalog.list) return;
     if (homeFilter !== selectedHome) setHomeFilter("");
@@ -40,9 +40,7 @@ function SessionHub() {
         ? catalog.list
         : {
             ...catalog.list,
-            sessions: catalog.list.sessions.filter(
-              (session) => session.sourceInstanceId === selectedHome,
-            ),
+            sessions: catalog.list.sessions.filter((session) => session.home === selectedHome),
           },
     [catalog.list, selectedHome],
   );

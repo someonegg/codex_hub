@@ -49,37 +49,27 @@ export class SessionLaunchError extends Error {
 }
 
 export class SessionManagerRegistry {
-  readonly #homes = new Map<string, string>();
   readonly #managers = new Map<string, SessionManager>();
 
-  constructor(readonly defaultSourceInstanceId: string) {}
+  constructor(readonly defaultHome: string) {}
 
-  register(sourceInstanceId: string, manager: SessionManager, nickname?: string): this {
-    if (this.#managers.has(sourceInstanceId)) {
-      throw new Error(`Duplicate management source: ${sourceInstanceId}`);
-    }
-    this.#managers.set(sourceInstanceId, manager);
-    if (nickname !== undefined) this.#homes.set(nickname, sourceInstanceId);
+  register(home: string, manager: SessionManager): this {
+    if (!home.trim()) throw new Error("Empty home nickname");
+    if (this.#managers.has(home)) throw new Error(`Duplicate home nickname: ${home}`);
+    this.#managers.set(home, manager);
     return this;
   }
 
-  resolveCreateSource(sourceInstanceId?: string, home?: string): string {
-    if (sourceInstanceId !== undefined && home !== undefined)
-      throw new Error("home and sourceInstanceId are mutually exclusive");
-    if (home !== undefined) {
-      const source = this.#homes.get(home);
-      if (!source) throw new Error("Unknown home nickname");
-      return source;
-    }
-    const source = sourceInstanceId ?? this.defaultSourceInstanceId;
-    if (!this.#managers.has(source)) throw new Error("Unknown sourceInstanceId");
-    return source;
+  resolveCreateHome(home?: string): string {
+    const selected = home ?? this.defaultHome;
+    if (!this.#managers.has(selected)) throw new Error("Unknown home nickname");
+    return selected;
   }
 
-  get(sourceInstanceId: string): SessionManager {
-    const manager = this.#managers.get(sourceInstanceId);
+  get(home: string): SessionManager {
+    const manager = this.#managers.get(home);
     if (!manager) {
-      throw new Error(`Session source has no management capability: ${sourceInstanceId}`);
+      throw new Error(`Session source has no management capability: ${home}`);
     }
     return manager;
   }

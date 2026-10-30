@@ -368,7 +368,7 @@ describe("catalog discovery", () => {
     const after = await createCodexSessionSource(configuredHome);
 
     expect(after.descriptor.instanceKey).toBe(before.descriptor.instanceKey);
-    expect(after.descriptor.sourceInstanceId).toBe(before.descriptor.sourceInstanceId);
+    expect(after.descriptor.home).toBe(before.descriptor.home);
   });
 });
 

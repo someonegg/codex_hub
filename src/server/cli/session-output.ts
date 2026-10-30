@@ -10,7 +10,7 @@ export interface CliSessionList {
     id: string;
     title: string;
     status: string;
-    home: string | null;
+    home: string;
     projectDirectory: string | null;
     updatedAt: string | null;
   }[];
@@ -20,7 +20,7 @@ export interface CliSession {
   title: string;
   nickname: string | null;
   status: string;
-  home: string | null;
+  home: string;
   sourceType: string;
   agentName: string;
   workingDirectory: string | null;
@@ -91,7 +91,7 @@ export function mapList(list: SessionListResponse, project?: string): CliSession
         id: s.id,
         title: s.title,
         status: s.status,
-        home: list.homes.find((h) => h.sourceInstanceId === s.sourceInstanceId)?.nickname ?? null,
+        home: s.home,
         projectDirectory: list.projects.find((p) => p.id === s.projectId)?.directory ?? null,
         updatedAt: s.updatedAt,
       }))
@@ -107,7 +107,7 @@ export function mapInspect(value: InspectResponse): CliInspect {
       title: s.title,
       nickname: s.nickname,
       status: s.status,
-      home: null,
+      home: s.origin.home,
       sourceType: s.origin.sourceType,
       agentName: s.origin.agentName,
       workingDirectory: s.workingDirectory,

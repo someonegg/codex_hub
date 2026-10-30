@@ -85,14 +85,12 @@ export class SessionRuntime {
       if (observed.state === "alive" && observed.replacement === null) status = "live";
       if (!detail) return deny("Resume validation required");
       if (status === "live") return deny("Session is already live");
-      const manager = this.managers.get(session.origin.sourceInstanceId);
+      const manager = this.managers.get(session.origin.home);
       if (!session.sourceId?.trim() || !manager.isValidNativeId(session.sourceId))
         return deny("Session has no valid native identity");
       if (
         sessions.filter(
-          (item) =>
-            item.origin.sourceInstanceId === session.origin.sourceInstanceId &&
-            item.sourceId === session.sourceId,
+          (item) => item.origin.home === session.origin.home && item.sourceId === session.sourceId,
         ).length !== 1
       )
         return deny("Native session identity is ambiguous");

@@ -20,7 +20,7 @@ export interface DomainAgentIdentity {
 
 export interface DomainSessionOrigin {
   readonly sourceType: string;
-  readonly sourceInstanceId: string;
+  readonly home: string;
   readonly agentName: string;
   readonly agentVersion: string | null;
   readonly formatVersion: string | null;

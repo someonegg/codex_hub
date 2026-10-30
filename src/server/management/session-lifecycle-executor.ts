@@ -38,8 +38,8 @@ export class SessionLifecycleExecutor {
         }
         throw new Error("Session not found");
       }
-      entry.sourceInstanceId = session.origin.sourceInstanceId;
-      const manager = this.managers.get(entry.sourceInstanceId);
+      entry.home = session.origin.home;
+      const manager = this.managers.get(entry.home);
       if (type === "archive" && session.archived) {
         this.control.finish(entry, "succeeded", null);
         return;
@@ -130,15 +130,10 @@ export class SessionLifecycleExecutor {
       else await this.#archive(entry, nativeId);
       return;
     }
-    const task = this.#exit.start(
-      sessionId,
-      target,
-      this.managers.get(entry.sourceInstanceId),
-      () => {
-        this.control.timeout(entry);
-        if (!this.control.pending(entry)) throw new Error("Exit operation is no longer active");
-      },
-    );
+    const task = this.#exit.start(sessionId, target, this.managers.get(entry.home), () => {
+      this.control.timeout(entry);
+      if (!this.control.pending(entry)) throw new Error("Exit operation is no longer active");
+    });
     this.control.transition(
       entry,
       { kind: "exiting", task, nativeId },
@@ -155,7 +150,7 @@ export class SessionLifecycleExecutor {
       this.now() + 25_000,
     );
     try {
-      await this.managers.get(entry.sourceInstanceId).archive(nativeId);
+      await this.managers.get(entry.home).archive(nativeId);
       if (!this.control.pending(entry)) return;
       this.control.transition(
         entry,
@@ -170,8 +165,7 @@ export class SessionLifecycleExecutor {
 
   #matches(snapshot: ManagementSnapshot, entry: OperationEntry, nativeId: string) {
     return snapshot.sessions.filter(
-      (session) =>
-        session.origin.sourceInstanceId === entry.sourceInstanceId && session.sourceId === nativeId,
+      (session) => session.origin.home === entry.home && session.sourceId === nativeId,
     );
   }
 }

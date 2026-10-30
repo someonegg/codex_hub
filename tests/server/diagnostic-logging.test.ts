@@ -21,7 +21,7 @@ const warning: DomainDiagnostic = {
 const descriptor = {
   sourceType: "test",
   instanceKey: "key",
-  sourceInstanceId: "source",
+  home: "source",
   displayName: "Test",
 };
 const id = opaqueIdForParts(descriptor.instanceKey, "one");
@@ -51,8 +51,8 @@ it("logs during detail-only refreshes, deduplicates content and logs cleared dia
   expect(detail?.session).not.toHaveProperty("diagnostics");
   expect(detail?.session).not.toHaveProperty("warningCount");
   expect(log.mock.calls.map(([record]) => record)).toEqual([
-    { ...warning, sourceInstanceId: "source", sessionId: null, scope: "source" },
-    { ...warning, sourceInstanceId: "source", sessionId: id, scope: "session" },
+    { ...warning, home: "source", sessionId: null, scope: "source" },
+    { ...warning, home: "source", sessionId: id, scope: "session" },
   ]);
   await reader.getSession(id);
   expect(source.refresh).toHaveBeenCalledOnce();
@@ -120,7 +120,7 @@ it("logs each source independently, including aggregate diagnostics, and forgets
       },
     },
     {
-      descriptor: { ...descriptor, instanceKey: "other", sourceInstanceId: "other" },
+      descriptor: { ...descriptor, instanceKey: "other", home: "other" },
       snapshot: {
         signature: "2",
         sessions: [one, one],
@@ -146,7 +146,7 @@ it("logs each source independently, including aggregate diagnostics, and forgets
   logger.update(sources, aggregates);
   expect(log).toHaveBeenCalledTimes(52);
   expect(log.mock.calls.at(-1)?.[0]).toMatchObject({
-    sourceInstanceId: "other",
+    home: "other",
     scope: "aggregate",
     code: "duplicate_source_session_id",
   });
@@ -207,7 +207,7 @@ it("does not wake automatic updates when session or source diagnostics change", 
   }
 });
 
-it.each(["instanceKey", "sourceInstanceId"] as const)(
+it.each(["instanceKey", "home"] as const)(
   "rejects empty and duplicate %s at registration",
   (field) => {
     const source = {
@@ -224,7 +224,7 @@ it.each(["instanceKey", "sourceInstanceId"] as const)(
       descriptor: {
         ...descriptor,
         instanceKey: "other",
-        sourceInstanceId: "other",
+        home: "other",
         [field]: descriptor[field],
       },
     };

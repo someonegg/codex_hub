@@ -63,7 +63,7 @@ describe("catalog source aggregation", () => {
     ).current();
     expect(log).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceInstanceId: broken.descriptor.sourceInstanceId,
+        home: broken.descriptor.home,
         scope: "aggregate",
         code: "duplicate_source_session_id",
       }),
@@ -77,7 +77,7 @@ describe("catalog source aggregation", () => {
       descriptor: {
         sourceType: "test",
         instanceKey: "test-source",
-        sourceInstanceId: "test-source",
+        home: "test-source",
         displayName: "Test",
       },
       refresh: vi.fn(async () => {
@@ -148,7 +148,7 @@ function sourceEntry(
 ): SourceSessionEntry {
   const origin = {
     sourceType: "test",
-    sourceInstanceId: "replaced-by-source",
+    home: "replaced-by-source",
     agentName: "Test",
     agentVersion: null,
     formatVersion: null,
@@ -178,7 +178,7 @@ function testSource(instanceKey: string, sessions: readonly SourceSessionEntry[]
     descriptor: {
       sourceType: "test",
       instanceKey,
-      sourceInstanceId: instanceKey,
+      home: instanceKey,
       displayName: "Test",
     },
     async refresh() {

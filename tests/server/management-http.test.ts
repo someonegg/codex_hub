@@ -122,7 +122,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   };
   for (const extra of [
     { directory: home },
-    { sourceInstanceId: "test" },
+    { home: "test" },
     { worktree: false },
     { yolo: "true" },
     { resumeSessionId: "" },

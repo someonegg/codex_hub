@@ -76,7 +76,7 @@ export function HubSidebar({
             >
               <option value="">{t("allHomes")}</option>
               {catalog.list!.homes.map((home) => (
-                <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                <option key={home.nickname} value={home.nickname}>
                   {home.nickname}
                 </option>
               ))}
@@ -161,13 +161,7 @@ export function HubSidebar({
                           <span className="session-nav-copy">
                             <span>{session.title}</span>
                             {(catalog.list?.homes?.length ?? 0) > 1 ? (
-                              <small className="session-nav-home">
-                                {
-                                  catalog.list!.homes.find(
-                                    (home) => home.sourceInstanceId === session.sourceInstanceId,
-                                  )?.nickname
-                                }
-                              </small>
+                              <small className="session-nav-home">{session.home}</small>
                             ) : null}
                             {updatedAtLabel ? (
                               <time dateTime={session.updatedAt!}>{updatedAtLabel}</time>

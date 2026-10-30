@@ -7,7 +7,7 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
     id: "session",
     origin: {
       sourceType: "test",
-      sourceInstanceId: "test",
+      home: "test",
       agentName: "Test",
       agentVersion: null,
       formatVersion: null,

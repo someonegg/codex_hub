@@ -27,7 +27,7 @@ function setup() {
     archived: false,
     origin: {
       sourceType: "codex",
-      sourceInstanceId: "home",
+      home: "home",
       agentName: "Codex",
       agentVersion: null,
       formatVersion: null,
@@ -124,7 +124,7 @@ describe("session runtime evidence", () => {
           {
             ...f.session,
             id: "other-home",
-            origin: { ...f.session.origin, sourceInstanceId: "other" },
+            origin: { ...f.session.origin, home: "other" },
           },
         ])
       ).resume.allowed,

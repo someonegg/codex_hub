@@ -244,7 +244,7 @@ function sameMapEntries<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>)
 
 const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
   sourceType: "test",
-  sourceInstanceId: "test",
+  home: "test",
   agentName: "Test",
   agentVersion: null,
   formatVersion: null,

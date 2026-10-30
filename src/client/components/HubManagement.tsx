@@ -135,10 +135,10 @@ export function CreateSession({
   const [directory, setDirectory] = useState(project);
   const initialHome =
     selectedHome ||
-    homes.find((home) => home.sourceInstanceId === preferences.defaultHome)?.sourceInstanceId ||
-    homes.find((home) => home.nickname === "default")?.sourceInstanceId ||
-    (homes.length === 1 ? homes[0]!.sourceInstanceId : "");
-  const [sourceInstanceId, setSourceInstanceId] = useState(initialHome);
+    homes.find((home) => home.nickname === preferences.defaultHome)?.nickname ||
+    homes.find((home) => home.nickname === "default")?.nickname ||
+    (homes.length === 1 ? homes[0]!.nickname : "");
+  const [home, setHome] = useState(initialHome);
   useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
@@ -152,7 +152,7 @@ export function CreateSession({
   useEffect(() => {
     if (open) {
       setDirectory(launchDefaults.current.directory);
-      setSourceInstanceId(launchDefaults.current.home);
+      setHome(launchDefaults.current.home);
       setWorktree(launchDefaults.current.worktree);
       setYolo(launchDefaults.current.yolo);
     }
@@ -181,12 +181,12 @@ export function CreateSession({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const fingerprint = JSON.stringify([sourceInstanceId, directory, worktree, yolo]);
+          const fingerprint = JSON.stringify([home, directory, worktree, yolo]);
           if (request.current?.fingerprint !== fingerprint)
             request.current = { fingerprint, id: newRequestId() };
           void controller.start(() =>
             api.createSession({
-              ...(sourceInstanceId ? { sourceInstanceId } : {}),
+              ...(home ? { home } : {}),
               directory,
               worktree,
               yolo,
@@ -201,15 +201,15 @@ export function CreateSession({
             <select
               required
               aria-label={t("sessionHome")}
-              value={sourceInstanceId}
+              value={home}
               disabled={controller.busy}
-              onChange={(event) => setSourceInstanceId(event.target.value)}
+              onChange={(event) => setHome(event.target.value)}
             >
               <option value="" disabled>
                 {t("selectAHome")}
               </option>
               {homes.map((home) => (
-                <option key={home.sourceInstanceId} value={home.sourceInstanceId}>
+                <option key={home.nickname} value={home.nickname}>
                   {home.nickname}
                 </option>
               ))}
@@ -246,7 +246,7 @@ export function CreateSession({
           disabled={
             controller.busy ||
             !directory.startsWith("/") ||
-            (homes.length > 1 && !homes.some((home) => home.sourceInstanceId === sourceInstanceId))
+            (homes.length > 1 && !homes.some((item) => item.nickname === home))
           }
         >
           {controller.busy ? t("creating") : t("createSession")}
