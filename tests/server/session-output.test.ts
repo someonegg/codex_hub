@@ -283,3 +283,38 @@ it.each([
     expect(mapped.nextAfter).toBe(44);
   },
 );
+
+it("aligns complete session list columns, including empty projects and long opaque IDs", () => {
+  const row = {
+    id: "id",
+    title: "中文 title",
+    status: "live",
+    home: "工作",
+    projectDirectory: "/project",
+    updatedAt: null,
+  };
+  expect(
+    formatResult("list", {
+      sessions: [
+        row,
+        {
+          ...row,
+          id: "opaque-session-with-a-long-native-id",
+          status: "archived",
+          home: "e\u0301",
+          projectDirectory: null,
+          title: "👩🏽‍💻 fix",
+        },
+      ],
+    }),
+  ).toBe(
+    [
+      "ID                                    STATUS    HOME  PROJECT   TITLE",
+      "id                                    live      工作  /project  中文 title",
+      "opaque-session-with-a-long-native-id  archived  e\u0301               👩🏽‍💻 fix",
+    ].join("\n"),
+  );
+  expect(formatResult("list", { sessions: [] })).toBe(
+    "ID  STATUS  HOME  PROJECT  TITLE\nNo sessions.",
+  );
+});

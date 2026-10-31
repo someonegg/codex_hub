@@ -5,7 +5,7 @@ import { resolveHomeDirectory } from "../config.js";
 import { DiffStore } from "../hosting/diff-store.js";
 import { HostingStore } from "../hosting/store.js";
 import { CommandError } from "./command-error.js";
-import { output, singleLine } from "./output.js";
+import { formatTable, output } from "./output.js";
 
 function resourceHelp(resource: string): string {
   const publishUsage =
@@ -64,15 +64,16 @@ function formatResourceList(
   resource: string,
   entries: Array<{ id: string; project?: string; title: string; url: string }>,
 ): string {
-  const lines = [resource === "page" ? "ID\tPROJECT\tTITLE\tURL" : "ID\tTITLE\tURL"];
-  for (const entry of entries) {
-    const fields = [entry.id];
-    if (resource === "page") fields.push(entry.project ?? "");
-    fields.push(entry.title, entry.url);
-    lines.push(fields.map(singleLine).join("\t"));
-  }
-  if (entries.length === 0) lines.push(`No ${resource === "page" ? "pages" : "diffs"}.`);
-  return lines.join("\n");
+  const table = formatTable(
+    resource === "page" ? ["ID", "PROJECT", "TITLE", "URL"] : ["ID", "TITLE", "URL"],
+    entries.map((entry) => [
+      entry.id,
+      ...(resource === "page" ? [entry.project ?? ""] : []),
+      entry.title,
+      entry.url,
+    ]),
+  );
+  return table + (entries.length ? "" : `\nNo ${resource === "page" ? "pages" : "diffs"}.`);
 }
 
 function parseResourceArgs(args: string[]) {

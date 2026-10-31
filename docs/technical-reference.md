@@ -147,6 +147,17 @@ newline; help stays text. Argument/validation/dispatch errors use `invalid_argum
 other resource failures use `command_failed`. Session connection errors use
 `query_failed`; local validation fails before requests.
 
+Human-readable session/page/diff lists align columns with spaces using Unicode
+terminal display widths (East Asian ambiguous characters count as narrow), with
+at least two spaces between columns. Default text symbols such as `©` and `™`
+use text widths; explicit emoji forms (`©️`, `™️`) and emoji sequences use two
+cells. Actual rendering depends on the terminal, font and Unicode version.
+Cell line breaks and tabs become spaces.
+Values remain complete: long IDs, paths, titles and URLs are not truncated, so
+wide tables can wrap in narrow terminals. Layout is identical when redirected;
+use `--json` for machine consumption. Message Markdown and terminal captures keep
+their original layout.
+
 ### Client behavior and results
 
 `ahub-cli session` is a stateless HTTP client: no rollout reads, direct tmux

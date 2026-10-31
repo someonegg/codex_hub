@@ -4,7 +4,7 @@ import type {
   TerminalResponse,
   TmuxTarget,
 } from "../../shared/api-contract.js";
-import { formatTmux, singleLine } from "./output.js";
+import { formatTable, formatTmux, singleLine } from "./output.js";
 
 export interface CliSessionList {
   sessions: {
@@ -197,15 +197,18 @@ export function formatResult(
   if ("content" in result)
     return `${singleLine(result.capturedAt)}${result.truncated ? " (truncated)" : ""}\n${result.content}`;
   if ("sessions" in result)
-    return [
-      "ID\tSTATUS\tHOME\tPROJECT\tTITLE",
-      ...(result.sessions.length ? [] : ["No sessions."]),
-      ...result.sessions.map((s) =>
-        [s.id, s.status, s.home ?? "", s.projectDirectory ?? "", s.title]
-          .map(singleLine)
-          .join("\t"),
-      ),
-    ].join("\n");
+    return (
+      formatTable(
+        ["ID", "STATUS", "HOME", "PROJECT", "TITLE"],
+        result.sessions.map((s) => [
+          s.id,
+          s.status,
+          s.home ?? "",
+          s.projectDirectory ?? "",
+          s.title,
+        ]),
+      ) + (result.sessions.length ? "" : "\nNo sessions.")
+    );
   if (!("session" in result)) {
     const lines = [`${command} ${singleLine(String(result.sessionId))}: ${result.status}`];
     if (result.tmux) lines.push(`Tmux: ${formatTmux(result.tmux)}`);

@@ -405,7 +405,7 @@ it("renders human output and sends human diagnostics to stderr", async () => {
   });
   const list = await cli(["list", "--url", base]);
   expect(list.code).toBe(0);
-  expect(list.stdout).toContain("id\tlive\twork\t/project\tTitle");
+  expect(list.stdout).toContain("id  live    work  /project  Title");
   expect((await cli(["terminal", "id", "--url", base])).stdout).toContain(
     "(truncated)\ncurrent screen",
   );

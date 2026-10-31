@@ -1,9 +1,32 @@
+import stringWidth from "string-width";
+
 import type { TmuxTarget } from "../../shared/api-contract.js";
 import { ResourceValidationError } from "../hosting/validation-error.js";
 import { CommandError } from "./command-error.js";
 
 export function singleLine(value: string): string {
   return value.replace(/[\r\n\t]/g, " ");
+}
+
+// Keep complete values (especially opaque IDs and URLs) and use deterministic
+// widths for both terminals and redirected output. Ambiguous characters are narrow.
+export function formatTable(headers: string[], rows: string[][]): string {
+  const lines = [headers, ...rows].map((row) => row.map(singleLine));
+  const widths = headers.map((_, column) =>
+    lines.reduce((width, row) => Math.max(width, stringWidth(row[column] ?? "")), 0),
+  );
+  return lines
+    .map((row) =>
+      row
+        .map((cell, column) =>
+          column === headers.length - 1
+            ? cell
+            : cell + " ".repeat(widths[column]! - stringWidth(cell) + 2),
+        )
+        .join("")
+        .trimEnd(),
+    )
+    .join("\n");
 }
 
 export function formatTmux(target: TmuxTarget | null): string {
