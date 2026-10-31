@@ -68,7 +68,7 @@ const request = {
 };
 
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
-  const list = mapList({
+  const response = {
     homes: [{ nickname: "default" }],
     projects: [{ directory: "/project" }],
     revision: "secret",
@@ -95,7 +95,8 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         updatedAt: null,
       },
     ],
-  } as unknown as SessionListResponse);
+  } as unknown as SessionListResponse;
+  const list = mapList(response, undefined, true);
   expect(list).toEqual({
     sessions: [
       {

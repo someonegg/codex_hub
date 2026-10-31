@@ -85,7 +85,7 @@ ahub-cli session inspect <id>
 ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 ```
 
-使用 `list` 傳回的 ID 傳送輸入或檢視工作階段。`list` 列出主工作階段，`inspect` 也接受子工作階段 ID。
+使用 `list` 傳回的 ID 傳送輸入或檢視工作階段。`list` 預設列出未封存的主工作階段（`--all` 包含已封存工作階段），`inspect` 也接受子工作階段 ID。
 將傳回的 `Next after` 值傳給 `--after <value>` 繼續讀取下一頁。
 使用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端。
 終端切換工作階段後，用 `handoff <id>` 移交繫結。

@@ -106,7 +106,7 @@ ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 ```
 
 Use an ID from `list` to send input or inspect a conversation. `list` shows
-main sessions; `inspect` also accepts child session IDs. To read the next page,
+unarchived main sessions (`--all` includes archived); `inspect` also accepts child session IDs. To read the next page,
 pass the returned `Next after` value as `--after <value>`. Use `send <id> --stdin`
 for piped input and `terminal <id>` to check the terminal. After a terminal switches
 sessions, use `handoff <id>` to transfer its binding.

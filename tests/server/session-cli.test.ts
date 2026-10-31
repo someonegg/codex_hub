@@ -818,3 +818,32 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
     expect(result.stdout).toContain("- Selected");
   }
 });
+
+it.each([false, true])("filters archived sessions with all=%s", async (include) => {
+  const base = await serve((_req, res) => {
+    reply(res, {
+      homes: [],
+      projects: [],
+      sessions: [
+        { id: "normal", status: "normal", projectDirectory: "/project" },
+        { id: "live", status: "live", projectDirectory: "/project" },
+        { id: "archived", status: "archived", projectDirectory: "/project" },
+        { id: "child", status: "archived", isChild: true, projectDirectory: "/project" },
+        { id: "other", status: "archived", projectDirectory: "/other" },
+      ].map((session) => ({ title: session.id, home: "default", updatedAt: null, ...session })),
+    });
+  });
+  const args = ["list", "--url", base, "--project", "/project", ...(include ? ["--all"] : [])];
+  const json = await cli([...args, "--json"]);
+  expect(json.code).toBe(0);
+  expect(JSON.parse(json.stdout).sessions.map((s: { id: string }) => s.id)).toEqual(
+    include ? ["normal", "live", "archived"] : ["normal", "live"],
+  );
+  const text = await cli(args);
+  expect(text.code).toBe(0);
+  expect(text.stdout.includes("archived")).toBe(include);
+});
+
+it("rejects all outside list", () => {
+  expect(() => parseSessionArguments(["inspect", "id", "--all"])).toThrow();
+});
