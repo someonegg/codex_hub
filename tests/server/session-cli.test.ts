@@ -608,3 +608,84 @@ it("prints a follow error as a separate NDJSON line without retry", async () => 
   expect(lines[1].error.message).toBe("Backend unavailable");
   expect(reads).toBe(2);
 });
+
+it.each([true, false])("follows input hints, answers and idle changes (json=%s)", async (json) => {
+  let reads = 0;
+  const paths: string[] = [];
+  const inputEvents = [
+    {
+      kind: "user_input",
+      stage: "request",
+      callId: "private-call",
+      questions: [
+        {
+          id: "private-question",
+          header: "Implementation",
+          question: "Which approach?",
+          options: [{ label: "Minimal", description: "Fix the current issue" }],
+        },
+      ],
+    },
+    {
+      kind: "user_input",
+      stage: "response",
+      callId: "private-call",
+      outcome: "answered",
+      answers: [{ questionId: "private-question", answers: ["Selected"] }],
+    },
+  ];
+  const base = await serve((req, res) => {
+    paths.push(req.url!);
+    const page = ++reads;
+    const record = { id: `record-${page}`, ordinal: page, timestamp: null };
+    const event = inputEvents[page - 1];
+    reply(res, {
+      session: { id: "id", origin: {}, resume: {} },
+      interaction: {
+        supported: true,
+        state: "connected",
+        activity: page === 1 ? "working" : "idle",
+      },
+      items: event ? [{ ...record, ...event }] : [],
+      nextAfter: page,
+      hasMore: page === 1,
+    });
+  });
+  const result = await cli([
+    "inspect",
+    "id",
+    "--follow",
+    "--count",
+    "2",
+    "--interval",
+    "0.01",
+    "--url",
+    base,
+    ...(json ? ["--json"] : []),
+  ]);
+  expect(result.code).toBe(0);
+  expect(paths).toHaveLength(3);
+  expect(paths[1]).toContain("after=1");
+  expect(paths[2]).toContain("after=2");
+  expect(result.stdout).toContain("session terminal id");
+  expect(result.stdout).toContain("Selected");
+  expect(result.stdout).toContain("Which approach?");
+  expect(result.stdout).toContain("Minimal");
+  expect(result.stdout).toContain("Fix the current issue");
+  for (const hidden of ["private-call", "private-question", "callId", "questionId"])
+    expect(result.stdout).not.toContain(hidden);
+  if (json) {
+    const pages = result.stdout
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(pages).toHaveLength(2);
+    expect(pages[0].nextAfter).toBe(1);
+    expect(pages[1].interaction.activity).toBe("idle");
+    expect(pages[1].items[0].answers).toEqual(["Selected"]);
+  } else {
+    expect(result.stdout).toContain("Activity: working");
+    expect(result.stdout).toContain("Activity: idle");
+    expect(result.stdout).toContain("- Selected");
+  }
+});

@@ -198,17 +198,20 @@ nullable metadata remain null. `home` is the origin nickname; inspect needs no
 catalog request. Null activity displays as unknown. Explicit IDs, including child
 IDs, go directly to endpoints without catalog checks or parent redirection.
 
-Items expose only messages and structured user input, with `id`, `ordinal`,
-`timestamp`, `kind`. Messages add `role`, `phase`, `itemType`, `markdown`. User
-input adds `stage`, `callId`: requests include
-`questions: [{ id, header, question, options: [{ label, description }] }]`;
-responses contain `outcome` and, when answered,
-`answers: [{ questionId, answers: string[] }]`, or an unavailable `summary`.
-Aborted responses use `outcome: "aborted"`. Other kinds/nested properties are omitted.
+Items expose messages and user input with `id`, `ordinal`, `timestamp`, `kind`.
+Messages add `role`, `phase`, `itemType`, `markdown`; only assistant messages with
+`phase=response` and `itemType=Plan` also include `inputHint`, preserving full
+Markdown. User input adds `stage`: requests add `questions` (header, question,
+and option labels/descriptions) and `inputHint`; responses add `outcome`:
+`answered` adds `answers: string[]` in original question/answer order;
+`unavailable` adds `summary`; `aborted` adds no fields.
 
-Text preserves user content/Markdown, flattening tabs/newlines only in summaries
-and tables. Answers match page-local `callId`/question IDs, falling back to IDs.
-See [output formatting](../src/server/cli/session-output.ts) for labels/numbering.
+Text preserves content/Markdown, flattening tabs/newlines only in summaries and
+tables. Requests show question headers, full questions, numbered options with
+descriptions, and a hint; answers show one selection per line; Plans append the
+hint to their full text. See [output formatting](../src/server/cli/session-output.ts)
+for labels and [ahub-control](../skills/ahub-control/SKILL.md#operation-state-machine)
+for the input workflow.
 
 ### Inspect and numbered pagination
 
@@ -216,7 +219,7 @@ See [output formatting](../src/server/cli/session-output.ts) for labels/numberin
 `session`, `live`, `interaction`, `items`, `nextAfter`, `hasMore`. Log/runtime
 observations are not atomic; missing sessions return `404`, not empty history.
 
-Visibility matches CLI items above and browser defaults, including Plan markers.
+Visible item kinds match the CLI and browser defaults, including Plan markers.
 Roles, normalized phases, item types, IDs, ordinals, and call IDs remain; unknown
 phases stay unclassified. Raw ordinals may have gaps; requests/responses correlate
 by `callId`. Tools/directives/token usage/internal events are excluded.

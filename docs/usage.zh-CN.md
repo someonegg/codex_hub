@@ -82,6 +82,7 @@ npx --package=@someonegg/codex-hub@latest ahub-cli --help
 ahub-cli session list --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
+ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 ```
 
 使用 `list` 返回的 ID 发送输入或查看会话。`list` 列出主会话，`inspect` 也接受子会话 ID。
@@ -95,12 +96,18 @@ ahub-cli session inspect <id>
 两个目录均可使用相对路径，CLI 会将其转为绝对路径。删除前必须先归档会话。
 
 会话命令默认连接 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
-HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默认的 360 秒超时。
+HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默认的 15 秒超时
+（创建、恢复、退出、归档和删除为 45 秒）。使用 `inspect --follow` 时，它限制每次 HTTP
+请求；观察持续到按 Ctrl+C 停止或达到指定轮数。
 
 创建和恢复等待终端已连接且空闲；发送输入和普通按键要求空闲。输入或 `handoff` 成功仅表示
 已发送，不代表任务完成。超时或退出码为 `2`（写入结果不明）时，先用 `list`、`inspect`
 或 `terminal` 核查，再决定是否重试。停止客户端不会取消已提交操作。
 输出字段、退出码与失败语义见 [CLI 参考（英文）](technical-reference.md#session-cli-and-observation)。
+
+如需智能体协助管理会话，可使用 npm 包附带的
+[`ahub-control` skill](../skills/ahub-control)。运行
+`ahub-cli skill path ahub-control` 查看目录。`npx` 返回缓存路径，长期使用请复制该目录。
 
 ## 多个 Home
 
@@ -165,18 +172,18 @@ ahub-cli diff delete <uuid>
 
 将选项传给 `codex-hub`，修改后重启。完整命令帮助见 `codex-hub --help`。
 
-| 选项                           | 默认值             | 用途                                        |
-| ------------------------------ | ------------------ | ------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex` | 指定一个或多个 Codex Home                   |
-| `--host <host>`                | `127.0.0.1`        | 监听地址                                    |
-| `--port <port>`                | `4173`             | 监听端口，`0` 自动选择空闲端口              |
-| `--home-dir <path>`            | `~/.codex-hub`     | Hub 数据目录，包含 `uploads/` 和 `hosting/` |
-| `--hosting`                    | 关闭               | 启用静态网页托管                            |
-| `--tmux-socket <path>`         | tmux 默认值        | 自定义 tmux socket                          |
-| `--ssl`                        | 关闭               | 启用 HTTPS，需同时指定证书和私钥            |
-| `--ssl-cert <path>`            | 无                 | PEM 服务器证书或证书链                      |
-| `--ssl-key <path>`             | 无                 | PEM 私钥                                    |
-| `--ssl-ca <path>`              | 无                 | 要求客户端提供由此 CA 签发的证书            |
+| 选项                           | 默认值             | 用途                                               |
+| ------------------------------ | ------------------ | -------------------------------------------------- |
+| `--codex-home <nickname=path>` | `default=~/.codex` | 指定一个或多个 Codex Home                          |
+| `--host <host>`                | `127.0.0.1`        | 监听地址                                           |
+| `--port <port>`                | `4173`             | 监听端口，`0` 自动选择空闲端口                     |
+| `--home-dir <path>`            | `~/.codex-hub`     | Hub 数据目录，包含 `uploads/` 和 `hosting/`        |
+| `--hosting`                    | 关闭               | 启用静态网页托管                                   |
+| `--tmux-socket <path>`         | tmux 默认值        | 自定义 tmux socket                                 |
+| `--ssl`                        | 关闭               | 启用 HTTPS，需同时指定 `--ssl-cert` 和 `--ssl-key` |
+| `--ssl-cert <path>`            | 无                 | PEM 服务器证书或证书链                             |
+| `--ssl-key <path>`             | 无                 | PEM 私钥                                           |
+| `--ssl-ca <path>`              | 无                 | 要求客户端提供由此 CA 签发的证书                   |
 
 ## 安全
 

@@ -57,13 +57,13 @@ try {
   const sessionHelp = await exec(cli, ["session", "--help"], { cwd: temporary });
   assert.match(sessionHelp.stdout, /Usage: ahub-cli session/);
   assert.match(sessionHelp.stdout, /inspect/);
-  const skillPath = (
-    await exec(cli, ["skill", "path", "ahub-publish"], { cwd: temporary })
-  ).stdout.trim();
-  assert.equal(
-    await readFile(join(skillPath, "SKILL.md"), "utf8"),
-    await readFile(join(root, "skills/ahub-publish/SKILL.md"), "utf8"),
-  );
+  for (const skill of ["ahub-publish", "ahub-control"]) {
+    const skillPath = (await exec(cli, ["skill", "path", skill], { cwd: temporary })).stdout.trim();
+    assert.equal(
+      await readFile(join(skillPath, "SKILL.md"), "utf8"),
+      await readFile(join(root, "skills", skill, "SKILL.md"), "utf8"),
+    );
+  }
   await assert.rejects(exec(cli, ["skill", "path", "unknown"]));
   const source = join(temporary, "web-source");
   const hosting = join(temporary, "hosting");
