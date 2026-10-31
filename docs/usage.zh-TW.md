@@ -100,7 +100,10 @@ HTTP 位址；此用戶端不支援 HTTPS。用 `--timeout <seconds>` 修改預�
 （建立、恢復、退出、封存和刪除為 45 秒）。使用 `inspect --follow` 時，它限制每次 HTTP
 請求；觀察持續到按 Ctrl+C 停止或達到指定輪數。
 
-建立和恢復等待終端已連線且閒置；傳送輸入和一般按鍵要求閒置。輸入或 `handoff` 成功僅表示
+建立和恢復等待終端已連線且閒置；傳送輸入和一般按鍵預設要求閒置。使用
+`send <id> --message <text> --force`（或 `--stdin --force`）或
+`keys <id> <key...> --force` 可在工作中傳送輸入。`--force` 僅略過閒置檢查，
+連線、繫結所有權和管理操作占用檢查仍然有效。輸入或 `handoff` 成功僅表示
 已傳送，不代表任務完成。逾時或結束代碼為 `2`（寫入結果不明）時，先用 `list`、`inspect`
 或 `terminal` 核查，再決定是否重試。停止用戶端不會取消已提交操作。
 輸出欄位、結束代碼與失敗語意見 [CLI 參考（英文）](technical-reference.md#session-cli-and-observation)。
