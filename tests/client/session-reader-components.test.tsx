@@ -439,3 +439,21 @@ describe("session reader components", () => {
     ).toBe(["Old step Done", "Status · Owner", "Ready · Codex"].join("\n"));
   });
 });
+
+it("only displays task metadata inside session information when configured", async () => {
+  const header = (taskName?: string) => (
+    <SessionHeader
+      session={{ ...firstPage.session, taskName }}
+      visibility={DEFAULT_TIMELINE_VISIBILITY}
+      onVisibilityChange={vi.fn()}
+    />
+  );
+  const view = render(header());
+  expect(screen.queryByText("Task")).not.toBeInTheDocument();
+  view.rerender(header("Cross-project release"));
+  expect(screen.getByText("Cross-project release")).not.toBeVisible();
+  await userEvent.click(screen.getByText("Session information"));
+  expect(screen.getByText("Cross-project release")).toBeVisible();
+  view.rerender(header());
+  expect(screen.queryByText("Cross-project release")).not.toBeInTheDocument();
+});

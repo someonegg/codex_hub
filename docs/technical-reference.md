@@ -356,6 +356,17 @@ Latest valid bind overrides Working Directory: absolute project path without
 NUL/CR/LF; no filesystem/Git checks. Invalid/empty fields preserve earlier project
 paths and do not invalidate pane bindings.
 
+### Task association
+
+Create accepts optional `taskName`; resume retains it and rejects overrides.
+Names are trimmed, case-sensitive, and shared across homes/projects; empty means
+unassigned, while `<`, `>`, NUL, CR and LF are rejected. Unassigned responses omit
+the field; catalog revisions include task associations.
+
+V2 binding output appends a JSON task name or null after the project line.
+The first valid binding fixes the task (V1 means unassigned); resume/rebinding
+preserves it. Invalid V2 task fields invalidate the binding attempt.
+
 ### Activity observation
 
 Activity is null unless connected. Output within five monotonic seconds means

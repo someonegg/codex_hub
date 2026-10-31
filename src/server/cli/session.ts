@@ -12,6 +12,7 @@ import {
   type TerminalResponse,
   type TmuxTarget,
 } from "../../shared/api-contract.js";
+import { TASK_NAME_ERROR, validTaskName } from "../../shared/task-name.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { CommandError, commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
@@ -27,8 +28,8 @@ import {
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
-  list [--project <directory>] [--all]
-  create --project <directory> [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
+  list [--project <directory>] [--task <name>] [--all]
+  create --project <directory> [--task <name>] [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin) [--force]
   inspect <id> [--limit 1-300] [--after <number>] [--follow [--interval <seconds>] [--count <N>]]
@@ -57,6 +58,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         json: { type: "boolean" },
         timeout: { type: "string" },
         project: { type: "string" },
+        task: { type: "string" },
         all: { type: "boolean" },
         cwd: { type: "string" },
         home: { type: "string" },
@@ -79,8 +81,8 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   }
   const [command, id, ...keys] = positionals;
   const allowed: Record<string, string[]> = {
-    list: ["project", "all"],
-    create: ["cwd", "project", "home", "worktree", "yolo"],
+    list: ["project", "task", "all"],
+    create: ["task", "cwd", "project", "home", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin", "force"],
     inspect: ["limit", "after", "follow", "interval", "count"],
@@ -98,6 +100,8 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     if (!["url", "json", "timeout", "help", ...allowed[command]!].includes(key))
       throw new CommandError("invalid_arguments", `--${key} is not supported by ${command}`);
   }
+  if (values.task !== undefined && !validTaskName(values.task))
+    throw new CommandError("invalid_arguments", TASK_NAME_ERROR);
   const acceptsSessionId = command !== "list" && command !== "create";
   const invalidPositionals = acceptsSessionId
     ? !id || (command !== "keys" && positionals.length !== 2)
@@ -203,7 +207,12 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     if (command === "list") {
       const list = await api<SessionListResponse>("/api/v1/sessions");
       const project = values.project === undefined ? undefined : resolve(values.project);
-      result = mapList(list, project, values.all);
+      const task = values.task?.trim();
+      const taskList =
+        task === undefined
+          ? list
+          : { ...list, sessions: list.sessions.filter((session) => session.taskName === task) };
+      result = mapList(taskList, project, values.all);
     } else if (command === "inspect") {
       const query = new URLSearchParams();
       for (const name of ["limit", "after"] as const) {
@@ -246,6 +255,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
         operationPath = "/api/v1/sessions";
         body = {
           projectDirectory: resolve(values.project!),
+          taskName: values.task?.trim(),
           ...(values.cwd === undefined ? {} : { workingDirectory: resolve(values.cwd) }),
           worktree: values.worktree ?? false,
           yolo: values.yolo ?? false,

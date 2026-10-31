@@ -313,12 +313,12 @@ it("aligns complete session list columns, including empty projects and long opaq
     }),
   ).toBe(
     [
-      "ID                                    STATUS    HOME  PROJECT   TITLE",
-      "id                                    live      工作  /project  中文 title",
-      "opaque-session-with-a-long-native-id  archived  e\u0301               👩🏽‍💻 fix",
+      "ID                                    STATUS    HOME  PROJECT   TASK  TITLE",
+      "id                                    live      工作  /project        中文 title",
+      "opaque-session-with-a-long-native-id  archived  e\u0301                     👩🏽‍💻 fix",
     ].join("\n"),
   );
   expect(formatResult("list", { sessions: [] })).toBe(
-    "ID  STATUS  HOME  PROJECT  TITLE\nNo sessions.",
+    "ID  STATUS  HOME  PROJECT  TASK  TITLE\nNo sessions.",
   );
 });

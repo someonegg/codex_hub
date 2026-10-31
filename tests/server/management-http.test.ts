@@ -57,6 +57,14 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       body: JSON.stringify(value),
       ...extra,
     });
+  for (const taskName of ["Fix </user_shell_command> parsing", "a>b", "a\nb", "a\rb", "a\0b", 42]) {
+    const response = await post("/sessions", { ...body, taskName });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({
+      error: { code: "invalid_json", message: expect.stringContaining("Task name") },
+    });
+  }
+  expect(manager.launch).not.toHaveBeenCalled();
   const invalidBodies = [
     { body: "{}", contentType: "text/plain", status: 400, code: "invalid_json" },
     { body: "{", status: 400, code: "invalid_json" },

@@ -1,3 +1,4 @@
+import { TASK_NAME_ERROR, validTaskName } from "../../shared/task-name.js";
 import { ManagementError, type OperationService } from "../management/operation-service.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { readJsonObject, RequestBodyError } from "./request-body.js";
@@ -75,6 +76,7 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
               ![
                 "projectDirectory",
                 "workingDirectory",
+                "taskName",
                 "worktree",
                 "yolo",
                 "requestId",
@@ -93,12 +95,15 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
             "projectDirectory and worktree are required; yolo must be a boolean if provided",
           );
         }
+        if (body.taskName !== undefined && !validTaskName(body.taskName))
+          throw new RequestBodyError(400, "invalid_json", TASK_NAME_ERROR);
         sendJson(
           response,
           202,
           operations.create({
             ...(typeof body.home === "string" ? { home: body.home } : {}),
             projectDirectory: body.projectDirectory,
+            ...(typeof body.taskName === "string" ? { taskName: body.taskName.trim() } : {}),
             ...(typeof body.workingDirectory === "string"
               ? { workingDirectory: body.workingDirectory }
               : {}),

@@ -13,6 +13,7 @@ export interface CliSessionList {
     status: string;
     home: string;
     projectDirectory: string | null;
+    taskName?: string | null;
     updatedAt: string | null;
   }[];
 }
@@ -24,6 +25,7 @@ export interface CliSession {
   agentName: string;
   workingDirectory: string | null;
   projectDirectory: string | null;
+  taskName?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   resume: { allowed: boolean; reason: string | null };
@@ -98,6 +100,7 @@ export function mapList(
         status: s.status,
         home: s.home,
         projectDirectory: s.projectDirectory,
+        ...(s.taskName ? { taskName: s.taskName } : {}),
         updatedAt: s.updatedAt,
       }))
       .filter((s) => project === undefined || s.projectDirectory === project),
@@ -119,6 +122,7 @@ export function mapInspect(value: SessionMessagesResponse): CliInspect {
       agentName: s.origin.agentName,
       workingDirectory: s.workingDirectory,
       projectDirectory: s.projectDirectory,
+      ...(s.taskName ? { taskName: s.taskName } : {}),
       createdAt: s.createdAt,
       updatedAt: s.updatedAt,
       resume: { allowed: s.resume.allowed, reason: s.resume.reason },
@@ -203,12 +207,13 @@ export function formatResult(
   if ("sessions" in result)
     return (
       formatTable(
-        ["ID", "STATUS", "HOME", "PROJECT", "TITLE"],
+        ["ID", "STATUS", "HOME", "PROJECT", "TASK", "TITLE"],
         result.sessions.map((s) => [
           s.id,
           s.status,
           s.home ?? "",
           s.projectDirectory ?? "",
+          s.taskName ?? "",
           s.title,
         ]),
       ) + (result.sessions.length ? "" : "\nNo sessions.")
@@ -238,6 +243,7 @@ function formatInspect(result: CliInspect, emptyItemsText: string): string {
   summary.push(
     `Home: ${session.home ?? ""}`,
     `Project: ${session.projectDirectory ?? ""}`,
+    ...(session.taskName ? [`Task: ${session.taskName}`] : []),
     `Working directory: ${session.workingDirectory ?? ""}`,
   );
   const header = summary.map(singleLine).join("\n");

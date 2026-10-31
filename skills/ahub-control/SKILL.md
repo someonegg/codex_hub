@@ -15,6 +15,8 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 
 ## Create, resume, and send
 
+- Use `create --task <name>` to assign an optional, fixed task at creation and `list --task <name>` to filter sessions across projects.
+
 - `create --project <directory>` sets project association and the default launch directory. `--cwd <directory>` changes the launch location without changing association.
 - Creation accepts `--home <nickname>`, defaulting to the first configured Home. Use `--worktree` and `--yolo` as authorized launch options, not universal defaults.
 - `resume <id>` retains the original Home and uses an available original working or project directory. It accepts `--yolo` but no directory overrides.

@@ -1,4 +1,5 @@
 export const messages = {
+  task: "Task",
   top: "TOP",
   end: "END",
   resumeUnavailable: "This session cannot be resumed.",
