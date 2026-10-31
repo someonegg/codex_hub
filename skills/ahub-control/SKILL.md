@@ -1,6 +1,6 @@
 ---
 name: ahub-control
-description: Manage agent sessions through an existing Codex Hub using ahub-cli session. Use to create or resume sessions, send tasks, follow replies, handle input requests, and diagnose launch or connection problems. Does not install or start Hub, or publish pages or diffs.
+description: Manage agent sessions through an existing Codex Hub using ahub-cli session. Use only when the user explicitly requests `ahub-control` by name.
 ---
 
 # Coordinate sessions through Codex Hub
@@ -42,10 +42,10 @@ ahub-cli session exit SESSION_ID --json
 ## Observe replies and input requests
 
 - Prefer `--json`. Single inspection returns one object; follow emits NDJSON. Parse each line independently as a result or `error` object. Text follow emits separate blocks.
-- Without `--after`, inspect returns the latest 10 visible records by default; `--after 0` starts from the beginning. Continue with `nextAfter`, not the last message ordinal: raw ordinals can have gaps.
-- Follow reads immediately, drains every `hasMore=true` page in the round, then waits `--interval` seconds (default 3). `--count N` counts rounds, including unchanged rounds; the final round also drains all pages. It is neither an output count nor a strict duration.
+- Without `--after`, inspect returns the latest 10 visible records; `--after 0` starts from the beginning. Continue with the returned `nextAfter`.
+- Follow checks immediately, then every `--interval` seconds (default 3). `--count N` limits polling rounds, including rounds with no changes.
 - Use continuous follow when the execution tool supports background processes and incremental output; otherwise use finite rounds and continue from the last received `nextAfter`. Allow opportunities to report progress to the user.
-- The first result always prints; subsequent results print only for new visible records or session/interaction changes. Position-only advances may remain silent. Numeric positions do not detect rewritten history; out-of-range positions or stalled pagination fail. Do not silently reset positions.
+- Follow prints the first result, then only new messages or state changes. Unchanged rounds are silent; use inspect when you need to confirm the current state.
 - Read `role`, `phase`, `itemType`, and message body. `phase=update` usually indicates progress; `phase=response` signals a reply. Neither idle nor response ends follow; verify completion separately.
 - Input requests include question headers, questions, option labels/descriptions, and an `inputHint`; assistant response Plans retain their full message and add the same hint. Answered responses list selected content in order; cancelled/unavailable responses retain their outcome.
 
@@ -61,6 +61,8 @@ Before each `send` or ordinary `keys` input, inspect and confirm `interaction.st
 
 Interrupt does not require idle. Ctrl+C stops follow without interrupting session execution.
 
+If inspect/follow reports idle while awaiting a task result and there is no unhandled reply, question, or Plan, run `terminal <id>` to inspect the prompt and diagnose the stall.
+
 ## Answer questions and Plans
 
 For a question or Plan reminder:
@@ -73,7 +75,8 @@ For questions (not Plans), an alternative is to interrupt, organize the chosen a
 
 ## Verify and finish
 
-- Verify files, tests, or other deliverables against the task's acceptance criteria. Resolve output locations against the actual `workingDirectory`, which may differ from `projectDirectory` with explicit cwd or worktrees. Neither idle, a response, nor a completion claim proves task completion.
+- Read and retain each new assistant `phase=response` reply. Continue observing until connected and idle, collecting any subsequent messages; if already connected and idle, proceed immediately.
+- Use the collected replies and verification of deliverables against the task's acceptance criteria to decide whether to finish or address questions, blockers, or remaining work. Neither idle nor a reply alone proves completion. Resolve output locations against the actual `workingDirectory`, which may differ from `projectDirectory` with explicit cwd or worktrees.
 - Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete requires prior archive. Verify an uncertain exit before claiming success.
 - Report deliverables, verification scope, and whether the session exited.
 
