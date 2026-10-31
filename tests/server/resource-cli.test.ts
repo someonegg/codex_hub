@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
+import stringWidth from "string-width";
 import { expect, it } from "vitest";
 
 import { CommandError } from "../../src/server/cli/command-error.js";
@@ -68,7 +69,7 @@ it.each(["page", "diff"])(
     const root = await mkdtemp(join(tmpdir(), "resource-cli-"));
     const home = join(root, "home");
     const source = join(root, "source");
-    const run = async (...args: string[]) => {
+    const runText = async (...args: string[]) => {
       const result = await exec(process.execPath, [
         "--import",
         "tsx",
@@ -77,11 +78,11 @@ it.each(["page", "diff"])(
         ...args,
         "--home-dir",
         home,
-        "--json",
       ]);
       expect(result.stderr).toBe("");
-      return JSON.parse(result.stdout);
+      return result.stdout;
     };
+    const run = async (...args: string[]) => JSON.parse(await runText(...args, "--json"));
     try {
       await mkdir(source);
       await writeFile(join(source, "index.html"), "<h1>Test</h1>");
@@ -97,8 +98,38 @@ it.each(["page", "diff"])(
       expect(published.title).toBe("Example");
       if (resource === "page") expect(published.name).toBe("example");
       expect(await run("list")).toEqual([published]);
+      const unicode = await run(
+        "publish",
+        resource === "page" ? source : file,
+        ...(resource === "page" ? ["--project", root, "--name", "unicode"] : []),
+        "--title",
+        "© / ©️ / ™ / ™️\n中文👩🏽‍💻",
+      );
+      const human = await runText("list");
+      expect(human).not.toContain("\t");
+      const lines = human.trimEnd().split("\n");
+      expect(lines).toHaveLength(3);
+      const header = lines[0]!;
+      for (const entry of [published, unicode]) {
+        const line = lines.find((value) => value.startsWith(entry.id))!;
+        const title = entry.title.replace(/[\r\n\t]/g, " ");
+        expect(line).toContain(title);
+        expect(line.endsWith(entry.url)).toBe(true);
+        expect(stringWidth(line.slice(0, line.indexOf(title)))).toBe(header.indexOf("TITLE"));
+        expect(stringWidth(line.slice(0, line.indexOf(entry.url)))).toBe(header.indexOf("URL"));
+        if (resource === "page") expect(line).toContain(root);
+      }
+      // JSON retains the original multiline title, rather than the table's sanitized cell.
+      expect(await run("list")).toEqual(expect.arrayContaining([published, unicode]));
+      expect(unicode.title).toBe("© / ©️ / ™ / ™️\n中文👩🏽‍💻");
+      await run("delete", unicode.id);
       expect(await run("delete", published.id)).toEqual({ id: published.id, deleted: true });
       expect(await run("list")).toEqual([]);
+      expect(await runText("list")).toBe(
+        resource === "page"
+          ? "ID  PROJECT  TITLE  URL\nNo pages.\n"
+          : "ID  TITLE  URL\nNo diffs.\n",
+      );
     } finally {
       await rm(root, { recursive: true, force: true });
     }
