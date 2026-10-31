@@ -1,7 +1,5 @@
 import { expect, it, vi } from "vitest";
 
-import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
-
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
@@ -10,6 +8,7 @@ import { TmuxInteractionService } from "../../src/server/interaction/tmux-servic
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
+import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
