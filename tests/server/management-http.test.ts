@@ -1,5 +1,7 @@
 import { expect, it, vi } from "vitest";
 
+import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
+
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
@@ -72,7 +74,11 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       status: 400,
       code: "invalid_json",
     },
-    { body: JSON.stringify({ message: "x".repeat(500_000) }), status: 413, code: "body_too_large" },
+    {
+      body: JSON.stringify({ message: "x".repeat(MAX_INTERACTION_MESSAGE_BYTES * 8) }),
+      status: 413,
+      code: "body_too_large",
+    },
   ];
   for (const path of [
     "/sessions",
