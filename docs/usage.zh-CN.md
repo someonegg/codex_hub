@@ -105,10 +105,6 @@ HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默�
 或 `terminal` 核查，再决定是否重试。停止客户端不会取消已提交操作。
 输出字段、退出码与失败语义见 [CLI 参考（英文）](technical-reference.md#session-cli-and-observation)。
 
-如需智能体协助管理会话，可使用 npm 包附带的
-[`ahub-control` skill](../skills/ahub-control)。运行
-`ahub-cli skill path ahub-control` 查看目录。`npx` 返回缓存路径，长期使用请复制该目录。
-
 ## 多个 Home
 
 使用 `--codex-home 'nickname=path'` 指定 Codex Home。路径应指向包含 `sessions/` 的目录，
