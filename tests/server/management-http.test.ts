@@ -8,6 +8,7 @@ import { TmuxInteractionService } from "../../src/server/interaction/tmux-servic
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
+import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
@@ -72,7 +73,11 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
       status: 400,
       code: "invalid_json",
     },
-    { body: JSON.stringify({ message: "x".repeat(500_000) }), status: 413, code: "body_too_large" },
+    {
+      body: JSON.stringify({ message: "x".repeat(MAX_INTERACTION_MESSAGE_BYTES * 8) }),
+      status: 413,
+      code: "body_too_large",
+    },
   ];
   for (const path of [
     "/sessions",

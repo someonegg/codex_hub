@@ -18,8 +18,8 @@ it.each([{ message: 1 }, { message: "ok", requireIdle: "yes" }])(
 it("validates message bytes after structure without changing the transmitted text", () => {
   const body = { message: "a\r\nb", requireIdle: false };
   expect(parseMessageBody(body)).toEqual(body);
-  expect(parseMessageBody({ message: "a".repeat(65_536) }).message).toHaveLength(65_536);
-  expect(() => parseMessageBody({ message: "a".repeat(65_537) })).toThrow(MessageValidationError);
+  expect(parseMessageBody({ message: "a".repeat(262_144) }).message).toHaveLength(262_144);
+  expect(() => parseMessageBody({ message: "a".repeat(262_145) })).toThrow(MessageValidationError);
   expect(() => parseMessageBody({ message: " \n " })).toThrow(MessageValidationError);
   expect(() => parseMessageBody({ message: " ", extra: true })).toThrow(RequestBodyError);
 });
