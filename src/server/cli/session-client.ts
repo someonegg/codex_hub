@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { request as secureRequest } from "node:https";
 
 import { httpFailure } from "./command-error.js";
 
@@ -15,7 +16,8 @@ export class SessionClient {
     if (this.signal.aborted) throw new Error("Command interrupted or timed out");
     const payload = body === undefined ? undefined : JSON.stringify(body);
     return new Promise<T>((accept, reject) => {
-      const req = request(
+      const sendRequest = this.base.protocol === "https:" ? secureRequest : request;
+      const req = sendRequest(
         new URL(path, this.base),
         {
           method,
