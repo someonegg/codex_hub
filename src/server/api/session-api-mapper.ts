@@ -42,6 +42,7 @@ export class SessionApiMapper {
           home: session.origin.home,
           title: this.resolveDisplayTitle(session) ?? session.title,
           projectDirectory,
+          ...(session.taskName ? { taskName: session.taskName } : {}),
           status:
             effectiveStates?.get(session.id) ??
             (session.archived ? ("archived" as const) : ("normal" as const)),
@@ -107,6 +108,7 @@ export class SessionApiMapper {
       title: this.resolveDisplayTitle(session) ?? session.title,
       workingDirectory: session.workingDirectory,
       projectDirectory: session.projectDirectory,
+      ...(session.taskName ? { taskName: session.taskName } : {}),
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
       status: session.archived ? ("archived" as const) : ("normal" as const),

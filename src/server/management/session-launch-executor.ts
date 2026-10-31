@@ -41,6 +41,7 @@ export class SessionLaunchExecutor {
         worktree: input.worktree,
         yolo: input.yolo ?? false,
         projectDirectory: project.directory,
+        ...(input.taskName?.trim() ? { taskName: input.taskName.trim() } : {}),
       });
       if (!this.control.pending(entry)) return;
       this.control.transition(
@@ -91,6 +92,7 @@ export class SessionLaunchExecutor {
         yolo: input.yolo ?? false,
         resumeNativeId: session.sourceId!,
         projectDirectory: session.projectDirectory,
+        ...(session.taskName ? { taskName: session.taskName } : {}),
       });
       if (!this.control.pending(entry)) return;
       this.control.transition(

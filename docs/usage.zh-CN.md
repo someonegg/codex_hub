@@ -90,6 +90,8 @@ ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 使用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端。
 终端切换会话后，用 `handoff <id>` 移交绑定。
 
+可用 `create --task <name>` 在创建时指定可选且不可更改的任务，用 `list --task <name>` 跨项目筛选，网页在会话信息中展示任务。
+
 创建、恢复、退出、归档等命令见 `ahub-cli session --help`。创建要求 `--project`，支持 `--cwd`、`--home`、`--worktree`
 和 `--yolo`；恢复保留原 Home，支持 `--yolo`。省略 `--home` 时选择第一个已配置 Home。
 省略 `--cwd` 时从项目目录启动；显式指定其他工作目录时仍保留 `--project` 的项目归属。

@@ -26,6 +26,7 @@ export interface SessionSummary {
   id: SessionId;
   title: string;
   projectDirectory: string | null;
+  taskName?: string | null;
   status: SessionStatus;
   parentId: SessionId | null;
   isChild: boolean;
@@ -39,6 +40,7 @@ export interface SessionDetail {
   title: string;
   workingDirectory: string | null;
   projectDirectory: string | null;
+  taskName?: string | null;
   createdAt: string | null;
   updatedAt: string | null;
   status: SessionStatus;

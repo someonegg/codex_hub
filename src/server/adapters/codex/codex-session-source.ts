@@ -174,7 +174,11 @@ export class CodexSessionSource implements SessionSource {
     const signature = JSON.stringify({
       discoverySignature,
       unavailableRollouts,
-      projects: sessions.map((entry) => [entry.localId, entry.normalized.session.projectDirectory]),
+      projects: sessions.map((entry) => [
+        entry.localId,
+        entry.normalized.session.projectDirectory,
+        entry.normalized.session.taskName ?? null,
+      ]),
     });
     const snapshot = { signature, sessions, diagnostics };
     this.#cache = nextCache;
@@ -251,15 +255,17 @@ export class CodexSessionSource implements SessionSource {
           : this.normalizer.materialize(normalizerState, metadata, origin);
       let bindProjectDirectory =
         decoded.mode === "append" ? (cached?.bindProjectDirectory ?? null) : null;
+      let taskName = decoded.mode === "append" ? cached?.normalized.session.taskName : undefined;
       for (const { attempt } of bindingEvents) {
-        if (attempt.valid && attempt.projectDirectory)
-          bindProjectDirectory = attempt.projectDirectory;
+        if (!attempt.valid) continue;
+        if (attempt.projectDirectory) bindProjectDirectory = attempt.projectDirectory;
+        if (taskName === undefined) taskName = attempt.taskName ?? null;
       }
       const projectDirectory = bindProjectDirectory ?? baseNormalized.session.workingDirectory;
       const normalized = {
         ...baseNormalized,
-        session: { ...baseNormalized.session, projectDirectory },
-        interaction: codexInteraction(projectDirectory),
+        session: { ...baseNormalized.session, projectDirectory, taskName },
+        interaction: codexInteraction(projectDirectory, taskName ?? null),
       };
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
       return {

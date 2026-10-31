@@ -58,6 +58,11 @@ export function SessionHeader({
           <details className="session-information" key={session.id}>
             <summary>{t("sessionInformation")}</summary>
             <div className="session-information-content">
+              {session.taskName ? (
+                <p className="session-meta">
+                  {t("task")} <span>{session.taskName}</span>
+                </p>
+              ) : null}
               <p className="session-meta">
                 {t("projectDirectory")} <code>{session.projectDirectory ?? t("unavailable")}</code>
               </p>

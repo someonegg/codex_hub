@@ -1,5 +1,6 @@
 import type { messages as english } from "./en";
 export const messages: Record<keyof typeof english, string> = {
+  task: "任务",
   top: "顶部",
   end: "底部",
   resumeUnavailable: "此会话无法恢复。",

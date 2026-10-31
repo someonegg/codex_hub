@@ -181,6 +181,7 @@ export type CreateSessionRequest =
       resumeSessionId: string;
       home?: never;
       projectDirectory?: never;
+      taskName?: never;
       workingDirectory?: never;
       worktree?: never;
       yolo?: boolean;
@@ -190,6 +191,7 @@ export type CreateSessionRequest =
       resumeSessionId?: never;
       home?: string;
       projectDirectory: string;
+      taskName?: string;
       workingDirectory?: string;
       worktree: boolean;
       yolo?: boolean;

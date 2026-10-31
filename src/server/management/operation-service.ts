@@ -121,6 +121,7 @@ export class OperationService {
       home,
       "create",
       input.projectDirectory,
+      input.taskName?.trim() || null,
       input.workingDirectory ?? input.projectDirectory,
       input.worktree,
       input.yolo ?? false,

@@ -27,6 +27,7 @@ export interface SessionLaunchOptions {
   readonly resumeNativeId?: string;
   /** Original project association, retained even when launching in a worktree. */
   readonly projectDirectory?: string | null;
+  readonly taskName?: string | null;
 }
 
 export interface SessionManager extends SessionExitCapability {

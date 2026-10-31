@@ -31,6 +31,7 @@ export class CodexSessionManager implements SessionManager {
     yolo,
     resumeNativeId,
     projectDirectory,
+    taskName,
   }: SessionLaunchOptions) {
     if (resumeNativeId !== undefined && !this.isValidNativeId(resumeNativeId))
       throw new Error("Invalid resume identity");
@@ -43,7 +44,7 @@ export class CodexSessionManager implements SessionManager {
       "--no-alt-screen",
       ...(worktree ? ["--worktree"] : []),
       ...(yolo ? ["--yolo"] : []),
-      codexBindingCommand(operationId, projectDirectory),
+      codexBindingCommand(operationId, projectDirectory, taskName ?? null),
     ]);
   }
   exitSteps() {

@@ -1,5 +1,6 @@
 import { isAbsolute } from "node:path";
 
+import { TASK_NAME_ERROR, validTaskName } from "../../../shared/task-name.js";
 import { validProjectDirectory } from "../../domain/project-directory.js";
 import type {
   DomainAgentInteraction,
@@ -10,6 +11,7 @@ import type { DecodedRecord } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
 
 const BINDING_MARKER = "AHUB_TMUX_BIND_V1";
+const TASK_BINDING_MARKER = "AHUB_TMUX_BIND_V2";
 
 export const CODEX_INTERACTION_KEY_BINDINGS = {
   enter: "Enter",
@@ -38,10 +40,13 @@ export function codexInterruptSteps() {
   ] as const;
 }
 
-export function codexInteraction(projectDirectory?: string | null): DomainAgentInteraction {
+export function codexInteraction(
+  projectDirectory?: string | null,
+  taskName?: string | null,
+): DomainAgentInteraction {
   return {
     transport: "tmux",
-    bindingCommand: codexBindingCommand(undefined, projectDirectory),
+    bindingCommand: codexBindingCommand(undefined, projectDirectory, taskName),
     keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
     interruptSteps: codexInterruptSteps,
   };
@@ -62,7 +67,20 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
   for (const block of shellBlocks) {
     const lines = (block[1] ?? "").split("\n").map((line) => line.replace(/\r$/, ""));
     for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index] !== BINDING_MARKER) continue;
+      if (lines[index] !== BINDING_MARKER && lines[index] !== TASK_BINDING_MARKER) continue;
+      let taskName: string | null | undefined;
+      if (lines[index] === TASK_BINDING_MARKER) {
+        try {
+          taskName = JSON.parse(lines[index + 5] ?? "");
+        } catch {
+          found.push({ ordinal: record.ordinal, valid: false });
+          continue;
+        }
+        if (taskName !== null && !validTaskName(taskName)) {
+          found.push({ ordinal: record.ordinal, valid: false });
+          continue;
+        }
+      }
       const project = lines[index + 4];
       const tmux = lines[index + 1] ?? "";
       const paneId = lines[index + 2] ?? "";
@@ -72,6 +90,7 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
           ? {
               ordinal: record.ordinal,
               valid: true,
+              ...(taskName !== undefined ? { taskName } : {}),
               socketPath: tmux,
               paneId,
               ...(operationId ? { operationId } : {}),
@@ -87,7 +106,8 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     const incomplete = text.slice(lastOpen + "<user_shell_command>".length);
     const incompleteLines = incomplete.replace(/\r\n?/g, "\n").split("\n");
     for (const line of incompleteLines) {
-      if (line === BINDING_MARKER) found.push({ ordinal: record.ordinal, valid: false });
+      if (line === BINDING_MARKER || line === TASK_BINDING_MARKER)
+        found.push({ ordinal: record.ordinal, valid: false });
     }
   }
   return found;
@@ -106,12 +126,19 @@ function contentText(value: unknown): string | null {
 export function codexBindingCommand(
   operationId?: string,
   projectDirectory?: string | null,
+  taskName?: string | null,
 ): string {
+  if (taskName !== undefined && taskName !== null && !validTaskName(taskName))
+    throw new Error(TASK_NAME_ERROR);
   if (operationId !== undefined && !validOperationId(operationId))
     throw new Error("Invalid operation ID");
   const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   const project = validProjectDirectory(projectDirectory) ? projectDirectory : "";
-  return `! printf '${BINDING_MARKER}\\n%s\\n%s\\n%s\\n%s\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" ${quote(operationId ?? "")} ${quote(project)}`;
+
+  const marker = taskName === undefined ? BINDING_MARKER : TASK_BINDING_MARKER;
+  const taskFormat = taskName === undefined ? "" : "%s\\n";
+  const taskArgument = taskName === undefined ? "" : " " + quote(JSON.stringify(taskName));
+  return `! printf '${marker}\\n%s\\n%s\\n%s\\n%s\\n${taskFormat}' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" ${quote(operationId ?? "")} ${quote(project)}${taskArgument}`;
 }
 
 function validOperationId(id: string): boolean {

@@ -32,6 +32,7 @@ export type InteractionBindingAttempt =
       readonly valid: true;
       readonly operationId?: string;
       readonly projectDirectory?: string;
+      readonly taskName?: string | null;
       readonly socketPath: string;
       readonly paneId: string;
     }
@@ -87,6 +88,7 @@ export interface DomainSession {
   readonly title: string;
   readonly workingDirectory: string | null;
   readonly projectDirectory: string | null;
+  taskName?: string | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
   readonly archived: boolean;
