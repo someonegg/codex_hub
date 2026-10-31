@@ -7,8 +7,8 @@ import {
   mapTerminal,
 } from "../../src/server/cli/session-output.js";
 import type {
-  SessionMessagesResponse,
   SessionListResponse,
+  SessionMessagesResponse,
 } from "../../src/shared/api-contract.js";
 
 const base = {
