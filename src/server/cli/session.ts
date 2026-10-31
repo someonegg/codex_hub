@@ -41,7 +41,8 @@ Options: --url <http(s)-url> --json --timeout <seconds> (default 15; create/resu
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Messages: update indicates progress; response indicates a reply, not verified task completion.
-Input: send/keys require connected and idle; --force skips only the idle check, allowing input while working.
+Input: send/keys require connected and idle; --force skips the idle check, allowing input while working.
+Send: messages starting with / are rejected by the CLI; --force skips this check too.
 Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}
 Completion: idle/response do not end --follow; verify results before exit/archive/delete.`;
 
@@ -167,7 +168,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     }
   }
   if (command === "send" && values.message !== undefined)
-    validateArguments(() => normalizeMessage(values.message!));
+    validateSendMessage(values.message, values.force);
   return { values, positionals, command, id, keys, seconds, base, help: false as const };
 }
 
@@ -225,7 +226,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     else if (["send", "keys", "interrupt", "handoff"].includes(command)) {
       if (command === "send") {
         const input = values.stdin ? await readStdin(abort.signal) : values.message!;
-        const message = validateArguments(() => normalizeMessage(input));
+        const message = validateSendMessage(input, values.force);
         await api(`${path}/messages`, "POST", { message, requireIdle: !values.force });
       } else if (command === "handoff") await api(`${path}/handoff-pane-binding`, "POST", {});
       else
@@ -328,6 +329,16 @@ async function readStdin(signal: AbortSignal): Promise<string> {
     process.stdin.on("data", data).once("end", end).once("error", fail);
     signal.addEventListener("abort", stop, { once: true });
   });
+}
+
+function validateSendMessage(input: string, force = false): string {
+  const message = validateArguments(() => normalizeMessage(input));
+  if (!force && message.startsWith("/"))
+    throw new CommandError(
+      "invalid_arguments",
+      "Message must not start with /; use --force to send it intentionally",
+    );
+  return message;
 }
 
 function validateArguments<T>(validate: () => T): T {

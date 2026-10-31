@@ -102,7 +102,8 @@ HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默�
 
 创建和恢复等待终端已连接且空闲；发送输入和普通按键默认要求空闲。使用
 `send <id> --message <text> --force`（或 `--stdin --force`）或
-`keys <id> <key...> --force` 可在工作中发送输入。`--force` 仅跳过空闲检查，
+`keys <id> <key...> --force` 可在工作中发送输入。CLI 还会拒绝首字符为 `/`
+的 `send` 消息；`--force` 也可跳过此检查。
 连接、绑定所有权和管理操作占用检查仍然有效。输入或 `handoff` 成功仅表示
 已发送，不代表任务完成。超时或退出码为 `2`（写入结果不明）时，先用 `list`、`inspect`
 或 `terminal` 核查，再决定是否重试。停止客户端不会取消已提交操作。

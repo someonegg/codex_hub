@@ -126,8 +126,9 @@ HTTP request; observation continues until Ctrl+C or the requested round count.
 
 Create and resume wait for a live, connected, idle terminal. Sending input and ordinary keys
 requires idle by default. Use `send <id> --message <text> --force` (or `--stdin --force`)
-or `keys <id> <key...> --force` to send while working. `--force` skips only the idle
-check; connection, binding ownership, and management occupancy checks still apply.
+or `keys <id> <key...> --force` to send while working. The CLI also rejects `send` messages
+whose first character is `/`; `--force` skips this check too. Connection, binding
+ownership, and management occupancy checks still apply.
 Successful input or `handoff` confirms sending, not task completion.
 After a timeout or exit code `2` (unknown write result), check with `list`, `inspect`,
 or `terminal` before retrying. Stopping the client does not cancel a submitted operation.
