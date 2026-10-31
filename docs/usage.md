@@ -243,6 +243,17 @@ Install a client certificate and its private key on each device, and ensure the
 device trusts the server certificate. Without `--ssl-ca`, HTTPS encrypts traffic
 but does not authenticate clients. Restart after replacing certificates or keys.
 
+Use `--local-port 4174` to additionally serve HTTP on `127.0.0.1:4174` without
+client certificates (disabled by default). The main listener retains its TLS/mTLS
+requirements. For local CLI access:
+
+```sh
+ahub-cli session list --url http://127.0.0.1:4174
+```
+
+Other local users and processes can also access this endpoint; do not forward
+external proxy traffic to it.
+
 ## Troubleshooting
 
 - **No sessions:** check that `--codex-home` points to the directory containing

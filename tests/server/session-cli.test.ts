@@ -107,6 +107,18 @@ it.each([true, false])("wires invalid arguments without requests (json=%s)", asy
     expect(result.stderr).toContain("Invalid session command arguments");
   }
 });
+it("defaults to the main listener and preserves URL override precedence", () => {
+  const origin = (args: string[], environmentUrl?: string) => {
+    const parsed = parseSessionArguments(args, environmentUrl);
+    return parsed.help ? undefined : parsed.base.origin;
+  };
+  expect(origin(["list"])).toBe("http://127.0.0.1:4173");
+  expect(origin(["list"], "http://localhost:5000")).toBe("http://localhost:5000");
+  expect(origin(["list", "--url", "http://localhost:6000"], "http://localhost:5000")).toBe(
+    "http://localhost:6000",
+  );
+});
+
 it("parses valid session options and help without I/O", () => {
   const parsed = parseSessionArguments(
     ["inspect", "opaque-native-id", "--limit", "300", "--after", "0"],

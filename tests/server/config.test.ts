@@ -92,3 +92,12 @@ it("shares the Hub root for uploads and hosting, expanding home-relative paths",
     hostingDirectory: resolve(homedir(), "hub-data/hosting"),
   });
 });
+
+it.each(["-1", "65536", "1.5", "invalid"])(
+  "names --local-port in invalid port errors (%s)",
+  (value) => {
+    expect(() => loadConfig([`--local-port=${value}`])).toThrow(
+      "--local-port must be an integer between 0 and 65535",
+    );
+  },
+);
