@@ -37,7 +37,7 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
   interrupt <id>
   handoff <id>
   exit <id> | archive <id> | delete <id>
-Options: --url <http-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
+Options: --url <http(s)-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Messages: update indicates progress; response indicates a reply, not verified task completion.
@@ -134,13 +134,10 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   const base = validateArguments(
     () => new URL(values.url ?? environmentUrl ?? "http://127.0.0.1:4173"),
   );
-  if (base.protocol !== "http:")
-    throw new CommandError(
-      "invalid_arguments",
-      "Only HTTP URLs are supported; HTTPS is not supported yet",
-    );
+  if (base.protocol !== "http:" && base.protocol !== "https:")
+    throw new CommandError("invalid_arguments", "Only HTTP and HTTPS URLs are supported");
   if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
-    throw new CommandError("invalid_arguments", "URL must contain only an HTTP origin");
+    throw new CommandError("invalid_arguments", "URL must contain only an HTTP or HTTPS origin");
 
   if ((values.interval !== undefined || values.count !== undefined) && !values.follow)
     throw new CommandError("invalid_arguments", "--interval and --count require --follow");

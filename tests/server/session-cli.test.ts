@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { createServer as createSecureServer } from "node:https";
 import type { AddressInfo } from "node:net";
 import { resolve } from "node:path";
 
@@ -7,6 +9,8 @@ import { afterEach, expect, it } from "vitest";
 
 import { CommandError } from "../../src/server/cli/command-error.js";
 import { parseSessionArguments } from "../../src/server/cli/session.js";
+import { createTempDirectory } from "../helpers/temp-directories.js";
+import { TEST_CA, TEST_SERVER_CERTIFICATE, TEST_SERVER_KEY } from "./tls-fixtures.js";
 
 const servers: ReturnType<typeof createServer>[] = [];
 afterEach(async () => {
@@ -20,15 +24,21 @@ afterEach(async () => {
     ),
   );
 });
-async function serve(handler: (req: IncomingMessage, res: ServerResponse, body: any) => void) {
-  const server = createServer(async (req, res) => {
+async function serve(
+  handler: (req: IncomingMessage, res: ServerResponse, body: any) => void,
+  secure = false,
+) {
+  const listener = async (req: IncomingMessage, res: ServerResponse) => {
     const chunks: Buffer[] = [];
     for await (const chunk of req) chunks.push(chunk);
     handler(req, res, chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : undefined);
-  });
+  };
+  const server = secure
+    ? createSecureServer({ cert: TEST_SERVER_CERTIFICATE, key: TEST_SERVER_KEY }, listener)
+    : createServer(listener);
   servers.push(server);
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
-  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  return `${secure ? "https" : "http"}://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
 function cli(args: string[], stdin = "", env: Record<string, string> = {}) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((done, reject) => {
@@ -65,7 +75,11 @@ it.each([
   ["keys", "id", "C-c"],
   ["resume", "id", "--home", "other"],
   ["inspect", "id", "--limit", "301"],
-  ["list", "--url", "https://example.com"],
+  ["list", "--url", "ftp://example.com"],
+  ["list", "--url", "https://example.com/path"],
+  ["list", "--url", "https://example.com?query=1"],
+  ["list", "--url", "https://example.com#fragment"],
+  ["list", "--url", "https://user:password@example.com"],
   ["list", "--timeout", "0"],
 ])("rejects invalid session arguments: %j", (...args) => {
   expect(() => parseSessionArguments(args)).toThrow(CommandError);
@@ -107,6 +121,34 @@ it("parses valid session options and help without I/O", () => {
   });
   expect(parsed.help ? undefined : parsed.base.origin).toBe("http://localhost:4173");
   expect(parseSessionArguments(["--help", "unknown"]).help).toBe(true);
+});
+
+it("supports HTTPS with an extra CA and rejects untrusted certificates by default", async () => {
+  let requests = 0;
+  const base = await serve((req, res) => {
+    requests++;
+    expect(req.url).toBe("/api/v1/sessions");
+    reply(res, { homes: [], projects: [], sessions: [] });
+  }, true);
+  const untrusted = await cli(["list", "--url", base, "--json"], "", {
+    NODE_EXTRA_CA_CERTS: "",
+    NODE_TLS_REJECT_UNAUTHORIZED: "1",
+  });
+  expect(untrusted.code).toBe(1);
+  expect(JSON.parse(untrusted.stdout).error.code).toBe("query_failed");
+  expect(requests).toBe(0);
+
+  const directory = await createTempDirectory("ahub-cli-ca-");
+  const caPath = resolve(directory, "ca.pem");
+  await writeFile(caPath, TEST_CA);
+  const trusted = await cli(["list", "--url", base, "--json"], "", {
+    NODE_EXTRA_CA_CERTS: caPath,
+    NODE_TLS_REJECT_UNAUTHORIZED: "1",
+  });
+  expect(trusted.stderr).toBe("");
+  expect(trusted.code).toBe(0);
+  expect(JSON.parse(trusted.stdout).sessions).toEqual([]);
+  expect(requests).toBe(1);
 });
 
 it("uses explicit URL over the environment and filters by associated project", async () => {

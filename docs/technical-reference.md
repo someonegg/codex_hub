@@ -153,11 +153,14 @@ other resource failures use `command_failed`. Session connection errors use
 control, server discovery/startup, or persisted recovery state. `codex-hub` starts
 the server; `ahub-cli page`/`diff` access local hosting storage via `--home-dir`.
 
-URL precedence: `--url`, `CODEX_HUB_URL`, `http://127.0.0.1:4173`. Only HTTP origins
-are accepted (server TLS support is unaffected). Except in
-[continuous inspection](#cli-continuous-inspection), one `--timeout` deadline covers
-stdin, requests, operation polling, and readiness. The default is 15 seconds;
-create, resume, exit, archive, and delete use 45 seconds.
+URL precedence: `--url`, `CODEX_HUB_URL`, `http://127.0.0.1:4173`. HTTP and HTTPS
+origins are accepted. HTTPS uses Node.js certificate verification. For a private CA, set
+`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
+
+Except in [continuous inspection](#cli-continuous-inspection), one `--timeout`
+deadline covers stdin, requests, operation polling, and readiness. The default is
+15 seconds; create, resume, exit, archive, and delete use 45 seconds.
+
 Lifecycle commands await [management](#asynchronous-management); create/resume
 also inspect until live, connected, and idle. Input success does not prove task
 completion or answer correctness.
