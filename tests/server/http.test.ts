@@ -10,7 +10,7 @@ import type { SessionReader } from "../../src/server/application/session-reader.
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { LOOPBACK_HOST, type ServerConfig } from "../../src/server/config.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
-import { createServer, listenServer } from "../../src/server/http/create-server.js";
+import { createServer, listenServer, startServer } from "../../src/server/http/create-server.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import {
@@ -389,4 +389,78 @@ describe("secure HTTP foundation", () => {
       error: failure,
     });
   });
+});
+
+it("serves an optional loopback HTTP listener and closes shared services once", async () => {
+  const clientDirectory = await createTempDirectory("codex-local-http-");
+  await writeFile(join(clientDirectory, "index.html"), "local endpoint");
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  const cleanup = vi.fn();
+  const server = await startServer(
+    {
+      host: LOOPBACK_HOST,
+      port: 0,
+      localPort: 0,
+      homes: [],
+      clientDirectory,
+      tls: { enabled: false },
+      interactionEnabled: false,
+    },
+    async () => false,
+    cleanup,
+  );
+  const url = String(log.mock.calls[0][0]).split(" on ")[1];
+  log.mockRestore();
+  expect(await (await fetch(url)).text()).toBe("local endpoint");
+  await new Promise<void>((resolve) => server.close(() => resolve()));
+  expect(cleanup).toHaveBeenCalledTimes(1);
+  await expect(fetch(url)).rejects.toThrow();
+});
+
+it("stops both listeners before a pending local response finishes", async () => {
+  const clientDirectory = await createTempDirectory("codex-local-shutdown-");
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  let finishResponse!: () => void;
+  const cleanup = vi.fn();
+  const server = await startServer(
+    {
+      host: LOOPBACK_HOST,
+      port: 0,
+      localPort: 0,
+      homes: [],
+      clientDirectory,
+      tls: { enabled: false },
+      interactionEnabled: false,
+    },
+    async (_request, response) => {
+      response.writeHead(200);
+      response.write("pending");
+      finishResponse = () => response.end("done");
+      return true;
+    },
+    cleanup,
+  );
+  const localUrl = String(log.mock.calls[0][0]).split(" on ")[1];
+  log.mockRestore();
+  const primaryUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const response = await fetch(localUrl);
+  const closed = vi.fn();
+  const closing = new Promise<void>((resolve) =>
+    server.close(() => {
+      closed();
+      resolve();
+    }),
+  );
+  try {
+    expect(server.listening).toBe(false);
+    await expect(fetch(primaryUrl)).rejects.toThrow();
+    await expect(fetch(localUrl)).rejects.toThrow();
+    expect(closed).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledTimes(1);
+  } finally {
+    finishResponse();
+    await response.text();
+    await closing;
+  }
+  expect(closed).toHaveBeenCalledTimes(1);
 });

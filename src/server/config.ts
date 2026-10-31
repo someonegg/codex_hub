@@ -30,6 +30,7 @@ export interface ServerConfig {
   homes: CodexHomeConfig[];
   host: string;
   port: number;
+  localPort?: number;
   clientDirectory: string;
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
@@ -51,11 +52,11 @@ function nonEmptyOption(name: string, value: string | undefined): string | undef
   return normalized;
 }
 
-function parsePort(value: string | undefined): number {
+function parsePort(value: string | undefined, option = "port"): number {
   if (value === undefined) return 4173;
   const port = Number(value);
   if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new Error("--port must be an integer between 0 and 65535");
+    throw new Error(`--${option} must be an integer between 0 and 65535`);
   }
   return port;
 }
@@ -69,6 +70,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       "codex-home": { type: "string", multiple: true },
       host: { type: "string" },
       port: { type: "string" },
+      "local-port": { type: "string" },
       ssl: { type: "boolean" },
       "ssl-cert": { type: "string" },
       "ssl-key": { type: "string" },
@@ -113,6 +115,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     config: {
       host,
       port: parsePort(values.port),
+      ...(values["local-port"] !== undefined
+        ? { localPort: parsePort(values["local-port"], "local-port") }
+        : {}),
       homes,
       clientDirectory: fileURLToPath(new URL("../../client/", import.meta.url)),
       tls,
@@ -138,6 +143,7 @@ Options:
                        Codex home; repeat for multiple homes (default: default=~/.codex)
   --host <host>        Listen host (default: 127.0.0.1)
   --port <port>        Listen port, or 0 for a free port (default: 4173)
+  --local-port <port>  Additional HTTP listener on 127.0.0.1 (disabled by default)
   --ssl                Enable TLS; the port will accept HTTPS only
   --ssl-cert <path>    PEM server certificate or certificate chain
   --ssl-key <path>     PEM server private key

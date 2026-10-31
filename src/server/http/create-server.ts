@@ -178,13 +178,58 @@ export async function startServer(
   closeServices: () => void,
   upgrades?: ServerUpgradeHandler,
 ) {
-  try {
-    const server = createServer(config, apiRouter, closeServices, upgrades);
-    await listenServer(server, config.port, config.host);
-    return server;
-  } catch (error) {
+  let primary: ReturnType<typeof createServer> | undefined;
+  let local: ReturnType<typeof createServer> | undefined;
+  let cleaned = false;
+  const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     upgrades?.close();
     closeServices();
+  };
+  // Listener shutdown must leave shared WebSocket cleanup to the owner above.
+  const listenerUpgrades = upgrades && {
+    handle: upgrades.handle.bind(upgrades),
+    close: () => {},
+  };
+  try {
+    primary = createServer(config, apiRouter, () => {}, listenerUpgrades);
+    await listenServer(primary, config.port, config.host);
+    if (config.localPort !== undefined) {
+      local = createServer(
+        { ...config, tls: { enabled: false } },
+        apiRouter,
+        () => {},
+        listenerUpgrades,
+      );
+      await listenServer(local, config.localPort, "127.0.0.1");
+      const address = local.address();
+      if (address && typeof address === "object")
+        console.log(`Codex Hub local HTTP listening on http://127.0.0.1:${address.port}`);
+    }
+    const server = primary;
+    const close = server.close.bind(server);
+    server.close = ((callback?: (error?: Error) => void) => {
+      let pending = local ? 2 : 1;
+      let failure: Error | undefined;
+      const finished = (error?: Error) => {
+        failure ??= error;
+        if (--pending === 0) callback?.(failure);
+      };
+      cleanup();
+      close(finished);
+      local?.close(finished);
+      return server;
+    }) as typeof server.close;
+    return server;
+  } catch (error) {
+    cleanup();
+    for (const server of [local, primary]) {
+      if (server?.listening) {
+        server.close();
+        server.closeAllConnections();
+      }
+    }
     throw error;
   }
 }
