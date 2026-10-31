@@ -311,7 +311,12 @@ async function readStdin(signal: AbortSignal): Promise<string> {
     const data = (chunk: Buffer) => {
       size += chunk.length;
       if (size > MAX_INTERACTION_MESSAGE_BYTES * 2)
-        fail(new CommandError("invalid_arguments", "Message exceeds 64 KiB"));
+        fail(
+          new CommandError(
+            "invalid_arguments",
+            `Message exceeds ${MAX_INTERACTION_MESSAGE_BYTES / 1024} KiB`,
+          ),
+        );
       else chunks.push(chunk);
     };
     const end = () => {

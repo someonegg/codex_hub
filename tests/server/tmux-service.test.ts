@@ -80,10 +80,10 @@ describe("tmux interaction transport", () => {
   it("normalizes message newlines and enforces whitespace and UTF-8 byte limits", () => {
     expect(normalizeMessage("alpha\r\nbeta\rgamma")).toBe("alpha\nbeta\ngamma");
     expect(() => normalizeMessage(" \n\t ")).toThrow("must not be blank");
-    expect(Buffer.byteLength(normalizeMessage("界".repeat(21_845)), "utf8")).toBeLessThanOrEqual(
+    expect(Buffer.byteLength(normalizeMessage("界".repeat(87_381)), "utf8")).toBeLessThanOrEqual(
       MAX_INTERACTION_MESSAGE_BYTES,
     );
-    expect(() => normalizeMessage("界".repeat(21_846))).toThrow("must not exceed");
+    expect(() => normalizeMessage("界".repeat(87_382))).toThrow("must not exceed");
   });
 
   it("revalidates and sends one bracketed paste followed by one Enter", async () => {

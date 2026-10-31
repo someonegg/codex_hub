@@ -169,6 +169,24 @@ it("sends stdin and keys with idle requirements, but interrupt and handoff witho
   ]);
 });
 
+it("sends 256 KiB through stdin and rejects larger messages before submission", async () => {
+  const seen: unknown[] = [];
+  const base = await serve((_req, res, body) => {
+    seen.push(body);
+    res.writeHead(204);
+    res.end();
+  });
+  const message = "a".repeat(256 * 1024);
+  const args = ["send", "id", "--stdin", "--url", base, "--json"];
+  expect((await cli(args, message)).code).toBe(0);
+  expect(seen).toEqual([{ message, requireIdle: true }]);
+  expect((await cli(args, message + "a")).code).toBe(1);
+  const oversized = await cli(args, "a".repeat(512 * 1024 + 1));
+  expect(oversized.code).toBe(1);
+  expect(oversized.stdout).toContain("Message exceeds 256 KiB");
+  expect(seen).toHaveLength(1);
+});
+
 it("waits for lifecycle completion and launch idle, mapping only public results", async () => {
   let submits = 0,
     inspections = 0;
