@@ -322,11 +322,12 @@ and malformed responses mean unknown. Binding changes during awaits fail closed.
 Queued input/previews revalidate ownership; uncertain input never resends.
 Socket/pane reuse has no process-identity check.
 
-CLI messages/ordinary keys set `requireIdle: true`, requiring idle at transaction
-entry; ownership/management occupancy remain checked throughout. Non-idle input
-fails without waiting/retry; browser calls omit this restriction. Ordinary keys
-use the non-interrupt whitelist. Interrupt permits working; handoff sends the
-adapter binding command without requiring idle. Both retain other checks;
+CLI messages/ordinary keys default to `requireIdle: true`, requiring idle at transaction
+entry; non-idle input fails without waiting/retry. Their `--force` option explicitly
+sends `requireIdle: false`, allowing input while working; browser calls omit the idle
+restriction. Connection checks still apply; ownership and management occupancy remain
+checked throughout. Ordinary keys use the non-interrupt whitelist. Interrupt permits
+working; handoff sends the adapter binding command without requiring idle. Both retain other checks;
 handoff success means sent, not confirmed binding.
 
 ### Binding format and ownership

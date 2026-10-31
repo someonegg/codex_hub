@@ -169,4 +169,8 @@ it("exposes fresh terminal capture and validates idle input options", async () =
   expect(interaction.sendMessage).toHaveBeenCalledWith(SESSION_ID, "hello", true);
   expect((await post("keys", { keys: ["enter"], requireIdle: true })).status).toBe(204);
   expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, ["enter"], true);
+  expect((await post("messages", { message: "forced", requireIdle: false })).status).toBe(204);
+  expect(interaction.sendMessage).toHaveBeenCalledWith(SESSION_ID, "forced", false);
+  expect((await post("keys", { keys: ["enter"], requireIdle: false })).status).toBe(204);
+  expect(interaction.sendKeys).toHaveBeenCalledWith(SESSION_ID, ["enter"], false);
 });

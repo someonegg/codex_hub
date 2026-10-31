@@ -73,6 +73,10 @@ it.each([
   ["send", "id", "--stdin", "--message", "x"],
   ["keys", "id", "interrupt"],
   ["keys", "id", "C-c"],
+  ["keys", "id", "C-c", "--force"],
+  ["send", "id", "--message", "  ", "--force"],
+  ["interrupt", "id", "--force"],
+  ["resume", "id", "--force"],
   ["resume", "id", "--home", "other"],
   ["inspect", "id", "--limit", "301"],
   ["list", "--url", "ftp://example.com"],
@@ -200,7 +204,7 @@ it("uses explicit URL over the environment and filters by associated project", a
   expect((await cli(["list", "--json"], "", { CODEX_HUB_URL: base })).code).toBe(0);
 });
 
-it("sends stdin and keys with idle requirements, but interrupt and handoff without them", async () => {
+it("requires idle for send and keys unless forced, leaving interrupt and handoff unchanged", async () => {
   const seen: { url: string; body: unknown }[] = [];
   const base = await serve((req, res, body) => {
     seen.push({ url: req.url!, body });
@@ -210,6 +214,9 @@ it("sends stdin and keys with idle requirements, but interrupt and handoff witho
   for (const args of [
     ["send", "id", "--stdin"],
     ["keys", "id", "up", "enter"],
+    ["send", "id", "--stdin", "--force"],
+    ["send", "id", "--message", "forced", "--force"],
+    ["keys", "id", "up", "enter", "--force"],
     ["interrupt", "id"],
     ["handoff", "id"],
   ]) {
@@ -218,6 +225,9 @@ it("sends stdin and keys with idle requirements, but interrupt and handoff witho
   expect(seen).toEqual([
     { url: "/api/v1/sessions/id/messages", body: { message: "hello\n", requireIdle: true } },
     { url: "/api/v1/sessions/id/keys", body: { keys: ["up", "enter"], requireIdle: true } },
+    { url: "/api/v1/sessions/id/messages", body: { message: "hello\n", requireIdle: false } },
+    { url: "/api/v1/sessions/id/messages", body: { message: "forced", requireIdle: false } },
+    { url: "/api/v1/sessions/id/keys", body: { keys: ["up", "enter"], requireIdle: false } },
     { url: "/api/v1/sessions/id/keys", body: { keys: ["interrupt"] } },
     { url: "/api/v1/sessions/id/handoff-pane-binding", body: {} },
   ]);
