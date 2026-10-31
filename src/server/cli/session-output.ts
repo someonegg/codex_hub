@@ -84,10 +84,14 @@ export interface CliOperation {
 }
 export type CliResult = CliSessionList | CliInspect | CliTerminal | CliOperation;
 
-export function mapList(list: SessionListResponse, project?: string): CliSessionList {
+export function mapList(
+  list: SessionListResponse,
+  project?: string,
+  includeArchived = false,
+): CliSessionList {
   return {
     sessions: list.sessions
-      .filter((s) => !s.isChild)
+      .filter((s) => !s.isChild && (includeArchived || s.status !== "archived"))
       .map((s) => ({
         id: s.id,
         title: s.title,

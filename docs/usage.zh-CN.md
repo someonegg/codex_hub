@@ -85,7 +85,7 @@ ahub-cli session inspect <id>
 ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 ```
 
-使用 `list` 返回的 ID 发送输入或查看会话。`list` 列出主会话，`inspect` 也接受子会话 ID。
+使用 `list` 返回的 ID 发送输入或查看会话。`list` 默认列出未归档的主会话（`--all` 包含已归档会话），`inspect` 也接受子会话 ID。
 将返回的 `Next after` 值传给 `--after <value>` 继续读取下一页。
 使用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端。
 终端切换会话后，用 `handoff <id>` 移交绑定。

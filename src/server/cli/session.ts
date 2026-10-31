@@ -27,7 +27,7 @@ import {
 import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
-  list [--project <directory>]
+  list [--project <directory>] [--all]
   create --project <directory> [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin) [--force]
@@ -38,6 +38,7 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
   handoff <id>
   exit <id> | archive <id> | delete <id>
 Options: --url <http(s)-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
+List: excludes archived sessions unless --all is set.
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Messages: update indicates progress; response indicates a reply, not verified task completion.
@@ -56,6 +57,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         json: { type: "boolean" },
         timeout: { type: "string" },
         project: { type: "string" },
+        all: { type: "boolean" },
         cwd: { type: "string" },
         home: { type: "string" },
         worktree: { type: "boolean" },
@@ -77,7 +79,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   }
   const [command, id, ...keys] = positionals;
   const allowed: Record<string, string[]> = {
-    list: ["project"],
+    list: ["project", "all"],
     create: ["cwd", "project", "home", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin", "force"],
@@ -201,7 +203,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
     if (command === "list") {
       const list = await api<SessionListResponse>("/api/v1/sessions");
       const project = values.project === undefined ? undefined : resolve(values.project);
-      result = mapList(list, project);
+      result = mapList(list, project, values.all);
     } else if (command === "inspect") {
       const query = new URLSearchParams();
       for (const name of ["limit", "after"] as const) {
