@@ -51,7 +51,7 @@ ahub-cli session exit SESSION_ID --json
 
 ## Choose actions by session state
 
-Before each `send` or ordinary `keys` input, inspect and confirm `interaction.state=connected` and `activity=idle`. Working sessions reject these inputs rather than queue them, even after an input reminder.
+Before each `send` or ordinary `keys` input, inspect and confirm `interaction.state=connected`. By default, `activity=idle` is also required; working sessions reject input rather than queue it, even after an input reminder. When input during working is intentional, add `--force` to `send` (with `--message` or `--stdin`) or `keys`; it skips only the idle check, retaining connection, binding ownership, and management occupancy checks.
 
 | State                   | Next action                                                                                                                                                         |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

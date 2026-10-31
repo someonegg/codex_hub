@@ -635,6 +635,25 @@ it("checks idle both before transport and at actual input, while allowing interr
     await expect(service.sendMessage("session", "working", true)).rejects.toMatchObject({
       code: "session_busy",
     });
+    await service.sendMessage("session", "forced", false);
+    await service.sendKeys("session", ["enter"], false);
+    expect(await service.describe("session")).toMatchObject({ activity: "working" });
+    service.setBusy("session", true);
+    await expect(service.sendMessage("session", "forced", false)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    await expect(service.sendKeys("session", ["enter"], false)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    service.setBusy("session", false);
+    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    await expect(service.sendMessage("session", "forced", false)).rejects.toMatchObject({
+      code: "interaction_not_connected",
+    });
+    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    await expect(service.sendKeys("session", ["enter"], false)).rejects.toMatchObject({
+      code: "interaction_not_connected",
+    });
     await service.sendKeys("session", ["interrupt"]);
     await service.handoffPaneBinding("session");
     await vi.advanceTimersByTimeAsync(5001);

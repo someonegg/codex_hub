@@ -30,10 +30,10 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
   list [--project <directory>]
   create --project <directory> [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
-  send <id> (--message <text> | --stdin)
+  send <id> (--message <text> | --stdin) [--force]
   inspect <id> [--limit 1-300] [--after <number>] [--follow [--interval <seconds>] [--count <N>]]
   terminal <id>
-  keys <id> <key...>
+  keys <id> <key...> [--force]
   interrupt <id>
   handoff <id>
   exit <id> | archive <id> | delete <id>
@@ -41,7 +41,7 @@ Options: --url <http(s)-url> --json --timeout <seconds> (default 15; create/resu
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
 Messages: update indicates progress; response indicates a reply, not verified task completion.
-Input: send/keys require connected and idle; while working, observe or interrupt first.
+Input: send/keys require connected and idle; --force skips only the idle check, allowing input while working.
 Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}
 Completion: idle/response do not end --follow; verify results before exit/archive/delete.`;
 
@@ -61,6 +61,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         yolo: { type: "boolean" },
         message: { type: "string" },
         stdin: { type: "boolean" },
+        force: { type: "boolean" },
         limit: { type: "string" },
         after: { type: "string" },
         follow: { type: "boolean" },
@@ -78,10 +79,10 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     list: ["project"],
     create: ["cwd", "project", "home", "worktree", "yolo"],
     resume: ["yolo"],
-    send: ["message", "stdin"],
+    send: ["message", "stdin", "force"],
     inspect: ["limit", "after", "follow", "interval", "count"],
     terminal: [],
-    keys: [],
+    keys: ["force"],
     interrupt: [],
     handoff: [],
     exit: [],
@@ -225,13 +226,13 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       if (command === "send") {
         const input = values.stdin ? await readStdin(abort.signal) : values.message!;
         const message = validateArguments(() => normalizeMessage(input));
-        await api(`${path}/messages`, "POST", { message, requireIdle: true });
+        await api(`${path}/messages`, "POST", { message, requireIdle: !values.force });
       } else if (command === "handoff") await api(`${path}/handoff-pane-binding`, "POST", {});
       else
         await api(
           `${path}/keys`,
           "POST",
-          command === "interrupt" ? { keys: ["interrupt"] } : { keys, requireIdle: true },
+          command === "interrupt" ? { keys: ["interrupt"] } : { keys, requireIdle: !values.force },
         );
       result = { sessionId: id!, status: "sent" };
     } else {
