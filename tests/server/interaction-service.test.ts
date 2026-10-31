@@ -621,11 +621,18 @@ it("checks idle both before transport and at actual input, while allowing interr
       code: "session_busy",
     });
     expect(tmux.sendMessage).not.toHaveBeenCalled();
+    await expect(service.sendKeys("session", ["enter"], true)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    expect(tmux.sendKeys).not.toHaveBeenCalled();
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5001);
     await service.sendMessage("session", "hello", true);
     output("%7");
     await expect(service.sendKeys("session", ["enter"], true)).rejects.toMatchObject({
+      code: "session_busy",
+    });
+    await expect(service.sendMessage("session", "working", true)).rejects.toMatchObject({
       code: "session_busy",
     });
     await service.sendKeys("session", ["interrupt"]);

@@ -39,7 +39,7 @@ npm install -g @someonegg/codex-hub
 codex-hub
 ```
 
-Open <http://127.0.0.1:4173>. Choose **Settings → Language** to switch between English (the default), 简体中文, and 繁體中文. Press `Ctrl-C` to stop the server.
+Open <http://127.0.0.1:4173>. Open **Settings → Language** at the bottom of the sidebar to switch between English (the default), 简体中文, and 繁體中文. The choice is saved in this browser. Press `Ctrl-C` to stop the server.
 For home configuration, ports, and optional page/diff hosting, see [Usage](docs/usage.md).
 
 To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
@@ -52,6 +52,7 @@ For running from source, see [Development](docs/development.md).
 - Follow conversation updates while browsing their history.
 - Create sessions with optional worktrees, send input, and preview their terminals.
 - See live sessions, safely resume exited sessions, exit without archiving, and manage archives.
+- Switch the interface between English, Simplified Chinese, and Traditional Chinese.
 
 ## Session interaction
 

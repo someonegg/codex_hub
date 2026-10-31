@@ -48,20 +48,20 @@ export interface CliMessage extends CliRecord {
   phase: string | null;
   itemType: string | null;
   markdown: string;
+  inputHint?: string;
 }
 export interface CliQuestion extends CliRecord {
   kind: "user_input";
   stage: "request";
-  callId: string;
   questions: {
-    id: string;
     header: string;
     question: string;
     options: { label: string; description: string }[];
   }[];
+  inputHint: string;
 }
-export type CliAnswer = CliRecord & { kind: "user_input"; stage: "response"; callId: string } & (
-    | { outcome: "answered"; answers: { questionId: string; answers: string[] }[] }
+export type CliAnswer = CliRecord & { kind: "user_input"; stage: "response" } & (
+    | { outcome: "answered"; answers: string[] }
     | { outcome: "aborted" }
     | { outcome: "unavailable"; summary: string }
   );
@@ -99,6 +99,10 @@ export function mapList(list: SessionListResponse, project?: string): CliSession
       .filter((s) => project === undefined || s.projectDirectory === project),
   };
 }
+function inputHint(sessionId: string): string {
+  return `Wait for connected and idle, then run session terminal ${sessionId} to check the current prompt and session keys ${sessionId} <key...> to select.`;
+}
+
 export function mapInspect(value: InspectResponse): CliInspect {
   const s = value.session;
   const i = value.interaction;
@@ -141,21 +145,27 @@ export function mapInspect(value: InspectResponse): CliInspect {
             phase: item.phase,
             itemType: item.itemType,
             markdown: item.markdown,
+            ...(item.role === "assistant" && item.phase === "response" && item.itemType === "Plan"
+              ? { inputHint: inputHint(s.id) }
+              : {}),
           },
         ];
       if (item.kind !== "user_input") return [];
-      const input = { ...base, kind: "user_input" as const, callId: item.callId };
+      const input = { ...base, kind: "user_input" as const };
       if (item.stage === "request")
         return [
           {
             ...input,
             stage: "request",
-            questions: item.questions.map((q) => ({
-              id: q.id,
-              header: q.header,
-              question: q.question,
-              options: q.options.map((o) => ({ label: o.label, description: o.description })),
+            questions: item.questions.map((question) => ({
+              header: question.header,
+              question: question.question,
+              options: question.options.map((option) => ({
+                label: option.label,
+                description: option.description,
+              })),
             })),
+            inputHint: inputHint(s.id),
           },
         ];
       if (item.outcome === "answered")
@@ -164,10 +174,7 @@ export function mapInspect(value: InspectResponse): CliInspect {
             ...input,
             stage: "response",
             outcome: "answered",
-            answers: item.answers.map((a) => ({
-              questionId: a.questionId,
-              answers: [...a.answers],
-            })),
+            answers: item.answers.flatMap((a) => a.answers),
           },
         ];
       if (item.outcome === "unavailable")
@@ -227,52 +234,38 @@ function formatInspect(result: CliInspect, emptyItemsText: string): string {
     `Working directory: ${session.workingDirectory ?? ""}`,
   );
   const header = summary.map(singleLine).join("\n");
-  const titles = new Map<string, Map<string, string>>();
-  for (const item of result.items)
-    if (item.kind === "user_input" && item.stage === "request") {
-      const questions = titles.get(item.callId) ?? new Map<string, string>();
-      for (const q of item.questions) questions.set(q.id, q.header || q.id);
-      titles.set(item.callId, questions);
-    }
-  const items = result.items
-    .map((item) =>
-      formatHistoryItem(item, item.kind === "user_input" ? titles.get(item.callId) : undefined),
-    )
-    .join("\n\n");
+  const items = result.items.map(formatHistoryItem).join("\n\n");
   return `${header}\n\n${items || emptyItemsText}\n\nNext after: ${result.nextAfter}\nHas more: ${result.hasMore ? "yes" : "no"}`;
 }
 
-function formatHistoryItem(
-  item: CliInspect["items"][number],
-  questionTitles?: ReadonlyMap<string, string>,
-): string {
+function formatHistoryItem(item: CliInspect["items"][number]): string {
   if (item.kind === "message") {
     const phase = [item.phase, item.itemType].filter(Boolean).join(" · ");
-    return `--- #${item.ordinal} ${item.role === "assistant" ? "Assistant" : "User"}${phase ? ` · ${singleLine(phase)}` : ""} ---\n${item.markdown}`;
+    const title = `--- #${item.ordinal} ${item.role === "assistant" ? "Assistant" : "User"}${phase ? ` · ${singleLine(phase)}` : ""} ---`;
+    const body = item.inputHint ? `${item.markdown}\n\n${item.inputHint}` : item.markdown;
+    return `${title}\n${body}`;
   }
   if (item.stage === "request") {
-    const questions = item.questions.map((question) =>
-      [
-        singleLine(question.header),
-        question.question,
-        ...question.options.map(
-          (option, index) =>
-            `${index + 1}. ${singleLine(option.label)}${option.description ? ` — ${singleLine(option.description)}` : ""}`,
-        ),
-      ].join("\n"),
-    );
-    return `--- #${item.ordinal} Question ---\n${questions.join("\n\n")}`;
+    const questions = item.questions
+      .map((question) =>
+        [
+          question.header,
+          question.question,
+          ...question.options.map(
+            (option, index) => `${index + 1}. ${option.label}\n   ${option.description}`,
+          ),
+        ].join("\n"),
+      )
+      .join("\n\n");
+    return [`--- #${item.ordinal} Question ---`, questions, item.inputHint]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   let body: string;
   switch (item.outcome) {
     case "answered":
-      body = item.answers
-        .map(
-          (answer) =>
-            `${singleLine(questionTitles?.get(answer.questionId) ?? answer.questionId)}: ${answer.answers.join(", ")}`,
-        )
-        .join("\n");
+      body = item.answers.map((answer) => `- ${answer}`).join("\n");
       break;
     case "aborted":
       body = "Cancelled.";

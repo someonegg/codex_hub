@@ -115,6 +115,7 @@ For lifecycle commands, run `ahub-cli session --help`. Create requires `--projec
 and accepts `--cwd`, `--home`, `--worktree`, and `--yolo`. Omitting `--cwd` starts
 in the project directory; specifying it starts elsewhere while retaining the
 `--project` association. Omitting `--home` selects the first configured home.
+Both directories accept relative paths, which the CLI converts to absolute paths.
 Resume keeps the original home and accepts `--yolo`. Archive a session before deleting it.
 
 Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
@@ -123,12 +124,17 @@ Use `--timeout <seconds>` to change the default 15-second timeout (45 seconds fo
 create, resume, exit, archive, and delete). With `inspect --follow`, it limits each
 HTTP request; observation continues until Ctrl+C or the requested round count.
 
-Create and resume wait for a live, idle terminal. Sending input and ordinary keys
+Create and resume wait for a live, connected, idle terminal. Sending input and ordinary keys
 requires idle; successful input or `handoff` confirms sending, not task completion.
 After a timeout or exit code `2` (unknown write result), check with `list`, `inspect`,
 or `terminal` before retrying. Stopping the client does not cancel a submitted operation.
 See the [CLI reference](technical-reference.md#session-cli-and-observation) for
 output fields, exit codes, and failure semantics.
+
+For agent-assisted session workflows, use the bundled
+[`ahub-control` skill](../skills/ahub-control). Run
+`ahub-cli skill path ahub-control` to locate it. With `npx`, copy the skill
+directory from the temporary cache for lasting use.
 
 ## Multiple homes
 

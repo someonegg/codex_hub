@@ -4,13 +4,17 @@ import { fileURLToPath } from "node:url";
 
 import { CommandError } from "./command-error.js";
 
+const bundledSkills = ["ahub-publish", "ahub-control"];
+const usage = `Usage: ahub-cli skill path <${bundledSkills.join(" | ")}>`;
+
 export async function runSkillCommand(args: string[]): Promise<void> {
   if (args.length === 0 || (args.length === 1 && args[0] === "--help")) {
-    console.log("Usage: ahub-cli skill path ahub-publish");
+    console.log(usage);
     return;
   }
-  if (args.length !== 2 || args[0] !== "path" || args[1] !== "ahub-publish")
-    throw new CommandError("invalid_arguments", "Expected skill path ahub-publish");
+  const [command, skill] = args;
+  if (args.length !== 2 || command !== "path" || !skill || !bundledSkills.includes(skill))
+    throw new CommandError("invalid_arguments", usage);
 
   let directory = dirname(fileURLToPath(import.meta.url));
   while (true) {
@@ -21,7 +25,7 @@ export async function runSkillCommand(args: string[]): Promise<void> {
       // Continue through directories without a package manifest.
     }
     if (name === "@someonegg/codex-hub") {
-      const path = join(directory, "skills", "ahub-publish");
+      const path = join(directory, "skills", skill);
       if (!(await stat(join(path, "SKILL.md"))).isFile())
         throw new CommandError("command_failed", "Skill file is missing");
       console.log(path);

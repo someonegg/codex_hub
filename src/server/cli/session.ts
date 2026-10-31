@@ -40,7 +40,10 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
 Options: --url <http-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
-Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}`;
+Messages: update indicates progress; response indicates a reply, not verified task completion.
+Input: send/keys require connected and idle; while working, observe or interrupt first.
+Keys: ${INTERACTION_KEYS.filter((key) => key !== "interrupt").join(", ")}
+Completion: idle/response do not end --follow; verify results before exit/archive/delete.`;
 
 export function parseSessionArguments(args: string[], environmentUrl?: string) {
   const { values, positionals } = validateArguments(() =>
