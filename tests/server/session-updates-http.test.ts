@@ -121,7 +121,7 @@ async function start(
   const repository = {
     list: vi.fn(),
     getSession: unavailable,
-    inspect: async () => null,
+    messages: async () => null,
     getItems: unavailable,
     getSessionUpdates,
     readSessionUpdates: async (id: string) => {

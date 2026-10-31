@@ -72,11 +72,11 @@ export function createSessionReadRoutes(dependencies: {
       const itemId =
         segments.length === 3 && segments[0] === "items" ? decodeItemId(segments[1] ?? "") : "";
 
-      if (segments.length === 1 && segments[0] === "inspect") {
+      if (segments.length === 1 && segments[0] === "messages") {
         only(url.searchParams, ["limit", "after"]);
         const limit = optional(url.searchParams, "limit");
         const after = optional(url.searchParams, "after");
-        const result = await dependencies.sessions.inspect(id, {
+        const result = await dependencies.sessions.messages(id, {
           ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
           ...(after === undefined ? {} : { after: integer(after, "after") }),
         });

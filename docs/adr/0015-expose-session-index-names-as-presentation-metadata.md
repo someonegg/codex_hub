@@ -5,7 +5,7 @@ date: 2026-09-04
 
 # Expose session index names as presentation metadata
 
-Current scope: the server resolves display titles for catalog, detail, inspect,
+Current scope: the server resolves display titles for catalog, detail, messages,
 and updates responses. Title changes affect catalog and reader revisions.
 The Codex adapter owns advisory index reading; API mapping applies title precedence.
 See the [catalog reference](../technical-reference.md#catalog) and

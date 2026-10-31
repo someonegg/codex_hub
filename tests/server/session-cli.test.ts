@@ -466,7 +466,7 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
   const seen: string[] = [];
   const base = await serve((req, res, body) => {
     seen.push(`${req.method} ${req.url}`);
-    if (req.url?.includes("/inspect"))
+    if (req.url?.includes("/messages"))
       reply(res, {
         session: {
           id: "child",
@@ -518,7 +518,7 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
     expect(result.stdout).not.toContain("parent");
   }
   expect(seen).toEqual([
-    "GET /api/v1/sessions/child/inspect",
+    "GET /api/v1/sessions/child/messages",
     "GET /api/v1/sessions/child/terminal",
     "POST /api/v1/sessions/child/messages",
     "POST /api/v1/sessions/child/keys",
@@ -528,7 +528,7 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
     "POST /api/v1/sessions/child/archive",
     "DELETE /api/v1/sessions/child",
     "POST /api/v1/sessions",
-    "GET /api/v1/sessions/child/inspect?limit=1",
+    "GET /api/v1/sessions/child/messages?limit=1",
   ]);
 });
 

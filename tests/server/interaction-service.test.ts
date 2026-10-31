@@ -35,7 +35,7 @@ function repository(snapshot: InteractionSessionSnapshot | null): SessionReader 
   return {
     list: vi.fn(),
     getSession: vi.fn(),
-    inspect: async () => null,
+    messages: async () => null,
     getItems: vi.fn(),
     readSessionUpdates: vi.fn(),
     getSessionUpdates: vi.fn(),

@@ -1,4 +1,4 @@
-import type { HubOperation, InspectResponse } from "../../shared/api-contract.js";
+import type { HubOperation, SessionMessagesResponse } from "../../shared/api-contract.js";
 import { CommandError } from "./command-error.js";
 import type { SessionClient } from "./session-client.js";
 
@@ -55,8 +55,8 @@ export async function waitForLaunch(
 ): Promise<void> {
   if (!sessionId) throw new Error("Launch response has no session");
   for (;;) {
-    const observed = await api<InspectResponse>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/inspect?limit=1`,
+    const observed = await api<SessionMessagesResponse>(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages?limit=1`,
     );
     if (
       observed.live &&

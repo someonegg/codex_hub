@@ -101,7 +101,7 @@ describe("SessionReadService", () => {
     const renamed = (await repository.list()).sessions.find(({ id }) => id === basic.id);
     expect(renamed).toMatchObject({ title: "Current nickname" });
 
-    const inspected = await repository.inspect(basic.id, { limit: 1 });
+    const inspected = await repository.messages(basic.id, { limit: 1 });
     expect(inspected?.session.title).toBe("Current nickname");
     expect(inspected?.session).not.toHaveProperty("nickname");
     const detail = await repository.getSession(basic.id);

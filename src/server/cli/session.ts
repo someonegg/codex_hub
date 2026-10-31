@@ -4,11 +4,11 @@ import { parseArgs } from "node:util";
 
 import {
   type HubOperation,
-  type InspectResponse,
   INTERACTION_KEYS,
   MAX_INTERACTION_KEY_SEQUENCE_LENGTH,
   MAX_INTERACTION_MESSAGE_BYTES,
   type SessionListResponse,
+  type SessionMessagesResponse,
   type TerminalResponse,
   type TmuxTarget,
 } from "../../shared/api-contract.js";
@@ -220,7 +220,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
         });
         return;
       }
-      result = mapInspect(await api<InspectResponse>(`${path}/inspect?${query}`));
+      result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
     } else if (command === "terminal")
       result = mapTerminal(await api<TerminalResponse>(`${path}/terminal`));
     else if (["send", "keys", "interrupt", "handoff"].includes(command)) {

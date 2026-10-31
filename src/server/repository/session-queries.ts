@@ -60,7 +60,7 @@ export class SessionQueries {
     return versioned?.normalized.session ?? null;
   }
 
-  inspect(snapshot: CatalogSnapshot, id: string, query: { limit?: number; after?: number }) {
+  messages(snapshot: CatalogSnapshot, id: string, query: { limit?: number; after?: number }) {
     validateItemQuery(query);
     if (query.after !== undefined && (!Number.isSafeInteger(query.after) || query.after < 0))
       throw new RepositoryQueryError("invalid_query", "after must be a nonnegative safe integer");
@@ -77,7 +77,7 @@ export class SessionQueries {
       start = timeline.length;
       while (start > 0 && remaining > 0) {
         start--;
-        if (isInspectVisible(timeline[start]!)) remaining--;
+        if (isMessageVisible(timeline[start]!)) remaining--;
       }
     } else {
       let upper = timeline.length;
@@ -92,7 +92,7 @@ export class SessionQueries {
     let index = start;
     for (; index < timeline.length; index++) {
       const item = timeline[index]!;
-      if (!isInspectVisible(item)) continue;
+      if (!isMessageVisible(item)) continue;
       if (items.length >= limit) break;
       const size = Buffer.byteLength(JSON.stringify(item), "utf8") + (items.length ? 1 : 0);
       if (items.length > 0 && bytes + size > MAX_ITEM_PAGE_BYTES) break;
@@ -295,6 +295,6 @@ function validateItemQuery(query: ItemPageCriteria): void {
   }
 }
 
-function isInspectVisible(item: DomainTimelineRecord): boolean {
+function isMessageVisible(item: DomainTimelineRecord): boolean {
   return item.kind === "message" || item.kind === "user_input";
 }

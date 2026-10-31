@@ -1,4 +1,4 @@
-import type { InspectResponse } from "../../shared/api-contract.js";
+import type { SessionMessagesResponse } from "../../shared/api-contract.js";
 import { CommandError } from "./command-error.js";
 import { output } from "./output.js";
 import { SessionClient } from "./session-client.js";
@@ -26,11 +26,10 @@ export async function followInspect(options: {
       const stop = () => controller.abort();
       signal.addEventListener("abort", stop, { once: true });
       const timer = setTimeout(stop, timeoutMs);
-      let observed: InspectResponse;
+      let observed: SessionMessagesResponse;
       try {
-        observed = await new SessionClient(base, controller.signal).request<InspectResponse>(
-          `${path}/inspect?${query}`,
-        );
+        const client = new SessionClient(base, controller.signal);
+        observed = await client.request<SessionMessagesResponse>(`${path}/messages?${query}`);
       } finally {
         clearTimeout(timer);
         signal.removeEventListener("abort", stop);
