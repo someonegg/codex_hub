@@ -78,6 +78,16 @@ Home、端口与可选网页／差异托管配置见[使用与配置](docs/usage
 显示**已被替代**后，点击**前往已绑定会话**。未发送草稿保留在旧页面。
 详见[与 Codex 交互](docs/usage.zh-CN.md#与-codex-交互)。
 
+## 通过管理 CLI 操作会话
+
+使用 `ahub-cli session` 在另一个终端中列出、创建、恢复、查看和管理会话，或向运行中的会话发送输入。
+添加 `--json` 可输出结构化结果，便于脚本和智能体工作流使用。
+命令与示例见[会话 CLI 使用说明](docs/usage.zh-CN.md#会话)。
+
+如需智能体协助管理会话，可使用 npm 包附带的
+[`ahub-control` skill](skills/ahub-control)。运行
+`ahub-cli skill path ahub-control` 查看目录。`npx` 返回缓存路径，长期使用请复制该目录。
+
 ## 安全
 
 Codex Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原生 CLI 命令管理会话。

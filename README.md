@@ -81,6 +81,18 @@ running a plan, click **Handoff** on the previous session's page. Once it shows
 **Superseded**, follow **Go to bound session**. Your draft stays on the old page.
 See [tmux interaction](docs/usage.md#interacting-with-codex) for details.
 
+## Management CLI sessions
+
+Use `ahub-cli session` to list, create, resume, inspect, and manage sessions from
+another terminal, or send input to a live session. Add `--json` for structured
+output in scripts and agent workflows.
+See [session CLI usage](docs/usage.md#sessions) for commands and examples.
+
+For agent-assisted session workflows, use the bundled
+[`ahub-control` skill](skills/ahub-control). Run
+`ahub-cli skill path ahub-control` to locate it. With `npx`, copy the skill
+directory from the temporary cache for lasting use.
+
 ## Security
 
 Codex Hub reads local session logs and the session index, interacts with Codex

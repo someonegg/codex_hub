@@ -105,10 +105,6 @@ HTTP 位址；此用戶端不支援 HTTPS。用 `--timeout <seconds>` 修改預�
 或 `terminal` 核查，再決定是否重試。停止用戶端不會取消已提交操作。
 輸出欄位、結束代碼與失敗語意見 [CLI 參考（英文）](technical-reference.md#session-cli-and-observation)。
 
-如需代理程式協助管理工作階段，可使用 npm 套件附帶的
-[`ahub-control` skill](../skills/ahub-control)。執行
-`ahub-cli skill path ahub-control` 查看目錄。`npx` 回傳快取路徑，長期使用請複製該目錄。
-
 ## 多個 Home
 
 使用 `--codex-home 'nickname=path'` 指定 Codex Home。路徑應指向包含 `sessions/` 的目錄，

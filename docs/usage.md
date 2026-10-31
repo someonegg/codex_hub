@@ -131,11 +131,6 @@ or `terminal` before retrying. Stopping the client does not cancel a submitted o
 See the [CLI reference](technical-reference.md#session-cli-and-observation) for
 output fields, exit codes, and failure semantics.
 
-For agent-assisted session workflows, use the bundled
-[`ahub-control` skill](../skills/ahub-control). Run
-`ahub-cli skill path ahub-control` to locate it. With `npx`, copy the skill
-directory from the temporary cache for lasting use.
-
 ## Multiple homes
 
 To use a different Codex home, pass `--codex-home 'nickname=path'`. Point to the

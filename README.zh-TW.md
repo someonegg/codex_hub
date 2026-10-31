@@ -78,6 +78,16 @@ Home、連接埠與可選網頁／差異託管設定見[使用與設定](docs/us
 顯示**已被替代**後，點選**前往已繫結工作階段**。未傳送草稿保留在舊頁面。
 詳見[與 Codex 互動](docs/usage.zh-TW.md#與-codex-互動)。
 
+## 透過管理 CLI 操作工作階段
+
+使用 `ahub-cli session` 在另一個終端中列出、建立、恢復、檢視和管理工作階段，或向執行中的工作階段傳送輸入。
+新增 `--json` 可輸出結構化結果，方便指令碼和代理工作流程使用。
+命令與範例見[工作階段 CLI 使用說明](docs/usage.zh-TW.md#工作階段)。
+
+如需代理程式協助管理工作階段，可使用 npm 套件附帶的
+[`ahub-control` skill](skills/ahub-control)。執行
+`ahub-cli skill path ahub-control` 查看目錄。`npx` 回傳快取路徑，長期使用請複製該目錄。
+
 ## 安全
 
 Codex Hub 讀取本地工作階段日誌與索引，透過 tmux 互動，並使用原生 CLI 命令管理工作階段。
