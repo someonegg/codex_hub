@@ -18,7 +18,7 @@ async function start() {
       session: SESSION,
       interactionSession: { archived: false, interaction: null },
     }),
-    inspect: async () => null,
+    messages: async () => null,
     getItems: unavailable,
     readSessionUpdates: unavailable,
     getSessionUpdates: unavailable,

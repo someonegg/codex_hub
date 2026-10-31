@@ -359,7 +359,7 @@ describe("secure HTTP foundation", () => {
     const repository: SessionReader = {
       list: fail,
       getSession: fail,
-      inspect: async () => null,
+      messages: async () => null,
       getItems: fail,
       readSessionUpdates: fail,
       getSessionUpdates: fail,

@@ -8,7 +8,7 @@ import { SessionUpdatesService } from "../../src/server/updates/session-updates-
 import { startHttpServer } from "../helpers/http-server.js";
 import { createCodexSessionReadService } from "./codex-read-helper.js";
 
-it("serves inspect from the reader snapshot, with validated pagination and missing-session errors", async () => {
+it("serves messages from the reader snapshot, with validated pagination and missing-session errors", async () => {
   const sessions = await createCodexSessionReadService(resolve("tests/fixtures/codex-home"));
   const catalog = new SessionCatalogService(sessions);
   const updates = new SessionUpdatesService(sessions);
@@ -19,7 +19,7 @@ it("serves inspect from the reader snapshot, with validated pagination and missi
   const session = (await sessions.list()).sessions.find(
     (item) => item.title === "Synthetic trace",
   )!;
-  const root = `${base}/api/v1/sessions/${session.id}/inspect`;
+  const root = `${base}/api/v1/sessions/${session.id}/messages`;
   const response = await fetch(`${root}?after=0&limit=1`);
   expect(response.status).toBe(200);
   const first = await response.json();
@@ -39,5 +39,5 @@ it("serves inspect from the reader snapshot, with validated pagination and missi
   expect((await fetch(`${root}?limit=0`)).status).toBe(400);
   expect((await fetch(`${root}?after=-1`)).status).toBe(400);
   expect((await fetch(`${root}?after=0&after=1`)).status).toBe(400);
-  expect((await fetch(`${base}/api/v1/sessions/${"a".repeat(43)}/inspect`)).status).toBe(404);
+  expect((await fetch(`${base}/api/v1/sessions/${"a".repeat(43)}/messages`)).status).toBe(404);
 });

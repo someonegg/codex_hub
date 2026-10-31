@@ -216,9 +216,9 @@ hint to their full text. See [output formatting](../src/server/cli/session-outpu
 for labels and [ahub-control](../skills/ahub-control/SKILL.md#operation-state-machine)
 for the input workflow.
 
-### Inspect and numbered pagination
+### Messages and numbered pagination
 
-`GET /api/v1/sessions/:id/inspect?limit=N&after=number` returns
+`GET /api/v1/sessions/:id/messages?limit=N&after=number` returns
 `session`, `live`, `interaction`, `items`, `nextAfter`, `hasMore`. Log/runtime
 observations are not atomic; missing sessions return `404`, not empty history.
 

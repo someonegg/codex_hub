@@ -54,7 +54,7 @@ it("waits for live, connected, idle launch readiness", async () => {
   await vi.advanceTimersByTimeAsync(1500);
   await waiting;
   expect(api.mock.calls).toEqual(
-    Array.from({ length: 4 }, () => ["/api/v1/sessions/session%2F1/inspect?limit=1"]),
+    Array.from({ length: 4 }, () => ["/api/v1/sessions/session%2F1/messages?limit=1"]),
   );
 });
 

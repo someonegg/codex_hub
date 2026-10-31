@@ -6,7 +6,10 @@ import {
   mapList,
   mapTerminal,
 } from "../../src/server/cli/session-output.js";
-import type { InspectResponse, SessionListResponse } from "../../src/shared/api-contract.js";
+import type {
+  SessionMessagesResponse,
+  SessionListResponse,
+} from "../../src/shared/api-contract.js";
 
 const base = {
   session: {
@@ -45,7 +48,7 @@ const base = {
   },
   items: [],
   secret: "secret",
-} as unknown as InspectResponse;
+} as unknown as SessionMessagesResponse;
 const record = { id: "record", ordinal: 42, timestamp: null, secret: "secret" };
 const request = {
   ...record,
@@ -146,7 +149,7 @@ it("whitelists nested records and renders Markdown, input hints, flattened answe
       { ...record, kind: "tool", toolName: "secret" },
       { ...record, kind: "future", secret: "secret" },
     ],
-  } as unknown as InspectResponse);
+  } as unknown as SessionMessagesResponse);
   expect(Object.keys(mapped)).toEqual(["session", "interaction", "items", "nextAfter", "hasMore"]);
   expect(Object.keys(mapped.session)).toEqual([
     "id",
@@ -237,7 +240,7 @@ it("renders unsupported, empty pages, cancelled and unavailable outcomes", () =>
         summary: "读取失败\n详细说明",
       },
     ],
-  } as unknown as InspectResponse);
+  } as unknown as SessionMessagesResponse);
   expect(formatResult("inspect", outcomes)).toContain("Answer ---\nCancelled.");
   expect(formatResult("inspect", outcomes)).toContain(
     "Answer ---\nUnavailable: 读取失败\n详细说明",

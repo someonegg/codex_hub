@@ -187,7 +187,7 @@ it("builds the detail index lazily once per immutable normalized session", () =>
   expect(() => queries.items(replaced, session.id, { cursor })).toThrow(/prefix/);
 });
 
-it("inspects visible messages and structured user input with raw ordinal boundaries", () => {
+it("reads visible messages and structured user input with raw ordinal boundaries", () => {
   const queries = new SessionQueries();
   const timeline: DomainTimelineRecord[] = [
     { ...message(0), role: "assistant", phase: "update", itemType: "plan" },
@@ -221,43 +221,43 @@ it("inspects visible messages and structured user input with raw ordinal boundar
     { id: "hidden-end", ordinal: 10, timestamp: null, kind: "internal", eventType: "event" },
   ];
   const state = snapshot(normalized(timeline));
-  expect(queries.inspect(state, session.id, { limit: 2 })).toMatchObject({
+  expect(queries.messages(state, session.id, { limit: 2 })).toMatchObject({
     items: timeline.slice(2, 4),
     nextAfter: 10,
     hasMore: false,
   });
-  const first = queries.inspect(state, session.id, { after: 0, limit: 1 })!;
+  const first = queries.messages(state, session.id, { after: 0, limit: 1 })!;
   expect(first).toMatchObject({ items: [timeline[0]], nextAfter: 2, hasMore: true });
-  const second = queries.inspect(state, session.id, { after: first.nextAfter, limit: 1 })!;
+  const second = queries.messages(state, session.id, { after: first.nextAfter, limit: 1 })!;
   expect(second).toMatchObject({ items: [timeline[2]], nextAfter: 4, hasMore: true });
-  expect(queries.inspect(state, session.id, { after: 7 })).toMatchObject({
+  expect(queries.messages(state, session.id, { after: 7 })).toMatchObject({
     items: [],
     nextAfter: 10,
     hasMore: false,
   });
-  expect(() => queries.inspect(state, session.id, { after: 11 })).toThrow("range");
-  expect(() => queries.inspect(state, session.id, { after: -1 })).toThrow();
-  expect(() => queries.inspect(state, session.id, { limit: 301 })).toThrow();
-  expect(queries.inspect(state, "missing", {})).toBeNull();
-  expect(queries.inspect(snapshot(normalized([])), session.id, {})).toMatchObject({
+  expect(() => queries.messages(state, session.id, { after: 11 })).toThrow("range");
+  expect(() => queries.messages(state, session.id, { after: -1 })).toThrow();
+  expect(() => queries.messages(state, session.id, { limit: 301 })).toThrow();
+  expect(queries.messages(state, "missing", {})).toBeNull();
+  expect(queries.messages(snapshot(normalized([])), session.id, {})).toMatchObject({
     items: [],
     nextAfter: 0,
     hasMore: false,
   });
 });
 
-it("inspect honors the byte budget without truncating visible bodies or skipping records", () => {
+it("messages honors the byte budget without truncating visible bodies or skipping records", () => {
   const queries = new SessionQueries();
   const large = { ...message(0), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES - 500) };
   const next = { ...message(1), markdown: "y".repeat(1000) };
   const state = snapshot(normalized([large, next]));
-  const first = queries.inspect(state, session.id, { after: 0, limit: 10 })!;
+  const first = queries.messages(state, session.id, { after: 0, limit: 10 })!;
   expect(first.items).toEqual([large]);
   expect(first.hasMore).toBe(true);
-  expect(queries.inspect(state, session.id, { after: first.nextAfter })!.items).toEqual([next]);
+  expect(queries.messages(state, session.id, { after: first.nextAfter })!.items).toEqual([next]);
 });
 
-it("inspect skips unrelated history for latest and after reads", () => {
+it("messages skips unrelated history for latest and after reads", () => {
   let reads = 0;
   const timeline = new Proxy(
     Array.from({ length: 10_000 }, (_, index) => message(index)),
@@ -271,19 +271,19 @@ it("inspect skips unrelated history for latest and after reads", () => {
   const state = snapshot(normalized(timeline));
   const queries = new SessionQueries();
   reads = 0;
-  const latest = queries.inspect(state, session.id, {})!;
+  const latest = queries.messages(state, session.id, {})!;
   expect(latest.items.map((item) => item.id)).toEqual(
     Array.from({ length: 10 }, (_, index) => `item-${9990 + index}`),
   );
   expect(reads).toBeLessThan(30);
   reads = 0;
-  const page = queries.inspect(state, session.id, { after: message(9000).ordinal, limit: 2 })!;
+  const page = queries.messages(state, session.id, { after: message(9000).ordinal, limit: 2 })!;
   expect(page.items).toEqual([message(9001), message(9002)]);
   expect(page.hasMore).toBe(true);
   expect(reads).toBeLessThan(30);
 });
 
-it("inspect handles hidden timelines, sparse boundaries and exact end reads", () => {
+it("messages handles hidden timelines, sparse boundaries and exact end reads", () => {
   const hidden: DomainTimelineRecord = {
     id: "hidden",
     ordinal: 100,
@@ -294,24 +294,24 @@ it("inspect handles hidden timelines, sparse boundaries and exact end reads", ()
   const queries = new SessionQueries();
   const state = snapshot(normalized([hidden]));
   for (const query of [{}, { after: 0 }, { after: 50 }, { after: 100 }]) {
-    expect(queries.inspect(state, session.id, query)).toMatchObject({
+    expect(queries.messages(state, session.id, query)).toMatchObject({
       items: [],
       nextAfter: 100,
       hasMore: false,
     });
   }
   const visible = snapshot(normalized([message(0), message(1), hidden]));
-  expect(queries.inspect(visible, session.id, { after: 2, limit: 1 })).toMatchObject({
+  expect(queries.messages(visible, session.id, { after: 2, limit: 1 })).toMatchObject({
     items: [message(1)],
     nextAfter: 100,
     hasMore: false,
   });
-  expect(queries.inspect(visible, session.id, { after: 100 })!.items).toEqual([]);
+  expect(queries.messages(visible, session.id, { after: 100 })!.items).toEqual([]);
   for (const after of [NaN, Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1])
-    expect(() => queries.inspect(visible, session.id, { after })).toThrow();
+    expect(() => queries.messages(visible, session.id, { after })).toThrow();
 });
 
-it("inspect latest byte pagination follows through hidden gaps and oversized records", () => {
+it("messages latest byte pagination follows through hidden gaps and oversized records", () => {
   const timeline: DomainTimelineRecord[] = [
     message(0),
     { ...message(1), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES) },
@@ -322,12 +322,12 @@ it("inspect latest byte pagination follows through hidden gaps and oversized rec
   ];
   const queries = new SessionQueries();
   const state = snapshot(normalized(timeline));
-  let page = queries.inspect(state, session.id, { limit: 3 })!;
+  let page = queries.messages(state, session.id, { limit: 3 })!;
   expect(page.items).toEqual([timeline[1]]);
   expect(page.nextAfter).toBe(5);
   const collected = [...page.items];
   while (page.hasMore) {
-    page = queries.inspect(state, session.id, { after: page.nextAfter, limit: 1 })!;
+    page = queries.messages(state, session.id, { after: page.nextAfter, limit: 1 })!;
     collected.push(...page.items);
   }
   expect(collected).toEqual([timeline[1], timeline[3], timeline[4]]);

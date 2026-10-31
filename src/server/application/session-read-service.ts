@@ -1,7 +1,7 @@
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
-  InspectQuery,
+  SessionMessagesQuery,
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
@@ -91,9 +91,9 @@ export class SessionReadService implements SessionReader {
     return { ...response, interactionSession };
   }
 
-  async inspect(id: SessionId, query: InspectQuery) {
+  async messages(id: SessionId, query: SessionMessagesQuery) {
     const snapshot = await this.#store.current();
-    const result = this.#queries.inspect(snapshot, id, query);
+    const result = this.#queries.messages(snapshot, id, query);
     if (!result) return null;
     const session = this.#mapper.sessionDetail(result.session);
     const interactionSession = await this.#runtimeDetail(session, snapshot);

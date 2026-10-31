@@ -1,5 +1,5 @@
 import type {
-  InspectResponse,
+  SessionMessagesResponse,
   SessionListResponse,
   TerminalResponse,
   TmuxTarget,
@@ -103,7 +103,7 @@ function inputHint(sessionId: string): string {
   return `Wait for connected and idle, then run session terminal ${sessionId} to check the current prompt and session keys ${sessionId} <key...> to select.`;
 }
 
-export function mapInspect(value: InspectResponse): CliInspect {
+export function mapInspect(value: SessionMessagesResponse): CliInspect {
   const s = value.session;
   const i = value.interaction;
   return {

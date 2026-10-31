@@ -40,12 +40,12 @@ export interface SessionDetailResponse {
   updateRevision: UpdateRevision;
 }
 
-export interface InspectQuery {
+export interface SessionMessagesQuery {
   limit?: number;
   after?: number;
 }
 
-export interface InspectResponse {
+export interface SessionMessagesResponse {
   session: SessionDetail;
   live: boolean;
   interaction: InteractionResponse;

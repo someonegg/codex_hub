@@ -1,8 +1,8 @@
 import type {
   DirectiveDetailQuery,
   DirectiveDetailResponse,
-  InspectQuery,
-  InspectResponse,
+  SessionMessagesQuery,
+  SessionMessagesResponse,
   InternalDetailQuery,
   InternalDetailResponse,
   ItemPageQuery,
@@ -24,7 +24,7 @@ export type SessionUpdatesRead = ((cursor: TimelineCursor) => SessionUpdatesSnap
 
 export interface SessionReader {
   readSessionUpdates(id: SessionId): Promise<SessionUpdatesRead | null>;
-  inspect(id: SessionId, query: InspectQuery): Promise<SessionInspectResponse | null>;
+  messages(id: SessionId, query: SessionMessagesQuery): Promise<SessionMessagesReadResponse | null>;
   list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionReadDetailResponse | null>;
   getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null>;
@@ -48,7 +48,7 @@ export interface SessionReader {
   getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
 }
 
-export type SessionInspectResponse = Omit<InspectResponse, "live" | "interaction"> & {
+export type SessionMessagesReadResponse = Omit<SessionMessagesResponse, "live" | "interaction"> & {
   readonly interactionSession: InteractionSessionSnapshot;
 };
 
