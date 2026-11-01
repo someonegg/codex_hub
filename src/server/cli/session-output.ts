@@ -204,20 +204,22 @@ export function formatResult(
 ): string {
   if ("content" in result)
     return `${singleLine(result.capturedAt)}${result.truncated ? " (truncated)" : ""}\n${result.content}`;
-  if ("sessions" in result)
+  if ("sessions" in result) {
+    const showTask = result.sessions.some((s) => Boolean(s.taskName));
     return (
       formatTable(
-        ["ID", "STATUS", "HOME", "PROJECT", "TASK", "TITLE"],
+        ["ID", "STATUS", "HOME", "PROJECT", ...(showTask ? ["TASK"] : []), "TITLE"],
         result.sessions.map((s) => [
           s.id,
           s.status,
           s.home ?? "",
           s.projectDirectory ?? "",
-          s.taskName ?? "",
+          ...(showTask ? [s.taskName ?? ""] : []),
           s.title,
         ]),
       ) + (result.sessions.length ? "" : "\nNo sessions.")
     );
+  }
   if (!("session" in result)) {
     const lines = [`${command} ${singleLine(String(result.sessionId))}: ${result.status}`];
     if (result.tmux) lines.push(`Tmux: ${formatTmux(result.tmux)}`);
