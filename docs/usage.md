@@ -79,7 +79,6 @@ for API and storage guarantees.
 Open **Settings** at the bottom of the sidebar to choose language, the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
 
 By default, **Shift+Enter** sends and **Enter** inserts a newline. Enable **Enter to send** in Settings to send with **Enter** and insert a newline with **Shift+Enter**.
-A bare slash command such as `/help`, with no arguments or attachments, also sends with **Enter**.
 
 The interface defaults to English. Choose **Language → 简体中文 / 繁體中文** to switch immediately without reloading; other open Hub tabs also update. Language affects Hub controls, dates, and numbers; conversation text, terminal output, filenames, paths, and commands retain their original content.
 

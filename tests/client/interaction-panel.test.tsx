@@ -344,36 +344,21 @@ it.each([
   );
 });
 
-it.each([
-  ["  /MODEL  ", true],
-  ["/model xxx", false],
-  ["/help2", false],
-  ["/my-command", false],
-  ["hello", false],
-  ["/帮助", false],
-  ["/help\n/status", false],
-])("handles Enter for %s (sends: %s)", async (message, sends) => {
-  const handlers = props(interaction("connected"));
-  render(<InteractionPanel {...handlers} />);
-  const textarea = screen.getByRole("textbox");
-  fireEvent.change(textarea, { target: { value: message } });
-  expect(fireEvent.keyDown(textarea, { key: "Enter" })).toBe(!sends);
-  await act(async () => {
-    await Promise.resolve();
-  });
-  if (sends) expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
-  else expect(handlers.onSendMessage).not.toHaveBeenCalled();
-});
-
-it.each([{ isComposing: true }, { repeat: true }])(
-  "does not send commands during composition or key repeat: %j",
-  (options) => {
+it.each([false, true])(
+  "protects IME confirmation and key repeat with enterToSend=%s",
+  (enterToSend) => {
+    updatePreferences({ enterToSend });
     const handlers = props(interaction("connected"));
     render(<InteractionPanel {...handlers} />);
     const textarea = screen.getByRole("textbox");
-    fireEvent.change(textarea, { target: { value: "/help" } });
-    fireEvent.keyDown(textarea, { key: "Enter", ...options });
+    fireEvent.change(textarea, { target: { value: "中文" } });
+    for (const options of [{ isComposing: true }, { keyCode: 229 }, { repeat: true }]) {
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: !enterToSend, ...options });
+    }
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    expect(textarea).toHaveValue("中文");
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: !enterToSend });
+    expect(handlers.onSendMessage).toHaveBeenCalledExactlyOnceWith("中文");
   },
 );
 
@@ -1040,8 +1025,6 @@ it("counts attachment paths in the message limit and does not expand slash comma
   });
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
-  expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" })).toBe(true);
-  expect(handlers.onSendMessage).not.toHaveBeenCalled();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
   expect(handlers.onSendMessage).toHaveBeenCalledWith("/tmp/report.txt\n\n/help");
   expect(handlers.onExpandPreview).not.toHaveBeenCalled();
@@ -1060,7 +1043,7 @@ function uploadResult(path: string): UploadAttachment {
   };
 }
 
-it("switches send shortcuts live and keeps Shift+Enter available for command newlines", async () => {
+it("switches send shortcuts live", async () => {
   const handlers = props(interaction("connected"));
   render(<InteractionPanel {...handlers} />);
   act(() => updatePreferences({ enterToSend: true }));
