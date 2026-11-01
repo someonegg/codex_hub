@@ -15,22 +15,39 @@ it.each([null, "跨项目 'quoted' $(printf unsafe) `command`"])(
       .replace("$(tmux display-message -p '#{socket_path}')", "/tmp/task-test-socket")
       .replace("$TMUX_PANE", "%7");
     const output = execFileSync("bash", ["-c", command], { encoding: "utf8" });
-    const attempts = bindingAttempts(output);
-    expect(attempts[0]).toMatchObject({
-      valid: true,
-      taskName: task,
-      projectDirectory: "/project",
-    });
+    expect(bindingAttempts(output)).toEqual([
+      {
+        ordinal: 1,
+        valid: true,
+        socketPath: "/tmp/task-test-socket",
+        paneId: "%7",
+        projectDirectory: "/project",
+        ...(task === null ? {} : { taskName: task }),
+      },
+    ]);
   },
 );
 
-it.each(["", "not-json", "42", JSON.stringify("a>b")])(
-  "invalidates a malformed V2 task binding: %s",
-  (task) => {
-    const output = `AHUB_TMUX_BIND_V2\n/tmp/socket\n%7\n\n/project\n${task}\n`;
-    expect(bindingAttempts(output, 9)).toEqual([{ ordinal: 9, valid: false }]);
-  },
-);
+it.each([
+  "",
+  "not-json",
+  "42",
+  "null",
+  JSON.stringify(""),
+  JSON.stringify("  "),
+  JSON.stringify("a>b"),
+])("ignores an empty or invalid task field without invalidating the binding: %s", (task) => {
+  const output = `AHUB_TMUX_BIND_V2\n/tmp/socket\n%7\n\n/project\n${task}\n`;
+  expect(bindingAttempts(output, 9)).toEqual([
+    {
+      ordinal: 9,
+      valid: true,
+      socketPath: "/tmp/socket",
+      paneId: "%7",
+      projectDirectory: "/project",
+    },
+  ]);
+});
 
 function bindingAttempts(output: string, ordinal = 1) {
   return codexBindingAttemptsFrom({

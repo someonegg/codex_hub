@@ -5,8 +5,8 @@ date: 2026-10-16
 
 # Use ahub V1 bindings and current pane validation
 
-Commands emit `AHUB_TMUX_BIND_V1` with socket, pane, optional operation UUID,
-and optional project directory. See the [current binding format](../technical-reference.md#tmux-interaction).
+Commands emit `AHUB_TMUX_BIND_V2` with socket, pane, operation UUID, project,
+and task. See the [current binding format](../technical-reference.md#binding-format-and-ownership).
 
 The exit sequence and no-forced-kill policy below are historical; see
 [ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.

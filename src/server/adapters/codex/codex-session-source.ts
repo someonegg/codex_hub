@@ -259,7 +259,7 @@ export class CodexSessionSource implements SessionSource {
       for (const { attempt } of bindingEvents) {
         if (!attempt.valid) continue;
         if (attempt.projectDirectory) bindProjectDirectory = attempt.projectDirectory;
-        if (taskName === undefined) taskName = attempt.taskName ?? null;
+        if (attempt.taskName) taskName = attempt.taskName;
       }
       const projectDirectory = bindProjectDirectory ?? baseNormalized.session.workingDirectory;
       const normalized = {

@@ -89,7 +89,7 @@ ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 使用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端。
 終端切換工作階段後，用 `handoff <id>` 移交繫結。
 
-可用 `create --task <name>` 在建立時指定可選且不可變更的任務，用 `list --task <name>` 跨專案篩選，網頁在工作階段資訊中顯示任務。
+可用 `create --task <name>` 在建立時指定可選任務，用 `list --task <name>` 跨專案篩選，網頁在工作階段資訊中顯示任務。
 
 建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立需要 `--project`，支援 `--cwd`、`--home`、`--worktree`
 和 `--yolo`；恢復保留原 Home，支援 `--yolo`。省略 `--home` 時選擇第一個已設定 Home。

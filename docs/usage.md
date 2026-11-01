@@ -110,7 +110,7 @@ pass the returned `Next after` value as `--after <value>`. Use `send <id> --stdi
 for piped input and `terminal <id>` to check the terminal. After a terminal switches
 sessions, use `handoff <id>` to transfer its binding.
 
-Use `create --task <name>` to assign an optional, fixed task at creation and `list --task <name>` to filter across projects; the web interface displays it in session information.
+Use `create --task <name>` to assign an optional task at creation and `list --task <name>` to filter across projects; the web interface displays it in session information.
 
 For lifecycle commands, run `ahub-cli session --help`. Create requires `--project`
 and accepts `--cwd`, `--home`, `--worktree`, and `--yolo`. Omitting `--cwd` starts

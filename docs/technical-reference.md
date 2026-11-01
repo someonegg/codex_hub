@@ -77,11 +77,11 @@ Creation defaults `home` to the first configured nickname. Unknown nicknames ret
 `GET /api/v1/sessions` returns `{ revision, homes, projects, sessions }` without
 pagination or server filtering:
 
-| Collection | Fields                                                                                  |
-| ---------- | --------------------------------------------------------------------------------------- |
-| `homes`    | `nickname`, including empty homes                                                       |
-| `projects` | `directory`                                                                             |
-| `sessions` | `id`, `home`, `title`, `projectDirectory`, `status`, `parentId`, `isChild`, `updatedAt` |
+| Collection | Fields                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------ |
+| `homes`    | `nickname`, including empty homes                                                                            |
+| `projects` | `directory`                                                                                                  |
+| `sessions` | `id`, `home`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
 
 Reads/updates resolve titles from valid owning-Home `thread_name`, then original title. Missing directories yield
 `projectDirectory: null`; `isChild` preserves declared parentage even without `parentId`.
@@ -96,8 +96,8 @@ Only `after` (43-character base64url revision) is accepted; invalid/extra querie
 | Over 100 waiters                            | `429`, `Retry-After: 2`  |
 
 Waiters share a 1.5-second probe, stopped when idle; disconnect/shutdown releases
-them. Revisions cover homes, titles, projects, effective runtime status, and
-relationships, excluding timestamps, content, statistics, and diagnostics.
+them. Revisions cover homes, titles, projects, task associations, effective runtime status,
+and relationships, excluding timestamps, content, statistics, and diagnostics.
 
 Browser sorting uses best-effort `updatedAt`, retaining newer snapshot/reader
 timestamps in memory. Projects follow their latest visible main session; IDs
@@ -340,7 +340,8 @@ not confirmed binding.
 Codex reads five-line `AHUB_TMUX_BIND_V1` records from user-message
 `<user_shell_command>` output: marker, absolute socket path, numeric `%` pane ID,
 optional operation UUID, optional project directory (empty fields retain lines).
-An invalid latest attempt never falls back.
+Six-line `AHUB_TMUX_BIND_V2` records add a final JSON task name or `null`.
+An invalid latest binding attempt never falls back.
 
 A process-wide manager tracks latest attempts/session and valid claims/socket/pane
 across homes, ordered by timestamp (invalid = zero), global session ID, ordinal,
@@ -359,13 +360,11 @@ paths and do not invalidate pane bindings.
 ### Task association
 
 Create accepts optional `taskName`; resume retains it and rejects overrides.
-Names are trimmed, case-sensitive, and shared across homes/projects; empty means
-unassigned, while `<`, `>`, NUL, CR and LF are rejected. Unassigned responses omit
-the field; catalog revisions include task associations.
+Names are trimmed, case-sensitive, and shared across homes/projects;
+`<`, `>`, NUL, CR and LF are rejected. Unassigned responses omit the field.
 
-V2 binding output appends a JSON task name or null after the project line.
-The first valid binding fixes the task (V1 means unassigned); resume/rebinding
-preserves it. Invalid V2 task fields invalidate the binding attempt.
+Latest valid bind overrides the task; empty or invalid task fields preserve the
+earlier value and do not invalidate pane bindings.
 
 ### Activity observation
 
@@ -414,21 +413,21 @@ backoff. See [service](../src/server/interaction/terminal-preview-service.ts) an
 
 ## Asynchronous management
 
-| Endpoint                              | Body / result                                                                                                                                        |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions`               | New: `{ home?, projectDirectory, workingDirectory?, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
-| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                               |
-| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                               |
-| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                               |
-| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                                    |
+| Endpoint                              | Body / result                                                                                                                                                   |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ home?, projectDirectory, workingDirectory?, taskName?, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                                          |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                                          |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                                          |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                                               |
 
 Creation requires `projectDirectory`; optional `workingDirectory` defaults to it.
 The adapter validates both as absolute existing local directories and resolves
 symlinks, without checking Git relationships. The working directory controls
 process launch; the project directory controls binding and association checks.
-Idempotency includes both directories and launch options; omitted working
-directory equals an explicit project directory. `worktree` remains an independent
-agent launch option.
+Idempotency includes both directories, normalized task name, and launch options;
+omitted working directory equals an explicit project directory. `worktree` remains
+an independent agent launch option.
 
 ### Service responsibilities
 

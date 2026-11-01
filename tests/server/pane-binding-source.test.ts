@@ -279,3 +279,37 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
   await writeFile(file, line({ type: "session_meta", payload: { id: "project", cwd: "/reset" } }));
   expect(await project()).toBe("/reset");
 });
+
+it("updates project and task from valid bindings while preserving omitted or invalid fields", async () => {
+  const home = await createTempDirectory("binding-metadata-");
+  await mkdir(join(home, "sessions"));
+  const file = join(home, "sessions/rollout-metadata.jsonl");
+  const meta = line({ type: "session_meta", payload: { id: "metadata", cwd: "/working" } });
+  await writeFile(file, meta + message(1, shell("/tmp/socket", "%1")));
+  const source = await createCodexSessionSource(home, bindings);
+  const read = async () => (await source.refresh()).sessions[0]!.normalized.session;
+  expect(await read()).toMatchObject({ projectDirectory: "/working", taskName: undefined });
+  const bind = (project: string, task: string, socket = "/tmp/socket") =>
+    `<user_shell_command>\nAHUB_TMUX_BIND_V2\n${socket}\n%1\n\n${project}\n${task}\n</user_shell_command>`;
+  await appendFile(file, message(2, bind("/first", JSON.stringify(" first "))));
+  const first = await read();
+  expect(first).toMatchObject({ projectDirectory: "/first", taskName: "first" });
+  for (const task of ["null", '""', '"  "', "not-json", "42", JSON.stringify("a>b")]) {
+    await appendFile(file, message(3, bind("relative", task)));
+    expect(await read()).toMatchObject({ projectDirectory: "/first", taskName: "first" });
+  }
+  await appendFile(file, message(4, bind("/second", JSON.stringify("second"))));
+  expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
+  expect(first).toMatchObject({ projectDirectory: "/first", taskName: "first" });
+  await appendFile(file, message(5, shell("/tmp/socket", "%2")));
+  expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
+  await appendFile(file, message(6, bind("/ignored", JSON.stringify("ignored"), "relative")));
+  expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
+  const rebuilt = await createCodexSessionSource(home, new PaneBindingManager());
+  expect((await rebuilt.refresh()).sessions[0]!.normalized.session).toMatchObject({
+    projectDirectory: "/second",
+    taskName: "second",
+  });
+  await writeFile(file, meta);
+  expect(await read()).toMatchObject({ projectDirectory: "/working", taskName: undefined });
+});
