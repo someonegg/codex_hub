@@ -96,6 +96,13 @@ export function InteractionPanel({
   const { message, setMessage, attachments, addAttachment, removeAttachment, clearSentMessage } =
     useSessionDraft(sessionId);
   const composer = useRef<HTMLTextAreaElement | null>(null);
+  useEffect(() => {
+    const blurWhenHidden = () => {
+      if (document.hidden && document.activeElement === composer.current) composer.current?.blur();
+    };
+    document.addEventListener("visibilitychange", blurWhenHidden);
+    return () => document.removeEventListener("visibilitychange", blurWhenHidden);
+  }, []);
   const [dragging, setDragging] = useState(false);
   const previewConnected = interaction?.supported === true && interaction.state === "connected";
   const {
