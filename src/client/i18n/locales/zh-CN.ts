@@ -169,6 +169,7 @@ export const messages: Record<keyof typeof english, string> = {
   requestDetailsUnavailable: "请求详情不可用。",
   resume: "恢复",
   resumeSession: "恢复会话",
+  automaticallyRetrying: "正在自动重试…",
   retry: "重试",
   retryLoadingDetail: "重新加载详情",
   retryOpeningSession: "重新打开会话",

@@ -15,6 +15,7 @@ import {
 export function useSessionList() {
   const [list, setList] = useState<SessionListResponse | null>(null);
   const [listError, setError] = useState<string | null>(null);
+  const [listRetrying, setRetrying] = useState(false);
   const revision = useRef<string | undefined>(undefined);
   const listRequest = useRef<AbortController | null>(null);
   const [connection, reconnect] = useState(0);
@@ -28,7 +29,10 @@ export function useSessionList() {
     const channel = createRequestChannel();
     const start = () => {
       channel.cancel();
-      if (document.visibilityState === "hidden") return;
+      if (document.visibilityState === "hidden") {
+        setRetrying(false);
+        return;
+      }
       const request = channel.begin();
       const controller = request.controller;
       listRequest.current = controller;
@@ -54,11 +58,14 @@ export function useSessionList() {
               });
             }
             setError(null);
+            setRetrying(false);
             retryMs = INITIAL_RETRY_MS;
           } catch (reason) {
             if (!request.isCurrent()) return;
             setError(messageFor(reason));
-            if (!isRetryableRequestError(reason)) return;
+            const retryable = isRetryableRequestError(reason);
+            setRetrying(retryable);
+            if (!retryable) return;
             try {
               await waitForRetry(retryMs, controller.signal);
             } catch {
@@ -94,12 +101,9 @@ export function useSessionList() {
     list,
     reportUpdatedAt,
     listError,
-    retryList: refresh,
+    listRetrying,
     listLoading: list === null && listError === null,
     refresh,
-    clearListError: () => {
-      setError(null);
-    },
   };
 }
 

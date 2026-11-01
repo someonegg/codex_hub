@@ -20,6 +20,17 @@ function setup() {
   return vi.spyOn(api, "items");
 }
 
+function openReaderWithUpdateFailure(status: number) {
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+  vi.spyOn(api, "items").mockResolvedValue({ ...firstPage, hasMore: false });
+  const updates = vi
+    .spyOn(api, "updates")
+    .mockRejectedValueOnce(new ApiClientError(status, "request_failed", "Offline"))
+    .mockResolvedValueOnce(null)
+    .mockImplementation(() => new Promise(() => {}));
+  return { ...renderHook(() => useSessionReader(SESSION_ID)), updates };
+}
+
 it("retries pagination at the boundary using the original cursor", async () => {
   vi.useFakeTimers();
   vi.spyOn(Math, "random").mockReturnValue(0.5);
@@ -35,6 +46,7 @@ it("retries pagination at the boundary using the original cursor", async () => {
   });
   await flush();
   expect(result.current.readerError).toBe("Busy");
+  expect(result.current.readerRetrying).toBe(true);
   expect(result.current.context?.cursor).toBe(TIMELINE_CURSOR);
   await act(() => vi.advanceTimersByTimeAsync(999));
   expect(request).toHaveBeenCalledTimes(2);
@@ -49,6 +61,7 @@ it("retries pagination at the boundary using the original cursor", async () => {
   );
   expect(result.current.context?.cursor).toBe(NEXT_TIMELINE_CURSOR);
   expect(result.current.readerError).toBeNull();
+  expect(result.current.readerRetrying).toBe(false);
 });
 
 it("stops pagination retries on a terminal error while preserving loaded data", async () => {
@@ -62,6 +75,7 @@ it("stops pagination retries on a terminal error while preserving loaded data", 
     expect(await result.current.loadMore()).toBe(false);
   });
   expect(result.current.readerError).toBe("Stop timeline");
+  expect(result.current.readerRetrying).toBe(false);
   expect(result.current.items).toEqual(initial.items);
   await act(() => vi.advanceTimersByTimeAsync(60_000));
   expect(request).toHaveBeenCalledTimes(2);
@@ -148,3 +162,35 @@ it.each(["success", "failure"])(
     expect(result.current.readerError).toBeNull();
   },
 );
+
+it("reports update recovery, hides it while backgrounded, and clears it after success", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Math, "random").mockReturnValue(0.5);
+  const { result, unmount } = openReaderWithUpdateFailure(503);
+  await flush();
+  expect(result.current.readerError).toBe("Offline");
+  expect(result.current.readerRetrying).toBe(true);
+
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(result.current.readerRetrying).toBe(false);
+  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+  act(() => document.dispatchEvent(new Event("visibilitychange")));
+  expect(result.current.readerRetrying).toBe(true);
+
+  await act(() => vi.advanceTimersByTimeAsync(1000));
+  expect(result.current.readerError).toBeNull();
+  expect(result.current.readerRetrying).toBe(false);
+  unmount();
+});
+
+it("does not report or request recovery after a terminal update error", async () => {
+  vi.useFakeTimers();
+  const { result, updates, unmount } = openReaderWithUpdateFailure(400);
+  await flush();
+  expect(result.current.readerError).toBe("Offline");
+  expect(result.current.readerRetrying).toBe(false);
+  await act(() => vi.advanceTimersByTimeAsync(60_000));
+  expect(updates).toHaveBeenCalledTimes(1);
+  unmount();
+});

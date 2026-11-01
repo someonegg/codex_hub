@@ -29,6 +29,7 @@ interface ReaderState {
   items: TimelineItem[];
   interaction: InteractionResponse | null;
   error: string | null;
+  retrying: boolean;
   missing: boolean;
   timelineConflict: boolean;
   timelineRenderGeneration: number;
@@ -38,8 +39,7 @@ type ReaderAction =
   | { type: "start"; operation: Exclude<ReaderOperation, null>; preserve: boolean }
   | { type: "success"; page: ItemPageResponse; replace: boolean }
   | { type: "updates-success"; response: SessionUpdatesResponse }
-  | { type: "updates-error"; error: string }
-  | { type: "page-retry"; error: string }
+  | { type: "request-error"; error: string; retrying: boolean }
   | { type: "failure"; error: string; missing: boolean }
   | { type: "timeline-conflict" }
   | { type: "clear-error" };
@@ -60,6 +60,7 @@ const initialState: ReaderState = {
   items: [],
   interaction: null,
   error: null,
+  retrying: false,
   missing: false,
   timelineConflict: false,
   timelineRenderGeneration: 0,
@@ -68,6 +69,12 @@ const initialState: ReaderState = {
 export function useSessionReader(sessionId: string) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [visible, setVisible] = useState(() => document.visibilityState !== "hidden");
+  useEffect(() => {
+    const visibility = () => setVisible(document.visibilityState !== "hidden");
+    document.addEventListener("visibilitychange", visibility);
+    return () => document.removeEventListener("visibilitychange", visibility);
+  }, []);
   const active = useRef<ActiveRequest | null>(null);
   const channel = useRef(createRequestChannel());
   const generation = useRef(0);
@@ -126,7 +133,7 @@ export function useSessionReader(sessionId: string) {
             const retryablePagination =
               (operation === "page" || operation === "poll") && isRetryableRequestError(reason);
             if (!retryablePagination) throw reason;
-            dispatch({ type: "page-retry", error: messageFor(reason) });
+            dispatch({ type: "request-error", error: messageFor(reason), retrying: true });
             await waitForRetry(retryMs, request.controller.signal);
             retryMs = nextRetryMs(retryMs);
           }
@@ -239,11 +246,13 @@ export function useSessionReader(sessionId: string) {
     onUpdate: onSessionUpdates,
     onTimelineConflict: markTimelineConflict,
     onError: (reason, terminal) => {
-      dispatch({ type: "updates-error", error: messageFor(reason) });
+      dispatch({ type: "request-error", error: messageFor(reason), retrying: !terminal });
       if (terminal) setAutoRefreshEnabled(false);
     },
     onSuccess: () => dispatch({ type: "clear-error" }),
   });
+
+  const retryContinuesWhileHidden = state.operation === "page" || state.operation === "poll";
 
   return {
     context: state.context,
@@ -253,10 +262,10 @@ export function useSessionReader(sessionId: string) {
     readerLoading:
       state.operation === "open" || state.operation === "page" || state.operation === "reload",
     readerError: state.error,
+    readerRetrying: state.retrying && (visible || retryContinuesWhileHidden),
     missing: state.missing,
     timelineConflict: state.timelineConflict,
     timelineRenderGeneration: state.timelineRenderGeneration,
-    clearReaderError: () => dispatch({ type: "clear-error" }),
     loadMore,
     retryOpen,
     markTimelineConflict,
@@ -268,7 +277,7 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
   switch (action.type) {
     case "start":
       return action.preserve
-        ? { ...state, operation: action.operation, error: null }
+        ? { ...state, operation: action.operation, error: null, retrying: false }
         : {
             ...initialState,
             operation: action.operation,
@@ -288,6 +297,7 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
         items: action.replace ? action.page.items : appendUnique(state.items, action.page.items),
         interaction: action.page.interaction,
         error: null,
+        retrying: false,
         missing: false,
         timelineConflict: false,
         timelineRenderGeneration:
@@ -308,18 +318,23 @@ function reducer(state: ReaderState, action: ReaderAction): ReaderState {
         },
         interaction: action.response.interaction,
         error: null,
+        retrying: false,
         missing: false,
       };
-    case "updates-error":
-      return { ...state, error: action.error };
-    case "page-retry":
-      return { ...state, error: action.error };
+    case "request-error":
+      return { ...state, error: action.error, retrying: action.retrying };
     case "failure":
-      return { ...state, operation: null, error: action.error, missing: action.missing };
+      return {
+        ...state,
+        operation: null,
+        error: action.error,
+        missing: action.missing,
+        retrying: false,
+      };
     case "timeline-conflict":
-      return { ...state, operation: null, error: null, timelineConflict: true };
+      return { ...state, operation: null, error: null, timelineConflict: true, retrying: false };
     case "clear-error":
-      return state.error === null ? state : { ...state, error: null };
+      return state.error === null ? state : { ...state, error: null, retrying: false };
   }
 }
 

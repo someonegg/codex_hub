@@ -76,11 +76,30 @@ describe("session catalog", () => {
     await flush();
     expect(view.result.current.list).toEqual(listBody);
     expect(view.result.current.listError).toBe("offline");
+    expect(view.result.current.listRetrying).toBe(true);
     await act(async () => vi.advanceTimersByTimeAsync(INITIAL_RETRY_MS));
     expect(sessions).toHaveBeenCalledTimes(3);
     view.unmount();
   });
-  it("dismisses terminal errors and manually refreshes without an after token", async () => {
+  it("retries immediately without leaving the old backoff timer running", async () => {
+    const sessions = vi
+      .spyOn(api, "sessions")
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(listBody)
+      .mockImplementation(() => new Promise(() => {}));
+    const view = renderHook(useSessionList);
+    await flush();
+    expect(view.result.current.listRetrying).toBe(true);
+    act(() => view.result.current.refresh());
+    await flush();
+    expect(view.result.current.listRetrying).toBe(false);
+    expect(view.result.current.listError).toBeNull();
+    expect(sessions).toHaveBeenCalledTimes(3);
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(sessions).toHaveBeenCalledTimes(3);
+    view.unmount();
+  });
+  it("retains terminal errors and manually refreshes without an after token", async () => {
     const sessions = vi
       .spyOn(api, "sessions")
       .mockResolvedValueOnce(listBody)
@@ -90,10 +109,9 @@ describe("session catalog", () => {
     await flush();
     expect(view.result.current.listError).toBe("stopped");
     expect(view.result.current.list).toEqual(listBody);
-    act(() => view.result.current.clearListError());
-    expect(view.result.current.listError).toBeNull();
+    expect(view.result.current.listRetrying).toBe(false);
     expect(sessions).toHaveBeenCalledTimes(2);
-    act(() => view.result.current.retryList());
+    act(() => view.result.current.refresh());
     await flush();
     expect(sessions.mock.calls.at(-1)?.[0]).toEqual({ after: undefined });
     view.unmount();

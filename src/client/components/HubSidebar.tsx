@@ -185,8 +185,7 @@ export function HubSidebar({
           <ErrorState
             title={t("couldNotUpdateSessionList")}
             message={catalog.listError}
-            onDismiss={catalog.clearListError}
-            onRetry={catalog.retryList}
+            retryNotice={catalog.listRetrying ? t("automaticallyRetrying") : undefined}
           />
         ) : null}
       </nav>

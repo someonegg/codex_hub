@@ -7,11 +7,15 @@ export function ErrorState({
   message,
   onDismiss,
   onRetry,
+  retryLabel,
+  retryNotice,
 }: {
   title: string;
   message: string;
   onDismiss?: () => void;
   onRetry?: () => void;
+  retryLabel?: string;
+  retryNotice?: string;
 }) {
   useTranslation();
   return (
@@ -20,9 +24,10 @@ export function ErrorState({
       <p>
         <RequestError error={message} />
       </p>
+      {retryNotice ? <p role="status">{retryNotice}</p> : null}
       {onRetry ? (
         <button type="button" onClick={onRetry}>
-          {t("retry")}
+          {retryLabel ?? t("retry")}
         </button>
       ) : null}
       {onDismiss ? (

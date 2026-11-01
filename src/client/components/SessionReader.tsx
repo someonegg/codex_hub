@@ -39,7 +39,7 @@ interface SessionReaderProps {
   timelineRenderGeneration: number;
   onRefreshLatest: () => Promise<unknown>;
   error?: string | null;
-  onDismissError?: () => void;
+  retrying?: boolean;
 }
 
 export function SessionReader({
@@ -63,7 +63,7 @@ export function SessionReader({
   timelineRenderGeneration,
   onRefreshLatest,
   error,
-  onDismissError,
+  retrying,
 }: SessionReaderProps) {
   useTranslation();
   const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
@@ -135,8 +135,12 @@ export function SessionReader({
           previewAutoExpandKey={previewAutoExpandKey}
         />
       ) : null}
-      {error && onDismissError ? (
-        <ErrorState title={t("couldNotLoadSession")} message={error} onDismiss={onDismissError} />
+      {error ? (
+        <ErrorState
+          title={t("couldNotLoadSession")}
+          message={error}
+          retryNotice={retrying ? t("automaticallyRetrying") : undefined}
+        />
       ) : null}
       {timelineConflict ? (
         <aside className="continuity-notice" role="alert">

@@ -107,7 +107,10 @@ button:hover:not(:disabled, [aria-disabled="true"]) {
 .error-state,
 .continuity-notice,
 .interaction-error {
-  border-radius: var(--radius-panel);
+  max-width: 52rem;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--error-border);
+  border-radius: var(--radius-control);
 }
 @media (width < 768px) {
   button {
