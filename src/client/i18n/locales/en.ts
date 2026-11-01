@@ -170,6 +170,7 @@ export const messages = {
   requestDetailsUnavailable: "Request details unavailable.",
   resume: "Resume",
   resumeSession: "Resume session",
+  automaticallyRetrying: "Automatically retrying…",
   retry: "Retry",
   retryLoadingDetail: "Retry loading detail",
   retryOpeningSession: "Retry opening session",

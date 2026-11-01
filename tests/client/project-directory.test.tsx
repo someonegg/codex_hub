@@ -22,6 +22,21 @@ function Field() {
 }
 
 describe("project directory suggestions", () => {
+  it.each([{ isComposing: true }, { keyCode: 229 }])("ignores IME keys when %j", (composition) => {
+    render(<Field />);
+    const input = screen.getByRole("combobox");
+    fireEvent.focus(input);
+    for (const key of ["ArrowUp", "ArrowDown"]) {
+      expect(fireEvent.keyDown(input, { key, ...composition })).toBe(true);
+      expect(screen.queryByRole("option", { selected: true })).toBeNull();
+    }
+    fireEvent.keyDown(input, { key: "ArrowDown" });
+    for (const key of ["Enter", "Escape"]) {
+      expect(fireEvent.keyDown(input, { key, ...composition })).toBe(true);
+      expect(input).toHaveValue("");
+      expect(screen.getByRole("listbox")).toBeInTheDocument();
+    }
+  });
   it("shows full paths in the page, filters and selects without submitting", () => {
     render(<Field />);
     const input = screen.getByRole("combobox");

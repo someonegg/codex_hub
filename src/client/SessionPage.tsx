@@ -174,28 +174,21 @@ export function SessionPage({
           timelineRenderGeneration={reader.timelineRenderGeneration}
           onRefreshLatest={reader.refreshLatest}
           error={reader.readerError}
-          onDismissError={reader.clearReaderError}
+          retrying={reader.readerRetrying}
         />
       ) : reader.readerError ? (
         <section className="reader">
           <ErrorState
             title={reader.missing ? t("sessionNotFound") : t("couldNotLoadSession")}
             message={reader.readerError}
+            onRetry={reader.missing ? undefined : () => void reader.retryOpen()}
+            retryLabel={t("retryOpeningSession")}
           />
           {reader.missing ? (
             <InternalLink href="/" onNavigate={onNavigate ? () => onNavigate(null) : undefined}>
               {t("backToHome")}
             </InternalLink>
-          ) : (
-            <button
-              className="load-more"
-              type="button"
-              disabled={reader.operation !== null}
-              onClick={() => void reader.retryOpen()}
-            >
-              {t("retryOpeningSession")}
-            </button>
-          )}
+          ) : null}
         </section>
       ) : (
         <section className="reader reader-welcome">

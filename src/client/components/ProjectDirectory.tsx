@@ -68,7 +68,7 @@ export function ProjectDirectory({
           setActive(-1);
         }}
         onKeyDown={(event) => {
-          if (event.nativeEvent.isComposing) return;
+          if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
           if ((event.key === "ArrowDown" || event.key === "ArrowUp") && options.length) {
             event.preventDefault();
             setOpen(true);

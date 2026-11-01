@@ -2,6 +2,7 @@ import type { en } from "./messages";
 
 export const namespaceKeys = {
   hub: [
+    "automaticallyRetrying",
     "collapseSidebar",
     "expandSidebar",
     "allHomes",

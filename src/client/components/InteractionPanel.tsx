@@ -217,7 +217,8 @@ export function InteractionPanel({
       event.altKey ||
       event.metaKey ||
       event.shiftKey ||
-      event.nativeEvent.isComposing
+      event.nativeEvent.isComposing ||
+      event.nativeEvent.keyCode === 229
     )
       return;
     if (event.ctrlKey) {

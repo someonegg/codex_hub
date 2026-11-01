@@ -539,6 +539,7 @@ it("ignores interrupt shortcuts outside the preview, with other modifiers, or wh
     { ctrlKey: true, shiftKey: true },
     { ctrlKey: true, altKey: true },
     { ctrlKey: true, isComposing: true },
+    { ctrlKey: true, keyCode: 229 },
   ]) {
     expect(fireEvent.keyDown(body, { key: "c", ...modifiers })).toBe(true);
   }
@@ -557,6 +558,9 @@ it("preserves editing and unrelated keyboard actions and blocks sends while busy
     for (const key of ["Enter", "Escape", "0", "9"]) {
       expect(fireEvent.keyDown(body, { key, [modifier]: true })).toBe(true);
     }
+  }
+  for (const key of ["Enter", "Escape", "0", "9"]) {
+    expect(fireEvent.keyDown(body, { key, keyCode: 229 })).toBe(true);
   }
   expect(fireEvent.keyDown(screen.getByRole("textbox"), { key: "ArrowUp" })).toBe(true);
   expect(

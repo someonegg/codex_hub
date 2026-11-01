@@ -60,6 +60,39 @@ beforeEach(() => {
   }));
 });
 describe("unified hub", () => {
+  it.each([503, 400])(
+    "keeps catalog errors visible with retry status matching HTTP %s",
+    async (status) => {
+      window.history.replaceState(null, "", "/");
+      vi.mocked(api.sessions)
+        .mockReset()
+        .mockRejectedValueOnce(new ApiClientError(status, "request_failed", "Catalog unavailable"))
+        .mockImplementation(() => new Promise(() => {}));
+      render(<App />);
+      await flush();
+      const alert = screen.getByRole("alert");
+      expect(within(alert).queryByText("Automatically retrying…") !== null).toBe(status === 503);
+      expect(api.sessions).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each([503, 400])(
+    "keeps an opened session error non-dismissible with accurate recovery status for HTTP %s",
+    async (status) => {
+      window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
+      vi.mocked(api.items)
+        .mockReset()
+        .mockResolvedValue({ ...firstPage, hasMore: false });
+      vi.spyOn(api, "updates")
+        .mockRejectedValueOnce(new ApiClientError(status, "request_failed", "Reader unavailable"))
+        .mockImplementation(() => new Promise(() => {}));
+      render(<App />);
+      await flush();
+      const alert = screen.getByRole("alert");
+      expect(alert).toHaveTextContent("Reader unavailable");
+      expect(within(alert).queryByRole("button")).toBeNull();
+      expect(within(alert).queryByText("Automatically retrying…") !== null).toBe(status === 503);
+    },
+  );
   it("remembers child session expansion and collapse after remounting", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
     let view = render(<App />);
@@ -121,7 +154,9 @@ describe("unified hub", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("Could not load session");
     expect(screen.queryByRole("link", { name: "Back to home" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Retry opening session" }));
+    const retry = screen.getByRole("button", { name: "Retry opening session" });
+    expect(screen.getByRole("alert")).toContainElement(retry);
+    fireEvent.click(retry);
     await flush();
     expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
   });
