@@ -197,7 +197,9 @@ export function InteractionPanel({
     if (
       event.key !== "Enter" ||
       event.nativeEvent.isComposing ||
-      (enterToSend ? event.shiftKey : !event.shiftKey && !isStrictSlashCommand)
+      // WebKit may report the IME-confirming Enter after composition has ended.
+      event.nativeEvent.keyCode === 229 ||
+      (enterToSend ? event.shiftKey : !event.shiftKey)
     )
       return;
     event.preventDefault();
