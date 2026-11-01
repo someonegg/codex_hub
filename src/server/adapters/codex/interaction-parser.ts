@@ -68,17 +68,13 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     const lines = (block[1] ?? "").split("\n").map((line) => line.replace(/\r$/, ""));
     for (let index = 0; index < lines.length; index += 1) {
       if (lines[index] !== BINDING_MARKER && lines[index] !== TASK_BINDING_MARKER) continue;
-      let taskName: string | null | undefined;
+      let taskName: string | undefined;
       if (lines[index] === TASK_BINDING_MARKER) {
         try {
-          taskName = JSON.parse(lines[index + 5] ?? "");
+          const value: unknown = JSON.parse(lines[index + 5] ?? "");
+          if (validTaskName(value)) taskName = value.trim() || undefined;
         } catch {
-          found.push({ ordinal: record.ordinal, valid: false });
-          continue;
-        }
-        if (taskName !== null && !validTaskName(taskName)) {
-          found.push({ ordinal: record.ordinal, valid: false });
-          continue;
+          // Invalid optional metadata does not invalidate the pane binding.
         }
       }
       const project = lines[index + 4];
