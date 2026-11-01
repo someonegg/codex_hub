@@ -173,7 +173,7 @@ describe("session automatic updates", () => {
       resolveUpdates(updates(false, OTHER_UPDATE_REVISION, connected));
     });
     await flush();
-    expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeDisabled();
+    expect(screen.getByRole("textbox", { name: "Message to agent" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(send).toHaveBeenCalledTimes(1);
     await act(async () => {

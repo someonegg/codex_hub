@@ -79,21 +79,27 @@ function InteractionPanel(properties: Omit<ComponentProps<typeof Panel>, "previe
 }
 
 describe("interaction panel", () => {
-  it("focuses the preview once on expansion, including before output arrives", async () => {
+  it("focuses the preview only on manual expansion, including before output arrives", async () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
-    const { rerender } = render(<InteractionPanel {...handlers} />);
+    const { rerender } = render(<Panel {...handlers} previewExpanded={false} />);
     const toggle = screen.getByRole("button", { name: "Terminal Preview" });
+    const composer = screen.getByRole("textbox", { name: "Message to agent" });
+    await user.click(composer);
+    rerender(<Panel {...handlers} previewExpanded />);
+    expect(composer).toHaveFocus();
+    rerender(<Panel {...handlers} previewExpanded={false} />);
     await user.click(toggle);
+    rerender(<Panel {...handlers} previewExpanded />);
     const previewBody = document.getElementById(toggle.getAttribute("aria-controls")!);
     expect(previewBody).toHaveFocus();
     await user.keyboard("{ArrowUp}");
     expect(handlers.onSendKeys).toHaveBeenCalledWith(["up"]);
-    const composer = screen.getByRole("textbox", { name: "Message to agent" });
     await user.click(composer);
     rerender(
-      <InteractionPanel
+      <Panel
         {...handlers}
+        previewExpanded
         preview={{
           content: "fresh output",
           truncated: false,
@@ -104,8 +110,10 @@ describe("interaction panel", () => {
     );
     expect(composer).toHaveFocus();
     await user.click(toggle);
+    rerender(<Panel {...handlers} previewExpanded={false} />);
     expect(toggle).toHaveFocus();
     await user.click(toggle);
+    rerender(<Panel {...handlers} previewExpanded />);
     expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
   });
 
@@ -180,7 +188,7 @@ describe("interaction panel", () => {
     expect(textarea).toHaveValue("   ");
   });
 
-  it("dispatches interaction controls and locks the composer and action buttons while busy", async () => {
+  it("dispatches interaction controls and keeps the composer editable while actions are busy", async () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
     const { rerender } = render(<InteractionPanel {...handlers} />);
@@ -193,6 +201,7 @@ describe("interaction panel", () => {
     expect(screen.queryByRole("button", { name: "Esc" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Terminal Preview" })).toBeEnabled();
     await user.click(screen.getByRole("button", { name: "Interrupt" }));
+    expect(screen.getByRole("button", { name: "Interrupt" })).toHaveFocus();
     expect(handlers.onSendKeys).toHaveBeenNthCalledWith(1, ["interrupt"]);
     expect(handlers.onSendKeys).toHaveBeenCalledTimes(1);
 
@@ -204,7 +213,7 @@ describe("interaction panel", () => {
     handlers.onExpandPreview.mockClear();
     rerender(<InteractionPanel {...handlers} interactionBusy />);
 
-    expect(screen.getByRole("textbox")).toBeDisabled();
+    expect(screen.getByRole("textbox")).toBeEnabled();
     expect(screen.getByRole("textbox")).toHaveValue("draft");
     expect(interrupt).toHaveFocus();
     expect(interrupt).toBeEnabled();
@@ -296,20 +305,28 @@ describe("interaction panel", () => {
 
 it.each([
   ["/plan", true],
-  ["/plan now", false],
-])("expands the preview after successfully sending %s: %s", async (message, expands) => {
+  [" /plan", false],
+])("sends %s with preview expansion=%s without moving focus", async (message, expands) => {
   const handlers = props(interaction("connected"));
   render(<InteractionPanel {...handlers} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: message } });
-  fireEvent.click(screen.getByRole("button", { name: "Send" }));
-  await act(async () => {
-    await Promise.resolve();
-  });
+  const textarea = screen.getByRole("textbox");
+  textarea.focus();
+  fireEvent.change(textarea, { target: { value: message } });
+  await act(async () => fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true }));
   expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
     "aria-expanded",
     String(expands),
   );
+  expect(handlers.onExpandPreview).toHaveBeenCalledTimes(expands ? 1 : 0);
+  expect(textarea).toHaveFocus();
+  if (expands) {
+    // Skipping command focus must not suppress later manual expansion.
+    const toggle = screen.getByRole("button", { name: "Terminal Preview" });
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
+  }
 });
 
 it.each([false, true])(
@@ -330,7 +347,7 @@ it.each([false, true])(
   },
 );
 
-it("waits for successful command delivery and keeps an expanded preview open", async () => {
+it("keeps an expanded preview open and preserves edits made during delivery", async () => {
   let resolve!: () => void;
   const handlers = props(interaction("connected"));
   handlers.onSendMessage.mockImplementationOnce(
@@ -339,22 +356,28 @@ it("waits for successful command delivery and keeps an expanded preview open", a
         resolve = done;
       }),
   );
-  render(<InteractionPanel {...handlers} />);
+  const view = render(<InteractionPanel {...handlers} />);
   const toggle = screen.getByRole("button", { name: "Terminal Preview" });
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
-  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter", shiftKey: true });
-  expect(toggle).toHaveAttribute("aria-expanded", "false");
-  await act(async () => resolve());
+  fireEvent.click(toggle);
+  const textarea = screen.getByRole("textbox");
+  textarea.focus();
+  fireEvent.change(textarea, { target: { value: "/plan" } });
+  fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+  view.rerender(<InteractionPanel {...handlers} interactionBusy />);
+  expect(textarea).toBeEnabled();
+  expect(textarea).toHaveFocus();
+  fireEvent.change(textarea, { target: { value: "下一条消息" } });
+  fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+  expect(handlers.onSendMessage).toHaveBeenCalledExactlyOnceWith("/plan");
   expect(toggle).toHaveAttribute("aria-expanded", "true");
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/status" } });
-  fireEvent.click(screen.getByRole("button", { name: "Send" }));
-  await act(async () => {
-    await Promise.resolve();
-  });
+  await act(async () => resolve());
+  expect(textarea).toHaveValue("下一条消息");
+  expect(textarea).toHaveFocus();
+  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
   expect(toggle).toHaveAttribute("aria-expanded", "true");
 });
 
-it("does not expand on failed command delivery", async () => {
+it("retains the draft after failed delivery", async () => {
   const handlers = props(interaction("connected"));
   handlers.onSendMessage.mockRejectedValueOnce(new Error("offline"));
   render(<InteractionPanel {...handlers} />);
@@ -363,10 +386,6 @@ it("does not expand on failed command delivery", async () => {
   await act(async () => {
     await Promise.resolve();
   });
-  expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
   expect(screen.getByRole("textbox")).toHaveValue("/plan");
   expect(handlers.onSendMessage).toHaveBeenCalledExactlyOnceWith("/plan");
 });
@@ -393,23 +412,6 @@ it("preserves the collapsed preview and draft after handoff and disables Handoff
   expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
   view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
   expect(screen.queryByRole("button", { name: "Handoff" })).not.toBeInTheDocument();
-});
-
-it("ignores command completion after the panel unmounts", async () => {
-  let resolve!: () => void;
-  const handlers = props(interaction("connected"));
-  handlers.onSendMessage.mockImplementationOnce(
-    () =>
-      new Promise<void>((done) => {
-        resolve = done;
-      }),
-  );
-  const view = render(<InteractionPanel {...handlers} />);
-  fireEvent.change(screen.getByRole("textbox"), { target: { value: "/plan" } });
-  fireEvent.click(screen.getByRole("button", { name: "Send" }));
-  view.unmount();
-  await act(async () => resolve());
-  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
 });
 
 it("shows takeover beside the status, preserves drafts, and navigates to the replacement", () => {
@@ -606,7 +608,7 @@ describe("composer uploads", () => {
     fireEvent.paste(input, {
       clipboardData: { files: [new File(["one"], "one.png"), new File(["two"], "two.txt")] },
     });
-    expect(input).toBeDisabled();
+    expect(input).toBeEnabled();
     expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
     expect(screen.getByText("Uploading 1/2…")).toBeInTheDocument();
@@ -959,7 +961,7 @@ it("retains attachment drafts across sessions and failed sends, then sends witho
   upload.mockRestore();
 });
 
-it("counts attachment paths in the message limit and does not expand slash commands with attachments", async () => {
+it("counts attachment paths in the message limit", async () => {
   const { api } = await import("../../src/client/api/client");
   const { MAX_INTERACTION_MESSAGE_BYTES } = await import("../../src/shared/api-contract");
   const upload = vi.spyOn(api, "upload").mockResolvedValue(uploadResult("/tmp/report.txt"));
@@ -976,7 +978,6 @@ it("counts attachment paths in the message limit and does not expand slash comma
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
   expect(handlers.onSendMessage).toHaveBeenCalledWith("/tmp/report.txt\n\n/help");
-  expect(handlers.onExpandPreview).not.toHaveBeenCalled();
   upload.mockRestore();
 });
 
