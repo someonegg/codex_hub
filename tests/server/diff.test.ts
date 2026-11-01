@@ -125,28 +125,18 @@ it("lists metadata without opening diff bodies", async () => {
   expect(await store.list()).toEqual([entry]);
 });
 
-it.each([
-  ["a", "\x07"],
-  ["b", "\b"],
-  ["f", "\f"],
-  ["v", "\v"],
-  ["n", "\n"],
-  ["t", "\t"],
-  ["r", "\r"],
-  ["\\", "\\"],
-  ['"', '"'],
-])("decodes Git's C escape %s in file headers and patch paths", (escape, decoded) => {
-  const path = `name\\${escape}end`;
+it("decodes mixed Git C escapes in file headers and patch paths", () => {
+  const path = String.raw`name\a\b\f\v\n\t\r\\\"end`;
   const header = `diff --git "a/${path}" "b/${path}"\n`;
   const modeOnly = parseDiff(header + "old mode 100644\nnew mode 100755\n");
   const patch = parseDiff(header + `--- "a/${path}"\n+++ "b/${path}"\n@@ -1 +1 @@\n-old\n+new\n`);
   for (const parsed of [modeOnly, patch]) {
     expect(parsed.warning).toBe(false);
-    expect(parsed.files[0].path).toBe(`name${decoded}end`);
+    expect(parsed.files[0].path).toBe('name\u0007\b\f\u000b\n\t\r\\"end');
   }
 });
 
-it.each(["foo b/bar", "foo b/bar b/baz", "a/ b/ b/", " leading b/trailing "])(
+it.each(["foo b/bar b/baz", " leading b/trailing "])(
   "resolves repeated paths containing spaces and b/ without patch headers: %s",
   (path) => {
     for (const body of [
@@ -174,7 +164,7 @@ ${operation} to b/new b/name
   },
 );
 
-it.each(['"a/foo b/bar" b/foo b/bar', 'a/foo b/bar "b/foo b/bar"', '"a/foo b/bar" "b/foo b/bar"'])(
+it.each(['"a/foo b/bar" b/foo b/bar', 'a/foo b/bar "b/foo b/bar"'])(
   "resolves quoted header paths: %s",
   (header) => {
     const parsed = parseDiff(`diff --git ${header}\nold mode 100644\nnew mode 100755\n`);

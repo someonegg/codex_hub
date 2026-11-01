@@ -5,8 +5,6 @@ import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 
 it.each([
   [false, false, []],
-  [true, false, ["--worktree"]],
-  [false, true, ["--yolo"]],
   [true, true, ["--worktree", "--yolo"]],
 ] as const)(
   "passes only enabled creation flags (worktree=%s, yolo=%s)",

@@ -2,9 +2,19 @@ import { afterEach } from "vitest";
 
 const cleanups: (() => void | Promise<void>)[] = [];
 
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
-});
+afterEach(runCleanups);
+
+export async function runCleanups(): Promise<void> {
+  const errors: unknown[] = [];
+  for (const cleanup of cleanups.splice(0).reverse()) {
+    try {
+      await cleanup();
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length > 0) throw new AggregateError(errors, "Test resource cleanup failed");
+}
 
 export function cleanupAfterEach(cleanup: () => void | Promise<void>): void {
   cleanups.push(cleanup);

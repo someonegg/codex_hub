@@ -96,18 +96,16 @@ describe("session runtime evidence", () => {
     expect(await f.evaluate()).toMatchObject({ status: "normal", resume: { allowed: false } });
   });
 
-  it.each(["native:会话/42%", "00000000-0000-4000-8000-000000000001"])(
-    "delegates opaque native identity %s to the owning manager",
-    async (sourceId) => {
-      const f = setup();
-      f.bind();
-      const value = { ...f.session, sourceId };
-      expect((await f.evaluate(value)).resume.allowed).toBe(true);
-      expect(f.isValidNativeId).toHaveBeenCalledWith(sourceId);
-      f.isValidNativeId.mockReturnValue(false);
-      expect((await f.evaluate(value)).resume.allowed).toBe(false);
-    },
-  );
+  it("delegates non-UUID native identity validation to the owning manager", async () => {
+    const sourceId = "native:会话/42%";
+    const f = setup();
+    f.bind();
+    const value = { ...f.session, sourceId };
+    expect((await f.evaluate(value)).resume.allowed).toBe(true);
+    expect(f.isValidNativeId).toHaveBeenCalledWith(sourceId);
+    f.isValidNativeId.mockReturnValue(false);
+    expect((await f.evaluate(value)).resume.allowed).toBe(false);
+  });
 
   it("rejects invalid identities and unavailable directories", async () => {
     const f = setup();

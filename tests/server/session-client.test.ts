@@ -32,26 +32,36 @@ it("sends JSON with a byte-accurate length and tracks writes across later querie
   });
 });
 
-it("keeps backend unknown errors on read-only requests as definite query failures", async () => {
-  const { base } = await startHttpServer(
-    async (_req, res) => {
-      res.writeHead(504).end(
-        JSON.stringify({
-          error: { code: "operation_result_unknown", message: "capture timed out" },
-        }),
-      );
-      return true;
-    },
-    () => {},
-  );
-  const client = new SessionClient(new URL(base), new AbortController().signal);
-  await expect(client.request("/api/terminal")).rejects.toMatchObject({
-    code: "request_failed",
-    message: "capture timed out",
-    exitCode: 1,
-  });
-  expect(client.mutationSubmitted).toBe(false);
-});
+it.each(["read", "write", "poll"] as const)(
+  "classifies backend unknown errors during %s",
+  async (stage) => {
+    const { base } = await startHttpServer(
+      async (req, res) => {
+        if (stage === "poll" && req.method === "POST") {
+          res.writeHead(202).end(JSON.stringify({ operationId: "pending", status: "pending" }));
+          return true;
+        }
+        res.writeHead(504).end(
+          JSON.stringify({
+            error: { code: "operation_result_unknown", message: "capture timed out" },
+          }),
+        );
+        return true;
+      },
+      () => {},
+    );
+    const client = new SessionClient(new URL(base), new AbortController().signal);
+    if (stage === "poll") await client.request("/api/write", "POST", {});
+    await expect(
+      client.request("/api/terminal", stage === "write" ? "POST" : "GET"),
+    ).rejects.toMatchObject({
+      code: stage === "read" ? "request_failed" : "operation_result_unknown",
+      exitCode: stage === "read" ? 1 : 2,
+      ...(stage === "read" ? { message: "capture timed out" } : {}),
+    });
+    expect(client.mutationSubmitted).toBe(stage !== "read");
+  },
+);
 
 it("does not mark a write submitted when the shared signal is already aborted", async () => {
   const client = new SessionClient(new URL("http://127.0.0.1:1"), AbortSignal.abort());

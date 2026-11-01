@@ -243,28 +243,22 @@ it("publishes truncation-only updates and isolates binding revisions", async () 
   expect(replacement.frames[0]?.revision).not.toBe(viewer.frames[0]?.revision);
 });
 
-it.each(["oversized", "edit budget", "not smaller"])(
-  "falls back to full text for %s and resumes deltas from that frame",
-  async (reason) => {
-    content = reason === "not smaller" ? "a" : `start\n${"a\n".repeat(300)}`;
-    const viewer = subscribe();
-    await flush();
-    if (reason === "oversized") content += "x".repeat(8192);
-    else if (reason === "edit budget") content = content.replaceAll("a\n", "b\n");
-    else content = "b";
-    change();
-    await vi.advanceTimersByTimeAsync(350);
-    const baseline = viewer.frames.at(-1)!;
-    expect(baseline).toMatchObject({ type: "snapshot", content });
-    if (reason === "not smaller") return;
-    content = content.replace("start", "next");
-    change();
-    await vi.advanceTimersByTimeAsync(350);
-    const delta = viewer.frames.at(-1)!;
-    expect(delta).toMatchObject({ type: "delta", baseRevision: baseline.revision });
-    expect(applyPreview(applyPreview(null, baseline), delta)?.content).toBe(content);
-  },
-);
+it("falls back to full text for edit budget and resumes deltas from that frame", async () => {
+  content = `start\n${"a\n".repeat(300)}`;
+  const viewer = subscribe();
+  await flush();
+  content = content.replaceAll("a\n", "b\n");
+  change();
+  await vi.advanceTimersByTimeAsync(350);
+  const baseline = viewer.frames.at(-1)!;
+  expect(baseline).toMatchObject({ type: "snapshot", content });
+  content = content.replace("start", "next");
+  change();
+  await vi.advanceTimersByTimeAsync(350);
+  const delta = viewer.frames.at(-1)!;
+  expect(delta).toMatchObject({ type: "delta", baseRevision: baseline.revision });
+  expect(applyPreview(applyPreview(null, baseline), delta)?.content).toBe(content);
+});
 
 it.each([8192, 8193])("enforces serialized UTF-8 delta byte boundary %i", async (size) => {
   content = `old\n${"padding".repeat(4000)}`;

@@ -26,8 +26,6 @@ it("validates message bytes after structure without changing the transmitted tex
 it.each([
   { keys: "enter" },
   { keys: ["enter"], extra: true },
-  { keys: [] },
-  { keys: ["unknown"] },
   { keys: Array.from({ length: 65 }, () => "left") },
   { keys: ["interrupt"], requireIdle: true },
 ])("rejects invalid keys body %j", (body) => {

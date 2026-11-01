@@ -1,11 +1,13 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 
-import { expect, it, vi } from "vitest";
+import { beforeEach, expect, it, vi } from "vitest";
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn }));
 import { createTmuxPreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
+
+beforeEach(() => spawn.mockReset());
 
 function child() {
   return Object.assign(new EventEmitter(), {

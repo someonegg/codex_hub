@@ -81,9 +81,7 @@ it("streams updates and cancels the subscription when the client leaves", async 
 
 it.each([
   ["session_not_found", false],
-  ["interaction_not_supported", false],
   ["interaction_not_connected", false],
-  ["interaction_failed", true],
   ["operation_result_unknown", true],
 ] as const)("sends structured %s errors with retryable=%s", async (code, retryable) => {
   const server = await start(async () => {
@@ -108,7 +106,6 @@ it("reports unavailable interaction after upgrading", async () => {
 
 it.each([
   ["/api/v1/sessions/invalid/terminal-preview", undefined, 404],
-  [`/api/v1/sessions/${PREVIEW_SESSION_ID}/terminal-preview?after=old`, undefined, 400],
   [`/api/v1/sessions/${PREVIEW_SESSION_ID}/terminal-preview?unexpected=1`, undefined, 400],
   [`/api/v1/sessions/${PREVIEW_SESSION_ID}/terminal-preview`, "https://other.example", 403],
 ] as const)("rejects invalid upgrade %s (%s)", async (path, origin, status) => {

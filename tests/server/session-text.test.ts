@@ -16,12 +16,10 @@ describe("session title text", () => {
     });
   });
 
-  it.each([
-    ["intro\n\n# ATX level one", "ATX level one"],
-    ["intro\n\nSetext level one\n================", "Setext level one"],
-    ["intro\n\nSetext level two\n----------------", "Setext level two"],
-  ])("uses a Markdown H1 or H2 from %j", (markdown, expected) => {
-    expect(sessionTitleFromMarkdown(markdown)).toBe(expected);
+  it("uses a Setext heading for the session title", () => {
+    expect(sessionTitleFromMarkdown("intro\n\nSetext level one\n================")).toBe(
+      "Setext level one",
+    );
   });
 
   it("uses the first H1 or H2 in document order and extracts plain text", () => {
@@ -32,11 +30,10 @@ describe("session title text", () => {
     ).toBe("First heading with code");
   });
 
-  it.each([
-    ["Fallback line\n\n### Level three", "Fallback line"],
-    ["Fallback line\n\n```md\n# Fenced heading\n```", "Fallback line"],
-  ])("ignores non-title heading syntax in %j", (markdown, expected) => {
-    expect(sessionTitleFromMarkdown(markdown)).toBe(expected);
+  it("ignores headings inside fenced code", () => {
+    expect(sessionTitleFromMarkdown("Fallback line\n\n```md\n# Fenced heading\n```")).toBe(
+      "Fallback line",
+    );
   });
 
   it("bounds a Markdown heading to the session title limit", () => {

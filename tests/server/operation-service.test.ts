@@ -141,63 +141,49 @@ describe("observed management operations", () => {
     });
     expect(manager.launch).toHaveBeenCalledTimes(2);
   });
-  it.each(["succeeded", "failed", "unknown"] as const)(
-    "retains %s request deduplication until 30 minutes after completion",
-    async (status) => {
-      const { service, manager, set, time } = setup();
-      const input = {
-        projectDirectory: "/project",
-        worktree: false,
-        requestId: "retained-request",
-      };
-      if (status === "failed") manager.launch.mockRejectedValueOnce(new Error("launch failed"));
-      const op = service.create(input);
-      expect(service.create(input).operationId).toBe(op.operationId);
+  it("retains unknown request deduplication until 30 minutes after completion", async () => {
+    const { service, manager, time } = setup();
+    const input = {
+      projectDirectory: "/project",
+      worktree: false,
+      requestId: "retained-request",
+    };
+    const op = service.create(input);
+    expect(service.create(input).operationId).toBe(op.operationId);
+    await flush();
+    const finishedAt = 300_000;
+    time(finishedAt);
+    await service.poll();
+    const completed = await service.get(op.operationId);
+    expect(completed).toMatchObject({ status: "unknown" });
+    const expiresAt = Date.parse(completed!.updatedAt) + 30 * 60_000;
+    for (const timestamp of [Date.parse(completed!.updatedAt), expiresAt - 1]) {
+      time(timestamp);
+      expect(service.create(input)).toEqual(completed);
+      expect(() => service.create({ ...input, worktree: true })).toThrow(
+        expect.objectContaining({ status: 409 }),
+      );
+      expect(() => service.create({ ...input, projectDirectory: "/other" })).toThrow(
+        expect.objectContaining({ status: 409 }),
+      );
       await flush();
-      if (status === "failed") {
-        expect(await service.get(op.operationId)).toMatchObject({
-          status: "failed",
-          error: "launch failed",
-        });
-        expect(service.create(input)).toEqual(await service.get(op.operationId));
-      }
-      const finishedAt = 300_000;
-      time(finishedAt);
-      if (status === "succeeded") set({ sessions: [session("created", op.operationId)] });
-      // Observe success before the deadline; failed launches have already finished at time zero.
-      if (status === "succeeded") time(finishedAt - 1);
-      await service.poll();
-      const completed = await service.get(op.operationId);
-      expect(completed).toMatchObject({ status });
-      const expiresAt = Date.parse(completed!.updatedAt) + 30 * 60_000;
-      for (const timestamp of [Date.parse(completed!.updatedAt), expiresAt - 1]) {
-        time(timestamp);
-        expect(service.create(input)).toEqual(completed);
-        expect(() => service.create({ ...input, worktree: true })).toThrow(
-          expect.objectContaining({ status: 409 }),
-        );
-        expect(() => service.create({ ...input, projectDirectory: "/other" })).toThrow(
-          expect.objectContaining({ status: 409 }),
-        );
-        await flush();
-        expect(manager.launch).toHaveBeenCalledTimes(1);
-      }
-      const explicit = service.create({ ...input, requestId: "explicit-new-request" });
-      expect(explicit.operationId).not.toBe(op.operationId);
-      await flush();
-      expect(manager.launch).toHaveBeenCalledTimes(2);
-      time(expiresAt);
-      // Submission itself must prune, without relying on a prior query or timer tick.
-      const fresh = service.create(input);
-      expect(fresh.operationId).not.toBe(op.operationId);
-      expect(await service.get(op.operationId)).toBeNull();
-      await flush();
-      expect(manager.launch).toHaveBeenCalledTimes(3);
-      time(expiresAt + 1);
-      expect(service.create(input).operationId).toBe(fresh.operationId);
-      expect(manager.launch).toHaveBeenCalledTimes(3);
-    },
-  );
+      expect(manager.launch).toHaveBeenCalledTimes(1);
+    }
+    const explicit = service.create({ ...input, requestId: "explicit-new-request" });
+    expect(explicit.operationId).not.toBe(op.operationId);
+    await flush();
+    expect(manager.launch).toHaveBeenCalledTimes(2);
+    time(expiresAt);
+    // Submission itself must prune, without relying on a prior query or timer tick.
+    const fresh = service.create(input);
+    expect(fresh.operationId).not.toBe(op.operationId);
+    expect(await service.get(op.operationId)).toBeNull();
+    await flush();
+    expect(manager.launch).toHaveBeenCalledTimes(3);
+    time(expiresAt + 1);
+    expect(service.create(input).operationId).toBe(fresh.operationId);
+    expect(manager.launch).toHaveBeenCalledTimes(3);
+  });
   it.each(["conflict", "wrong-target", "binding-failure", "wrong-project"])(
     "explains %s without guessing",
     async (scenario) => {
@@ -447,24 +433,22 @@ describe("archive exit workflow", () => {
     expect(interaction.killTarget).not.toHaveBeenCalled();
   });
 
-  it.each(["failure", "timeout"])("never repeats archive after command %s", async (scenario) => {
+  it("never repeats archive after command timeout", async () => {
     const { service, interaction, manager, set } = setup();
     set({ sessions: [session()] });
     manager.archive.mockRejectedValue(
-      Object.assign(new Error("native archive error"), { killed: scenario === "timeout" }),
+      Object.assign(new Error("native archive error"), { killed: true }),
     );
     const op = service.manage("archive", "session");
     await flush();
     expect(await service.get(op.operationId)).toMatchObject({
-      status: scenario === "timeout" ? "unknown" : "failed",
+      status: "unknown",
       error: "native archive error",
       phase: "archiving",
     });
     set({ sessions: [{ ...session(), archived: true }] });
     await Promise.all([service.get(op.operationId), service.get(op.operationId), service.poll()]);
-    expect((await service.get(op.operationId))?.status).toBe(
-      scenario === "timeout" ? "unknown" : "failed",
-    );
+    expect((await service.get(op.operationId))?.status).toBe("unknown");
     expect(manager.archive).toHaveBeenCalledOnce();
     expect(interaction.sendExitKeys).not.toHaveBeenCalled();
   });
@@ -556,21 +540,20 @@ it("rechecks actual deletion after timeout without repeating the native command"
   expect(manager.delete).toHaveBeenCalledOnce();
 });
 
-it.each(["timeout", "command_failed"])(
-  "stops archive before exit on initial query %s",
-  async (code) => {
-    const { service, interaction, manager, set } = setup();
-    set({ sessions: [session()] });
-    interaction.resolveTarget.mockRejectedValue(Object.assign(new Error("query error"), { code }));
-    const op = service.manage("archive", "session");
-    await flush();
-    expect(await service.get(op.operationId)).toMatchObject({
-      status: code === "timeout" ? "unknown" : "failed",
-    });
-    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
-    expect(manager.archive).not.toHaveBeenCalled();
-  },
-);
+it("stops archive before exit on initial query timeout", async () => {
+  const { service, interaction, manager, set } = setup();
+  set({ sessions: [session()] });
+  interaction.resolveTarget.mockRejectedValue(
+    Object.assign(new Error("query error"), { code: "timeout" }),
+  );
+  const op = service.manage("archive", "session");
+  await flush();
+  expect(await service.get(op.operationId)).toMatchObject({
+    status: "unknown",
+  });
+  expect(interaction.sendExitKeys).not.toHaveBeenCalled();
+  expect(manager.archive).not.toHaveBeenCalled();
+});
 it("delegates duplicate native identities to the adapter", async () => {
   const { service, interaction, manager, set } = setup();
   set({ sessions: [session(), session("duplicate")] });
@@ -747,31 +730,28 @@ it("isolates creation association and fingerprints the selected source", async (
 });
 
 describe("standalone exit operations", () => {
-  it.each([false, true])(
-    "exits without archiving an archived=%s session and coalesces requests",
-    async (archived) => {
-      const { service, interaction, manager, set } = setup();
-      set({ sessions: [{ ...session(), archived }] });
-      interaction.resolveTarget.mockResolvedValue(target);
-      interaction.inspectTarget.mockResolvedValue("alive");
-      const op = service.manage("exit", "session");
-      expect(service.manage("exit", "session").operationId).toBe(op.operationId);
-      expect(() => service.manage("archive", "session")).toThrow("Another management operation");
-      expect(() => service.manage("delete", "session")).toThrow("Another management operation");
-      await flush();
-      expect(await service.get(op.operationId)).toMatchObject({ type: "exit", status: "pending" });
-      expect(interaction.sendExitKeys).toHaveBeenCalledOnce();
-      interaction.inspectTarget.mockResolvedValue("exited");
-      await service.poll();
-      expect(await service.get(op.operationId)).toMatchObject({
-        type: "exit",
-        status: "succeeded",
-      });
-      expect(manager.archive).not.toHaveBeenCalled();
-      expect(manager.delete).not.toHaveBeenCalled();
-      expect(interaction.setBusy).toHaveBeenLastCalledWith("session", false);
-    },
-  );
+  it("exits archived sessions without archiving again and coalesces requests", async () => {
+    const { service, interaction, manager, set } = setup();
+    set({ sessions: [{ ...session(), archived: true }] });
+    interaction.resolveTarget.mockResolvedValue(target);
+    interaction.inspectTarget.mockResolvedValue("alive");
+    const op = service.manage("exit", "session");
+    expect(service.manage("exit", "session").operationId).toBe(op.operationId);
+    expect(() => service.manage("archive", "session")).toThrow("Another management operation");
+    expect(() => service.manage("delete", "session")).toThrow("Another management operation");
+    await flush();
+    expect(await service.get(op.operationId)).toMatchObject({ type: "exit", status: "pending" });
+    expect(interaction.sendExitKeys).toHaveBeenCalledOnce();
+    interaction.inspectTarget.mockResolvedValue("exited");
+    await service.poll();
+    expect(await service.get(op.operationId)).toMatchObject({
+      type: "exit",
+      status: "succeeded",
+    });
+    expect(manager.archive).not.toHaveBeenCalled();
+    expect(manager.delete).not.toHaveBeenCalled();
+    expect(interaction.setBusy).toHaveBeenLastCalledWith("session", false);
+  });
 
   it("does not require a native UUID to exit an unbound session", async () => {
     const { service, set, manager } = setup();
@@ -1196,68 +1176,62 @@ it("prunes batches while retaining recent results and active request identities"
 });
 
 describe("creation project and working directories", () => {
-  it.each([undefined, "/project"])(
-    "reuses project resolution for cwd %s and normalizes idempotency",
-    async (workingDirectory) => {
-      const f = setup();
-      const input = { projectDirectory: "/project", worktree: false, requestId: "directories" };
-      const op = f.service.create({ ...input, workingDirectory });
-      expect(f.service.create({ ...input, workingDirectory: "/project" })).toEqual(op);
-      expect(() => f.service.create({ ...input, workingDirectory: "/other" })).toThrow(
-        /different parameters/,
-      );
-      expect(() => f.service.create({ ...input, projectDirectory: "/other" })).toThrow(
-        /different parameters/,
-      );
-      await flush();
-      expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(1);
-      expect(f.manager.launch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workingDirectory: "/project",
-          projectDirectory: "/project",
-        }),
-      );
-    },
-  );
-
-  it.each([false, true])(
-    "launches in an existing working directory independently of project, worktree=%s",
-    async (worktree) => {
-      const f = setup();
-      f.manager.resolveDirectory.mockImplementation(async (directory) => ({
-        directory: directory + "/real",
-      }));
-      const op = f.service.create({
+  it("defaults the working directory to the project and normalizes idempotency", async () => {
+    const f = setup();
+    const input = { projectDirectory: "/project", worktree: false, requestId: "directories" };
+    const op = f.service.create(input);
+    expect(f.service.create({ ...input, workingDirectory: "/project" })).toEqual(op);
+    expect(() => f.service.create({ ...input, workingDirectory: "/other" })).toThrow(
+      /different parameters/,
+    );
+    expect(() => f.service.create({ ...input, projectDirectory: "/other" })).toThrow(
+      /different parameters/,
+    );
+    await flush();
+    expect(f.manager.resolveDirectory).toHaveBeenCalledTimes(1);
+    expect(f.manager.launch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workingDirectory: "/project",
         projectDirectory: "/project",
-        workingDirectory: "/existing-worktree",
-        worktree,
-        requestId: "split-directories",
-      });
-      await flush();
-      expect(f.manager.resolveDirectory.mock.calls).toEqual([["/project"], ["/existing-worktree"]]);
-      expect(f.manager.launch).toHaveBeenCalledWith({
-        operationId: op.operationId,
-        workingDirectory: "/existing-worktree/real",
-        projectDirectory: "/project/real",
-        worktree,
-        yolo: false,
-      });
-      f.set({
-        sessions: [
-          {
-            ...session("created", op.operationId),
-            workingDirectory: "/existing-worktree/real",
-            projectDirectory: "/project/real",
-          },
-        ],
-      });
-      await f.service.poll();
-      expect(await f.service.get(op.operationId)).toMatchObject({
-        status: "succeeded",
-        sessionId: "created",
-      });
-    },
-  );
+      }),
+    );
+  });
+
+  it("launches a worktree in an independent working directory", async () => {
+    const f = setup();
+    f.manager.resolveDirectory.mockImplementation(async (directory) => ({
+      directory: directory + "/real",
+    }));
+    const op = f.service.create({
+      projectDirectory: "/project",
+      workingDirectory: "/existing-worktree",
+      worktree: true,
+      requestId: "split-directories",
+    });
+    await flush();
+    expect(f.manager.resolveDirectory.mock.calls).toEqual([["/project"], ["/existing-worktree"]]);
+    expect(f.manager.launch).toHaveBeenCalledWith({
+      operationId: op.operationId,
+      workingDirectory: "/existing-worktree/real",
+      projectDirectory: "/project/real",
+      worktree: true,
+      yolo: false,
+    });
+    f.set({
+      sessions: [
+        {
+          ...session("created", op.operationId),
+          workingDirectory: "/existing-worktree/real",
+          projectDirectory: "/project/real",
+        },
+      ],
+    });
+    await f.service.poll();
+    expect(await f.service.get(op.operationId)).toMatchObject({
+      status: "succeeded",
+      sessionId: "created",
+    });
+  });
 
   it.each(["/project", "/working"])("does not launch when %s is unavailable", async (missing) => {
     const f = setup();

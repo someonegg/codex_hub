@@ -38,20 +38,6 @@ it("ignores inherited bindings, including invalid attempts", () => {
   }
 });
 
-it.each([undefined, { inherited_user_message: false }])(
-  "preserves bindings without an explicit inherited flag: %j",
-  (metadata) => {
-    const record = response(1, {
-      type: "message",
-      role: "user",
-      content: [{ type: "input_text", text: shellText("/tmp/tmux.sock", "%7") }],
-    });
-    expect(codexBindingAttemptsFrom({ ...record, value: { ...record.value, metadata } })).toEqual([
-      { ordinal: 1, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId },
-    ]);
-  },
-);
-
 it("parses bindings only from user shell output", () => {
   const text = shellText("/tmp/tmux.sock", "%7");
   expect(
@@ -62,29 +48,31 @@ it("parses bindings only from user shell output", () => {
   expect(
     codexBindingAttemptsFrom(response(2, { type: "custom_tool_call_output", output: text })),
   ).toEqual([]);
+  const userRecord = response(3, {
+    type: "message",
+    role: "user",
+    content: [{ type: "input_text", text }],
+  });
   expect(
-    codexBindingAttemptsFrom(
-      response(3, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
-    ),
+    codexBindingAttemptsFrom({
+      ...userRecord,
+      value: { ...userRecord.value, metadata: { inherited_user_message: false } },
+    }),
   ).toEqual([{ ordinal: 3, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId }]);
 });
 
-it.each(["invalid", "------------------------------------"])(
-  "rejects invalid operation ID %s",
-  (id) => {
-    expect(
-      codexBindingAttemptsFrom(
-        response(1, {
-          type: "message",
-          role: "user",
-          content: [
-            { type: "input_text", text: shellText("/tmp/a", "%1").replace(operationId, id) },
-          ],
-        }),
-      ),
-    ).toEqual([{ ordinal: 1, valid: false }]);
-  },
-);
+it("rejects a UUID-length operation ID without hexadecimal digits", () => {
+  const id = "------------------------------------";
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: shellText("/tmp/a", "%1").replace(operationId, id) }],
+      }),
+    ),
+  ).toEqual([{ ordinal: 1, valid: false }]);
+});
 
 it("accepts manual bindings with spaces and commas in the socket path", () => {
   const text = `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/a space,comma.sock\n%42\n\n\n</user_shell_command>`;

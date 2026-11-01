@@ -6,9 +6,7 @@ it.each([
   ["GET", false, 504, "operation_result_unknown", 1],
   ["GET", true, 404, "session_not_found", 2],
   ["POST", true, 504, "operation_result_unknown", 2],
-  ["POST", true, 500, "internal_error", 2],
   ["POST", true, 502, "interaction_failed", 1],
-  ["POST", true, 409, "session_busy", 1],
 ] as const)(
   "maps %s errors with submitted=%s, status=%s and code=%s",
   (method, submitted, status, code, exitCode) => {

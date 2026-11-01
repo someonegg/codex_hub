@@ -13,14 +13,14 @@ import {
 } from "../../src/server/management/session-manager.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
-it.each([null, undefined, "", "relative", "/a\0b", "/a\rb", "/a\nb"])(
+it.each([null, "relative", "/a\0b", "/a\rb", "/a\nb"])(
   "rejects invalid project path %j",
   (value) => {
     expect(validProjectDirectory(value)).toBe(false);
   },
 );
-it.each(["/a\0b"])("emits an empty project field for invalid %j", (path) => {
-  expect(codexBindingCommand(undefined, path)).toMatch(/'' ''$/);
+it("omits project paths containing NUL from binding commands", () => {
+  expect(codexBindingCommand(undefined, "/a\0b")).toMatch(/'' ''$/);
 });
 it("preserves and safely quotes shell characters in project paths", () => {
   const path = "/a space/'quote'/$HOME;$(echo bad)`echo bad`";

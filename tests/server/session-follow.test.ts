@@ -62,6 +62,26 @@ it("reads immediately, drains pages sequentially, waits between rounds and emits
   expect(vi.getTimerCount()).toBe(0);
 });
 
+it("drains the final round and suppresses position-only updates", async () => {
+  vi.useFakeTimers();
+  const log = vi.spyOn(console, "log").mockImplementation(() => {});
+  request
+    .mockResolvedValueOnce(page(1))
+    .mockResolvedValueOnce(page(2, { hasMore: true }))
+    .mockResolvedValueOnce(page(3));
+  const observing = followInspect(options());
+  await vi.advanceTimersByTimeAsync(3000);
+  await observing;
+  expect(request.mock.calls.map(([path]) => path)).toEqual([
+    "/session/messages?",
+    "/session/messages?after=1",
+    "/session/messages?after=2",
+  ]);
+  expect(log).toHaveBeenCalledOnce();
+  expect(JSON.parse(log.mock.calls[0]![0]).nextAfter).toBe(1);
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 it("continues after final replies and retains incremental metadata", async () => {
   vi.useFakeTimers();
   const log = vi.spyOn(console, "log").mockImplementation(() => {});

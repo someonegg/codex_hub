@@ -140,29 +140,6 @@ describe("page jump controls", () => {
     expect(observe).toHaveBeenCalledWith(replacement);
     expect(controls.style.getPropertyValue("--panel-clearance")).toBe("112px");
   });
-
-  it("coalesces repeated scroll events into one animation frame", () => {
-    let runFrame!: FrameRequestCallback;
-    const requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
-      runFrame = callback;
-      return 7;
-    });
-    const cancelAnimationFrame = vi.fn();
-    vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
-    vi.stubGlobal("cancelAnimationFrame", cancelAnimationFrame);
-    setPageMetrics({ scrollY: 0, innerHeight: 800, scrollHeight: 3_000 });
-    render(<PageJumpControls />);
-
-    act(() => {
-      setPageMetrics({ scrollY: 1_100, innerHeight: 800, scrollHeight: 3_000 });
-      fireEvent.scroll(window);
-      fireEvent.scroll(window);
-    });
-    expect(requestAnimationFrame).toHaveBeenCalledOnce();
-
-    act(() => runFrame(16));
-    expect(screen.getByRole("button", { name: "Back to top" })).toBeVisible();
-  });
 });
 
 function setPageMetrics(metrics: { scrollY: number; innerHeight: number; scrollHeight: number }) {

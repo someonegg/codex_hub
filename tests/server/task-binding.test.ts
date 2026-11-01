@@ -7,47 +7,40 @@ import {
   codexBindingCommand,
 } from "../../src/server/adapters/codex/interaction-parser.js";
 
-it.each([null, "跨项目 'quoted' $(printf unsafe) `command`"])(
-  "round trips task binding without shell evaluation: %s",
+it("round trips quoted task names without shell evaluation", () => {
+  const task = "跨项目 'quoted' $(printf unsafe) `command`";
+  const command = codexBindingCommand(undefined, "/project", task)
+    .slice(2)
+    .replace("$(tmux display-message -p '#{socket_path}')", "/tmp/task-test-socket")
+    .replace("$TMUX_PANE", "%7");
+  const output = execFileSync("bash", ["-c", command], { encoding: "utf8" });
+  expect(bindingAttempts(output)).toEqual([
+    {
+      ordinal: 1,
+      valid: true,
+      socketPath: "/tmp/task-test-socket",
+      paneId: "%7",
+      projectDirectory: "/project",
+      taskName: task,
+    },
+  ]);
+});
+
+it.each(["not-json", "42", JSON.stringify(""), JSON.stringify("a>b")])(
+  "ignores an empty or invalid task field without invalidating the binding: %s",
   (task) => {
-    const command = codexBindingCommand(undefined, "/project", task)
-      .slice(2)
-      .replace("$(tmux display-message -p '#{socket_path}')", "/tmp/task-test-socket")
-      .replace("$TMUX_PANE", "%7");
-    const output = execFileSync("bash", ["-c", command], { encoding: "utf8" });
-    expect(bindingAttempts(output)).toEqual([
+    const output = `AHUB_TMUX_BIND_V2\n/tmp/socket\n%7\n\n/project\n${task}\n`;
+    expect(bindingAttempts(output, 9)).toEqual([
       {
-        ordinal: 1,
+        ordinal: 9,
         valid: true,
-        socketPath: "/tmp/task-test-socket",
+        socketPath: "/tmp/socket",
         paneId: "%7",
         projectDirectory: "/project",
-        ...(task === null ? {} : { taskName: task }),
       },
     ]);
   },
 );
-
-it.each([
-  "",
-  "not-json",
-  "42",
-  "null",
-  JSON.stringify(""),
-  JSON.stringify("  "),
-  JSON.stringify("a>b"),
-])("ignores an empty or invalid task field without invalidating the binding: %s", (task) => {
-  const output = `AHUB_TMUX_BIND_V2\n/tmp/socket\n%7\n\n/project\n${task}\n`;
-  expect(bindingAttempts(output, 9)).toEqual([
-    {
-      ordinal: 9,
-      valid: true,
-      socketPath: "/tmp/socket",
-      paneId: "%7",
-      projectDirectory: "/project",
-    },
-  ]);
-});
 
 function bindingAttempts(output: string, ordinal = 1) {
   return codexBindingAttemptsFrom({

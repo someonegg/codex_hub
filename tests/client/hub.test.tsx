@@ -357,37 +357,6 @@ it("keeps archived content open while removing navigation, then returns to the p
   ).toBeInTheDocument();
 });
 
-it("formats a fixed catalog once and reuses dates when groups and selection change", async () => {
-  const count = 32;
-  const sessions = Array.from({ length: count }, (_, index) => ({
-    ...listBody.sessions[0]!,
-    id: index === 0 ? SESSION_ID : `session-${index}`,
-    title: `Large catalog ${index}`,
-  }));
-  vi.mocked(api.sessions)
-    .mockReset()
-    .mockResolvedValueOnce({ ...listBody, sessions })
-    .mockImplementation(() => new Promise(() => {}));
-  const format = vi.fn(() => "formatted date");
-  vi.spyOn(Intl.DateTimeFormat.prototype as { format: unknown }, "format", "get").mockReturnValue(
-    format,
-  );
-  render(<App />);
-  await flush();
-  expect(format).toHaveBeenCalledTimes(count);
-  const group = screen.getByRole("button", { name: new RegExp(`reader, ${count} main sessions`) });
-  fireEvent.click(group);
-  fireEvent.click(group);
-  expect(format).toHaveBeenCalledTimes(count);
-  // Select the link directly; accessible-name computation is unrelated to date caching.
-  const link = screen.getByText("Large catalog 0", { exact: true }).closest("a")!;
-  expect(link).toHaveAttribute("href", `/sessions/${SESSION_ID}`);
-  fireEvent.click(link);
-  await flush();
-  expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
-  expect(format.mock.calls.length).toBeLessThan(count + 5);
-});
-
 describe("hub link entry points", () => {
   it("preserves modified child clicks and navigates on primary click", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);

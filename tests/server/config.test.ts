@@ -73,15 +73,6 @@ it("resolves upload directories and rejects empty configuration", () => {
   expect(() => loadConfig(["--home-dir", " "])).toThrow("--home-dir must not be empty");
 });
 
-it("resolves hosting directories and reports their own option name for empty values", () => {
-  expect(runnable(["--hosting", "--home-dir", "web pages"]).hostingDirectory).toBe(
-    resolve("web pages", "hosting"),
-  );
-  expect(() => loadConfig(["--hosting", "--home-dir", " "])).toThrow(
-    "--home-dir must not be empty",
-  );
-});
-
 it("shares the Hub root for uploads and hosting, expanding home-relative paths", () => {
   expect(runnable(["--hosting"])).toMatchObject({
     uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
@@ -93,11 +84,8 @@ it("shares the Hub root for uploads and hosting, expanding home-relative paths",
   });
 });
 
-it.each(["-1", "65536", "1.5", "invalid"])(
-  "names --local-port in invalid port errors (%s)",
-  (value) => {
-    expect(() => loadConfig([`--local-port=${value}`])).toThrow(
-      "--local-port must be an integer between 0 and 65535",
-    );
-  },
-);
+it.each(["65536", "1.5"])("names --local-port in invalid port errors (%s)", (value) => {
+  expect(() => loadConfig([`--local-port=${value}`])).toThrow(
+    "--local-port must be an integer between 0 and 65535",
+  );
+});

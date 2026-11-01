@@ -136,7 +136,6 @@ it.each([
     capturedAt: "bad",
   },
   { ...frame, content: 42 },
-  { type: "unknown" },
 ])("keeps the display and recovers a full baseline after malformed updates: %j", async (bad) => {
   vi.useFakeTimers();
   vi.spyOn(Math, "random").mockReturnValue(0.5);

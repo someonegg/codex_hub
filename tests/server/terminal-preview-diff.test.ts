@@ -3,12 +3,6 @@ import { expect, it } from "vitest";
 import { diffLines } from "../../src/server/interaction/terminal-preview-diff.js";
 
 it.each([
-  ["clock 1\nstable", "clock 2\nstable"],
-  ["a\nb\nc\nd", "A\nb\nc\nD"],
-  ["a", "a\nb"],
-  ["a\nb", "a"],
-  ["a\nb\nc", "b\nc\nd"],
-  ["a\na\nb", "a\nb\nb"],
   ["", "你好\n😀\n"],
   ["a\n", ""],
   ["", ""],

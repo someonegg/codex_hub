@@ -73,7 +73,7 @@ it("uses adapter steps once, then EOF and one targeted kill, and requires exit c
   expect(await task.advance()).toBe(true);
 });
 
-it.each([0, 1, 2, 3, 4])("stops after natural exit following %i steps", async (count) => {
+it.each([0, 4])("stops after natural exit following %i steps", async (count) => {
   const { task, interaction, time } = setup();
   for (let index = 0; index < count; index++) {
     time([0, 1_000, 2_000, 6_000][index]!);

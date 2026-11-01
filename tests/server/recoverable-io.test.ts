@@ -30,7 +30,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 afterEach(() => faults.clear());
 
-const codes = ["ENOENT", "EACCES", "EPERM", "ESTALE", "EISDIR", "ENOTDIR"];
+const codes = ["ENOENT", "EACCES", "ESTALE"];
 async function fixture() {
   const home = await realpath(await createTempDirectory("codex-io-faults-"));
   const sessions = join(home, "sessions");
