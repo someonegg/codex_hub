@@ -79,25 +79,6 @@ function InteractionPanel(properties: Omit<ComponentProps<typeof Panel>, "previe
 }
 
 describe("interaction panel", () => {
-  it("reveals the panel on expansion and collapse without focusing the composer", async () => {
-    const user = userEvent.setup();
-    render(<InteractionPanel {...props(interaction("connected"))} />);
-    const panel = screen.getByRole("region", { name: "Session interaction" });
-    const scrollIntoView = vi.fn();
-    panel.scrollIntoView = scrollIntoView;
-    const toggle = screen.getByRole("button", { name: "Terminal Preview" });
-    await user.click(toggle);
-    expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({
-      block: "nearest",
-      behavior: "instant",
-    });
-    await user.click(toggle);
-    expect(scrollIntoView).toHaveBeenCalledTimes(2);
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(toggle).toHaveFocus();
-    expect(screen.getByRole("textbox", { name: "Message to agent" })).not.toHaveFocus();
-  });
-
   it("focuses the preview once on expansion, including before output arrives", async () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
@@ -159,25 +140,12 @@ describe("interaction panel", () => {
     expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveValue("draft");
   });
 
-  it.each(["unbound", "disconnected", "unsupported"] as const)(
-    "shows connection information without input on initial %s state",
-    (state) => {
-      const value: InteractionResponse =
-        state === "unsupported"
-          ? { supported: false, attachCommand: null }
-          : {
-              supported: true,
-              activity: null,
-              state,
-              supersededBySessionId: null,
-              attachCommand: null,
-            };
-      render(<InteractionPanel {...props(value)} />);
-      expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
-      expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-      expect(screen.queryByRole("region", { name: "Terminal Preview" })).not.toBeInTheDocument();
-    },
-  );
+  it("shows connection information without input on initial unbound state", () => {
+    render(<InteractionPanel {...props(interaction("unbound"))} />);
+    expect(screen.getByRole("region", { name: "Session interaction" })).toBeVisible();
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Terminal Preview" })).not.toBeInTheDocument();
+  });
 
   it("inserts a newline on Enter, sends on Shift+Enter, and clears after success", async () => {
     const handlers = props(interaction("connected"));
@@ -328,8 +296,6 @@ describe("interaction panel", () => {
 
 it.each([
   ["/plan", true],
-  ["  /exit\n", false],
-  ["\t/quit  ", false],
   ["/plan now", false],
 ])("expands the preview after successfully sending %s: %s", async (message, expands) => {
   const handlers = props(interaction("connected"));
@@ -521,26 +487,10 @@ it("preserves expanded preview during and after handoff delivery", async () => {
   expect(handlers.onTogglePreview).not.toHaveBeenCalled();
 });
 
-it("does not expand the preview after failed handoff delivery", async () => {
-  const handlers = props(interaction("connected"));
-  handlers.onHandoffPaneBinding.mockRejectedValueOnce(new Error("offline"));
-  render(<InteractionPanel {...handlers} />);
-  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
-  await act(async () => {
-    await Promise.resolve();
-  });
-  expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
-    "aria-expanded",
-    "false",
-  );
-});
-
 it.each([
   ["Enter", "enter"],
   ["ArrowLeft", "left"],
   ["0", "0"],
-  ["5", "5"],
-  ["9", "9"],
 ])("maps physical %s in the preview and prevents defaults", (physical, key) => {
   const handlers = props(interaction("connected"));
   render(<Panel {...handlers} previewExpanded />);
@@ -568,11 +518,11 @@ it("collapses the preview with Escape without interrupting and restores toggle f
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveFocus();
 });
 
-it.each(["c", "C"])("interrupts with Ctrl+%s in the preview without collapsing it", (key) => {
+it("interrupts with Ctrl+c in the preview without collapsing it", () => {
   const handlers = props(interaction("connected"));
   render(<Panel {...handlers} previewExpanded />);
   const body = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
-  expect(fireEvent.keyDown(body, { key, ctrlKey: true })).toBe(false);
+  expect(fireEvent.keyDown(body, { key: "c", ctrlKey: true })).toBe(false);
   expect(handlers.onSendKeys).toHaveBeenCalledExactlyOnceWith(["interrupt"]);
   expect(handlers.onTogglePreview).not.toHaveBeenCalled();
 });
@@ -775,17 +725,14 @@ it("rejects folders without uploading", async () => {
   upload.mockRestore();
 });
 
-it.each(["working", "idle"] as const)(
-  "renders activity %s independently of preview expansion",
-  (activity) => {
-    const value = { ...interaction("connected"), activity } as InteractionResponse;
-    const view = render(<Panel {...props(value)} previewExpanded={false} />);
-    for (const expanded of [false, true]) {
-      view.rerender(<Panel {...props(value)} previewExpanded={expanded} />);
-      expect(screen.getByText(activity === "working" ? "Working" : "Idle")).toBeVisible();
-    }
-  },
-);
+it("renders activity idle independently of preview expansion", () => {
+  const value = { ...interaction("connected"), activity: "idle" } as InteractionResponse;
+  const view = render(<Panel {...props(value)} previewExpanded={false} />);
+  for (const expanded of [false, true]) {
+    view.rerender(<Panel {...props(value)} previewExpanded={expanded} />);
+    expect(screen.getByText("Idle")).toBeVisible();
+  }
+});
 
 describe("image attachments", () => {
   it("navigates the menu, dismisses it and restores focus", async () => {

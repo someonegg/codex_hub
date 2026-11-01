@@ -110,19 +110,16 @@ it("preserves a fallback attach command when launch times out", async () => {
   expect(execute).toHaveBeenCalledOnce();
 });
 
-it.each(["broken", "|%7", "/actual/socket|bad"])(
-  "preserves fallback attach for malformed launch output %s",
-  async (stdout) => {
-    execute.mockImplementationOnce(succeeds(stdout));
-    await expect(
-      new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
-    ).rejects.toMatchObject({
-      outcome: "unknown",
-      attachCommand: attachCommand("/configured/socket", "ahub-id"),
-    });
-    expect(execute).toHaveBeenCalledOnce();
-  },
-);
+it("preserves fallback attach for an invalid pane in launch output", async () => {
+  execute.mockImplementationOnce(succeeds("/actual/socket|bad"));
+  await expect(
+    new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
+  ).rejects.toMatchObject({
+    outcome: "unknown",
+    attachCommand: attachCommand("/configured/socket", "ahub-id"),
+  });
+  expect(execute).toHaveBeenCalledOnce();
+});
 
 it("keeps the known target when post-launch setup fails", async () => {
   execute

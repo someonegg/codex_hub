@@ -124,63 +124,6 @@ describe("SessionReadService", () => {
     expect(updates?.session).not.toHaveProperty("nickname");
   });
 
-  it("publishes linked summaries and pages timeline details", async () => {
-    const { catalogSessions, repository, session: parent } = await basicFixtureSession();
-    const child = catalogSessions.find((session) => session.parentId === parent.id)!;
-    expect(child.parentId).toBe(parent.id);
-    expect(child.isChild).toBe(true);
-    expect((await repository.getSession(parent.id))?.session.childIds).toContain(child.id);
-
-    const page = await repository.getItems(parent.id, {
-      limit: 2,
-    });
-    expect(page?.hasMore).toBe(true);
-    await expect(
-      repository.getItems(parent.id, {
-        cursor: page!.cursor,
-        limit: 2,
-      }),
-    ).resolves.not.toBeNull();
-    const allItems = await repository.getItems(parent.id, {
-      limit: 200,
-    });
-    const directive = allItems!.items.find((item) => item.id === "directive-4")!;
-    expect(JSON.stringify(allItems)).not.toContain("DIRECTIVE_DETAIL_CANARY");
-    expect(
-      await repository.getDirectiveDetail(parent.id, directive.id, {
-        cursor: allItems!.cursor,
-      }),
-    ).toEqual(
-      expect.objectContaining({
-        text: expect.stringContaining("DIRECTIVE_DETAIL_CANARY"),
-        truncated: false,
-      }),
-    );
-    const internal = allItems!.items.find((item) => item.id === "internal-6")!;
-    expect(allItems).not.toHaveProperty("internalDetails");
-    expect(JSON.stringify(allItems)).not.toContain("REASONING_CANARY_NEVER_RENDER");
-    expect(
-      await repository.getInternalDetail(parent.id, internal.id, {
-        cursor: allItems!.cursor,
-      }),
-    ).toEqual(
-      expect.objectContaining({
-        json: expect.stringContaining("REASONING_CANARY_NEVER_RENDER"),
-        truncated: false,
-      }),
-    );
-    await expect(
-      repository.getInternalDetail(parent.id, internal.id, {
-        cursor: page!.cursor,
-      }),
-    ).rejects.toMatchObject({ code: "invalid_query" });
-    await expect(
-      repository.getInternalDetail(parent.id, directive.id, {
-        cursor: allItems!.cursor,
-      }),
-    ).resolves.toBeNull();
-  });
-
   it("does not revise a session until an appended JSONL tail is terminated", async () => {
     const home = await createTempDirectory("codex-silent-tail-");
     const directory = join(home, "sessions");

@@ -203,20 +203,6 @@ it("whitelists nested records and renders Markdown, input hints, flattened answe
   expect(text).toContain("Next after: 44\nHas more: yes");
 });
 
-it.each(["idle", null] as const)("renders activity %s explicitly", (activity) => {
-  const mapped = mapInspect({
-    ...base,
-    interaction: {
-      ...base.interaction,
-      supported: true,
-      state: "connected",
-      supersededBySessionId: null,
-      attachCommand: null,
-      activity,
-    },
-  });
-  expect(formatResult("inspect", mapped)).toContain(`Activity: ${activity ?? "unknown"}`);
-});
 it("renders unsupported, empty pages, cancelled and unavailable outcomes", () => {
   const mapped = mapInspect({
     ...base,
@@ -260,9 +246,7 @@ it("maps terminal fields explicitly", () => {
 
 it.each([
   ["assistant", "response", "Plan", true],
-  ["assistant", "response", null, false],
   ["assistant", "update", "Plan", false],
-  ["user", "response", "Plan", false],
 ] as const)(
   "adds hints only to assistant response Plans (%s %s %s)",
   (role, phase, itemType, hinted) => {

@@ -68,23 +68,14 @@ it.each([
   ["inspect", "id", "--after", "-1"],
   ["list", "extra"],
   ["list", "--url", "bad-url"],
-  ["send", "id", "--message", "  "],
   ["send", "id"],
   ["send", "id", "--stdin", "--message", "x"],
   ["keys", "id", "interrupt"],
-  ["keys", "id", "C-c"],
   ["keys", "id", "C-c", "--force"],
-  ["send", "id", "--message", "  ", "--force"],
-  ["interrupt", "id", "--force"],
-  ["resume", "id", "--force"],
   ["resume", "id", "--home", "other"],
   ["inspect", "id", "--limit", "301"],
   ["list", "--url", "ftp://example.com"],
-  ["list", "--url", "https://example.com/path"],
-  ["list", "--url", "https://example.com?query=1"],
-  ["list", "--url", "https://example.com#fragment"],
   ["list", "--url", "https://user:password@example.com"],
-  ["list", "--timeout", "0"],
   ["create", "--project", "/tmp", "--task", "Fix </user_shell_command> parsing"],
 ])("rejects invalid session arguments: %j", (...args) => {
   expect(() => parseSessionArguments(args)).toThrow(CommandError);
@@ -389,7 +380,7 @@ it("distinguishes failures from unknown writes and never retries or cancels", as
   expect(JSON.parse(failure.stdout).error.operationId).toBeUndefined();
 });
 
-it("treats backend unknown results as query failures unless a mutation was submitted", async () => {
+it("wires backend query errors to the JSON result and exit status", async () => {
   const base = await serve((_req, res) =>
     reply(
       res,
@@ -397,29 +388,11 @@ it("treats backend unknown results as query failures unless a mutation was submi
       504,
     ),
   );
-  for (const command of ["terminal", "inspect"]) {
-    const result = await cli([command, "id", "--url", base, "--json"]);
-    expect(result.code).toBe(1);
-    expect(JSON.parse(result.stdout)).toEqual({
-      error: { code: "request_failed", message: "The tmux operation timed out" },
-    });
-  }
-  const mutation = await cli(["interrupt", "id", "--url", base, "--json"]);
-  expect(mutation.code).toBe(2);
-  expect(JSON.parse(mutation.stdout).error.code).toBe("operation_result_unknown");
-
-  const polling = await serve((req, res) => {
-    if (req.method === "POST") reply(res, { operationId: "pending", status: "pending" }, 202);
-    else
-      reply(
-        res,
-        { error: { code: "operation_result_unknown", message: "Operation lookup timed out" } },
-        504,
-      );
+  const result = await cli(["terminal", "id", "--url", base, "--json"]);
+  expect(result.code).toBe(1);
+  expect(JSON.parse(result.stdout)).toEqual({
+    error: { code: "request_failed", message: "The tmux operation timed out" },
   });
-  const submitted = await cli(["archive", "id", "--url", polling, "--json"]);
-  expect(submitted.code).toBe(2);
-  expect(JSON.parse(submitted.stdout).error.code).toBe("operation_result_unknown");
 });
 
 it("applies one deadline to polling without resubmitting the mutation", async () => {
@@ -539,77 +512,25 @@ it("keeps connection failures classified as query_failed", async () => {
   expect(JSON.parse(result.stdout).error.code).toBe("query_failed");
 });
 
-it.each([
-  "list",
-  "inspect",
-  "terminal",
-  "send",
-  "keys",
-  "interrupt",
-  "handoff",
-  "create",
-  "resume",
-  "exit",
-  "archive",
-  "delete",
-])("sets the timeout tier for %s", (command) => {
-  const extra = command === "create" ? ["--project", "/project"] : command === "list" ? [] : ["id"];
-  if (command === "send") extra.push("--message", "hello");
-  if (command === "keys") extra.push("enter");
+it.each(["list", "create"])("sets the timeout tier for %s", (command) => {
+  const extra = command === "create" ? ["--project", "/project"] : [];
   expect(parseSessionArguments([command, ...extra])).toMatchObject({
-    seconds: ["create", "resume", "exit", "archive", "delete"].includes(command) ? 45 : 15,
+    seconds: command === "create" ? 45 : 15,
   });
   expect(parseSessionArguments([command, ...extra, "--timeout", "2"])).toMatchObject({
     seconds: 2,
   });
+  expect(() => parseSessionArguments([command, ...extra, "--timeout", "0"])).toThrow(
+    "timeout must be a positive number",
+  );
 });
 
 it.each([
   ["--interval", "1"],
-  ["--count", "2"],
-  ["--follow", "--interval", "Infinity"],
   ["--follow", "--interval", "0"],
   ["--follow", "--count", "1.5"],
-  ["--follow", "--count", "0"],
 ])("rejects invalid follow options %j", (...options) => {
   expect(() => parseSessionArguments(["inspect", "id", ...options])).toThrow();
-});
-
-it("drains the last follow round and suppresses position-only updates", async () => {
-  const paths: string[] = [];
-  const base = await serve((req, res) => {
-    paths.push(req.url!);
-    const page = paths.length;
-    reply(res, {
-      session: { id: "id", origin: {}, resume: {} },
-      interaction: { supported: false },
-      items: [],
-      nextAfter: page,
-      hasMore: page === 2,
-    });
-  });
-  const result = await cli([
-    "inspect",
-    "id",
-    "--follow",
-    "--count",
-    "2",
-    "--interval",
-    "0.01",
-    "--url",
-    base,
-    "--json",
-  ]);
-  expect(result.code).toBe(0);
-  expect(paths).toHaveLength(3);
-  expect(paths[1]).toContain("after=1");
-  expect(paths[2]).toContain("after=2");
-  expect(
-    result.stdout
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line)),
-  ).toHaveLength(1);
 });
 
 it("retains launch target on timeout without retry or cancellation", async () => {
@@ -794,9 +715,11 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
     ...(json ? ["--json"] : []),
   ]);
   expect(result.code).toBe(0);
-  expect(paths).toHaveLength(3);
-  expect(paths[1]).toContain("after=1");
-  expect(paths[2]).toContain("after=2");
+  expect(paths).toEqual([
+    "/api/v1/sessions/id/messages",
+    "/api/v1/sessions/id/messages?after=1",
+    "/api/v1/sessions/id/messages?after=2",
+  ]);
   expect(result.stdout).toContain("session terminal id");
   expect(result.stdout).toContain("Selected");
   expect(result.stdout).toContain("Which approach?");

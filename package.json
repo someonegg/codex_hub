@@ -51,6 +51,7 @@
     "katex": "$katex"
   },
   "devDependencies": {
+    "@babel/parser": "^7.29.12",
     "@codex-hub/client-lint": "file:tools/client-lint",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",

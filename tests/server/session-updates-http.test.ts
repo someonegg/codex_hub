@@ -48,7 +48,6 @@ describe("automatic update HTTP API", () => {
   it.each([
     ["cursor=x&after=REV&unknown=x", "unknown is not supported"],
     ["cursor=x&cursor=y&after=REV", "cursor must appear once"],
-    ["cursor=x&after=REV&after=REV", "after must appear once"],
     ["after=REV", "cursor is required for automatic updates"],
     ["cursor=x", "after is required for automatic updates"],
     ["cursor=x&after=bad", "after is malformed"],

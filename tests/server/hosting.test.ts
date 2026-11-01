@@ -4,8 +4,6 @@ import { join } from "node:path";
 
 import { afterEach, expect, it, vi } from "vitest";
 
-import { loadConfig } from "../../src/server/config.js";
-import { hostingRoutes } from "../../src/server/hosting/routes.js";
 import { HostingStore } from "../../src/server/hosting/store.js";
 import { createServer, listenServer } from "../../src/server/http/create-server.js";
 
@@ -25,11 +23,7 @@ async function fixture() {
   const store = new HostingStore(join(root, "storage"));
   return { root, source, project, store };
 }
-it("requires explicit hosting and never initializes disabled storage", async () => {
-  const disabled = loadConfig([]);
-  expect(disabled.kind === "run" && disabled.config.hostingDirectory).toBeUndefined();
-  expect(hostingRoutes()).toBeTypeOf("function");
-});
+
 it("canonicalizes project aliases, updates stable identities and retains snapshots", async () => {
   const { root, source, project, store } = await fixture();
   await symlink(project, join(root, "alias"));

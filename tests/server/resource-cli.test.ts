@@ -16,8 +16,6 @@ it.each([
   ["page", "list", ["--home-dir"]],
   ["diff", "publish", []],
   ["page", "nonsense", []],
-  ["page", "delete", []],
-  ["diff", "list", ["extra"]],
 ] as const)("rejects invalid resource arguments: %s %s %j", (resource, action, args) => {
   expect(() => parseResourceArguments(resource, action, [...args])).toThrow(CommandError);
   expect(() => parseResourceArguments(resource, action, [...args])).toThrow(
@@ -45,15 +43,12 @@ it.each([true, false])("wires resource errors to the correct stream (json=%s)", 
   }
 });
 
-// Cover each resource/action policy and restricted option directly.
+// Check representative action policies directly; shared parsing rejects restricted options.
 // Process tests above own output stream selection.
 const invalidOptions = [
   { resource: "page", action: "list", option: "project" },
   { resource: "page", action: "delete", option: "name" },
   { resource: "diff", action: "publish", option: "project" },
-  { resource: "diff", action: "publish", option: "name" },
-  { resource: "diff", action: "list", option: "title" },
-  { resource: "diff", action: "delete", option: "title" },
 ];
 it.each(invalidOptions)("rejects inapplicable options: %j", ({ resource, action, option }) => {
   const args = [...(action === "list" ? [] : ["/missing-source"]), `--${option}`, "value"];

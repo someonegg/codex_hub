@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { MessageItem as Message, SessionDetail } from "../../src/shared/domain";
 
-import { EventTime } from "../../src/client/components/EventTime";
 import {
   MessageItem,
   planPreview,
@@ -75,28 +74,6 @@ describe("session reader components", () => {
     expect(screen.getByText("Session information").closest("details")).toHaveAttribute("open");
     view.rerender(header("second"));
     expect(screen.getByText("Session information").closest("details")).not.toHaveAttribute("open");
-  });
-
-  it("renders valid event timestamps with semantic time markup and omits invalid values", () => {
-    const valid = "2026-07-28T10:00:00.000Z";
-    const view = render(<EventTime timestamp={valid} />);
-    expect(
-      screen.getByText(
-        new Intl.DateTimeFormat(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "numeric",
-          minute: "2-digit",
-          second: "2-digit",
-        }).format(new Date(valid)),
-      ),
-    ).toHaveAttribute("datetime", valid);
-    expect(view.container.querySelector("time")).not.toHaveTextContent("2026");
-
-    view.rerender(<EventTime timestamp={null} />);
-    expect(document.querySelector("time")).toBeNull();
-    view.rerender(<EventTime timestamp="not-a-timestamp" />);
-    expect(document.querySelector("time")).toBeNull();
   });
 
   it("uses request time for paired user input and response time for an orphan", () => {

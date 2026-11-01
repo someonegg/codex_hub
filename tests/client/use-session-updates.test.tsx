@@ -148,3 +148,57 @@ it("cancels a pending retry when disabled", async () => {
   await act(() => vi.advanceTimersByTimeAsync(60_000));
   expect(request).toHaveBeenCalledTimes(1);
 });
+
+it.each(["unmount", "switch", "hide"])(
+  "cancels automatic updates backoff on %s without stale requests or errors",
+  async (action) => {
+    vi.useFakeTimers();
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    const updates = vi
+      .spyOn(api, "updates")
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockImplementation(() => new Promise(() => {}));
+    const onError = vi.fn();
+    const { rerender, unmount } = renderHook(
+      ({ sessionId }) =>
+        useSessionUpdates({
+          sessionId,
+          enabled: true,
+          snapshot: { cursor: TIMELINE_CURSOR, updateRevision: UPDATE_REVISION },
+          onUpdate: vi.fn(),
+          onTimelineConflict: vi.fn(),
+          onError,
+        }),
+      { initialProps: { sessionId: "first" } },
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(vi.getTimerCount()).toBe(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+    if (action === "unmount") unmount();
+    if (action === "switch") rerender({ sessionId: "second" });
+    if (action === "hide") {
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+    }
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(vi.getTimerCount()).toBe(0);
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(updates).toHaveBeenCalledTimes(action === "switch" ? 2 : 1);
+    if (action === "hide") {
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+      act(() => document.dispatchEvent(new Event("visibilitychange")));
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(updates).toHaveBeenCalledTimes(2);
+    }
+    expect(onError).toHaveBeenCalledTimes(1);
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  },
+);
