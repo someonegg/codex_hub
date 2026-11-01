@@ -122,6 +122,7 @@ export function InteractionPanel({
     [onPanelElement],
   );
   const wasPreviewExpanded = useRef(false);
+  const focusPreviewOnExpand = useRef(false);
   const hadPreviewContent = useRef(false);
   const previewContentId = useId();
   const previewBody = useRef<HTMLDivElement | null>(null);
@@ -139,7 +140,9 @@ export function InteractionPanel({
   const messageIsBlank = !attachments.length && message.trim().length === 0;
   const previewHasContent = (preview?.content.length ?? 0) > 0;
   useLayoutEffect(() => {
-    if (previewExpanded && previewConnected) previewBody.current?.focus({ preventScroll: true });
+    if (previewExpanded && previewConnected && focusPreviewOnExpand.current)
+      previewBody.current?.focus({ preventScroll: true });
+    focusPreviewOnExpand.current = false;
   }, [previewExpanded, previewConnected]);
   useLayoutEffect(() => {
     const expanded = previewExpanded && previewConnected;
@@ -167,19 +170,20 @@ export function InteractionPanel({
       scrollOnExpand.current = false;
     }
   }, [preview, previewExpanded]);
-  const isStrictSlashCommand = !attachments.length && /^\/[A-Za-z]+$/.test(message.trim());
   const send = async () => {
     if (!previewConnected || interactionBusy || isUploading() || messageIsBlank || messageTooLarge)
       return;
-    const command = message.trim();
-    const shouldExpandPreview = isStrictSlashCommand && command !== "/exit" && command !== "/quit";
+    const command = message.trimEnd();
+    const shouldExpandPreview =
+      !attachments.length &&
+      /^\/[A-Za-z]+$/.test(command) &&
+      command !== "/exit" &&
+      command !== "/quit";
     await onSendMessage(outgoingMessage);
     clearSentMessage();
-    if (!mounted.current) return;
-    if (shouldExpandPreview) {
-      if (!previewExpanded) scrollOnExpand.current = true;
-      onExpandPreview();
-    }
+    if (!mounted.current || !shouldExpandPreview || wasPreviewExpanded.current) return;
+    scrollOnExpand.current = true;
+    onExpandPreview();
   };
   const handoff = async () => {
     if (!previewConnected || interactionBusy || isUploading()) return;
@@ -251,7 +255,10 @@ export function InteractionPanel({
       statusLabel
     );
   const togglePreview = () => {
-    if (!previewExpanded) scrollOnExpand.current = true;
+    if (!previewExpanded) {
+      scrollOnExpand.current = true;
+      focusPreviewOnExpand.current = true;
+    }
     onTogglePreview();
   };
 
@@ -477,7 +484,6 @@ export function InteractionPanel({
             }}
             aria-label={t("messageToAgent")}
             value={message}
-            disabled={interactionBusy || !!uploadProgress || !previewConnected}
             rows={4}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
             placeholder={t(enterToSend ? "shiftNewline" : "shiftSend")}
