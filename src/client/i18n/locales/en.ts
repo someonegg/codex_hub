@@ -1,4 +1,6 @@
 export const messages = {
+  collapseSidebar: "Collapse sidebar",
+  expandSidebar: "Expand sidebar",
   task: "Task",
   top: "TOP",
   end: "END",

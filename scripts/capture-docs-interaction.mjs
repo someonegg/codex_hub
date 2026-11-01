@@ -419,6 +419,44 @@ async function capture(
     await prepareDesktopPreview();
   }
 
+  async function verifySidebarCollapse() {
+    // Collapsing must reclaim the sidebar width without remounting the composer.
+    const sidebarToggle = demo.locator(".hub-sidebar-toggle:visible");
+    const draftBeforeCollapse = demo.locator("textarea");
+    await draftBeforeCollapse.fill("Sidebar toggle keeps this draft");
+    const originalComposer = await draftBeforeCollapse.elementHandle();
+    for (const width of [1440, 1024, 768]) {
+      await demo.setViewportSize({ width, height: 1500 });
+      const expandedWidth = await demo.locator(".hub-content").evaluate((el) => el.clientWidth);
+      await sidebarToggle.click();
+      if (await demo.locator(".hub-sidebar").isVisible())
+        throw new Error("Collapsed sidebar remains visible");
+      const collapsedWidth = await demo.locator(".hub-content").evaluate((el) => el.clientWidth);
+      if (collapsedWidth - expandedWidth !== 302)
+        throw new Error("Collapsing did not reclaim sidebar width");
+      await sidebarToggle.click();
+      if (!(await demo.locator(".hub-sidebar").isVisible()))
+        throw new Error("Sidebar did not expand");
+    }
+    if (
+      !(await draftBeforeCollapse.evaluate((el, original) => el === original, originalComposer)) ||
+      (await draftBeforeCollapse.inputValue()) !== "Sidebar toggle keeps this draft"
+    )
+      throw new Error("Sidebar toggle remounted or cleared the composer");
+    await sidebarToggle.click();
+    await demo.reload();
+    await sidebarToggle.waitFor();
+    if ((await sidebarToggle.getAttribute("aria-expanded")) !== "false")
+      throw new Error("Sidebar collapse was not restored after reload");
+    await demo.setViewportSize({ width: 390, height: 844 });
+    await demo.goto(origin);
+    if (!(await demo.locator(".hub-sidebar").isVisible()))
+      throw new Error("Desktop collapse hid the mobile catalog");
+    await demo.goto(`${origin}/sessions/${session.id}`);
+    await demo.setViewportSize({ width: 1440, height: 1500 });
+    await sidebarToggle.click();
+  }
+
   async function assertDesktopCardsVisible() {
     for (const selector of [".user-input-card", ".interaction-panel"]) {
       const bounds = await demo.locator(selector).boundingBox();
@@ -442,6 +480,8 @@ async function capture(
     await selectedProject.waitFor();
     if ((await selectedProject.getAttribute("aria-expanded")) !== "true")
       throw new Error("Opening a session must expand its project");
+    await verifySidebarCollapse();
+    await prepareDesktopPreview();
     await verifyCompactInteraction();
     await verifyAttachments();
     await prepareDesktopPreview();
