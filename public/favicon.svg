@@ -1,7 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs><linearGradient id="frame" gradientUnits="userSpaceOnUse" x1="0" y1="83.0" x2="0" y2="427.0"><stop offset="0" stop-color="#8bdace"/><stop offset="0.45" stop-color="#80d5c8"/><stop offset="1" stop-color="#76c8bc"/></linearGradient></defs>
-  <rect width="512" height="512" fill="#16262d"/>
-  <rect x="110" y="100" width="290" height="310" rx="60" fill="none" stroke="url(#frame)" stroke-width="34"/>
-  <g fill="none" stroke="#f7faf8" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"><polyline points="202,207 153,256 202,305"/><polyline points="250,318 305,318"/></g>
-  <g fill="#80d5c8"><circle cx="350" cy="183" r="23"/><circle cx="350" cy="255" r="23"/><circle cx="350" cy="327" r="23"/></g>
+  <rect width="512" height="512" fill="#edf4f1"/>
+  <rect x="110" y="100" width="290" height="310" rx="60" fill="none" stroke="#69aa9f" stroke-width="18"/>
+  <g fill="none" stroke="#28474d" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"><polyline points="211,210 165,256 211,302"/><polyline points="251,315 302,315"/></g>
+  <g fill="#69aa9f"><circle cx="350" cy="185" r="12"/><circle cx="350" cy="256" r="12"/><circle cx="350" cy="327" r="12"/></g>
 </svg>

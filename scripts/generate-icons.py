@@ -1,41 +1,27 @@
-"""Generate SVG/PNG/ICO from shared geometry and color stops.
+"""Generate the light terminal SVG/PNG/ICO icons from shared geometry.
 
-Requires Python 3 and Pillow. Only the mint frame has subtle shading.
+Requires Python 3 and Pillow.
 """
 from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-INK = '#16262d'
-IVORY = '#f7faf8'
-MINT = '#80d5c8'
+BACKGROUND = '#edf4f1'
+PROMPT_COLOR = '#28474d'
+FRAME_COLOR = '#69aa9f'
 SCALE = 4
-# Frame bounds, corner radius, and stroke width are shared by both renderers.
-FRAME = ((110, 100, 400, 410), 60, 34)
-PROMPT_WIDTH = 28
-PROMPT = [((202, 207), (153, 256), (202, 305)), ((250, 318), (305, 318))]
-ENDPOINTS = [(350, y, 23) for y in (183, 255, 327)]
-FRAME_STOPS = [(0, '#8bdace'), (0.45, MINT), (1, '#76c8bc')]
+FRAME_WIDTH = 18
+FRAME_LEFT, FRAME_TOP = 110, 100
+FRAME_RIGHT, FRAME_BOTTOM = 400, 410
+FRAME_RADIUS = 60
+PROMPT_WIDTH = 19
+PROMPT = [((211, 210), (165, 256), (211, 302)), ((251, 315), (302, 315))]
+ENDPOINTS = [(350, y, 12) for y in (185, 256, 327)]
 
 
-def rgb(color):
-    return tuple(bytes.fromhex(color.lstrip('#')))
-
-
-def frame_color(progress, stops):
-    for (start, first), (end, last) in zip(stops, stops[1:]):
-        if progress <= end:
-            blend = max(0, (progress - start) / (end - start))
-            return tuple(round(a + (b - a) * blend) for a, b in zip(rgb(first), rgb(last)))
-    return rgb(stops[-1][1])
-
-
-def svg(stops):
-    (left, top, right, bottom), radius, width = FRAME
-    gradient = ''.join(
-        f'<stop offset="{offset}" stop-color="{color}"/>'
-        for offset, color in stops
-    )
+def svg():
+    left, right = FRAME_LEFT, FRAME_RIGHT
+    top, bottom, radius = FRAME_TOP, FRAME_BOTTOM, FRAME_RADIUS
     paths = ''.join(
         '<polyline points="' + ' '.join(f'{x},{y}' for x, y in points) + '"/>'
         for points in PROMPT
@@ -45,62 +31,49 @@ def svg(stops):
         for x, y, radius in ENDPOINTS
     )
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs><linearGradient id="frame" gradientUnits="userSpaceOnUse" x1="0" y1="{top-width/2}" x2="0" y2="{bottom+width/2}">{gradient}</linearGradient></defs>
-  <rect width="512" height="512" fill="{INK}"/>
-  <rect x="{left}" y="{top}" width="{right-left}" height="{bottom-top}" rx="{radius}" fill="none" stroke="url(#frame)" stroke-width="{width}"/>
-  <g fill="none" stroke="{IVORY}" stroke-width="{PROMPT_WIDTH}" stroke-linecap="round" stroke-linejoin="round">{paths}</g>
-  <g fill="{MINT}">{circles}</g>
+  <rect width="512" height="512" fill="{BACKGROUND}"/>
+  <rect x="{left}" y="{top}" width="{right-left}" height="{bottom-top}" rx="{radius}" fill="none" stroke="{FRAME_COLOR}" stroke-width="{FRAME_WIDTH}"/>
+  <g fill="none" stroke="{PROMPT_COLOR}" stroke-width="{PROMPT_WIDTH}" stroke-linecap="round" stroke-linejoin="round">{paths}</g>
+  <g fill="{FRAME_COLOR}">{circles}</g>
 </svg>
 '''
 
 
-def canvas(stops):
-    resolution = 512 * SCALE
-    image = Image.new('RGB', (resolution, resolution), INK)
-    mask = Image.new('L', image.size, 0)
-    draw = ImageDraw.Draw(mask)
-    (left, top, right, bottom), radius, width = FRAME
-    for inset, fill in [(-width / 2, 255), (width / 2, 0)]:
-        bounds = (left + inset, top + inset, right - inset, bottom - inset)
-        draw.rounded_rectangle(
-            tuple(round(value * SCALE) for value in bounds),
-            radius=round((radius - inset) * SCALE),
-            fill=fill,
-        )
-    ramp = Image.new('RGB', (1, resolution))
-    for y in range(resolution):
-        progress = (y / SCALE - (top - width / 2)) / (bottom - top + width)
-        ramp.putpixel((0, y), frame_color(progress, stops))
-    image.paste(ramp.resize(image.size), (0, 0), mask)
+def canvas():
+    image = Image.new('RGB', (512 * SCALE, 512 * SCALE), BACKGROUND)
     draw = ImageDraw.Draw(image)
-    cap_radius = PROMPT_WIDTH / 2
-    for points in PROMPT:
-        draw.line(
-            [(x * SCALE, y * SCALE) for x, y in points],
-            fill=IVORY,
-            width=PROMPT_WIDTH * SCALE,
-            joint='curve',
-        )
+
+    def line(points, color, width):
+        draw.line([(x * SCALE, y * SCALE) for x, y in points],
+                  fill=color, width=width * SCALE, joint='curve')
         for x, y in points:
-            draw.ellipse(
-                ((x - cap_radius) * SCALE, (y - cap_radius) * SCALE,
-                 (x + cap_radius) * SCALE, (y + cap_radius) * SCALE),
-                fill=IVORY,
-            )
-    for x, y, radius in ENDPOINTS:
-        draw.ellipse(
-            ((x - radius) * SCALE, (y - radius) * SCALE,
-             (x + radius) * SCALE, (y + radius) * SCALE),
-            fill=MINT,
+            circle(x, y, width / 2, color)
+
+    def circle(x, y, radius, color):
+        draw.ellipse(((x-radius)*SCALE, (y-radius)*SCALE,
+                      (x+radius)*SCALE, (y+radius)*SCALE), fill=color)
+
+    # SVG strokes are centered on the rounded rectangle's boundary.
+    for inset, color in [(-FRAME_WIDTH / 2, FRAME_COLOR), (FRAME_WIDTH / 2, BACKGROUND)]:
+        draw.rounded_rectangle(
+            tuple(round(value * SCALE) for value in (
+                FRAME_LEFT + inset, FRAME_TOP + inset,
+                FRAME_RIGHT - inset, FRAME_BOTTOM - inset)),
+            radius=round((FRAME_RADIUS - inset) * SCALE),
+            fill=color,
         )
+    for points in PROMPT:
+        line(points, PROMPT_COLOR, PROMPT_WIDTH)
+    for x, y, radius in ENDPOINTS:
+        circle(x, y, radius, FRAME_COLOR)
     return image
 
 
 def main():
     directory = Path(__file__).resolve().parents[1] / 'public'
     (directory / 'icons').mkdir(parents=True, exist_ok=True)
-    (directory / 'favicon.svg').write_text(svg(FRAME_STOPS))
-    master = canvas(FRAME_STOPS)
+    (directory / 'favicon.svg').write_text(svg())
+    master = canvas()
     for size, name in [
         (192, 'icons/icon-192.png'),
         (512, 'icons/icon-512.png'),
