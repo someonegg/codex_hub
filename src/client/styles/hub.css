@@ -346,3 +346,41 @@
   background: var(--surface);
   border: 1px solid var(--mist);
 }
+
+.hub-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 1px solid var(--mist);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.hub-sidebar-toggle:hover {
+  background: var(--hover-surface);
+}
+@media (width >= 768px) {
+  .hub.sidebar-collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hub.sidebar-collapsed .hub-sidebar {
+    display: none;
+  }
+}
+@media (width < 768px) {
+  .hub-sidebar-toggle {
+    display: none;
+  }
+}
+
+.hub-sidebar .hub-sidebar-toggle {
+  border: 1px solid var(--mist);
+}
+.hub:not(.has-session):not(.sidebar-collapsed) .hub-topbar {
+  display: none;
+}

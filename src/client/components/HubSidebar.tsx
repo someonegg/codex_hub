@@ -9,18 +9,21 @@ import type { useSessionList } from "../state/use-session-list";
 import { ErrorState } from "./ErrorState";
 import { InternalLink } from "./InternalLink";
 import { Settings } from "./Settings";
+import { SidebarToggle } from "./SidebarToggle";
 import { StatusBadge } from "./StatusBadge";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
   homeFilter?: string;
   onHomeFilter?: (value: string) => void;
+  onCollapse?: () => void;
   onCreate: (directory: string | null) => void;
 }
 export function HubSidebar({
   catalog,
   hub,
   onCreate,
+  onCollapse,
   homeFilter = "",
   onHomeFilter,
 }: HubSidebarProps) {
@@ -58,12 +61,13 @@ export function HubSidebar({
     [catalog.list, language],
   );
   return (
-    <aside ref={sidebar} className="hub-sidebar" aria-label={t("sessionList")}>
+    <aside id="hub-sidebar" ref={sidebar} className="hub-sidebar" aria-label={t("sessionList")}>
       <header className="hub-brand">
         <InternalLink href="/" onNavigate={() => navigate(null)}>
           <img className="brand-logo" src="/favicon.svg" alt="" width="29" height="29" />
           Codex Hub
         </InternalLink>
+        {onCollapse ? <SidebarToggle collapsed={false} onToggle={onCollapse} /> : null}
       </header>
       <div className="catalog-filters">
         {(catalog.list?.homes?.length ?? 0) > 1 ? (

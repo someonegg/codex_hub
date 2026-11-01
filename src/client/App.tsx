@@ -6,6 +6,7 @@ import { DiffPage } from "./components/DiffPage";
 import { CreateSession } from "./components/HubManagement";
 import { HubSidebar } from "./components/HubSidebar";
 import { InternalLink } from "./components/InternalLink";
+import { SidebarToggle } from "./components/SidebarToggle";
 import { UploadsPage } from "./components/UploadsPage";
 import { t } from "./i18n";
 import { SessionPage } from "./SessionPage";
@@ -47,11 +48,28 @@ function SessionHub() {
   const visibleCatalog = { ...catalog, list: visibleList };
   const hub = useHubNavigation(catalog.list);
   const { sessionId, navigation, navigate, selectedProject } = hub;
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => browserStorage.getItem("ahub.sidebar-collapsed") === "true",
+  );
   const [createDirectory, setCreateDirectory] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createdSessionId, setCreatedSessionId] = useState<string | null>(null);
+  function toggleSidebar() {
+    const collapsed = !sidebarCollapsed;
+    setSidebarCollapsed(collapsed);
+    browserStorage.setItem("ahub.sidebar-collapsed", String(collapsed));
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLButtonElement>(
+          collapsed ? ".hub-topbar .hub-sidebar-toggle" : ".hub-brand .hub-sidebar-toggle",
+        )
+        ?.focus({ preventScroll: true });
+    });
+  }
   return (
-    <main className={`hub${sessionId ? " has-session" : ""}`}>
+    <main
+      className={`hub${sessionId ? " has-session" : ""}${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+    >
       {createdSessionId ? (
         <aside className="creation-notice" role="status">
           {t("sessionCreated")}{" "}
@@ -74,6 +92,7 @@ function SessionHub() {
         </aside>
       ) : null}
       <HubSidebar
+        onCollapse={toggleSidebar}
         catalog={visibleCatalog}
         homeFilter={selectedHome}
         onHomeFilter={setHomeFilter}
@@ -84,9 +103,10 @@ function SessionHub() {
         }}
       />
       <div className="hub-content">
-        {sessionId ? (
-          <>
-            <div className="hub-topbar">
+        <div className="hub-topbar">
+          {sidebarCollapsed ? <SidebarToggle collapsed onToggle={toggleSidebar} /> : null}
+          {sessionId ? (
+            <>
               <button className="hub-back" type="button" onClick={() => navigate(null)}>
                 {t("backToList")}
               </button>
@@ -101,7 +121,11 @@ function SessionHub() {
               </strong>
               <span aria-hidden="true">/</span>
               <span>{t("session")}</span>
-            </div>
+            </>
+          ) : null}
+        </div>
+        {sessionId ? (
+          <>
             {hub.uploadsOpen ? (
               <UploadsPage
                 key={sessionId}

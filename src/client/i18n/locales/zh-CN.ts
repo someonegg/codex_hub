@@ -1,5 +1,7 @@
 import type { messages as english } from "./en";
 export const messages: Record<keyof typeof english, string> = {
+  collapseSidebar: "收起侧栏",
+  expandSidebar: "展开侧栏",
   task: "任务",
   top: "顶部",
   end: "底部",
