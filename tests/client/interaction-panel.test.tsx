@@ -189,9 +189,11 @@ describe("interaction panel", () => {
     await user.type(textarea, "line one{enter}line two");
     expect(textarea).toHaveValue("line one\nline two");
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
-    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    await act(async () => {
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+    });
     expect(handlers.onSendMessage).toHaveBeenCalledWith("line one\nline two");
-    expect(await screen.findByRole("textbox", { name: "Message to agent" })).toHaveValue("");
+    expect(textarea).toHaveValue("");
   });
 
   it("keeps Send disabled for blank input", async () => {
