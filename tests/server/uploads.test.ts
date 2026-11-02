@@ -615,3 +615,170 @@ it.each(["folder", "metadata", "content"])("rejects %s symlink escapes", async (
     );
   }
 });
+
+it("generates small thumbnails after upload and serves cached WebP without changing originals", async () => {
+  const sharp = (await import("sharp")).default;
+  const { origin, store } = await fixture();
+  const original = await sharp({
+    create: { width: 1600, height: 1200, channels: 4, background: "#456789" },
+  })
+    .png()
+    .toBuffer();
+  const response = await fetch(
+    `${origin}/api/v1/uploads?sessionId=one-00000000000000000&filename=large.png`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "image/png" },
+      body: new Uint8Array(original),
+    },
+  );
+  expect(response.status).toBe(201);
+  const attachment = (await response.json()) as UploadAttachment;
+  const thumbnailPath = join(attachment.path, "..", attachment.id + ".thumb.webp");
+  await vi.waitFor(async () => expect((await readFile(thumbnailPath)).length).toBeGreaterThan(0));
+  const url = `${origin}/api/v1/sessions/${attachment.sessionId}/uploads/${attachment.id}`;
+  const thumbnail = await fetch(url + "/thumbnail");
+  expect(thumbnail.status).toBe(200);
+  expect(thumbnail.headers.get("content-type")).toBe("image/webp");
+  expect(thumbnail.headers.get("cache-control")).toBe("private, max-age=86400");
+  const bytes = Buffer.from(await thumbnail.arrayBuffer());
+  expect(await sharp(bytes).metadata()).toMatchObject({ width: 360, height: 270, format: "webp" });
+  expect(bytes.length).toBeLessThan(original.length);
+  expect(Buffer.from(await (await fetch(url + "/content")).arrayBuffer())).toEqual(original);
+  expect(await readFile(thumbnailPath)).toEqual(bytes);
+  await store.delete(attachment.sessionId, attachment.id);
+  expect(await readdir(join(attachment.path, ".."))).toEqual([]);
+  expect((await fetch(url + "/thumbnail")).status).toBe(404);
+});
+
+it("backfills legacy thumbnails once for concurrent requests and reuses them after restart", async () => {
+  const sharp = (await import("sharp")).default;
+  const { store, directory } = await storeFixture();
+  const image = await sharp({ create: { width: 40, height: 20, channels: 3, background: "red" } })
+    .png()
+    .toBuffer();
+  const attachment = await store.upload(
+    "one-00000000000000000",
+    "legacy.png",
+    "application/octet-stream",
+    (async function* () {
+      yield image;
+    })(),
+  );
+  const metadataPath = join(attachment.path, "..", attachment.id + ".meta.json");
+  await fs.writeFile(metadataPath, JSON.stringify({ ...attachment, type: "image/png" }));
+  const write = vi.spyOn(fs, "writeFile");
+  const results = await Promise.all(
+    Array.from({ length: 8 }, () => store.thumbnail(attachment.sessionId, attachment.id)),
+  );
+  expect(results.every((result) => result?.equals(results[0]!))).toBe(true);
+  expect(await sharp(results[0]!).metadata()).toMatchObject({ width: 40, height: 20 });
+  expect(
+    write.mock.calls.filter(([path]) => String(path).endsWith(".thumb.webp.pending")),
+  ).toHaveLength(1);
+  write.mockClear();
+  const restarted = new UploadStore(directory);
+  await restarted.initialize();
+  expect(await restarted.thumbnail(attachment.sessionId, attachment.id)).toEqual(results[0]);
+  expect(write).not.toHaveBeenCalled();
+});
+
+it("keeps malformed image uploads successful and never substitutes originals for unavailable thumbnails", async () => {
+  const { origin } = await fixture();
+  const upload = await fetch(
+    `${origin}/api/v1/uploads?sessionId=one-00000000000000000&filename=bad.png`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "image/png" },
+      body: "not an image",
+    },
+  );
+  expect(upload.status).toBe(201);
+  const attachment = (await upload.json()) as UploadAttachment;
+  const url = `${origin}/api/v1/sessions/${attachment.sessionId}/uploads/${attachment.id}`;
+  expect((await fetch(url + "/thumbnail")).status).toBe(404);
+  expect(await (await fetch(url + "/content")).text()).toBe("not an image");
+  expect(
+    (await fetch(url.replace(attachment.sessionId, "two-00000000000000000") + "/thumbnail")).status,
+  ).toBe(404);
+});
+
+it("does not delay upload completion and waits for thumbnail writes before finishing deletion", async () => {
+  const sharp = (await import("sharp")).default;
+  const { store } = await storeFixture();
+  const image = await sharp({ create: { width: 20, height: 10, channels: 3, background: "blue" } })
+    .png()
+    .toBuffer();
+  let release!: () => void;
+  let started!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const writing = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const rename = fs.rename;
+  vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+    if (String(to).endsWith(".thumb.webp")) {
+      started();
+      await blocked;
+    }
+    return rename(from, to);
+  });
+  try {
+    const attachment = await store.upload(
+      "one-00000000000000000",
+      "image.png",
+      "image/png",
+      (async function* () {
+        yield image;
+      })(),
+    );
+    await writing;
+    const deletion = store.delete(attachment.sessionId, attachment.id);
+    await vi.waitFor(async () =>
+      expect(await store.get(attachment.sessionId, attachment.id)).toBeNull(),
+    );
+    expect(await store.thumbnail(attachment.sessionId, attachment.id)).toBeNull();
+    release();
+    await deletion;
+    expect(await readdir(join(attachment.path, ".."))).toEqual([]);
+  } finally {
+    release();
+  }
+});
+
+it("skips BMP thumbnail generation while preserving inline originals and downloads", async () => {
+  const { store, origin } = await fixture();
+  const thumbnail = vi.spyOn(store, "thumbnail");
+  const bmp = Buffer.alloc(58);
+  bmp.write("BM");
+  bmp.writeUInt32LE(58, 2);
+  bmp.writeUInt32LE(54, 10);
+  bmp.writeUInt32LE(40, 14);
+  bmp.writeInt32LE(1, 18);
+  bmp.writeInt32LE(1, 22);
+  bmp.writeUInt16LE(1, 26);
+  bmp.writeUInt16LE(24, 28);
+  bmp[56] = 255;
+  const response = await fetch(
+    `${origin}/api/v1/uploads?sessionId=one-00000000000000000&filename=photo.bmp`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "image/bmp" },
+      body: new Uint8Array(bmp),
+    },
+  );
+  expect(response.status).toBe(201);
+  const attachment = (await response.json()) as UploadAttachment;
+  expect(thumbnail).not.toHaveBeenCalled();
+  const url = `${origin}/api/v1/sessions/${attachment.sessionId}/uploads/${attachment.id}`;
+  const content = await fetch(url + "/content");
+  expect(content.headers.get("content-type")).toBe("image/bmp");
+  expect(Buffer.from(await content.arrayBuffer())).toEqual(bmp);
+  expect((await fetch(url + "/thumbnail")).status).toBe(404);
+  expect((await fetch(url + "/content?download=1")).headers.get("content-disposition")).toMatch(
+    /^attachment/,
+  );
+  expect(await readdir(join(attachment.path, ".."))).toHaveLength(2);
+});

@@ -110,7 +110,7 @@ export function captureSource(fn, language) {
     const label = (text, values = {}) => {
       let translated = labels[text] ?? text;
       for (const prefix of ["Preview", "Remove", "Expand", "Collapse"]) {
-        if (text.startsWith(prefix + " ") && labels[prefix + " {{filename}}"])
+        if (!Object.hasOwn(labels, text) && text.startsWith(prefix + " ") && labels[prefix + " {{filename}}"])
           translated = labels[prefix + " {{filename}}"].replace("{{filename}}", text.slice(prefix.length + 1));
       }
       return translated.replace(/\\{\\{(\\w+)(?:, number)?\\}\\}/g, (match, key) => values[key] ?? match);
