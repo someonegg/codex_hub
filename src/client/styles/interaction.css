@@ -101,7 +101,9 @@
   background: var(--current);
   border-color: var(--current);
 }
-.interaction-actions button:disabled {
+.interaction-actions button:disabled,
+.interaction-actions button[aria-disabled="true"],
+.terminal-key[aria-disabled="true"] {
   opacity: 0.42;
   cursor: default;
 }
@@ -302,17 +304,12 @@
 .terminal-key:active:not([aria-disabled="true"]) {
   transform: translateY(1px);
 }
-.interaction-interrupt[aria-disabled="true"],
-.terminal-key[aria-disabled="true"] {
-  cursor: default;
-  opacity: 0.38;
-}
 @media (hover: hover) and (pointer: fine) {
-  .interaction-actions button:hover:not(:disabled) {
+  .interaction-actions button:hover:not(:disabled):not([aria-disabled="true"]) {
     background: var(--hover-surface);
     border-color: var(--notice-border);
   }
-  .interaction-actions .interaction-send:hover:not(:disabled) {
+  .interaction-actions .interaction-send:hover:not(:disabled):not([aria-disabled="true"]) {
     color: var(--paper);
     background: var(--current-hover);
     border-color: var(--current-hover);

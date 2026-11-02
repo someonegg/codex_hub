@@ -112,6 +112,7 @@ export function InteractionPanel({
     setUploadError,
     isUploading,
   } = useAttachmentUpload(sessionId, previewConnected, interactionBusy, addAttachment);
+  const inputUnavailable = !previewConnected || interactionBusy || !!uploadProgress;
   const uploadFiles = async (files: File[]) => {
     if (!files.length || isUploading() || interactionBusy || !previewConnected) return;
     setDragging(false);
@@ -197,7 +198,7 @@ export function InteractionPanel({
     await onHandoffPaneBinding();
   };
   const sendKeys = (keys: readonly InteractionKey[]) => {
-    if (!previewConnected || interactionBusy) return;
+    if (!previewConnected || interactionBusy || isUploading()) return;
     if (keys.includes("interrupt")) {
       if (!previewExpanded) scrollOnExpand.current = true;
       onExpandPreview();
@@ -425,7 +426,7 @@ export function InteractionPanel({
                     className={`terminal-key terminal-key-${key}`}
                     aria-label={t(label)}
                     disabled={!previewConnected}
-                    aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
+                    aria-disabled={inputUnavailable}
                     onClick={() => sendKeys([key])}
                   >
                     <span aria-hidden="true">{key === "plan" ? t("plan") : glyph}</span>
@@ -512,7 +513,8 @@ export function InteractionPanel({
                 type="button"
                 className="interaction-handoff"
                 title={t("handOffThisPaneSBindingToTheActiveCodexSession")}
-                disabled={!previewConnected || interactionBusy || !!uploadProgress}
+                disabled={!previewConnected}
+                aria-disabled={inputUnavailable}
                 onClick={() => void handoff().catch(() => undefined)}
               >
                 {t("handoff")}
@@ -521,7 +523,7 @@ export function InteractionPanel({
                 type="button"
                 className="interaction-interrupt"
                 disabled={!previewConnected}
-                aria-disabled={interactionBusy || !!uploadProgress || !previewConnected}
+                aria-disabled={inputUnavailable}
                 onClick={() => sendKeys(["interrupt"])}
               >
                 {t("interrupt")}
@@ -532,10 +534,8 @@ export function InteractionPanel({
               <button
                 type="button"
                 className="interaction-send"
-                disabled={
-                  !previewConnected || !!uploadProgress || messageIsBlank || messageTooLarge
-                }
-                aria-disabled={interactionBusy}
+                disabled={!previewConnected || messageIsBlank || messageTooLarge}
+                aria-disabled={inputUnavailable}
                 onClick={() => void send().catch(() => undefined)}
               >
                 {t("send")}

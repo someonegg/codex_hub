@@ -394,12 +394,13 @@ it("preserves the collapsed preview and draft after handoff and disables Handoff
   const handlers = props(interaction("connected"));
   const view = render(<InteractionPanel {...handlers} />);
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "draft" } });
-  fireEvent.click(screen.getByRole("button", { name: "Handoff" }));
+  const handoff = screen.getByRole("button", { name: "Handoff" });
+  fireEvent.click(handoff);
   await act(async () => {
     await Promise.resolve();
   });
   expect(handlers.onHandoffPaneBinding).toHaveBeenCalledOnce();
-  expect(screen.getByRole("button", { name: "Handoff" })).toHaveAttribute(
+  expect(handoff).toHaveAttribute(
     "title",
     "Hand off this pane’s binding to the active Codex session.",
   );
@@ -408,8 +409,13 @@ it("preserves the collapsed preview and draft after handoff and disables Handoff
     "aria-expanded",
     "false",
   );
+  handoff.focus();
   view.rerender(<InteractionPanel {...handlers} interactionBusy />);
-  expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
+  expect(handoff).toHaveFocus();
+  fireEvent.click(handoff);
+  expect(handlers.onHandoffPaneBinding).toHaveBeenCalledOnce();
+  expect(handoff).toBeEnabled();
+  expect(handoff).toHaveAttribute("aria-disabled", "true");
   view.rerender(<InteractionPanel {...handlers} interaction={interaction("disconnected")} />);
   expect(screen.queryByRole("button", { name: "Handoff" })).not.toBeInTheDocument();
 });
@@ -613,8 +619,29 @@ describe("composer uploads", () => {
       clipboardData: { files: [new File(["one"], "one.png"), new File(["two"], "two.txt")] },
     });
     expect(input).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Handoff" })).toBeDisabled();
+    for (const name of ["Send", "Handoff", "Interrupt"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toBeEnabled();
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      button.focus();
+      fireEvent.click(button);
+      expect(button).toHaveFocus();
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
+    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+      const button = screen.getByRole("button", { name });
+      expect(button).toBeEnabled();
+      expect(button).toHaveAttribute("aria-disabled", "true");
+      fireEvent.click(button);
+    }
+    const previewBody = screen.getByRole("group", { name: "Terminal controls" }).parentElement!;
+    for (const key of ["Enter", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Tab"])
+      fireEvent.keyDown(previewBody, { key });
+    fireEvent.keyDown(previewBody, { key: "c", ctrlKey: true });
+    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
+    expect(handlers.onHandoffPaneBinding).not.toHaveBeenCalled();
+    expect(handlers.onSendKeys).not.toHaveBeenCalled();
     expect(screen.getByText("Uploading 1/2…")).toBeInTheDocument();
     await act(async () => finish(uploadResult("/tmp/space dir/one.png")));
     expect(input.value).toBe("before replace after");
