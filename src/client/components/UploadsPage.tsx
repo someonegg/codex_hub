@@ -13,6 +13,7 @@ import { LocalizedError } from "../i18n/localized-error";
 import { useSessionDraft } from "../state/session-drafts";
 import { InternalLink } from "./InternalLink";
 import { RequestError } from "./RequestError";
+import { UploadDownload } from "./UploadDownload";
 
 export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
   const { i18n } = useTranslation();
@@ -144,9 +145,7 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
       ) : null}
       {broken ? <p>{t("previewUnavailableDownloadTheFileBelow")}</p> : null}
       <div className="upload-actions">
-        <a href={`${contentUrl}?download=1`} download={item.filename}>
-          {t("download")}
-        </a>
+        <UploadDownload item={item} href={`${contentUrl}?download=1`} />
         {!confirming ? (
           <button type="button" onClick={() => setConfirming(true)}>
             {t("delete")}
