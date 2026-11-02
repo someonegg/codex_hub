@@ -7,6 +7,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 BACKGROUND = '#edf4f1'
+PANEL_COLOR = '#f3f8f5'
 PROMPT_COLOR = '#28474d'
 FRAME_COLOR = '#69aa9f'
 SCALE = 4
@@ -32,7 +33,7 @@ def svg():
     )
     return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="{BACKGROUND}"/>
-  <rect x="{left}" y="{top}" width="{right-left}" height="{bottom-top}" rx="{radius}" fill="none" stroke="{FRAME_COLOR}" stroke-width="{FRAME_WIDTH}"/>
+  <rect x="{left}" y="{top}" width="{right-left}" height="{bottom-top}" rx="{radius}" fill="{PANEL_COLOR}" stroke="{FRAME_COLOR}" stroke-width="{FRAME_WIDTH}"/>
   <g fill="none" stroke="{PROMPT_COLOR}" stroke-width="{PROMPT_WIDTH}" stroke-linecap="round" stroke-linejoin="round">{paths}</g>
   <g fill="{FRAME_COLOR}">{circles}</g>
 </svg>
@@ -54,7 +55,7 @@ def canvas():
                       (x+radius)*SCALE, (y+radius)*SCALE), fill=color)
 
     # SVG strokes are centered on the rounded rectangle's boundary.
-    for inset, color in [(-FRAME_WIDTH / 2, FRAME_COLOR), (FRAME_WIDTH / 2, BACKGROUND)]:
+    for inset, color in [(-FRAME_WIDTH / 2, FRAME_COLOR), (FRAME_WIDTH / 2, PANEL_COLOR)]:
         draw.rounded_rectangle(
             tuple(round(value * SCALE) for value in (
                 FRAME_LEFT + inset, FRAME_TOP + inset,
