@@ -454,6 +454,43 @@ async function capture(
         animations: "disabled",
       });
     }
+    await demo.evaluate(() => {
+      window.restoreDownloadNavigator = Object.fromEntries(
+        ["userAgent", "standalone", "share", "canShare"].map((key) => [
+          key,
+          Object.getOwnPropertyDescriptor(navigator, key),
+        ]),
+      );
+      Object.defineProperties(navigator, {
+        userAgent: { configurable: true, value: "iPhone" },
+        standalone: { configurable: true, value: true },
+        canShare: { configurable: true, value: () => true },
+        share: {
+          configurable: true,
+          value: async ({ files }) => {
+            if (files[0].name !== "dashboard.png" || files[0].type !== "image/png")
+              throw new Error("Incorrect shared file metadata");
+            window.sharedDownloadFile = true;
+          },
+        },
+      });
+    });
+    // Re-render with standalone detection, then exercise both explicit user gestures.
+    await demo.getByRole("button", { name: label("Collapse dashboard.png"), exact: true }).click();
+    const historyUrl = demo.url();
+    await demo.getByRole("button", { name: label("Download"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Save file"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Download"), exact: true }).waitFor();
+    if (demo.url() !== historyUrl || !(await demo.evaluate(() => window.sharedDownloadFile)))
+      throw new Error("Standalone download navigated away or failed to share");
+    await demo.evaluate(() => {
+      for (const [key, descriptor] of Object.entries(window.restoreDownloadNavigator)) {
+        if (descriptor) Object.defineProperty(navigator, key, descriptor);
+        else delete navigator[key];
+      }
+      delete window.restoreDownloadNavigator;
+      delete window.sharedDownloadFile;
+    });
     await demo.goBack();
     await composer.waitFor();
     if ((await composer.inputValue()) !== "Keep this draft while browsing uploads")
