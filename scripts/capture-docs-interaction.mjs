@@ -260,9 +260,17 @@ async function capture(
     });
     if ((await previewToggle.getAttribute("aria-expanded")) !== "true") await previewToggle.click();
     await demo.getByLabel(label("Terminal Preview content"), { exact: true }).waitFor();
-    await demo
-      .getByRole("textbox", { name: label("Message to agent") })
-      .fill("Suggest the next step.");
+    const composer = demo.getByRole("textbox", { name: label("Message to agent") });
+    await composer.fill("Suggest the next step.");
+    await composer.press("Escape");
+    if (
+      (await previewToggle.getAttribute("aria-expanded")) !== "false" ||
+      !(await composer.evaluate((element) => document.activeElement === element)) ||
+      (await composer.inputValue()) !== "Suggest the next step."
+    )
+      throw new Error("Composer Escape must collapse preview and preserve draft and focus");
+    await previewToggle.click();
+    await demo.getByLabel(label("Terminal Preview content"), { exact: true }).waitFor();
     await demo.evaluate(() => document.fonts.ready);
   }
 

@@ -526,6 +526,54 @@ it("collapses the preview with Escape without interrupting and restores toggle f
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveFocus();
 });
 
+it("collapses from the composer while preserving focus and the draft without terminal input", async () => {
+  const handlers = props(interaction("connected"));
+  const user = userEvent.setup();
+  render(
+    <InteractionPanel
+      {...handlers}
+      preview={{ revision: "1", content: "output", capturedAt: "now", truncated: false }}
+    />,
+  );
+  const input = screen.getByRole("textbox");
+  await user.click(input);
+  await user.type(input, "unfinished draft");
+  await user.keyboard("{Escape}");
+  expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  expect(input).toHaveFocus();
+  expect(input).toHaveValue("unfinished draft");
+  expect(handlers.onTogglePreview).toHaveBeenCalledExactlyOnceWith();
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+  expect(handlers.onSendMessage).not.toHaveBeenCalled();
+  await user.keyboard("{Escape}");
+  expect(handlers.onTogglePreview).toHaveBeenCalledTimes(1);
+});
+
+it("ignores modified, composing, repeated and already handled composer Escape", () => {
+  const handlers = props(interaction("connected"));
+  render(<Panel {...handlers} previewExpanded />);
+  const input = screen.getByRole("textbox");
+  for (const options of [
+    { altKey: true },
+    { ctrlKey: true },
+    { metaKey: true },
+    { shiftKey: true },
+    { isComposing: true },
+    { keyCode: 229 },
+  ]) {
+    expect(fireEvent.keyDown(input, { key: "Escape", ...options })).toBe(true);
+  }
+  expect(fireEvent.keyDown(input, { key: "Escape", repeat: true })).toBe(false);
+  const handled = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+  handled.preventDefault();
+  fireEvent(input, handled);
+  expect(handlers.onTogglePreview).not.toHaveBeenCalled();
+  expect(handlers.onSendKeys).not.toHaveBeenCalled();
+});
+
 it("interrupts with Ctrl+c in the preview without collapsing it", () => {
   const handlers = props(interaction("connected"));
   render(<Panel {...handlers} previewExpanded />);

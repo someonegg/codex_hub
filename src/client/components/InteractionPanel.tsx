@@ -206,14 +206,23 @@ export function InteractionPanel({
     void onSendKeys(keys).catch(() => undefined);
   };
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    // WebKit may report IME-confirming keys after composition has ended.
+    if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
     if (
-      event.key !== "Enter" ||
-      event.nativeEvent.isComposing ||
-      // WebKit may report the IME-confirming Enter after composition has ended.
-      event.nativeEvent.keyCode === 229 ||
-      (enterToSend ? event.shiftKey : !event.shiftKey)
-    )
+      event.key === "Escape" &&
+      previewExpanded &&
+      previewConnected &&
+      !event.defaultPrevented &&
+      !event.altKey &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.shiftKey
+    ) {
+      event.preventDefault();
+      if (!event.repeat) onTogglePreview();
       return;
+    }
+    if (event.key !== "Enter" || (enterToSend ? event.shiftKey : !event.shiftKey)) return;
     event.preventDefault();
     if (event.repeat) return;
     void send().catch(() => undefined);
