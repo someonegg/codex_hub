@@ -270,18 +270,30 @@ latest launch target even when waiting for idle times out.
 
 ## File uploads
 
-| Endpoint                                                          | Contract                                       |
-| ----------------------------------------------------------------- | ---------------------------------------------- |
-| `POST /api/v1/uploads?sessionId=<Hub ID>&filename=<encoded name>` | Raw binary, ≤20 MiB; existing session required |
-| `GET /api/v1/sessions/:id/uploads`                                | `{ items }`, newest first, unpaginated         |
-| `GET /api/v1/sessions/:id/uploads/:attachmentId/content`          | Raster preview; `?download=1` downloads        |
-| `DELETE /api/v1/sessions/:id/uploads/:attachmentId`               | Delete content/registration; idempotent        |
+| Endpoint                                                          | Contract                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------ |
+| `POST /api/v1/uploads?sessionId=<Hub ID>&filename=<encoded name>` | Raw binary, ≤20 MiB; existing session required   |
+| `GET /api/v1/sessions/:id/uploads`                                | `{ items }`, newest first, unpaginated           |
+| `GET /api/v1/sessions/:id/uploads/:attachmentId/content`          | Raster preview; `?download=1` downloads          |
+| `GET /api/v1/sessions/:id/uploads/:attachmentId/thumbnail`        | Cached WebP thumbnail; unavailable returns `404` |
+| `DELETE /api/v1/sessions/:id/uploads/:attachmentId`               | Delete content/registration; idempotent          |
 
 Upload returns `201`: `path`, `id`, `sessionId`, `filename`, `size`, `type`,
-`uploadedAt`, also grouped as `attachment`. Unique paths prevent overwrites.
+`uploadedAt`. Unique paths prevent overwrites.
 Oversize returns `413`, storage failures `500`; mutations reject cross-origin
 access. Content/deletion are session-scoped. Non-preview types (including HTML/SVG)
-download; all content uses `nosniff` and sandbox CSP.
+download; original content uses `nosniff`, sandbox CSP, and `no-store`.
+
+Previewable uploads schedule background thumbnail generation without delaying or
+failing the upload. Sharp produces a static, auto-oriented WebP within 360 × 280
+pixels (no enlargement, 40-million-pixel input limit). Generation is serialized
+and concurrent requests for the same thumbnail share work. Existing uploads
+are generated on first thumbnail request; decoding failures return `404` without
+falling back to transferring the original. History lazily loads thumbnails and
+requests the original only on expansion; unavailable thumbnails still allow expansion.
+Thumbnails use `private, max-age=86400` browser caching and atomic
+`<attachment ID>.thumb.webp` files beside originals. Deletion removes both;
+startup clears interrupted thumbnail writes and orphan thumbnails.
 
 Storage: `<home-dir>/uploads/<Hub session ID>/`, with atomic metadata rename and
 absolute content paths. HTTP/storage validate session IDs and UUID-v4 attachment

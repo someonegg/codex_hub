@@ -11,7 +11,8 @@ import { RequestBodyError } from "./request-body.js";
 import { sendJson } from "./router.js";
 import { isOpaqueId } from "./session-path.js";
 
-const SESSION_UPLOAD_PATH = /^\/api\/v1\/sessions\/([^/]+)\/uploads(?:\/([^/]+)(\/content)?)?$/;
+const SESSION_UPLOAD_PATH =
+  /^\/api\/v1\/sessions\/([^/]+)\/uploads(?:\/([^/]+)(\/(?:content|thumbnail))?)?$/;
 
 async function* uploadChunks(request: IncomingMessage): AsyncIterable<Uint8Array> {
   let size = 0;
@@ -93,6 +94,13 @@ export function createUploadRoutes(
       } else if (!contentPath) {
         await store.delete(id, attachmentId);
         sendJson(response, 200, { deleted: true });
+      } else if (contentPath === "/thumbnail") {
+        const data = await store.thumbnail(id, attachmentId);
+        if (!data) throw new RequestBodyError(404, "not_found", "Thumbnail unavailable");
+        response.setHeader("Content-Type", "image/webp");
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Cache-Control", "private, max-age=86400");
+        response.end(data);
       } else {
         const content = await (async () => {
           const attachment = await store.get(id, attachmentId);

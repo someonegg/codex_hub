@@ -12,7 +12,9 @@ import {
 } from "node:fs/promises";
 import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 
-import type { UploadAttachment } from "../../shared/uploads.js";
+import sharp from "sharp";
+
+import { isPreviewableUploadType, type UploadAttachment } from "../../shared/uploads.js";
 import { isOpaqueId } from "../security/opaque-id.js";
 
 const ATTACHMENT_ID_PATTERN =
@@ -27,6 +29,69 @@ export interface UploadCleanup {
 
 export class UploadStore implements UploadCleanup {
   constructor(readonly directory: string) {}
+  private readonly thumbnails = new Map<string, Promise<Buffer | null>>();
+  private thumbnailQueue: Promise<unknown> = Promise.resolve();
+
+  async thumbnail(id: string, attachmentId: string): Promise<Buffer | null> {
+    const attachment = await this.get(id, attachmentId);
+    if (!attachment || !isPreviewableUploadType(attachment.type)) return null;
+    const path = join(this.folder(id), attachmentId + ".thumb.webp");
+    const existing = this.thumbnails.get(path);
+    if (existing) return existing;
+    const task = (async () => {
+      await this.safeFile(path, this.folder(id));
+      try {
+        return await readFile(path);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      const generation = this.thumbnailQueue.then(async () => {
+        // Revalidate after waiting in the queue: deletion must not resurrect files.
+        const current = await this.get(id, attachmentId);
+        if (!current) return null;
+        let data: Buffer;
+        try {
+          data = await sharp(current.path, { limitInputPixels: 40_000_000 })
+            .rotate()
+            .resize(360, 280, { fit: "inside", withoutEnlargement: true })
+            .webp({ quality: 80 })
+            .toBuffer();
+        } catch {
+          return null;
+        }
+        const temporary = path + ".pending";
+        try {
+          await writeFile(temporary, data, { mode: 0o600, flag: "wx" });
+          await rename(temporary, path);
+        } finally {
+          await rm(temporary, { force: true });
+        }
+        return data;
+      });
+      this.thumbnailQueue = generation.catch(() => undefined);
+      return generation;
+    })();
+    this.thumbnails.set(path, task);
+    try {
+      return await task;
+    } finally {
+      if (this.thumbnails.get(path) === task) this.thumbnails.delete(path);
+    }
+  }
+
+  private async waitForThumbnails(id: string, attachmentId?: string) {
+    const folder = this.folder(id);
+    await Promise.allSettled(
+      [...this.thumbnails]
+        .filter(([path]) =>
+          attachmentId
+            ? path === join(folder, attachmentId + ".thumb.webp")
+            : dirname(path) === folder,
+        )
+        .map(([, task]) => task),
+    );
+  }
+
   private folder(id: string) {
     if (!isOpaqueId(id)) throw new Error("Invalid session ID");
     return resolve(this.directory, id);
@@ -39,6 +104,7 @@ export class UploadStore implements UploadCleanup {
     await rename(folder, tombstone).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
+    await this.waitForThumbnails(id);
     await rm(tombstone, { recursive: true, force: true });
   }
   async upload(id: string, filename: string, type: string, chunks: AsyncIterable<Uint8Array>) {
@@ -74,6 +140,9 @@ export class UploadStore implements UploadCleanup {
       await writeFile(temporary, JSON.stringify(attachment), { mode: 0o600 });
       await rename(temporary, join(folder, attachmentId + ".meta.json"));
       complete = true;
+      if (isPreviewableUploadType(type)) {
+        void this.thumbnail(id, attachmentId).catch(() => undefined);
+      }
       return attachment;
     } finally {
       if (!complete) {
@@ -108,6 +177,8 @@ export class UploadStore implements UploadCleanup {
       if (name.endsWith(".meta.deleting")) {
         await this.finishDeletion(join(folder, name));
       } else if (
+        name.endsWith(".thumb.webp.pending") ||
+        (name.endsWith(".thumb.webp") && !names.includes(name.slice(0, 36) + ".meta.json")) ||
         name.endsWith(".meta.pending") ||
         (/^[a-f0-9-]{36}(?:\.[a-zA-Z0-9]{1,16})?$/.test(name) &&
           !names.includes(name.slice(0, 36) + ".meta.json") &&
@@ -155,6 +226,7 @@ export class UploadStore implements UploadCleanup {
     await rename(metadata, tombstone).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
     });
+    await this.waitForThumbnails(id, attachmentId);
     await this.finishDeletion(tombstone);
   }
   private async safeFolder(folder: string) {
@@ -231,6 +303,7 @@ export class UploadStore implements UploadCleanup {
       throw error;
     }
     await rm(attachment.path, { force: true });
+    await rm(join(dirname(tombstone), attachment.id + ".thumb.webp"), { force: true });
     await rm(tombstone, { force: true });
   }
 }

@@ -53,12 +53,15 @@ it("preserves failed deletion, supports inline retry, and removes the matching d
     </StrictMode>,
   );
   await screen.findByText(item.filename);
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("/thumbnail"));
+  expect(screen.getByRole("img")).toHaveAttribute("loading", "lazy");
   fireEvent.click(screen.getByText("Stage"));
   fireEvent.click(screen.getByRole("button", { name: "Expand photo.png" }));
   expect(screen.getByRole("button", { name: "Collapse photo.png" })).toHaveAttribute(
     "aria-expanded",
     "true",
   );
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("/content"));
   fireEvent.click(screen.getByRole("button", { name: "Delete" }));
   expect(remove).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
@@ -84,6 +87,8 @@ it("retries initial errors, loads the full history, and aborts requests on unmou
   await screen.findByText(item.filename);
   fireEvent.error(screen.getByRole("img"));
   expect(screen.getByText(/Preview unavailable/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Expand photo.png" }));
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("/content"));
   expect(screen.queryByText("Load more")).not.toBeInTheDocument();
   await screen.findByText("other.txt");
   await waitFor(() => expect(list).toHaveBeenCalledTimes(2));

@@ -75,6 +75,7 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
   useTranslation();
   const [expanded, setExpanded] = useState(false);
   const [broken, setBroken] = useState(false);
+  const [thumbnailBroken, setThumbnailBroken] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -118,7 +119,18 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
           aria-label={t(expanded ? "collapseFile" : "expandFile", { filename: item.filename })}
           onClick={() => setExpanded((value) => !value)}
         >
-          <img src={url} alt={item.filename} onError={() => setBroken(true)} />
+          {!expanded && thumbnailBroken ? (
+            t("previewUnavailable")
+          ) : (
+            <img
+              key={expanded ? "original" : "thumbnail"}
+              src={expanded ? url : url.replace(/content$/, "thumbnail")}
+              alt={item.filename}
+              loading="lazy"
+              decoding="async"
+              onError={() => (expanded ? setBroken(true) : setThumbnailBroken(true))}
+            />
+          )}
         </button>
       ) : null}
       {broken ? <p>{t("previewUnavailableDownloadTheFileBelow")}</p> : null}

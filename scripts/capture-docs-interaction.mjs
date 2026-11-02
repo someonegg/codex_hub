@@ -145,7 +145,7 @@ async function capture(
   await context.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (path.endsWith("/uploads/docs-upload-1/content"))
+    if (/\/uploads\/docs-upload-1\/(content|thumbnail)$/.test(path))
       return route.fulfill({ contentType: "image/png", body: imageBuffer });
     if (path.endsWith("/uploads/docs-upload-1") && route.request().method() === "DELETE") {
       if (++deletionAttempts === 1)
@@ -386,7 +386,14 @@ async function capture(
     await stageAttachment();
     await demo.getByRole("link", { name: label("Upload history"), exact: true }).click();
     await demo.getByRole("heading", { name: label("Upload history"), exact: true }).waitFor();
+    const historyImage = demo.getByRole("img", { name: label("dashboard.png"), exact: true });
+    await historyImage.evaluate((element) => element.decode());
+    if (!(await historyImage.getAttribute("src")).endsWith("/thumbnail"))
+      throw new Error("History did not load the thumbnail");
     await demo.getByRole("button", { name: label("Expand dashboard.png"), exact: true }).click();
+    await historyImage.evaluate((element) => element.decode());
+    if (!(await historyImage.getAttribute("src")).endsWith("/content"))
+      throw new Error("Expansion did not load the original");
     await demo
       .getByRole("button", { name: label("Collapse dashboard.png"), exact: true })
       .waitFor();
