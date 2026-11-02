@@ -129,6 +129,8 @@ async function capture(
   const uploadedNames = [];
   let historyDeleted = false;
   let deletionAttempts = 0;
+  let thumbnailMissing = false;
+  let thumbnailRequests = 0;
   const historyAttachment = {
     id: "docs-upload-1",
     sessionId: session.id,
@@ -142,11 +144,24 @@ async function capture(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=",
     "base64",
   );
+  // A valid 1×1, 24-bit BMP keeps the original-preview check independent of Sharp.
+  const bmpBuffer = Buffer.from(
+    "Qk06AAAAAAAAADYAAAAoAAAAAQAAAAEAAAABABgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD/AA==",
+    "base64",
+  );
   await context.route("**/api/v1/**", async (route) => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    if (/\/uploads\/docs-upload-1\/(content|thumbnail)$/.test(path))
+    if (path.endsWith("/uploads/docs-upload-1/thumbnail")) {
+      thumbnailRequests += 1;
+      if (thumbnailMissing) return route.fulfill({ status: 404 });
       return route.fulfill({ contentType: "image/png", body: imageBuffer });
+    }
+    if (path.endsWith("/uploads/docs-upload-1/content"))
+      return route.fulfill({
+        contentType: historyAttachment.type,
+        body: historyAttachment.type === "image/bmp" ? bmpBuffer : imageBuffer,
+      });
     if (path.endsWith("/uploads/docs-upload-1") && route.request().method() === "DELETE") {
       if (++deletionAttempts === 1)
         return route.fulfill({
@@ -380,6 +395,40 @@ async function capture(
     await image.evaluate((element) => element.decode());
   }
 
+  async function verifyUnavailableUploadPreviews() {
+    const original = { ...historyAttachment };
+    try {
+      for (const { type, filename, missing, requests } of [
+        { type: "image/bmp", filename: "dashboard.bmp", missing: false, requests: 0 },
+        { type: "image/png", filename: "dashboard.png", missing: true, requests: 1 },
+      ]) {
+        Object.assign(historyAttachment, { type, filename });
+        thumbnailMissing = missing;
+        const requestsBefore = thumbnailRequests;
+        await demo.reload();
+        await demo.getByText(label("Preview unavailable"), { exact: true }).waitFor();
+        if (await demo.locator(".upload-preview img").count())
+          throw new Error(`${type} loaded an image instead of the unavailable label`);
+        if (thumbnailRequests - requestsBefore !== requests)
+          throw new Error(`${type} made unexpected thumbnail requests`);
+        await demo.getByRole("button", { name: label(`Expand ${filename}`), exact: true }).click();
+        const image = demo.getByRole("img", { name: filename, exact: true });
+        await image.evaluate((element) => element.decode());
+        if (!(await image.getAttribute("src")).endsWith("/content"))
+          throw new Error(`${type} did not expand the original`);
+        await demo
+          .getByRole("button", { name: label(`Collapse ${filename}`), exact: true })
+          .click();
+        await demo.getByText(label("Preview unavailable"), { exact: true }).waitFor();
+        if (thumbnailRequests - requestsBefore !== requests)
+          throw new Error(`${type} retried its unavailable thumbnail on collapse`);
+      }
+    } finally {
+      Object.assign(historyAttachment, original);
+      thumbnailMissing = false;
+    }
+  }
+
   async function verifyUploadHistory() {
     const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     await composer.fill("Keep this draft while browsing uploads");
@@ -412,6 +461,7 @@ async function capture(
     await demo.getByRole("button", { name: label("Remove dashboard.png"), exact: true }).waitFor();
     await demo.goForward();
     await demo.getByRole("heading", { name: label("Upload history"), exact: true }).waitFor();
+    await verifyUnavailableUploadPreviews();
     await demo.reload();
     await demo.getByRole("button", { name: label("Delete"), exact: true }).click();
     await demo.getByRole("button", { name: label("Cancel"), exact: true }).click();

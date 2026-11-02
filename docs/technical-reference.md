@@ -284,13 +284,17 @@ Oversize returns `413`, storage failures `500`; mutations reject cross-origin
 access. Content/deletion are session-scoped. Non-preview types (including HTML/SVG)
 download; original content uses `nosniff`, sandbox CSP, and `no-store`.
 
-Previewable uploads schedule background thumbnail generation without delaying or
-failing the upload. Sharp produces a static, auto-oriented WebP within 360 × 280
-pixels (no enlargement, 40-million-pixel input limit). Generation is serialized
-and concurrent requests for the same thumbnail share work. Existing uploads
-are generated on first thumbnail request; decoding failures return `404` without
-falling back to transferring the original. History lazily loads thumbnails and
-requests the original only on expansion; unavailable thumbnails still allow expansion.
+PNG, JPEG, GIF, WebP, and AVIF uploads schedule background thumbnail generation
+without delaying or failing the upload. Sharp produces a static, auto-oriented
+WebP within 360 × 280 pixels (no enlargement, 40-million-pixel input limit).
+Generation is serialized; concurrent requests for the same thumbnail share work.
+Existing uploads are generated on first request; decoding failures return `404`.
+
+History lazily loads thumbnails and requests originals only on expansion. BMP
+skips thumbnail generation and requests. Unsupported, missing, or failed thumbnails
+show “Preview unavailable” and still allow expansion; they never automatically
+load the original.
+
 Thumbnails use `private, max-age=86400` browser caching and atomic
 `<attachment ID>.thumb.webp` files beside originals. Deletion removes both;
 startup clears interrupted thumbnail writes and orphan thumbnails.

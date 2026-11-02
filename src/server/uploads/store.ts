@@ -14,7 +14,7 @@ import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path
 
 import sharp from "sharp";
 
-import { isPreviewableUploadType, type UploadAttachment } from "../../shared/uploads.js";
+import { supportsUploadThumbnail, type UploadAttachment } from "../../shared/uploads.js";
 import { isOpaqueId } from "../security/opaque-id.js";
 
 const ATTACHMENT_ID_PATTERN =
@@ -34,7 +34,7 @@ export class UploadStore implements UploadCleanup {
 
   async thumbnail(id: string, attachmentId: string): Promise<Buffer | null> {
     const attachment = await this.get(id, attachmentId);
-    if (!attachment || !isPreviewableUploadType(attachment.type)) return null;
+    if (!attachment || !supportsUploadThumbnail(attachment.type)) return null;
     const path = join(this.folder(id), attachmentId + ".thumb.webp");
     const existing = this.thumbnails.get(path);
     if (existing) return existing;
@@ -140,7 +140,7 @@ export class UploadStore implements UploadCleanup {
       await writeFile(temporary, JSON.stringify(attachment), { mode: 0o600 });
       await rename(temporary, join(folder, attachmentId + ".meta.json"));
       complete = true;
-      if (isPreviewableUploadType(type)) {
+      if (supportsUploadThumbnail(type)) {
         void this.thumbnail(id, attachmentId).catch(() => undefined);
       }
       return attachment;

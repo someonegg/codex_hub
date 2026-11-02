@@ -96,3 +96,22 @@ it("retries initial errors, loads the full history, and aborts requests on unmou
   view.unmount();
   expect(signal.aborted).toBe(true);
 });
+
+it("shows the same unavailable label for BMP without requesting a thumbnail and keeps original expansion", async () => {
+  vi.spyOn(api, "uploads").mockResolvedValue({
+    items: [{ ...item, filename: "photo.bmp", type: "image/bmp" }],
+  });
+  render(<UploadsPage sessionId={item.sessionId} onBack={() => {}} />);
+  await screen.findByText("photo.bmp");
+  expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
+  expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Expand photo.bmp" }));
+  expect(screen.getByRole("img")).toHaveAttribute("src", expect.stringContaining("/content"));
+  fireEvent.click(screen.getByRole("button", { name: "Collapse photo.bmp" }));
+  expect(screen.getByText("Preview unavailable")).toBeInTheDocument();
+  expect(screen.queryByRole("img")).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute(
+    "href",
+    expect.stringContaining("/content?download=1"),
+  );
+});

@@ -747,3 +747,38 @@ it("does not delay upload completion and waits for thumbnail writes before finis
     release();
   }
 });
+
+it("skips BMP thumbnail generation while preserving inline originals and downloads", async () => {
+  const { store, origin } = await fixture();
+  const thumbnail = vi.spyOn(store, "thumbnail");
+  const bmp = Buffer.alloc(58);
+  bmp.write("BM");
+  bmp.writeUInt32LE(58, 2);
+  bmp.writeUInt32LE(54, 10);
+  bmp.writeUInt32LE(40, 14);
+  bmp.writeInt32LE(1, 18);
+  bmp.writeInt32LE(1, 22);
+  bmp.writeUInt16LE(1, 26);
+  bmp.writeUInt16LE(24, 28);
+  bmp[56] = 255;
+  const response = await fetch(
+    `${origin}/api/v1/uploads?sessionId=one-00000000000000000&filename=photo.bmp`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "image/bmp" },
+      body: new Uint8Array(bmp),
+    },
+  );
+  expect(response.status).toBe(201);
+  const attachment = (await response.json()) as UploadAttachment;
+  expect(thumbnail).not.toHaveBeenCalled();
+  const url = `${origin}/api/v1/sessions/${attachment.sessionId}/uploads/${attachment.id}`;
+  const content = await fetch(url + "/content");
+  expect(content.headers.get("content-type")).toBe("image/bmp");
+  expect(Buffer.from(await content.arrayBuffer())).toEqual(bmp);
+  expect((await fetch(url + "/thumbnail")).status).toBe(404);
+  expect((await fetch(url + "/content?download=1")).headers.get("content-disposition")).toMatch(
+    /^attachment/,
+  );
+  expect(await readdir(join(attachment.path, ".."))).toHaveLength(2);
+});

@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { isPreviewableUploadType, type UploadAttachment } from "../../shared/uploads";
+import {
+  isPreviewableUploadType,
+  supportsUploadThumbnail,
+  type UploadAttachment,
+} from "../../shared/uploads";
 
 import { api } from "../api/client";
 import { formatDate, formatNumber, t } from "../i18n";
@@ -100,7 +104,9 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
         if (!controller.current!.signal.aborted) setBusy(false);
       });
   };
-  const url = `/api/v1/sessions/${encodeURIComponent(item.sessionId)}/uploads/${encodeURIComponent(item.id)}/content`;
+  const attachmentUrl = `/api/v1/sessions/${encodeURIComponent(item.sessionId)}/uploads/${encodeURIComponent(item.id)}`;
+  const contentUrl = `${attachmentUrl}/content`;
+  const thumbnailUnavailable = !supportsUploadThumbnail(item.type) || thumbnailBroken;
   const image = isPreviewableUploadType(item.type);
   return (
     <article className="upload-entry">
@@ -119,23 +125,26 @@ function UploadEntry({ item, onDeleted }: { item: UploadAttachment; onDeleted: (
           aria-label={t(expanded ? "collapseFile" : "expandFile", { filename: item.filename })}
           onClick={() => setExpanded((value) => !value)}
         >
-          {!expanded && thumbnailBroken ? (
+          {!expanded && thumbnailUnavailable ? (
             t("previewUnavailable")
           ) : (
             <img
               key={expanded ? "original" : "thumbnail"}
-              src={expanded ? url : url.replace(/content$/, "thumbnail")}
+              src={expanded ? contentUrl : `${attachmentUrl}/thumbnail`}
               alt={item.filename}
               loading="lazy"
               decoding="async"
-              onError={() => (expanded ? setBroken(true) : setThumbnailBroken(true))}
+              onError={() => {
+                if (expanded) setBroken(true);
+                else setThumbnailBroken(true);
+              }}
             />
           )}
         </button>
       ) : null}
       {broken ? <p>{t("previewUnavailableDownloadTheFileBelow")}</p> : null}
       <div className="upload-actions">
-        <a href={`${url}?download=1`} download={item.filename}>
+        <a href={`${contentUrl}?download=1`} download={item.filename}>
           {t("download")}
         </a>
         {!confirming ? (
