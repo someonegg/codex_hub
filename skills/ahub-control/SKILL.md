@@ -10,7 +10,8 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 ## Check the environment and target
 
 - Check `command -v ahub-cli` and `ahub-cli session --help` for the commands and options needed by the task. Report missing capabilities; install, update, or start services only when authorized.
-- Address precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Keep custom addresses consistent across commands; only HTTP origins are supported.
+- Address precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Keep custom addresses consistent across commands.
+- HTTP and HTTPS origins are supported. HTTPS uses Node.js certificate verification; for a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 - Select existing sessions with `list --project /absolute/project --json`. It lists unarchived main sessions; add `--all` to include archived sessions. Known child IDs can be inspected directly. Treat IDs as opaque strings.
 
 ## Create, resume, and send
@@ -80,7 +81,7 @@ For questions (not Plans), an alternative is to interrupt, organize the chosen a
 
 - Read and retain each new assistant `phase=response` reply. Continue observing until connected and idle, collecting any subsequent messages; if already connected and idle, proceed immediately.
 - Use the collected replies and verification of deliverables against the task's acceptance criteria to decide whether to finish or address questions, blockers, or remaining work. Neither idle nor a reply alone proves completion. Resolve output locations against the actual `workingDirectory`, which may differ from `projectDirectory` with explicit cwd or worktrees.
-- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete permanently removes session history without requiring prior archive. Verify an uncertain exit before claiming success.
+- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete permanently removes session history. Verify an uncertain exit before claiming success.
 - Report deliverables, verification scope, and whether the session exited.
 
 ## Recover from errors

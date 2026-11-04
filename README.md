@@ -48,10 +48,10 @@ For running from source, see [Development](docs/development.md).
 ## Features
 
 - Navigate projects, main sessions, and child conversations.
-- Read Markdown, code, tables, and math with optional technical events.
+- Read conversation messages, plans, and user input with Markdown, code, tables, and math.
 - Follow conversation updates while browsing their history.
 - Create sessions with optional worktrees, send input, and preview their terminals.
-- See live sessions, safely resume exited sessions, exit without archiving, and manage archives.
+- View live sessions, resume exited sessions, stop session execution, and archive or delete history.
 - Switch the interface between English, Simplified Chinese, and Traditional Chinese.
 
 ## Session interaction
