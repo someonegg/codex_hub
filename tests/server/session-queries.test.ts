@@ -3,7 +3,6 @@ import { expect, it, vi } from "vitest";
 import type {
   DomainSession,
   DomainTimelineRecord,
-  NormalizedSession,
 } from "../../src/server/domain/session-domain.js";
 import type { CatalogSnapshot } from "../../src/server/repository/catalog-snapshot-store.js";
 import {
@@ -47,24 +46,30 @@ function message(index: number): Extract<DomainTimelineRecord, { kind: "message"
     markdown: "text",
   };
 }
-function normalized(timeline: readonly DomainTimelineRecord[]): NormalizedSession {
-  return {
-    session,
-    timeline,
-  };
-}
-function snapshot(value: NormalizedSession): CatalogSnapshot {
+function snapshot(timeline: readonly DomainTimelineRecord[]): CatalogSnapshot {
   return {
     signature: "test",
     diagnostics: [],
-    sessions: new Map([[session.id, { normalized: value }]]),
+    sessions: new Map([[session.id, { normalized: { session, timeline } }]]),
   };
+}
+
+function countedTimeline(length: number, onRead: () => void): DomainTimelineRecord[] {
+  return new Proxy(
+    Array.from({ length }, (_, index) => message(index)),
+    {
+      get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property)) onRead();
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
 }
 
 it("reads empty timelines and noncontiguous ordinals across first, middle, last and empty pages", () => {
   const queries = new SessionQueries();
-  expect(queries.messages(snapshot(normalized([])), session.id, {})?.hasMore).toBe(false);
-  const state = snapshot(normalized(Array.from({ length: 5 }, (_, index) => message(index))));
+  expect(queries.messages(snapshot([]), session.id, {})?.hasMore).toBe(false);
+  const state = snapshot(Array.from({ length: 5 }, (_, index) => message(index)));
   const first = queries.messages(state, session.id, { after: 0, limit: 2 })!;
   const middle = queries.messages(state, session.id, { limit: 2, after: first.nextAfter })!;
   const last = queries.messages(state, session.id, { limit: 2, after: middle.nextAfter })!;
@@ -83,16 +88,8 @@ it("reads empty timelines and noncontiguous ordinals across first, middle, last 
 it("bounds deep-page array reads to binary searches plus this page", () => {
   const queries = new SessionQueries();
   let reads = 0;
-  const timeline = new Proxy(
-    Array.from({ length: 10_000 }, (_, index) => message(index)),
-    {
-      get(target, property, receiver) {
-        if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-        return Reflect.get(target, property, receiver);
-      },
-    },
-  );
-  const state = snapshot(normalized(timeline));
+  const timeline = countedTimeline(10_000, () => reads++);
+  const state = snapshot(timeline);
   let after = 0;
   for (let index = 0; index < 30; index++) {
     after = queries.messages(state, session.id, { limit: 300, after })!.nextAfter;
@@ -110,7 +107,7 @@ it("honors the byte budget while returning a single oversized item", () => {
     ...message(0),
     markdown: "x".repeat(MAX_ITEM_PAGE_BYTES),
   } as DomainTimelineRecord;
-  const state = snapshot(normalized([large, message(1)]));
+  const state = snapshot([large, message(1)]);
   const first = queries.messages(state, session.id, { after: 0, limit: 2 })!;
   expect(first.items).toEqual([large]);
   expect(first.hasMore).toBe(true);
@@ -123,7 +120,7 @@ it("messages honors the byte budget without truncating visible bodies or skippin
   const queries = new SessionQueries();
   const large = { ...message(0), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES - 500) };
   const next = { ...message(1), markdown: "y".repeat(1000) };
-  const state = snapshot(normalized([large, next]));
+  const state = snapshot([large, next]);
   const first = queries.messages(state, session.id, { after: 0, limit: 10 })!;
   expect(first.items).toEqual([large]);
   expect(first.hasMore).toBe(true);
@@ -132,16 +129,8 @@ it("messages honors the byte budget without truncating visible bodies or skippin
 
 it("messages skips unrelated history for latest and after reads", () => {
   let reads = 0;
-  const timeline = new Proxy(
-    Array.from({ length: 10_000 }, (_, index) => message(index)),
-    {
-      get(target, property, receiver) {
-        if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-        return Reflect.get(target, property, receiver);
-      },
-    },
-  );
-  const state = snapshot(normalized(timeline));
+  const timeline = countedTimeline(10_000, () => reads++);
+  const state = snapshot(timeline);
   const queries = new SessionQueries();
   reads = 0;
   const latest = queries.messages(state, session.id, {})!;
@@ -158,7 +147,7 @@ it("messages skips unrelated history for latest and after reads", () => {
 
 it("defaults to 10 messages and accepts the maximum page length", () => {
   const queries = new SessionQueries();
-  const state = snapshot(normalized(Array.from({ length: 301 }, (_, index) => message(index))));
+  const state = snapshot(Array.from({ length: 301 }, (_, index) => message(index)));
   expect(queries.messages(state, session.id, {})!.items).toHaveLength(10);
   const maximum = queries.messages(state, session.id, { after: 0, limit: 300 })!;
   expect(maximum.items).toHaveLength(300);
@@ -170,10 +159,8 @@ it("defaults to 10 messages and accepts the maximum page length", () => {
 
 it.each([0, 301, 1.5, NaN])("rejects invalid item limit %s", (limit) => {
   const queries = new SessionQueries();
-  expect(() => queries.messages(snapshot(normalized([])), session.id, { limit })).toThrow(
-    RepositoryQueryError,
-  );
-  expect(() => queries.messages(snapshot(normalized([])), session.id, { limit })).toThrow(
+  expect(() => queries.messages(snapshot([]), session.id, { limit })).toThrow(RepositoryQueryError);
+  expect(() => queries.messages(snapshot([]), session.id, { limit })).toThrow(
     expect.objectContaining({ code: "invalid_query" }),
   );
 });
@@ -184,7 +171,7 @@ it("fills byte-bounded pages and reads every long UTF-8 message exactly once", (
     ...message(index),
     markdown: "界".repeat(333_333),
   }));
-  const state = snapshot(normalized(timeline));
+  const state = snapshot(timeline);
   const first = queries.messages(state, session.id, { after: 0, limit: 200 })!;
   const second = queries.messages(state, session.id, { limit: 200, after: first.nextAfter })!;
   const last = queries.messages(state, session.id, { limit: 200, after: second.nextAfter })!;
@@ -206,11 +193,11 @@ it("reuses exact byte sizes across immutable snapshots without retaining stale i
   const next = message(1);
   const stringify = vi.spyOn(JSON, "stringify");
   try {
-    queries.messages(snapshot(normalized([first])), session.id, { after: 0 });
-    queries.messages(snapshot(normalized([first, next])), session.id, { after: 0 });
+    queries.messages(snapshot([first]), session.id, { after: 0 });
+    queries.messages(snapshot([first, next]), session.id, { after: 0 });
     expect(stringify.mock.calls.filter(([value]) => value === first)).toHaveLength(1);
     const rewritten = { ...first, markdown: "界".repeat(MAX_ITEM_PAGE_BYTES) };
-    const page = queries.messages(snapshot(normalized([rewritten, next])), session.id, {
+    const page = queries.messages(snapshot([rewritten, next]), session.id, {
       after: 0,
     })!;
     expect(page.items).toEqual([rewritten]);

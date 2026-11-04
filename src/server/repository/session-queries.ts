@@ -59,7 +59,7 @@ export class SessionQueries {
     return {
       session: versioned.normalized.session,
       items,
-      nextAfter: index < timeline.length ? (timeline[index - 1]?.ordinal ?? 0) : end,
+      nextAfter: items.at(-1)?.ordinal ?? end,
       hasMore: index < timeline.length,
     };
   }
