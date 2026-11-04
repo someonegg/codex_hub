@@ -24,8 +24,8 @@ answers, an aborted result, or a safe unavailable fallback. Matching by `call_id
 continues across incremental batches. Browser cards combine loaded requests and
 responses; API records retain their original ordinals.
 
-Other records do not produce timeline items or detail maps. Raw parsing needed
-for metadata, relationships, pane bindings, and runtime state remains adapter-owned.
+The adapter extracts session metadata, relationships, pane bindings, and runtime
+facts from source records independently of conversation publication.
 
 ## Bounds
 

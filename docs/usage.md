@@ -15,9 +15,11 @@ By default, the hub reads `~/.codex` and listens only on this machine.
 
 ## Reading and managing sessions
 
-Choose a project and session in the sidebar. Conversations update automatically;
-use **Include archived** to browse archived sessions. You can bookmark or share a
-session URL with another device that can access the hub.
+Choose a project and main session in the sidebar; open child sessions from their
+parent conversation. Messages load from the beginning as you scroll, then receive
+automatic updates. Use **Archived** to browse read-only archived sessions.
+
+You can bookmark a session URL or share it with another device that can access the hub.
 
 - **Create:** click a project's **+**, or the global **+** to choose a project or
   enter an absolute local directory. Optionally enable a worktree or YOLO mode.
@@ -25,8 +27,9 @@ session URL with another device that can access the hub.
   continues the same session using its original home and an available original
   working or project directory.
 - **Exit session:** use the session's **…** menu to stop the connected terminal
-  pane without archiving the conversation.
-- **Archive or delete:** use the session's **…** menu. Permanent deletion requires confirmation.
+  pane and retain conversation history.
+- **Archive:** use the session's **…** menu to stop execution and mark the session as archived.
+- **Delete:** use the session's **…** menu to permanently remove session history. Deletion requires confirmation.
 
 Creating and resuming sessions use tmux. If startup needs login, permission, or
 trust confirmation, use **Tmux access** in the session's **…** menu or the attach
@@ -119,7 +122,8 @@ Both directories accept relative paths, which the CLI converts to absolute paths
 Resume keeps the original home and accepts `--yolo`.
 
 Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
-or pass `--url` to use another HTTP address; HTTPS is not supported by this client.
+or pass `--url` to use another HTTP or HTTPS address. For a private CA, set
+`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 Use `--timeout <seconds>` to change the default 15-second timeout (30 seconds for follow; 45 seconds for
 create, resume, exit, archive, and delete). With `inspect --follow`, it limits each
 HTTP request; observation continues until Ctrl+C or the requested round count.
@@ -248,8 +252,7 @@ device trusts the server certificate. Without `--ssl-ca`, HTTPS encrypts traffic
 but does not authenticate clients. Restart after replacing certificates or keys.
 
 Use `--local-port 4174` to additionally serve HTTP on `127.0.0.1:4174` without
-client certificates (disabled by default). The main listener retains its TLS/mTLS
-requirements. For local CLI access:
+client certificates (disabled by default). TLS/mTLS settings apply independently to the main listener. For local CLI access:
 
 ```sh
 ahub-cli session list --url http://127.0.0.1:4174
