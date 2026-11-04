@@ -14,13 +14,16 @@ export interface SessionMessagesRead {
   readonly page: (query: SessionMessagesQuery) => SessionMessagesResponse;
 }
 
-export interface SessionReader {
+export interface InteractionSessionReader {
+  getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
+}
+
+export interface SessionReader extends InteractionSessionReader {
   readMessages(id: SessionId): Promise<SessionMessagesRead | null>;
   messages(id: SessionId, query: SessionMessagesQuery): Promise<SessionMessagesResponse | null>;
   list(): Promise<SessionListResponse>;
   getSession(id: SessionId): Promise<SessionDetailResponse | null>;
   refresh(): Promise<void>;
-  getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null>;
 }
 
 export interface InteractionSessionSnapshot {

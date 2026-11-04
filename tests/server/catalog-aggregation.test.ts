@@ -115,17 +115,12 @@ describe("catalog source aggregation", () => {
     expect(first.signature).toBe(reordered.signature);
     expect(first.signature).toBe(reorderedEntries.signature);
     const mapper = new SessionApiMapper();
-    expect(
-      mapper.list([...first.sessions.values()].map((value) => value.normalized.session)),
-    ).toEqual(
-      mapper.list([...reordered.sessions.values()].map((value) => value.normalized.session)),
+    expect(mapper.list([...first.sessions.values()].map((value) => value.session))).toEqual(
+      mapper.list([...reordered.sessions.values()].map((value) => value.session)),
     );
     expect([...first.sessions.keys()].sort()).toEqual([...reordered.sessions.keys()].sort());
     const byTitle = new Map(
-      [...first.sessions.values()].map(({ normalized: value }) => [
-        value.session.title,
-        value.session,
-      ]),
+      [...first.sessions.values()].map((value) => [value.session.title, value.session]),
     );
     expect(byTitle.get("Source A parent")?.id).not.toBe(byTitle.get("Source B parent")?.id);
     expect(byTitle.get("Source A child A")?.parentId).toBe(byTitle.get("Source A parent")?.id);
@@ -135,8 +130,8 @@ describe("catalog source aggregation", () => {
     expect(parent.childIds).toEqual([...parent.childIds].sort());
     expect(parent.childIds).toEqual(
       [...reorderedEntries.sessions.values()].find(
-        ({ normalized: value }) => value.session.title === "Source A parent",
-      )!.normalized.session.childIds,
+        (value) => value.session.title === "Source A parent",
+      )!.session.childIds,
     );
   });
 });

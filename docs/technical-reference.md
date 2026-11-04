@@ -130,6 +130,11 @@ shutdown release capacity. Concurrent same-session probes share immutable source
 and runtime observations; pagination remains request-specific. Each response
 uses the same pane observation for status and interaction; effects revalidate.
 
+Public response assembly belongs to `SessionReadService`. Interaction operations
+read internal facts through `InteractionSessionReader` over the same catalog,
+without calling the public response assembler. The interaction describer is
+injected at construction; no post-construction binding is required.
+
 `stateRevision` compares public state only, without validating historical content.
 An ordinal beyond the current range returns `400 after_out_of_range`; clients
 reload once from their initial position. Other history rewrites are accepted as

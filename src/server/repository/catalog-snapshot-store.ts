@@ -16,9 +16,6 @@ import {
   RefreshDiagnosticLogger,
 } from "./diagnostic-logger.js";
 import { RefreshCoordinator } from "./refresh-coordinator.js";
-interface IndexedSession {
-  readonly normalized: NormalizedSession;
-}
 
 export const DEFAULT_CATALOG_FRESHNESS_MS = 1_500;
 export const MAX_CATALOG_DIAGNOSTICS = 50;
@@ -26,7 +23,7 @@ export const MAX_CATALOG_DIAGNOSTICS = 50;
 export interface CatalogSnapshot {
   readonly signature: string;
   readonly diagnostics: readonly DomainDiagnostic[];
-  readonly sessions: ReadonlyMap<DomainSessionId, IndexedSession>;
+  readonly sessions: ReadonlyMap<DomainSessionId, NormalizedSession>;
 }
 
 export interface CatalogSnapshotStoreDependencies {
@@ -103,7 +100,7 @@ export class CatalogSnapshotStore {
     const snapshot: CatalogSnapshot = {
       signature,
       diagnostics,
-      sessions: new Map([...normalizedSessions].map(([id, normalized]) => [id, { normalized }])),
+      sessions: normalizedSessions,
     };
     this.#aggregate = {
       inputs: linked.inputs,

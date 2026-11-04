@@ -17,14 +17,18 @@ import { SessionQueries } from "../repository/session-queries.js";
 import type { SessionSource } from "../source/session-source.js";
 import type { UpdateRevisionFactory } from "../updates/update-revision.js";
 import { createProcessUpdateRevisionFactory } from "../updates/update-revision.js";
+import { CatalogInteractionSessionReader } from "./interaction-session-reader.js";
 import type {
   InteractionSessionSnapshot,
   SessionMessagesRead,
   SessionReader,
 } from "./session-reader.js";
-import { assembleSessionResponse, type SessionInteractionReader } from "./session-response.js";
+import { assembleSessionResponse, type SessionInteractionDescriber } from "./session-response.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
+  /** Shared catalog; when supplied, it owns source refresh and freshness configuration. */
+  readonly store?: CatalogSnapshotStore;
+  readonly interaction?: SessionInteractionDescriber;
   readonly freshnessMs?: number;
   readonly now?: () => number;
   readonly runtime?: RuntimeReader;
@@ -38,10 +42,13 @@ export class SessionReadService implements SessionReader {
   readonly #queries: SessionQueries;
   readonly #mapper: SessionApiMapper;
   readonly #createRevision: UpdateRevisionFactory = createProcessUpdateRevisionFactory();
-  #interaction?: SessionInteractionReader;
+  readonly #interaction?: SessionInteractionDescriber;
+  readonly #interactionSessions: CatalogInteractionSessionReader;
 
   constructor(sources: readonly SessionSource[], options: SessionReadServiceDependencies = {}) {
     const {
+      store,
+      interaction,
       resolveDisplayTitle,
       homes,
       freshnessMs = DEFAULT_CATALOG_FRESHNESS_MS,
@@ -51,15 +58,15 @@ export class SessionReadService implements SessionReader {
     } = options;
     this.runtime = runtime;
     this.#mapper = new SessionApiMapper(resolveDisplayTitle, homes);
-    this.#store = new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
+    this.#store = store ?? new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
+    this.#interaction = interaction;
+    this.#interactionSessions = new CatalogInteractionSessionReader(this.#store);
     this.#queries = new SessionQueries();
   }
 
   async managementSnapshot() {
     const snapshot = await this.#store.refresh();
-    const byId = new Map(
-      [...snapshot.sessions].map(([id, value]) => [id, value.normalized.session]),
-    );
+    const byId = new Map([...snapshot.sessions].map(([id, value]) => [id, value.session]));
     return { sessions: [...byId.values()], byId };
   }
 
@@ -69,7 +76,7 @@ export class SessionReadService implements SessionReader {
 
   async list(): Promise<SessionListResponse> {
     const snapshot = await this.#store.current();
-    const sessions = [...snapshot.sessions.values()].map(({ normalized }) => normalized.session);
+    const sessions = [...snapshot.sessions.values()].map(({ session }) => session);
     if (!this.runtime) return this.#mapper.list(sessions);
     const states = await Promise.all(
       sessions.map((session) => this.runtime!.evaluate(session, false)),
@@ -115,16 +122,11 @@ export class SessionReadService implements SessionReader {
     };
   }
 
-  /** Bind the interaction describer once it is constructed; it depends on this service. */
-  bindInteraction(interaction: SessionInteractionReader): void {
-    this.#interaction = interaction;
-  }
-
   async #runtimeDetail(
     detail: SessionDetail,
     snapshot: Awaited<ReturnType<CatalogSnapshotStore["current"]>>,
   ) {
-    const normalized = snapshot.sessions.get(detail.id)!.normalized;
+    const normalized = snapshot.sessions.get(detail.id)!;
     const interactionSession: InteractionSessionSnapshot = {
       archived: normalized.session.archived,
       interaction: normalized.interaction ?? null,
@@ -138,14 +140,7 @@ export class SessionReadService implements SessionReader {
     return { ...interactionSession, observation };
   }
 
-  async getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null> {
-    const snapshot = await this.#store.current();
-    const normalized = snapshot.sessions.get(id)?.normalized;
-    return normalized === undefined
-      ? null
-      : {
-          archived: normalized.session.archived,
-          interaction: normalized.interaction ?? null,
-        };
+  getInteractionSession(id: SessionId): Promise<InteractionSessionSnapshot | null> {
+    return this.#interactionSessions.getInteractionSession(id);
   }
 }

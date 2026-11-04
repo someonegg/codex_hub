@@ -13,15 +13,15 @@ export class SessionQueries {
   // Published timeline records are immutable; release cached sizes with their records.
   readonly #itemBytes = new WeakMap<DomainTimelineRecord, number>();
   session(snapshot: CatalogSnapshot, id: string) {
-    return snapshot.sessions.get(id)?.normalized.session ?? null;
+    return snapshot.sessions.get(id)?.session ?? null;
   }
   messages(snapshot: CatalogSnapshot, id: string, query: { limit?: number; after?: number }) {
     validateItemQuery(query);
     if (query.after !== undefined && (!Number.isSafeInteger(query.after) || query.after < 0))
       throw new RepositoryQueryError("invalid_query", "after must be a nonnegative safe integer");
-    const versioned = snapshot.sessions.get(id);
-    if (!versioned) return null;
-    const timeline = versioned.normalized.timeline;
+    const normalized = snapshot.sessions.get(id);
+    if (!normalized) return null;
+    const timeline = normalized.timeline;
     const end = timeline.at(-1)?.ordinal ?? 0;
     if ((query.after ?? 0) > end)
       throw new RepositoryQueryError(
@@ -57,7 +57,7 @@ export class SessionQueries {
       bytes += size;
     }
     return {
-      session: versioned.normalized.session,
+      session: normalized.session,
       items,
       nextAfter: items.at(-1)?.ordinal ?? end,
       hasMore: index < timeline.length,

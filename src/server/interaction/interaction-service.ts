@@ -3,7 +3,10 @@ import type {
   InteractionResponse,
   TerminalPreviewFrame,
 } from "../../shared/api-contract.js";
-import type { InteractionSessionSnapshot, SessionReader } from "../application/session-reader.js";
+import type {
+  InteractionSessionReader,
+  InteractionSessionSnapshot,
+} from "../application/session-reader.js";
 import type {
   DomainAgentInteraction,
   InteractionBindingAttempt,
@@ -50,8 +53,6 @@ interface ResolvedBinding extends CheckedBinding {
   readonly bindingCommand: string;
   readonly keyBindings: NonNullable<InteractionSessionSnapshot["interaction"]>["keyBindings"];
 }
-
-type InteractionSessionReader = Pick<SessionReader, "getInteractionSession">;
 
 export interface SessionInteractionOptions {
   readonly enabled: boolean;

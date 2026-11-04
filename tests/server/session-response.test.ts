@@ -3,12 +3,14 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
+import { CatalogInteractionSessionReader } from "../../src/server/application/interaction-session-reader.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
+import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
@@ -40,11 +42,11 @@ async function setup() {
     manager,
   );
   const runtime = new SessionRuntime(transport, managers, bindings);
-  const reader = new SessionReadService([source], { runtime, diagnosticLogger: { log: () => {} } });
-  const initialPage = (await reader.messages(session.id, { limit: 300 }))!;
-  resolveDirectory.mockClear();
+  const store = new CatalogSnapshotStore([source], undefined, undefined, {
+    diagnosticLogger: { log: () => {} },
+  });
   const interaction = closeAfterEach(
-    new SessionInteractionService(reader, transport, {
+    new SessionInteractionService(new CatalogInteractionSessionReader(store), transport, {
       enabled: true,
       bindings,
       listener: createTestPreviewListener(),
@@ -52,8 +54,11 @@ async function setup() {
     }),
   );
 
+  const reader = new SessionReadService([source], { store, runtime, interaction });
+  const initialPage = (await reader.messages(session.id, { limit: 300 }))!;
+  resolveDirectory.mockClear();
   const updates = new SessionUpdatesService(reader);
-  reader.bindInteraction(interaction);
+
   const bind = (valid = true, ordinal = 1) =>
     bindings.submit({
       sessionId: session.id,

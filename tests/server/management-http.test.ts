@@ -1,5 +1,8 @@
 import { expect, it, vi } from "vitest";
 
+import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
+import { CatalogInteractionSessionReader } from "../../src/server/application/interaction-session-reader.js";
+import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
@@ -7,20 +10,31 @@ import { paneBindings } from "../../src/server/interaction/pane-binding-manager.
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { OperationService } from "../../src/server/management/operation-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
+import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
-import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
   const home = await createTempDirectory("management-http-");
-  const sessions = await createCodexSessionReadService(home);
-  const interaction = new SessionInteractionService(sessions, new TmuxInteractionService(), {
-    enabled: true,
-    bindings: paneBindings,
-    listener: createTestPreviewListener(),
+  const source = await createCodexSessionSource(home, paneBindings);
+  const store = new CatalogSnapshotStore([source]);
+  const interaction = new SessionInteractionService(
+    new CatalogInteractionSessionReader(store),
+    new TmuxInteractionService(),
+    {
+      enabled: true,
+      bindings: paneBindings,
+      listener: createTestPreviewListener(),
+    },
+  );
+  const sessions = new SessionReadService([source], {
+    store,
+    interaction,
+    resolveDisplayTitle: (session) => source.displayTitleFor(session),
+    homes: [{ nickname: "default" }],
   });
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
@@ -38,7 +52,6 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     { now: () => now },
   );
   const catalogService = new SessionCatalogService(sessions);
-  sessions.bindInteraction(interaction);
   const updates = new SessionUpdatesService(sessions);
   const { base: origin } = await startHttpServer(
     createApiRouter({ sessions, catalog: catalogService, interaction, operations, updates }),

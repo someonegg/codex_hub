@@ -1,10 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type {
-  SessionDetailResponse,
-  SessionHome,
-  SessionListResponse,
-} from "../../shared/api-contract.js";
+import type { SessionHome, SessionListResponse } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionStatus } from "../../shared/domain.js";
 import type { DomainSession } from "../domain/session-domain.js";
 
@@ -52,10 +48,6 @@ export class SessionApiMapper {
       projects: structure.projects,
       sessions: summaries,
     };
-  }
-
-  detail(result: DomainSession): Omit<SessionDetailResponse, "interaction" | "stateRevision"> {
-    return { session: this.sessionDetail(result) };
   }
 
   sessionDetail(session: DomainSession): SessionDetail {

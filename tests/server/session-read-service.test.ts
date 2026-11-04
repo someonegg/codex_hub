@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import { codexInteraction } from "../../src/server/adapters/codex/interaction-parser.js";
+import { CatalogInteractionSessionReader } from "../../src/server/application/interaction-session-reader.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import type {
@@ -15,6 +16,7 @@ import { PaneBindingManager } from "../../src/server/interaction/pane-binding-ma
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
+import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
 import type { SessionSource, SourceSessionEntry } from "../../src/server/source/session-source.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
@@ -353,9 +355,9 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     exitSteps: () => [],
   });
   const runtime = new SessionRuntime(transport, registry, bindings);
-  const reader = new SessionReadService([source], { runtime });
+  const store = new CatalogSnapshotStore([source]);
   const interaction = closeAfterEach(
-    new SessionInteractionService(reader, transport, {
+    new SessionInteractionService(new CatalogInteractionSessionReader(store), transport, {
       enabled: true,
       bindings,
       listener: createTestPreviewListener(),
@@ -363,8 +365,9 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     }),
   );
 
+  const reader = new SessionReadService([source], { store, runtime, interaction });
   const catalog = new SessionCatalogService(reader);
-  reader.bindInteraction(interaction);
+
   const updates = new SessionUpdatesService(reader, { probeIntervalMs: 2 });
   try {
     const live = await reader.list();

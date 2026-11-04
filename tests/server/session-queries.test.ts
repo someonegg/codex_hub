@@ -50,7 +50,7 @@ function snapshot(timeline: readonly DomainTimelineRecord[]): CatalogSnapshot {
   return {
     signature: "test",
     diagnostics: [],
-    sessions: new Map([[session.id, { normalized: { session, timeline } }]]),
+    sessions: new Map([[session.id, { session, timeline }]]),
   };
 }
 

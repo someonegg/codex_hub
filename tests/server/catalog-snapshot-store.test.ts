@@ -27,8 +27,8 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     const p1Id = idByTitle(snapshot, "Parent one");
     const p2Id = idByTitle(snapshot, "Parent two");
     const childId = idByTitle(snapshot, "Child");
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(p1Id);
-    expect(snapshot.sessions.get(p1Id)!.normalized.session.childIds).toEqual([childId]);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(p1Id);
+    expect(snapshot.sessions.get(p1Id)!.session.childIds).toEqual([childId]);
 
     const beforeReparent = normalizedReferences(snapshot);
     entries = [
@@ -38,18 +38,18 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     ];
     signature = "reparent";
     snapshot = await store.refresh();
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(p2Id);
-    expect(snapshot.sessions.get(p1Id)!.normalized.session.childIds).toEqual([]);
-    expect(snapshot.sessions.get(p2Id)!.normalized.session.childIds).toEqual([childId]);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(p2Id);
+    expect(snapshot.sessions.get(p1Id)!.session.childIds).toEqual([]);
+    expect(snapshot.sessions.get(p2Id)!.session.childIds).toEqual([childId]);
     expectChanged(snapshot, beforeReparent, [p1Id, p2Id, childId]);
 
     const beforeDelete = normalizedReferences(snapshot);
     entries = entries.filter((entry) => entry.localId !== "child");
     signature = "delete-child";
     snapshot = await store.refresh();
-    expect(snapshot.sessions.get(p2Id)!.normalized.session.childIds).toEqual([]);
+    expect(snapshot.sessions.get(p2Id)!.session.childIds).toEqual([]);
     expectChanged(snapshot, beforeDelete, [p2Id]);
-    expect(snapshot.sessions.get(p1Id)!.normalized).toBe(beforeDelete.get(p1Id));
+    expect(snapshot.sessions.get(p1Id)!).toBe(beforeDelete.get(p1Id));
   });
 
   it("relinks a child when its missing parent appears, disappears, and reappears", async () => {
@@ -64,26 +64,26 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     );
     let snapshot = await store.current();
     const childId = idByTitle(snapshot, "Child");
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBeNull();
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBeNull();
 
     entries = [...entries, sourceEntry("parent", parent, "native-parent")];
     signature = "parent-appears";
     snapshot = await store.refresh();
     const parentId = idByTitle(snapshot, "Parent");
-    const firstParent = snapshot.sessions.get(parentId)!.normalized;
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(parentId);
-    expect(snapshot.sessions.get(parentId)!.normalized.session.childIds).toEqual([childId]);
+    const firstParent = snapshot.sessions.get(parentId)!;
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(parentId);
+    expect(snapshot.sessions.get(parentId)!.session.childIds).toEqual([childId]);
 
     entries = entries.filter((entry) => entry.localId !== "parent");
     signature = "parent-deleted";
     snapshot = await store.refresh();
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBeNull();
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBeNull();
 
     entries = [...entries, sourceEntry("parent", parent, "native-parent")];
     signature = "parent-reappears";
     snapshot = await store.refresh();
-    expect(snapshot.sessions.get(parentId)!.normalized).not.toBe(firstParent);
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(parentId);
+    expect(snapshot.sessions.get(parentId)!).not.toBe(firstParent);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(parentId);
   });
 
   it("unlinks and recovers a child when its native parent identity becomes ambiguous", async () => {
@@ -103,22 +103,22 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     let snapshot = await store.current();
     const childId = idByTitle(snapshot, "Child");
     const parentId = idByTitle(snapshot, "Parent");
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(parentId);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(parentId);
 
     entries = [...entries, sourceEntry("duplicate", duplicateParent, "native-parent")];
     signature = "native-duplicate";
     snapshot = await store.refresh();
     const duplicateId = idByTitle(snapshot, "Duplicate parent");
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBeNull();
-    expect(snapshot.sessions.get(parentId)!.normalized.session.childIds).toEqual([]);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBeNull();
+    expect(snapshot.sessions.get(parentId)!.session.childIds).toEqual([]);
 
     const beforeRecovery = normalizedReferences(snapshot);
     entries = entries.filter((entry) => entry.localId !== "duplicate");
     signature = "native-unique-again";
     snapshot = await store.refresh();
     expect(snapshot.sessions.get(duplicateId)).toBeUndefined();
-    expect(snapshot.sessions.get(childId)!.normalized.session.parentId).toBe(parentId);
-    expect(snapshot.sessions.get(parentId)!.normalized.session.childIds).toEqual([childId]);
+    expect(snapshot.sessions.get(childId)!.session.parentId).toBe(parentId);
+    expect(snapshot.sessions.get(parentId)!.session.childIds).toEqual([childId]);
     expectChanged(snapshot, beforeRecovery, [childId, parentId]);
   });
 });
@@ -193,9 +193,7 @@ function normalizedSession(id: string, title: string): NormalizedSession {
 }
 
 function idByTitle(snapshot: CatalogSnapshot, title: string): DomainSessionId {
-  const matches = [...snapshot.sessions].filter(
-    ([, value]) => value.normalized.session.title === title,
-  );
+  const matches = [...snapshot.sessions].filter(([, value]) => value.session.title === title);
   if (matches.length !== 1) {
     throw new Error(`Expected one session titled ${title}, found ${matches.length}`);
   }
@@ -203,7 +201,7 @@ function idByTitle(snapshot: CatalogSnapshot, title: string): DomainSessionId {
 }
 
 function normalizedReferences(snapshot: CatalogSnapshot): Map<string, NormalizedSession> {
-  return new Map([...snapshot.sessions].map(([id, value]) => [id, value.normalized]));
+  return new Map(snapshot.sessions);
 }
 
 function expectChanged(
@@ -212,6 +210,6 @@ function expectChanged(
   ids: readonly string[],
 ): void {
   for (const id of ids) {
-    expect(snapshot.sessions.get(id)!.normalized).not.toBe(before.get(id));
+    expect(snapshot.sessions.get(id)!).not.toBe(before.get(id));
   }
 }
