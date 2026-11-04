@@ -10,7 +10,9 @@ rollouts. Successfully loaded archives reuse cached content; directory discovery
 is unchanged. See the [cache rules](../technical-reference.md) for details.
 
 Current reader scope: timeline paging uses ordinal offsets rather than signed
-cursors or a repository prefix index. See the [reader contract](../technical-reference.md#reader-and-automatic-updates).
+cursors or a repository prefix index, and tool pairing is no longer retained.
+[ADR-0025](0025-unify-session-reading-on-ordinal-messages.md) replaces those reader
+and normalization guarantees below. See the [reader contract](../technical-reference.md#reader-and-automatic-updates).
 
 ## Context and Problem Statement
 
@@ -37,7 +39,8 @@ Chosen option: "Validate two bounded probes, incrementally decode and derive app
 Use bounded probe validation to reuse a decoded prefix and process only appended
 complete records. Rebuild the whole file whenever validation or derivation is
 uncertain. Publish copy-on-write snapshots so append optimization does not mutate
-previous generations or weaken timeline-prefix continuity.
+previous generations. Reader continuity follows ADR-0025 rather than historical
+prefix validation.
 
 The [current cache contract](../technical-reference.md#discovery-and-caching)
 defines probes and fallback conditions; the
@@ -48,7 +51,7 @@ and reference-reuse details.
 ### Positive Consequences
 
 - Normal append reads and decodes only two probes, the unfinished tail, and appended bytes.
-- Tool output and user-input responses can pair with calls or requests from earlier refreshes.
+- User-input responses can pair with requests from earlier refreshes.
 - Stable item ordinals allow readers to continue after an append; offsets beyond the current timeline require recovery after a rewrite.
 - Parser or normalizer version changes, truncation, and common replacements recover automatically through full rebuild.
 - Restart behavior remains simple because checkpoints are process-local and disposable.
@@ -56,7 +59,7 @@ and reference-reuse details.
 ### Negative Consequences
 
 - Two 4 KiB probes are heuristic, not a proof that every historical byte is unchanged; a middle rewrite that preserves both probe regions and then appends may be missed.
-- Decoder, identity, normalization, and prefix derivation now maintain versioned copy-on-write state and require more boundary tests.
+- Decoder, identity, and normalization maintain versioned copy-on-write state and require more boundary tests.
 - An unfinished oversized line may be reread on every refresh until its newline arrives.
 - A process restart still requires a complete decode and derivation.
 

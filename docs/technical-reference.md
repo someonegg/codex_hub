@@ -464,7 +464,7 @@ external-change scan or filesystem/tmux atomicity. Native commands use owning
 | Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.           |
 | Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks. |
 | Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                |
-| Delete    | Native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds.                                                                 |
+| Delete    | No prior archive or automatic exit; native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds.                             |
 
 Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
 `--worktree`/`--yolo` (off by default), and initial binding instruction. Resume uses
