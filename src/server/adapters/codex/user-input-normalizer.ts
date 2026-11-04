@@ -4,8 +4,9 @@ import type {
   DomainUserInputRecord,
 } from "../../domain/session-domain.js";
 import { MAX_PREVIEW_CHARS, truncateText } from "../../domain/session-text.js";
+import type { ToolOutput } from "./response-item-parser.js";
 import { isObject } from "./rollout-decoder.js";
-import type { ToolOutput } from "./tool-normalizer.js";
+import { nonEmptyString } from "./value-readers.js";
 
 export interface UserInputRequest {
   readonly callId: string;
@@ -83,13 +84,13 @@ export function parseUserInputQuestions(value: unknown): readonly DomainUserInpu
 function parseQuestion(value: unknown): DomainUserInputQuestion | null {
   if (!isObject(value) || !Array.isArray(value.options)) return null;
   if (value.options.length < 2 || value.options.length > 3) return null;
-  const id = string(value.id);
-  const header = string(value.header);
-  const question = string(value.question);
+  const id = nonEmptyString(value.id);
+  const header = nonEmptyString(value.header);
+  const question = nonEmptyString(value.question);
   const options = value.options.map((option) => {
     if (!isObject(option)) return null;
-    const label = string(option.label);
-    const description = string(option.description);
+    const label = nonEmptyString(option.label);
+    const description = nonEmptyString(option.description);
     return label === null || description === null ? null : { label, description };
   });
   if (
@@ -141,8 +142,4 @@ function parseObject(value: unknown): Record<string, unknown> | null {
   } catch {
     return null;
   }
-}
-
-function string(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
 }

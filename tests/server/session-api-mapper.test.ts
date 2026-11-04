@@ -20,7 +20,6 @@ const session = domainSession({
   updatedAt: "2026-07-28T01:00:00Z",
   childIds: ["child"],
   agent: { taskName: "task", nickname: null, role: "worker" },
-  messageCount: 1,
   warningCount: 1,
   diagnostics: [
     {
@@ -30,7 +29,6 @@ const session = domainSession({
       ordinal: 2,
     },
   ],
-  itemCount: 1,
 });
 
 describe("session API mapping", () => {
@@ -47,13 +45,13 @@ describe("session API mapping", () => {
       isChild: false,
       updatedAt: session.updatedAt,
     });
-    const detail = mapper.detail(session);
-    detail.session.childIds.push("mutated");
-    expect(detail.session).not.toHaveProperty("diagnostics");
-    expect(detail.session).not.toHaveProperty("warningCount");
+    const detail = mapper.sessionDetail(session);
+    detail.childIds.push("mutated");
+    expect(detail).not.toHaveProperty("diagnostics");
+    expect(detail).not.toHaveProperty("warningCount");
     expect(session.childIds).toEqual(["child"]);
     expect(session.diagnostics[0]!.message).toBe("Partial");
-    expect(detail.session.origin).not.toBe(session.origin);
+    expect(detail.origin).not.toBe(session.origin);
   });
 
   it("excludes child-only projects while retaining child sessions in the catalog", () => {
@@ -82,11 +80,11 @@ describe("session API mapping", () => {
 
   it("resolves display titles consistently and falls back to the original title", () => {
     const mapper = new SessionApiMapper(() => "Index title");
-    const detail = mapper.detail(session).session;
+    const detail = mapper.sessionDetail(session);
     expect(mapper.list([session]).sessions[0]!.title).toBe("Index title");
     expect(detail.title).toBe("Index title");
     expect(detail).not.toHaveProperty("nickname");
-    expect(new SessionApiMapper().detail(session).session.title).toBe(session.title);
+    expect(new SessionApiMapper().sessionDetail(session).title).toBe(session.title);
   });
 
   it("hashes resolved titles and effective status while excluding timestamps", () => {

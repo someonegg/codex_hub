@@ -14,7 +14,7 @@ import { join } from "node:path";
 // Requires a running client server, playwright-cli, and Python with Pillow.
 const { origin, output, language } = docsOptions("docs/images/ahub-intro.gif");
 const frames = await mkdtemp(join(tmpdir(), "ahub-intro-"));
-const browserSession = `intro-${Date.now()}`;
+const browserSession = `intro-${language}-${Date.now()}`;
 
 async function record(
   page,
@@ -53,17 +53,16 @@ async function record(
   let stage = 0;
   const session = () => ({
     ...docsSession,
-    id: "demo-session",
+    id: "docs-demo-intro-session-000001",
     title: label("Improve the project dashboard"),
     messageCount: stage,
-    itemCount: stage === 2 ? 4 : stage,
   });
   const interaction = connectedInteraction;
   const items = () =>
     [
       {
         id: "prompt",
-        ordinal: 0,
+        ordinal: 1,
         timestamp,
         kind: "message",
         role: "user",
@@ -73,7 +72,7 @@ async function record(
       },
       {
         id: "reply",
-        ordinal: 3,
+        ordinal: 4,
         timestamp,
         kind: "message",
         role: "assistant",
@@ -83,12 +82,19 @@ async function record(
       },
     ]
       .slice(0, stage)
-      .flatMap((item) => (item.id === "reply" ? [...docsUserInput, item] : [item]));
+      .flatMap((item) =>
+        item.id === "reply"
+          ? [
+              ...docsUserInput.map((question) => ({ ...question, ordinal: question.ordinal + 1 })),
+              item,
+            ]
+          : [item],
+      );
   const snapshot = () => ({
     session: session(),
     interaction,
-    cursor: "demo-cursor",
-    updateRevision: String(stage),
+    nextAfter: items().at(-1)?.ordinal ?? 0,
+    stateRevision: String(stage),
     hasMore: false,
   });
   await context.route("**/api/v1/**", async (route) => {
@@ -110,7 +116,7 @@ async function record(
           operationId: "demo-create",
           type: "create",
           status: "succeeded",
-          sessionId: "demo-session",
+          sessionId: "docs-demo-intro-session-000001",
           phase: null,
           attachCommand: null,
           createdAt: timestamp,
@@ -135,13 +141,15 @@ async function record(
           : [],
       });
     }
-    if (path.endsWith("/items")) return json({ ...snapshot(), items: items() });
-    if (path.endsWith("/updates")) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-      if (url.searchParams.get("after") === String(stage)) {
+    if (path.endsWith("/messages") && route.request().method() === "GET") {
+      if (url.searchParams.get("wait") === "true")
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      if (url.searchParams.get("stateRevision") === String(stage))
         return route.fulfill({ status: 204 });
-      }
-      return json({ ...snapshot(), hasMore: true });
+      return json({
+        ...snapshot(),
+        items: items().filter((item) => item.ordinal > Number(url.searchParams.get("after") ?? 0)),
+      });
     }
     if (path.endsWith("/messages") && route.request().method() === "POST") {
       if (route.request().postDataJSON().message !== prompt) throw new Error("Unexpected prompt");

@@ -1,9 +1,8 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type {
   DomainSession,
   DomainTimelineRecord,
-  NormalizedSession,
 } from "../../src/server/domain/session-domain.js";
 import type { CatalogSnapshot } from "../../src/server/repository/catalog-snapshot-store.js";
 import {
@@ -11,7 +10,6 @@ import {
   RepositoryQueryError,
   SessionQueries,
 } from "../../src/server/repository/session-queries.js";
-import { deriveTimelinePrefixIndex } from "../../src/server/repository/timeline-prefix-index.js";
 
 const session: DomainSession = {
   id: "session",
@@ -32,13 +30,10 @@ const session: DomainSession = {
   parentId: null,
   childIds: [],
   agent: null,
-  messageCount: 0,
-  toolCount: 0,
   warningCount: 0,
-  itemCount: 0,
   diagnostics: [],
 };
-const key = new Uint8Array(32);
+
 function message(index: number): Extract<DomainTimelineRecord, { kind: "message" }> {
   return {
     id: `item-${index}`,
@@ -51,41 +46,41 @@ function message(index: number): Extract<DomainTimelineRecord, { kind: "message"
     markdown: "text",
   };
 }
-function normalized(timeline: readonly DomainTimelineRecord[]): NormalizedSession {
-  return {
-    session,
-    timeline,
-    toolDetails: new Map(),
-    directiveDetails: new Map(),
-    internalDetails: new Map(),
-  };
-}
-function snapshot(value: NormalizedSession): CatalogSnapshot {
+function snapshot(timeline: readonly DomainTimelineRecord[]): CatalogSnapshot {
   return {
     signature: "test",
     diagnostics: [],
-    sessions: new Map([
-      [
-        session.id,
-        { normalized: value, timelinePrefixIndex: deriveTimelinePrefixIndex(value, key) },
-      ],
-    ]),
+    sessions: new Map([[session.id, { session, timeline }]]),
   };
+}
+
+function countedTimeline(length: number, onRead: () => void): DomainTimelineRecord[] {
+  return new Proxy(
+    Array.from({ length }, (_, index) => message(index)),
+    {
+      get(target, property, receiver) {
+        if (typeof property === "string" && /^\d+$/.test(property)) onRead();
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
 }
 
 it("reads empty timelines and noncontiguous ordinals across first, middle, last and empty pages", () => {
   const queries = new SessionQueries();
-  expect(queries.items(snapshot(normalized([])), session.id, {})?.context.hasMore).toBe(false);
-  const state = snapshot(normalized(Array.from({ length: 5 }, (_, index) => message(index))));
-  const first = queries.items(state, session.id, { limit: 2 })!;
-  const middle = queries.items(state, session.id, { limit: 2, cursor: first.context.cursor })!;
-  const last = queries.items(state, session.id, { limit: 2, cursor: middle.context.cursor })!;
+  expect(queries.messages(snapshot([]), session.id, {})?.hasMore).toBe(false);
+  const state = snapshot(Array.from({ length: 5 }, (_, index) => message(index)));
+  const first = queries.messages(state, session.id, { after: 0, limit: 2 })!;
+  const middle = queries.messages(state, session.id, { limit: 2, after: first.nextAfter })!;
+  const last = queries.messages(state, session.id, { limit: 2, after: middle.nextAfter })!;
   expect(first.items.map((item) => item.ordinal)).toEqual([1, 4]);
   expect(middle.items.map((item) => item.ordinal)).toEqual([7, 10]);
   expect(last.items.map((item) => item.ordinal)).toEqual([13]);
-  expect(last.context.hasMore).toBe(false);
-  expect(queries.items(state, session.id, { cursor: last.context.cursor })).toEqual({
-    context: last.context,
+  expect(last.hasMore).toBe(false);
+  expect(queries.messages(state, session.id, { after: last.nextAfter })).toEqual({
+    session: last.session,
+    nextAfter: last.nextAfter,
+    hasMore: false,
     items: [],
   });
 });
@@ -93,22 +88,14 @@ it("reads empty timelines and noncontiguous ordinals across first, middle, last 
 it("bounds deep-page array reads to binary searches plus this page", () => {
   const queries = new SessionQueries();
   let reads = 0;
-  const timeline = new Proxy(
-    Array.from({ length: 10_000 }, (_, index) => message(index)),
-    {
-      get(target, property, receiver) {
-        if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-        return Reflect.get(target, property, receiver);
-      },
-    },
-  );
-  const state = snapshot(normalized(timeline));
-  let cursor: string | undefined;
+  const timeline = countedTimeline(10_000, () => reads++);
+  const state = snapshot(timeline);
+  let after = 0;
   for (let index = 0; index < 30; index++) {
-    cursor = queries.items(state, session.id, { limit: 300, cursor })!.context.cursor;
+    after = queries.messages(state, session.id, { limit: 300, after })!.nextAfter;
   }
   reads = 0;
-  const page = queries.items(state, session.id, { limit: 10, cursor })!;
+  const page = queries.messages(state, session.id, { limit: 10, after })!;
   expect(page.items[0]?.id).toBe("item-9000");
   expect(page.items).toHaveLength(10);
   expect(reads).toBeLessThan(100);
@@ -120,137 +107,20 @@ it("honors the byte budget while returning a single oversized item", () => {
     ...message(0),
     markdown: "x".repeat(MAX_ITEM_PAGE_BYTES),
   } as DomainTimelineRecord;
-  const state = snapshot(normalized([large, message(1)]));
-  const first = queries.items(state, session.id, { limit: 2 })!;
+  const state = snapshot([large, message(1)]);
+  const first = queries.messages(state, session.id, { after: 0, limit: 2 })!;
   expect(first.items).toEqual([large]);
-  expect(first.context.hasMore).toBe(true);
-  expect(queries.items(state, session.id, { cursor: first.context.cursor })?.items).toEqual([
+  expect(first.hasMore).toBe(true);
+  expect(queries.messages(state, session.id, { after: first.nextAfter })?.items).toEqual([
     message(1),
   ]);
-});
-
-it("builds the detail index lazily once per immutable normalized session", () => {
-  const queries = new SessionQueries();
-  let reads = 0;
-  const items: DomainTimelineRecord[] = Array.from({ length: 1_000 }, (_, index) => message(index));
-  items.push({
-    kind: "directive",
-    id: "detail",
-    ordinal: 3_001,
-    timestamp: null,
-    hasDetail: true,
-    summary: "Detail",
-    charCount: 4,
-  });
-  const timeline = new Proxy(items, {
-    get(target, property, receiver) {
-      if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-      return Reflect.get(target, property, receiver);
-    },
-  });
-  const value = {
-    ...normalized(timeline),
-    directiveDetails: new Map([["detail", { text: "full", truncated: false }]]),
-  };
-  const state = snapshot(value);
-  let cursor: string | undefined;
-  for (let index = 0; index < 4; index++)
-    cursor = queries.items(state, session.id, { limit: 300, cursor })!.context.cursor;
-  reads = 0;
-  expect(queries.directiveDetail(state, session.id, "detail", { cursor: cursor! })?.detail).toEqual(
-    { text: "full", truncated: false },
-  );
-  expect(reads).toBeGreaterThanOrEqual(items.length);
-  reads = 0;
-  queries.directiveDetail(state, session.id, "detail", { cursor: cursor! });
-  expect(reads).toBeLessThan(50);
-  const early = queries.items(state, session.id, { limit: 1 })!;
-  expect(() =>
-    queries.directiveDetail(state, session.id, "detail", { cursor: early.context.cursor }),
-  ).toThrow(/does not confirm/);
-  expect(queries.toolDetail(state, session.id, "detail", { cursor: cursor! })).toBeNull();
-  const changedKind = snapshot({
-    ...value,
-    timeline: [...items.slice(0, -1), { ...message(1_000), id: "detail" }],
-  });
-  const replacementCursor = queries.items(changedKind, session.id, { limit: 1 })!.context.cursor;
-  expect(
-    queries.directiveDetail(changedKind, session.id, "detail", { cursor: replacementCursor }),
-  ).toBeNull();
-  // A replacement snapshot receives its own index; an append preserves cursor continuity.
-  const appended = snapshot({ ...value, timeline: [...items, message(1_001)] });
-  expect(queries.items(appended, session.id, { cursor })?.items).toHaveLength(1);
-  const replaced = snapshot({
-    ...value,
-    timeline: [{ ...message(0), id: "replacement" }, ...items.slice(1)],
-  });
-  expect(() => queries.items(replaced, session.id, { cursor })).toThrow(/prefix/);
-});
-
-it("reads visible messages and structured user input with raw ordinal boundaries", () => {
-  const queries = new SessionQueries();
-  const timeline: DomainTimelineRecord[] = [
-    { ...message(0), role: "assistant", phase: "update", itemType: "plan" },
-    { id: "hidden", ordinal: 2, timestamp: null, kind: "internal", eventType: "event" },
-    {
-      id: "question",
-      ordinal: 4,
-      timestamp: null,
-      kind: "user_input",
-      stage: "request",
-      callId: "call",
-      questions: [
-        {
-          id: "q",
-          header: "Choice",
-          question: "Which?",
-          options: [{ label: "A", description: "First" }],
-        },
-      ],
-    },
-    {
-      id: "answer",
-      ordinal: 7,
-      timestamp: null,
-      kind: "user_input",
-      stage: "response",
-      callId: "call",
-      outcome: "answered",
-      answers: [{ questionId: "q", answers: ["A"] }],
-    },
-    { id: "hidden-end", ordinal: 10, timestamp: null, kind: "internal", eventType: "event" },
-  ];
-  const state = snapshot(normalized(timeline));
-  expect(queries.messages(state, session.id, { limit: 2 })).toMatchObject({
-    items: timeline.slice(2, 4),
-    nextAfter: 10,
-    hasMore: false,
-  });
-  const first = queries.messages(state, session.id, { after: 0, limit: 1 })!;
-  expect(first).toMatchObject({ items: [timeline[0]], nextAfter: 2, hasMore: true });
-  const second = queries.messages(state, session.id, { after: first.nextAfter, limit: 1 })!;
-  expect(second).toMatchObject({ items: [timeline[2]], nextAfter: 4, hasMore: true });
-  expect(queries.messages(state, session.id, { after: 7 })).toMatchObject({
-    items: [],
-    nextAfter: 10,
-    hasMore: false,
-  });
-  expect(() => queries.messages(state, session.id, { after: 11 })).toThrow("range");
-  expect(() => queries.messages(state, session.id, { after: -1 })).toThrow();
-  expect(() => queries.messages(state, session.id, { limit: 301 })).toThrow();
-  expect(queries.messages(state, "missing", {})).toBeNull();
-  expect(queries.messages(snapshot(normalized([])), session.id, {})).toMatchObject({
-    items: [],
-    nextAfter: 0,
-    hasMore: false,
-  });
 });
 
 it("messages honors the byte budget without truncating visible bodies or skipping records", () => {
   const queries = new SessionQueries();
   const large = { ...message(0), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES - 500) };
   const next = { ...message(1), markdown: "y".repeat(1000) };
-  const state = snapshot(normalized([large, next]));
+  const state = snapshot([large, next]);
   const first = queries.messages(state, session.id, { after: 0, limit: 10 })!;
   expect(first.items).toEqual([large]);
   expect(first.hasMore).toBe(true);
@@ -259,16 +129,8 @@ it("messages honors the byte budget without truncating visible bodies or skippin
 
 it("messages skips unrelated history for latest and after reads", () => {
   let reads = 0;
-  const timeline = new Proxy(
-    Array.from({ length: 10_000 }, (_, index) => message(index)),
-    {
-      get(target, property, receiver) {
-        if (typeof property === "string" && /^\d+$/.test(property)) reads++;
-        return Reflect.get(target, property, receiver);
-      },
-    },
-  );
-  const state = snapshot(normalized(timeline));
+  const timeline = countedTimeline(10_000, () => reads++);
+  const state = snapshot(timeline);
   const queries = new SessionQueries();
   reads = 0;
   const latest = queries.messages(state, session.id, {})!;
@@ -283,75 +145,22 @@ it("messages skips unrelated history for latest and after reads", () => {
   expect(reads).toBeLessThan(30);
 });
 
-it("messages handles hidden timelines, sparse boundaries and exact end reads", () => {
-  const hidden: DomainTimelineRecord = {
-    id: "hidden",
-    ordinal: 100,
-    timestamp: null,
-    kind: "internal",
-    eventType: "event",
-  };
+it("defaults to 10 messages and accepts the maximum page length", () => {
   const queries = new SessionQueries();
-  const state = snapshot(normalized([hidden]));
-  for (const query of [{}, { after: 0 }, { after: 50 }, { after: 100 }]) {
-    expect(queries.messages(state, session.id, query)).toMatchObject({
-      items: [],
-      nextAfter: 100,
-      hasMore: false,
-    });
-  }
-  const visible = snapshot(normalized([message(0), message(1), hidden]));
-  expect(queries.messages(visible, session.id, { after: 2, limit: 1 })).toMatchObject({
-    items: [message(1)],
-    nextAfter: 100,
-    hasMore: false,
-  });
-  expect(queries.messages(visible, session.id, { after: 100 })!.items).toEqual([]);
-  for (const after of [NaN, Infinity, 0.5, Number.MAX_SAFE_INTEGER + 1])
-    expect(() => queries.messages(visible, session.id, { after })).toThrow();
-});
-
-it("messages latest byte pagination follows through hidden gaps and oversized records", () => {
-  const timeline: DomainTimelineRecord[] = [
-    message(0),
-    { ...message(1), markdown: "x".repeat(MAX_ITEM_PAGE_BYTES) },
-    { id: "gap", ordinal: 5, timestamp: null, kind: "internal", eventType: "event" },
-    message(2),
-    message(3),
-    { id: "tail", ordinal: 20, timestamp: null, kind: "internal", eventType: "event" },
-  ];
-  const queries = new SessionQueries();
-  const state = snapshot(normalized(timeline));
-  let page = queries.messages(state, session.id, { limit: 3 })!;
-  expect(page.items).toEqual([timeline[1]]);
-  expect(page.nextAfter).toBe(5);
-  const collected = [...page.items];
-  while (page.hasMore) {
-    page = queries.messages(state, session.id, { after: page.nextAfter, limit: 1 })!;
-    collected.push(...page.items);
-  }
-  expect(collected).toEqual([timeline[1], timeline[3], timeline[4]]);
-  expect(page.nextAfter).toBe(20);
-});
-
-it("defaults to 100 items and accepts the maximum page length", () => {
-  const queries = new SessionQueries();
-  const state = snapshot(normalized(Array.from({ length: 301 }, (_, index) => message(index))));
-  expect(queries.items(state, session.id, {})!.items).toHaveLength(100);
-  const maximum = queries.items(state, session.id, { limit: 300 })!;
+  const state = snapshot(Array.from({ length: 301 }, (_, index) => message(index)));
+  expect(queries.messages(state, session.id, {})!.items).toHaveLength(10);
+  const maximum = queries.messages(state, session.id, { after: 0, limit: 300 })!;
   expect(maximum.items).toHaveLength(300);
-  expect(maximum.context.hasMore).toBe(true);
-  expect(queries.items(state, session.id, { cursor: maximum.context.cursor })!.items).toEqual([
+  expect(maximum.hasMore).toBe(true);
+  expect(queries.messages(state, session.id, { after: maximum.nextAfter })!.items).toEqual([
     message(300),
   ]);
 });
 
 it.each([0, 301, 1.5, NaN])("rejects invalid item limit %s", (limit) => {
   const queries = new SessionQueries();
-  expect(() => queries.items(snapshot(normalized([])), session.id, { limit })).toThrow(
-    RepositoryQueryError,
-  );
-  expect(() => queries.items(snapshot(normalized([])), session.id, { limit })).toThrow(
+  expect(() => queries.messages(snapshot([]), session.id, { limit })).toThrow(RepositoryQueryError);
+  expect(() => queries.messages(snapshot([]), session.id, { limit })).toThrow(
     expect.objectContaining({ code: "invalid_query" }),
   );
 });
@@ -362,18 +171,38 @@ it("fills byte-bounded pages and reads every long UTF-8 message exactly once", (
     ...message(index),
     markdown: "界".repeat(333_333),
   }));
-  const state = snapshot(normalized(timeline));
-  const first = queries.items(state, session.id, { limit: 200 })!;
-  const second = queries.items(state, session.id, { limit: 200, cursor: first.context.cursor })!;
-  const last = queries.items(state, session.id, { limit: 200, cursor: second.context.cursor })!;
+  const state = snapshot(timeline);
+  const first = queries.messages(state, session.id, { after: 0, limit: 200 })!;
+  const second = queries.messages(state, session.id, { limit: 200, after: first.nextAfter })!;
+  const last = queries.messages(state, session.id, { limit: 200, after: second.nextAfter })!;
   expect(first.items).toHaveLength(4);
   expect(second.items).toHaveLength(4);
   expect(last.items).toHaveLength(2);
-  expect(first.context.hasMore).toBe(true);
-  expect(second.context.hasMore).toBe(true);
-  expect(last.context.hasMore).toBe(false);
+  expect(first.hasMore).toBe(true);
+  expect(second.hasMore).toBe(true);
+  expect(last.hasMore).toBe(false);
   expect(Buffer.byteLength(JSON.stringify(first.items))).toBeLessThanOrEqual(
     MAX_ITEM_PAGE_BYTES + 2,
   );
   expect([...first.items, ...second.items, ...last.items]).toEqual(timeline);
+});
+
+it("reuses exact byte sizes across immutable snapshots without retaining stale item sizes", () => {
+  const queries = new SessionQueries();
+  const first = message(0);
+  const next = message(1);
+  const stringify = vi.spyOn(JSON, "stringify");
+  try {
+    queries.messages(snapshot([first]), session.id, { after: 0 });
+    queries.messages(snapshot([first, next]), session.id, { after: 0 });
+    expect(stringify.mock.calls.filter(([value]) => value === first)).toHaveLength(1);
+    const rewritten = { ...first, markdown: "界".repeat(MAX_ITEM_PAGE_BYTES) };
+    const page = queries.messages(snapshot([rewritten, next]), session.id, {
+      after: 0,
+    })!;
+    expect(page.items).toEqual([rewritten]);
+    expect(page.hasMore).toBe(true);
+  } finally {
+    stringify.mockRestore();
+  }
 });

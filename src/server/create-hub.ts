@@ -1,5 +1,6 @@
 import { createCodexSessionSource } from "./adapters/codex/codex-session-source.js";
 import { createCodexSessionManager } from "./adapters/codex/session-manager.js";
+import { CatalogInteractionSessionReader } from "./application/interaction-session-reader.js";
 import { SessionReadService } from "./application/session-read-service.js";
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
 import type { CodexHomeConfig } from "./config.js";
@@ -9,6 +10,7 @@ import { SessionRuntime } from "./interaction/session-runtime.js";
 import { TmuxInteractionService } from "./interaction/tmux-service.js";
 import { OperationService } from "./management/operation-service.js";
 import { SessionManagerRegistry } from "./management/session-manager.js";
+import { CatalogSnapshotStore } from "./repository/catalog-snapshot-store.js";
 import { SessionUpdatesService } from "./updates/session-updates-service.js";
 import type { UploadCleanup } from "./uploads/store.js";
 
@@ -37,18 +39,25 @@ export async function createCodexHub({
   );
   const transport = new TmuxInteractionService();
   const runtime = new SessionRuntime(transport, managers, paneBindings);
+  const store = new CatalogSnapshotStore(sources);
+  const interaction = new SessionInteractionService(
+    new CatalogInteractionSessionReader(store),
+    transport,
+    {
+      enabled: interactionEnabled,
+      bindings: paneBindings,
+      runtime,
+    },
+  );
   const sessions = new SessionReadService(sources, {
     runtime,
+    store,
+    interaction,
     resolveDisplayTitle: (session) =>
       sources
         .find((source) => source.descriptor.home === session.origin.home)
         ?.displayTitleFor(session) ?? null,
     homes: sources.map((source) => ({ nickname: source.descriptor.home })),
-  });
-  const interaction = new SessionInteractionService(sessions, transport, {
-    enabled: interactionEnabled,
-    bindings: paneBindings,
-    runtime,
   });
   const cleanup: (() => void)[] = [() => interaction.close()];
   let closed = false;
@@ -60,7 +69,7 @@ export async function createCodexHub({
   try {
     const catalog = new SessionCatalogService(sessions);
     cleanup.push(() => catalog.close());
-    const updates = new SessionUpdatesService(sessions, { interaction });
+    const updates = new SessionUpdatesService(sessions);
     cleanup.push(() => updates.close());
     const operations = new OperationService(sessions, interaction, managers, {
       bindings: paneBindings,

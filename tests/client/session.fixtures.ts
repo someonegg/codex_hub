@@ -1,23 +1,10 @@
-import type {
-  ItemPageResponse,
-  TimelineCursor,
-  UpdateRevision,
-} from "../../src/shared/api-contract";
-import type {
-  DirectiveItem as Directive,
-  SessionDetail,
-  ToolItem as Tool,
-} from "../../src/shared/domain";
-
+import type { SessionMessagesResponse, UpdateRevision } from "../../src/shared/api-contract";
+import type { SessionDetail } from "../../src/shared/domain";
 export const SESSION_ID = "abcdefghijklmnopqrstuvwx";
 export const CHILD_ID = "zyxwvutsrqponmlkjihgfedc";
-export const TIMELINE_CURSOR = "opaque.timeline.cursor" as TimelineCursor;
-export const NEXT_TIMELINE_CURSOR = "opaque.timeline.next" as TimelineCursor;
-export const UPDATE_REVISION = "opaque.updates.revision" as UpdateRevision;
-
+export const UPDATE_REVISION = "a".repeat(43) as UpdateRevision;
 export const baseSession: SessionDetail = {
   sourceId: "original-session-id",
-  itemCount: 3,
   id: SESSION_ID,
   title: "Reader work",
   workingDirectory: "/project/reader",
@@ -36,8 +23,6 @@ export const baseSession: SessionDetail = {
   parentId: null,
   childIds: [],
   agent: null,
-  messageCount: 2,
-  toolCount: 1,
 };
 
 export const listBody = {
@@ -58,43 +43,20 @@ export const listBody = {
   projects: [{ directory: "/project/reader" }],
 };
 
-export function readContext(cursor: TimelineCursor = TIMELINE_CURSOR, hasMore = true) {
+export function readContext(nextAfter = 0, hasMore = true) {
   return {
-    cursor,
+    nextAfter,
     session: baseSession,
     hasMore,
-    updateRevision: UPDATE_REVISION,
+    stateRevision: UPDATE_REVISION,
   };
 }
 
-export const toolItem: Tool = {
-  kind: "tool",
-  stage: "output",
-  id: "tool-2",
-  ordinal: 2,
-  timestamp: null,
-  callId: "call-reader",
-  toolName: "exec",
-  status: "completed",
-  preview: "inspect",
-  charCount: 7,
-  hasDetail: true,
-};
-
-export const directiveItem: Directive = {
-  kind: "directive",
-  id: "directive-4",
-  ordinal: 4,
-  timestamp: null,
-  summary: "AGENTS.md instructions",
-  charCount: 1_892,
-  hasDetail: true,
-};
-
-export const firstPage: ItemPageResponse = {
+export const firstPage: SessionMessagesResponse = {
   ...readContext(),
+  live: false,
   interaction: { supported: false, attachCommand: null },
-  updateRevision: UPDATE_REVISION,
+  stateRevision: UPDATE_REVISION,
   items: [
     {
       kind: "message",
@@ -106,7 +68,6 @@ export const firstPage: ItemPageResponse = {
       itemType: null,
       markdown: "Hello",
     },
-    toolItem,
   ],
 };
 

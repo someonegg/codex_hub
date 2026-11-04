@@ -190,15 +190,19 @@ it("does not wake automatic updates when session or source diagnostics change", 
   );
   const updates = new SessionUpdatesService(reader, { probeIntervalMs: 1, waitTimeoutMs: 8 });
   try {
-    const page = await reader.getItems(id, {});
+    const page = await reader.messages(id, {});
     const initial = await updates.wait(id, {
-      cursor: page!.cursor,
-      after: "a".repeat(43) as never,
+      after: page!.nextAfter,
+      stateRevision: "a".repeat(43) as never,
     });
     snapshot = { signature: "2", sessions: [entry([warning])], diagnostics: [warning] };
     await reader.refresh();
     expect(
-      await updates.wait(id, { cursor: page!.cursor, after: initial!.updateRevision }),
+      await updates.wait(id, {
+        after: page!.nextAfter,
+        wait: true,
+        stateRevision: initial!.stateRevision,
+      }),
     ).toBeNull();
   } finally {
     updates.close();

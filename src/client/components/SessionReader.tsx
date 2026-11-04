@@ -1,16 +1,9 @@
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { InteractionResponse } from "../../shared/api-contract";
-import type { TimelineItem } from "../../shared/domain";
+import type { SessionMessagesResponse } from "../../shared/api-contract";
 
 import { t } from "../i18n";
-import type { ReaderContext } from "../state/session-reader-state";
-import {
-  filterVisibleTimelineItems,
-  type TimelineVisibility,
-  type TimelineVisibilityKey,
-} from "../state/timeline-visibility";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { PageJumpControls } from "./PageJumpControls";
@@ -26,18 +19,10 @@ interface SessionReaderProps {
   management?: ReactNode;
   onNavigate?: (sessionId: string) => void;
   related?: ReactNode;
-  context: ReaderContext;
-  items: TimelineItem[];
-  interaction: InteractionResponse | null;
-  visibility: TimelineVisibility;
-  onVisibilityChange: (key: TimelineVisibilityKey, visible: boolean) => void;
+  context: SessionMessagesResponse;
   readerLoading: boolean;
   readerBusy: boolean;
   onLoadMore: () => void;
-  onTimelineConflict: () => void;
-  timelineConflict: boolean;
-  timelineRenderGeneration: number;
-  onRefreshLatest: () => Promise<unknown>;
   error?: string | null;
   retrying?: boolean;
 }
@@ -51,35 +36,16 @@ export function SessionReader({
   onNavigate,
   related,
   context,
-  items,
-  interaction,
-  visibility,
-  onVisibilityChange,
   readerLoading,
   readerBusy,
   onLoadMore,
-  onTimelineConflict,
-  timelineConflict,
-  timelineRenderGeneration,
-  onRefreshLatest,
   error,
   retrying,
 }: SessionReaderProps) {
   useTranslation();
   const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
-  const visibleItems = useMemo(
-    () => filterVisibleTimelineItems(items, visibility),
-    [items, visibility],
-  );
-  const hasMore = context.hasMore;
-  let latestMessage: TimelineItem | null = null;
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]!;
-    if (item.kind === "message" || item.kind === "user_input") {
-      latestMessage = item;
-      break;
-    }
-  }
+  const { hasMore, items, interaction } = context;
+  const latestMessage = items.at(-1) ?? null;
   const previewAutoExpandKey =
     !hasMore &&
     latestMessage &&
@@ -87,7 +53,7 @@ export function SessionReader({
       (latestMessage.kind === "message" &&
         latestMessage.role === "assistant" &&
         latestMessage.phase === "response" &&
-        latestMessage.itemType === "Plan"))
+        latestMessage.itemType === "plan"))
       ? latestMessage.id
       : null;
   return (
@@ -96,28 +62,21 @@ export function SessionReader({
         homeNickname={homeNickname}
         management={management}
         session={context.session}
-        visibility={visibility}
-        onVisibilityChange={onVisibilityChange}
       />
       {related}
-      {visibleItems.length === 0 && !readerLoading ? (
-        <EmptyState title={t("thisSessionHasNoVisibleEvents")}>
-          {emptyStateMessage(visibility, hasMore)}
+      {items.length === 0 && !readerLoading ? (
+        <EmptyState title={t("thisSessionHasNoMessages")}>
+          {t("waitForTheSessionToUpdate")}
         </EmptyState>
       ) : null}
-      {visibleItems.length > 0 || hasMore ? (
+      {items.length > 0 || hasMore ? (
         <Timeline
-          key={timelineRenderGeneration}
-          items={visibleItems}
+          items={items}
           sessionId={context.session.id}
-          cursor={context.cursor}
           hasMore={hasMore}
           loading={readerLoading}
           readerBusy={readerBusy}
-          paginationEnabled={true}
-          paginationFrozen={timelineConflict}
           onLoadMore={onLoadMore}
-          onTimelineConflict={onTimelineConflict}
         />
       ) : null}
       {context.session.status !== "archived" ? (
@@ -130,8 +89,6 @@ export function SessionReader({
           interaction={interaction}
           onNavigate={onNavigate}
           sessionId={context.session.id}
-          itemCount={context.session.itemCount}
-          updatedAt={context.session.updatedAt}
           previewAutoExpandKey={previewAutoExpandKey}
         />
       ) : null}
@@ -142,30 +99,7 @@ export function SessionReader({
           retryNotice={retrying ? t("automaticallyRetrying") : undefined}
         />
       ) : null}
-      {timelineConflict ? (
-        <aside className="continuity-notice" role="alert">
-          <div>
-            <strong>{t("sessionContentHasChanged")}</strong>
-            <p>
-              {t("yourReadingPositionHasBeenPreservedReloadToReadTheLatestVersionFromTheFirstPage")}
-            </p>
-          </div>
-          <button type="button" disabled={readerBusy} onClick={onRefreshLatest}>
-            {t("reloadLatestVersion")}
-          </button>
-        </aside>
-      ) : null}
       <PageJumpControls interactionPanel={interactionPanel} />
     </section>
   );
-}
-
-function emptyStateMessage(visibility: TimelineVisibility, hasMore: boolean): string {
-  if (hasMore) {
-    return t("noVisibleEventsInTheLoadedRangeKeepScrollingOrChangeAVisibilityFilter");
-  }
-  if (Object.values(visibility).some((visible) => !visible)) {
-    return t("tryShowingMoreEventTypesOrWaitForTheSessionToUpdate");
-  }
-  return t("waitForTheSessionToUpdate");
 }

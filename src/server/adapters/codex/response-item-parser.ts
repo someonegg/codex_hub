@@ -1,14 +1,16 @@
-import type { DomainTimelineRecord } from "../../domain/session-domain.js";
-import { internalItem } from "./internal-event-parser.js";
-import { type ParsedDirective, responseDirective } from "./message-normalizer.js";
 import { isObject } from "./rollout-decoder.js";
-import type { ToolCall, ToolOutput } from "./tool-normalizer.js";
 import { parseUserInputQuestions, type UserInputRequest } from "./user-input-normalizer.js";
+import { nonEmptyString } from "./value-readers.js";
+
+export interface ToolOutput {
+  callId: string;
+  ordinal: number;
+  timestamp: string | null;
+  output: string | null;
+  failed: boolean;
+}
 
 export type ParsedResponseItem =
-  | { readonly kind: "directive"; readonly value: ParsedDirective }
-  | { readonly kind: "timeline"; readonly value: DomainTimelineRecord }
-  | { readonly kind: "tool_call"; readonly value: ToolCall }
   | { readonly kind: "tool_output"; readonly value: ToolOutput }
   | { readonly kind: "user_input_request"; readonly value: UserInputRequest }
   | { readonly kind: "ignored" };
@@ -18,27 +20,11 @@ export function parseResponseItem(
   timestamp: string | null,
   payload: Record<string, unknown>,
 ): ParsedResponseItem {
-  const type = string(payload.type);
-  if (type === "message") {
-    const directive = responseDirective(ordinal, timestamp, payload);
-    return directive === null ? { kind: "ignored" } : { kind: "directive", value: directive };
-  }
-  if (type === "reasoning") {
-    return {
-      kind: "timeline",
-      value: internalItem(ordinal, timestamp, "reasoning"),
-    };
-  }
   const userInput = userInputRequest(ordinal, timestamp, payload);
   if (userInput !== null) return { kind: "user_input_request", value: userInput };
-  const call = toolCall(ordinal, timestamp, payload);
-  if (call !== null) return { kind: "tool_call", value: call };
   const output = toolOutput(ordinal, timestamp, payload);
   if (output !== null) return { kind: "tool_output", value: output };
-  return {
-    kind: "timeline",
-    value: internalItem(ordinal, timestamp, type ?? "response_item"),
-  };
+  return { kind: "ignored" };
 }
 
 function userInputRequest(
@@ -47,7 +33,7 @@ function userInputRequest(
   payload: Record<string, unknown>,
 ): UserInputRequest | null {
   if (payload.type !== "function_call" || payload.name !== "request_user_input") return null;
-  const callId = string(payload.call_id);
+  const callId = nonEmptyString(payload.call_id);
   if (callId === null) return null;
   const questions = parseUserInputQuestions(payload.arguments);
   return {
@@ -59,32 +45,14 @@ function userInputRequest(
   };
 }
 
-function toolCall(
-  ordinal: number,
-  timestamp: string | null,
-  payload: Record<string, unknown>,
-): ToolCall | null {
-  const type = string(payload.type);
-  if (type !== "function_call" && type !== "custom_tool_call") return null;
-  const callId = string(payload.call_id);
-  if (callId === null) return null;
-  return {
-    callId,
-    ordinal,
-    timestamp,
-    toolName: string(payload.name) ?? (type === "custom_tool_call" ? "custom tool" : "function"),
-    input: serializeText(payload.arguments ?? payload.input),
-  };
-}
-
 function toolOutput(
   ordinal: number,
   timestamp: string | null,
   payload: Record<string, unknown>,
 ): ToolOutput | null {
-  const type = string(payload.type);
+  const type = nonEmptyString(payload.type);
   if (type !== "function_call_output" && type !== "custom_tool_call_output") return null;
-  const callId = string(payload.call_id);
+  const callId = nonEmptyString(payload.call_id);
   if (callId === null) return null;
   return {
     callId,
@@ -109,11 +77,10 @@ function toolOutputText(value: unknown): string | null {
   if (!Array.isArray(value)) return serializeText(value);
   const parts = value
     .filter(isObject)
-    .map((part) => string(part.text) ?? string(part.output_text) ?? serializeText(part))
+    .map(
+      (part) =>
+        nonEmptyString(part.text) ?? nonEmptyString(part.output_text) ?? serializeText(part),
+    )
     .filter((part): part is string => part !== null);
   return parts.length === 0 ? serializeText(value) : parts.join("\n\n");
-}
-
-function string(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
 }

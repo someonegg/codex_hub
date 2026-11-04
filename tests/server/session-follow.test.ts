@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
 
+import type * as SessionClientModule from "../../src/server/cli/session-client.js";
+
 const request = vi.hoisted(() => vi.fn());
-vi.mock("../../src/server/cli/session-client.js", () => ({
+vi.mock("../../src/server/cli/session-client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SessionClientModule>()),
   SessionClient: class {
     constructor(_base: URL, signal: AbortSignal) {
       this.request = (path: string) => request(path, signal);
@@ -14,6 +17,7 @@ import { followInspect } from "../../src/server/cli/session-follow.js";
 const page = (nextAfter: number, extra = {}) => ({
   session: { id: "id", status: "live", origin: {}, resume: {} },
   interaction: { supported: true, state: "connected", activity: "idle" },
+  stateRevision: "a".repeat(43),
   items: [],
   nextAfter,
   hasMore: false,
@@ -25,7 +29,6 @@ const options = (extra = {}) => ({
   base: new URL("http://localhost"),
   signal: new AbortController().signal,
   timeoutMs: 15000,
-  intervalMs: 3000,
   count: 2,
   json: true,
   ...extra,
@@ -34,52 +37,6 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   request.mockReset();
-});
-
-it("reads immediately, drains pages sequentially, waits between rounds and emits only changes", async () => {
-  vi.useFakeTimers();
-  const log = vi.spyOn(console, "log").mockImplementation(() => {});
-  request
-    .mockResolvedValueOnce(page(1, { hasMore: true }))
-    .mockResolvedValueOnce(page(2))
-    .mockResolvedValueOnce(page(3))
-    .mockResolvedValueOnce(page(4, { interaction: { supported: false } }));
-  const observing = followInspect(options({ count: 3 }));
-  await vi.advanceTimersByTimeAsync(0);
-  expect(request).toHaveBeenCalledTimes(2);
-  expect(request.mock.calls[1]![0]).toContain("after=1");
-  await vi.advanceTimersByTimeAsync(2999);
-  expect(request).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(1);
-  expect(request).toHaveBeenCalledTimes(3);
-  await vi.advanceTimersByTimeAsync(3000);
-  await observing;
-  expect(log).toHaveBeenCalledTimes(2);
-  expect(log.mock.calls.map(([line]) => JSON.parse(line))).toMatchObject([
-    { nextAfter: 1 },
-    { nextAfter: 4 },
-  ]);
-  expect(vi.getTimerCount()).toBe(0);
-});
-
-it("drains the final round and suppresses position-only updates", async () => {
-  vi.useFakeTimers();
-  const log = vi.spyOn(console, "log").mockImplementation(() => {});
-  request
-    .mockResolvedValueOnce(page(1))
-    .mockResolvedValueOnce(page(2, { hasMore: true }))
-    .mockResolvedValueOnce(page(3));
-  const observing = followInspect(options());
-  await vi.advanceTimersByTimeAsync(3000);
-  await observing;
-  expect(request.mock.calls.map(([path]) => path)).toEqual([
-    "/session/messages?",
-    "/session/messages?after=1",
-    "/session/messages?after=2",
-  ]);
-  expect(log).toHaveBeenCalledOnce();
-  expect(JSON.parse(log.mock.calls[0]![0]).nextAfter).toBe(1);
-  expect(vi.getTimerCount()).toBe(0);
 });
 
 it("continues after final replies and retains incremental metadata", async () => {
@@ -111,27 +68,6 @@ it("rejects pagination without progress", async () => {
     followInspect(options({ query: new URLSearchParams({ after: "5" }) })),
   ).rejects.toMatchObject({ code: "pagination_stalled", exitCode: 1 });
   expect(request).toHaveBeenCalledTimes(1);
-});
-
-it.each(["request", "interval"])("cancels %s and removes timers", async (stage) => {
-  vi.useFakeTimers();
-  vi.spyOn(console, "log").mockImplementation(() => {});
-  const abort = new AbortController();
-  if (stage === "request")
-    request.mockImplementation(
-      (_path, signal: AbortSignal) =>
-        new Promise((_resolve, reject) =>
-          signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true }),
-        ),
-    );
-  else request.mockResolvedValue(page(1));
-  const observing = followInspect(options({ signal: abort.signal }));
-  const rejected = expect(observing).rejects.toThrow();
-  await vi.advanceTimersByTimeAsync(0);
-  abort.abort();
-  await rejected;
-  expect(request).toHaveBeenCalledTimes(1);
-  expect(vi.getTimerCount()).toBe(0);
 });
 
 it("times out an individual read without retrying", async () => {
@@ -184,3 +120,28 @@ it.each([false, true])(
     }
   },
 );
+
+it("drains backlog within a round then long-polls, counting 204 as a round", async () => {
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  request
+    .mockResolvedValueOnce(page(7, { hasMore: true }))
+    .mockResolvedValueOnce(page(9))
+    .mockResolvedValueOnce(undefined);
+  await followInspect(options());
+  expect(request).toHaveBeenCalledTimes(3);
+  const urls = request.mock.calls.map(([path]) => new URL(path, "http://localhost"));
+  expect(urls[1]!.searchParams.get("after")).toBe("7");
+  expect(urls[1]!.searchParams.has("wait")).toBe(false);
+  expect(urls[2]!.searchParams.get("wait")).toBe("true");
+  expect(urls[2]!.searchParams.get("after")).toBe("9");
+});
+
+it("reloads once after an out-of-range ordinal", async () => {
+  const { CommandError } = await import("../../src/server/cli/command-error.js");
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  request
+    .mockRejectedValueOnce(new CommandError("after_out_of_range", "rewritten"))
+    .mockResolvedValueOnce(page(1));
+  await followInspect(options({ count: 1, query: new URLSearchParams({ after: "9" }) }));
+  expect(request.mock.calls[1]![0]).toContain("after=0");
+});

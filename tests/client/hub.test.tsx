@@ -46,18 +46,26 @@ beforeEach(() => {
   vi.spyOn(api, "sessions")
     .mockResolvedValueOnce(catalog)
     .mockImplementation(() => new Promise(() => {}));
-  vi.spyOn(api, "items").mockImplementation(async (id) => ({
-    ...firstPage,
-    hasMore: false,
-    session: {
-      ...baseSession,
-      id,
-      parentId: id === CHILD_ID ? SESSION_ID : null,
-      status: "archived" as const,
-      title:
-        id === CHILD_ID ? "Child trace" : id === archiveId ? "Archived trace" : baseSession.title,
-    },
-  }));
+  vi.spyOn(api, "messages").mockImplementation(async (id, query) =>
+    query.wait
+      ? new Promise(() => {})
+      : {
+          ...firstPage,
+          hasMore: false,
+          session: {
+            ...baseSession,
+            id,
+            parentId: id === CHILD_ID ? SESSION_ID : null,
+            status: "archived" as const,
+            title:
+              id === CHILD_ID
+                ? "Child trace"
+                : id === archiveId
+                  ? "Archived trace"
+                  : baseSession.title,
+          },
+        },
+  );
 });
 describe("unified hub", () => {
   it.each([503, 400])(
@@ -75,24 +83,7 @@ describe("unified hub", () => {
       expect(api.sessions).toHaveBeenCalledTimes(1);
     },
   );
-  it.each([503, 400])(
-    "keeps an opened session error non-dismissible with accurate recovery status for HTTP %s",
-    async (status) => {
-      window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-      vi.mocked(api.items)
-        .mockReset()
-        .mockResolvedValue({ ...firstPage, hasMore: false });
-      vi.spyOn(api, "updates")
-        .mockRejectedValueOnce(new ApiClientError(status, "request_failed", "Reader unavailable"))
-        .mockImplementation(() => new Promise(() => {}));
-      render(<App />);
-      await flush();
-      const alert = screen.getByRole("alert");
-      expect(alert).toHaveTextContent("Reader unavailable");
-      expect(within(alert).queryByRole("button")).toBeNull();
-      expect(within(alert).queryByText("Automatically retrying…") !== null).toBe(status === 503);
-    },
-  );
+
   it("remembers child session expansion and collapse after remounting", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
     let view = render(<App />);
@@ -121,7 +112,7 @@ describe("unified hub", () => {
 
   it("offers a home link below a missing session error without redirecting automatically", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    vi.mocked(api.items).mockRejectedValue(
+    vi.mocked(api.messages).mockRejectedValue(
       new ApiClientError(404, "session_not_found", "Session missing"),
     );
     render(<App />);
@@ -146,7 +137,7 @@ describe("unified hub", () => {
 
   it("keeps retry available for other session loading errors", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    vi.mocked(api.items).mockRejectedValueOnce(
+    vi.mocked(api.messages).mockRejectedValueOnce(
       new ApiClientError(500, "internal_error", "Load failed"),
     );
     render(<App />);
@@ -215,18 +206,22 @@ describe("unified hub", () => {
   );
   it("expands the destination project when following the bound-session link", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-    vi.mocked(api.items).mockImplementation(async (id) => ({
-      ...firstPage,
-      hasMore: false,
-      session: { ...baseSession, id },
-      interaction: {
-        supported: true,
-        state: "superseded",
-        activity: null,
-        supersededBySessionId: CHILD_ID,
-        attachCommand: null,
-      },
-    }));
+    vi.mocked(api.messages).mockImplementation(async (id, query) =>
+      query.wait
+        ? new Promise(() => {})
+        : {
+            ...firstPage,
+            hasMore: false,
+            session: { ...baseSession, id },
+            interaction: {
+              supported: true,
+              state: "superseded",
+              activity: null,
+              supersededBySessionId: CHILD_ID,
+              attachCommand: null,
+            },
+          },
+    );
     render(<App />);
     await flush();
     fireEvent.click(screen.getByRole("button", { name: /^reader.*1/ }));
@@ -249,7 +244,7 @@ describe("unified hub", () => {
     const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
     expect(within(nav).getAllByRole("link")).toHaveLength(1);
     expect(screen.queryByRole("link", { name: /Child trace/ })).not.toBeInTheDocument();
-    expect(api.items).not.toHaveBeenCalled();
+    expect(api.messages).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Archived" }));
     expect(within(nav).getAllByRole("link")).toHaveLength(2);
     fireEvent.click(within(nav).getByRole("link", { name: /Reader work/ }));
@@ -328,68 +323,6 @@ describe("unified hub", () => {
     expect(screen.queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
     expect(JSON.parse(browserStorage.getItem("ahub.navigation")!).expanded).toEqual([]);
   });
-});
-
-it("keeps archived content open while removing navigation, then returns to the project list after deletion", async () => {
-  window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
-  let archived = false;
-  vi.spyOn(api, "sessions")
-    .mockReset()
-    .mockResolvedValueOnce(catalog)
-    .mockImplementation((query) =>
-      query.after
-        ? new Promise(() => {})
-        : Promise.resolve({
-            ...catalog,
-            revision: "b".repeat(43),
-            sessions: catalog.sessions.map((item) =>
-              item.id === SESSION_ID ? { ...item, status: archived ? "archived" : "normal" } : item,
-            ),
-          }),
-    );
-  vi.spyOn(api, "items").mockImplementation(async () => ({
-    ...firstPage,
-    hasMore: false,
-    session: { ...baseSession, status: archived ? "archived" : "normal" },
-  }));
-  vi.spyOn(api, "updates").mockImplementation(() => new Promise(() => {}));
-  const operation = {
-    phase: null,
-    attachCommand: null,
-    operationId: "archive-op",
-    type: "archive",
-    status: "succeeded",
-    sessionId: SESSION_ID,
-    createdAt: "2026-10-16T00:00:00Z",
-    updatedAt: "2026-10-16T00:00:00Z",
-    error: null,
-  } as const;
-  vi.spyOn(api, "archiveSession").mockImplementation(async () => {
-    archived = true;
-    return operation;
-  });
-  vi.spyOn(api, "deleteSession").mockResolvedValue({
-    ...operation,
-    type: "delete",
-    operationId: "delete-op",
-  });
-  render(<App />);
-  await flush();
-  fireEvent.click(screen.getByRole("button", { name: "Session management" }));
-  fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
-  await flush();
-  const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
-  expect(within(nav).queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
-  expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
-  expect(window.location.pathname).toBe(`/sessions/${SESSION_ID}`);
-  fireEvent.click(screen.getByRole("button", { name: "Session management" }));
-  fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
-  fireEvent.click(screen.getByRole("button", { name: "Confirm delete" }));
-  await flush();
-  expect(window.location.pathname).toBe("/");
-  expect(
-    screen.getByRole("heading", { name: "Select a session from the sidebar" }),
-  ).toBeInTheDocument();
 });
 
 describe("hub link entry points", () => {

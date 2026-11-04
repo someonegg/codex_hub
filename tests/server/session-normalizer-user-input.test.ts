@@ -17,46 +17,6 @@ const QUESTIONS = {
 };
 
 describe("request_user_input normalization", () => {
-  it("emits append-stable request and answered response records instead of tools", () => {
-    const request = userInputRequest(1, "answered", QUESTIONS);
-    const before = normalizeRecords("user-input-before", [request]);
-    const after = normalizeRecords("user-input-after", [
-      request,
-      userInputOutput(
-        2,
-        "answered",
-        JSON.stringify({
-          answers: { choice: { answers: ["Second"] } },
-        }),
-      ),
-    ]);
-
-    expect(after.timeline).toEqual([
-      {
-        kind: "user_input",
-        stage: "request",
-        id: "user-input-1",
-        ordinal: 1,
-        timestamp: null,
-        callId: "answered",
-        questions: QUESTIONS.questions,
-      },
-      {
-        kind: "user_input",
-        stage: "response",
-        id: "user-input-2",
-        ordinal: 2,
-        timestamp: null,
-        callId: "answered",
-        outcome: "answered",
-        answers: [{ questionId: "choice", answers: ["Second"] }],
-      },
-    ]);
-    expect(after.timeline[0]).toEqual(before.timeline[0]);
-    expect(after.session).toMatchObject({ messageCount: 0, toolCount: 0, itemCount: 2 });
-    expect(after.toolDetails.size).toBe(0);
-  });
-
   it("recognizes the Codex aborted output while retaining the request", () => {
     const normalized = normalizeRecords("user-input-aborted", [
       userInputRequest(1, "aborted", QUESTIONS),
@@ -92,50 +52,6 @@ describe("request_user_input normalization", () => {
       ["invalid_user_input", 1],
       ["invalid_user_input", 2],
     ]);
-  });
-
-  it("keeps an output without a preceding request_user_input call as a tool output", () => {
-    const normalized = normalizeRecords("unmatched-user-input", [
-      userInputOutput(1, "missing", "result"),
-    ]);
-
-    expect(normalized.timeline[0]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      callId: "missing",
-      toolName: "unknown tool",
-    });
-  });
-
-  it("consumes a request after its first response", () => {
-    const normalized = normalizeRecords("duplicate-user-input-output", [
-      userInputRequest(1, "duplicate", QUESTIONS),
-      userInputOutput(
-        2,
-        "duplicate",
-        JSON.stringify({
-          answers: { choice: { answers: ["First"] } },
-        }),
-      ),
-      userInputOutput(
-        3,
-        "duplicate",
-        JSON.stringify({
-          answers: { choice: { answers: ["Second"] } },
-        }),
-      ),
-    ]);
-
-    expect(normalized.timeline[1]).toMatchObject({
-      kind: "user_input",
-      stage: "response",
-      outcome: "answered",
-    });
-    expect(normalized.timeline[2]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      toolName: "unknown tool",
-    });
   });
 });
 

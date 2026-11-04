@@ -49,6 +49,10 @@ npm run format:check
 Use `npm run format` to format files and `npm run lint -- --fix` to fix supported
 lint issues. See the [lint toolchain](../tools/client-lint/README.md) for rules.
 
+Reader changes should cover ordinal pagination, state/message wakeups, timeout, cancellation,
+and one-time out-of-range recovery in existing tests. Protocol details live in the
+[technical reference](technical-reference.md#reader-and-automatic-updates).
+
 Run additional checks for the affected area:
 
 | Command                          | When to use                                              |

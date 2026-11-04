@@ -54,119 +54,6 @@ describe("incremental Codex derivation", () => {
     expect(resolver.append(after, [])).toBe(after);
   });
 
-  it("consumes cross-batch matches without mutating the old snapshot", () => {
-    const normalizer = new DefaultSessionNormalizer();
-    const firstState = normalizer.append(
-      normalizer.create(descriptor),
-      [
-        toolCall(1, "tool", "inspect", "input"),
-        userInputRequest(2, "question"),
-        eventMessage(3, "user_message", "First user title"),
-        binding(4, "/tmp/valid.sock", "%1"),
-      ],
-      [],
-    );
-    const before = normalizer.materialize(firstState, sessionMetadata());
-    const oldCall = before.timeline[0];
-    const oldCallDetail = before.toolDetails.get("tool-1");
-    expect(firstState.pendingToolCalls.size).toBe(1);
-    expect(firstState.pendingUserInputRequests.size).toBe(1);
-
-    const secondState = normalizer.append(
-      firstState,
-      [
-        toolOutput(5, "tool", "result"),
-        toolOutput(
-          6,
-          "question",
-          JSON.stringify({
-            answers: { choice: { answers: ["Second"] } },
-          }),
-        ),
-        binding(7, "malformed", "pane"),
-      ],
-      [],
-    );
-    const after = normalizer.materialize(secondState, sessionMetadata());
-
-    expect(secondState.pendingToolCalls.size).toBe(0);
-    expect(secondState.pendingUserInputRequests.size).toBe(0);
-    expect(after.timeline[0]).toBe(oldCall);
-    expect(after.toolDetails.get("tool-1")).toBe(oldCallDetail);
-    expect(after.timeline[4]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      toolName: "inspect",
-      preview: "result",
-    });
-    expect(after.timeline[5]).toMatchObject({
-      kind: "user_input",
-      stage: "response",
-      outcome: "answered",
-    });
-    expect(after.session).toMatchObject({
-      title: "First user title",
-      messageCount: 1,
-      toolCount: 1,
-      itemCount: 7,
-    });
-    expect(before.timeline).toHaveLength(4);
-    expect(before.toolDetails).toHaveLength(1);
-
-    const forkedState = normalizer.append(
-      firstState,
-      [
-        toolOutput(8, "tool", "forked result"),
-        toolOutput(
-          9,
-          "question",
-          JSON.stringify({
-            answers: { choice: { answers: ["First"] } },
-          }),
-        ),
-      ],
-      [],
-    );
-    const forked = normalizer.materialize(forkedState, sessionMetadata());
-    expect(firstState.pendingToolCalls.size).toBe(1);
-    expect(firstState.pendingUserInputRequests.size).toBe(1);
-    expect(forkedState.pendingToolCalls.size).toBe(0);
-    expect(forkedState.pendingUserInputRequests.size).toBe(0);
-    expect(forked.timeline[4]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      toolName: "inspect",
-      preview: "forked result",
-    });
-    expect(forked.timeline[5]).toMatchObject({
-      kind: "user_input",
-      stage: "response",
-      outcome: "answered",
-    });
-
-    const consumedState = normalizer.append(
-      secondState,
-      [
-        toolOutput(8, "tool", "duplicate tool result"),
-        toolOutput(9, "question", "duplicate user-input result"),
-      ],
-      [],
-    );
-    const consumed = normalizer.materialize(consumedState, sessionMetadata());
-    expect(consumed.timeline.slice(7)).toEqual([
-      expect.objectContaining({
-        kind: "tool",
-        stage: "output",
-        toolName: "unknown tool",
-      }),
-      expect.objectContaining({
-        kind: "tool",
-        stage: "output",
-        toolName: "unknown tool",
-      }),
-    ]);
-  });
-
   it("recombines cumulative decoder diagnostics ahead of retained normalizer diagnostics", () => {
     const normalizer = new DefaultSessionNormalizer();
     const first = normalizer.append(normalizer.create(descriptor), [record(1, {})], []);
@@ -192,101 +79,55 @@ function record(ordinal: number, value: Record<string, unknown>): DecodedRecord 
   return { ordinal, value };
 }
 
-function toolCall(ordinal: number, callId: string, name: string, input: string): DecodedRecord {
-  return record(ordinal, {
-    type: "response_item",
-    payload: { type: "function_call", call_id: callId, name, arguments: input },
-  });
-}
-
-function toolOutput(ordinal: number, callId: string, output: string): DecodedRecord {
-  return record(ordinal, {
-    type: "response_item",
-    payload: { type: "function_call_output", call_id: callId, output },
-  });
-}
-
-function userInputRequest(ordinal: number, callId: string): DecodedRecord {
-  return record(ordinal, {
-    type: "response_item",
-    payload: {
-      type: "function_call",
-      name: "request_user_input",
-      call_id: callId,
-      arguments: JSON.stringify({
-        questions: [
-          {
-            header: "Choice",
-            id: "choice",
-            question: "Which option?",
-            options: [
-              { label: "First", description: "First option." },
-              { label: "Second", description: "Second option." },
-            ],
-          },
-        ],
-      }),
-    },
-  });
-}
-
-function eventMessage(
-  ordinal: number,
-  type: "user_message" | "agent_message",
-  message: string,
-): DecodedRecord {
-  return record(ordinal, { type: "event_msg", payload: { type, message } });
-}
-
-function binding(ordinal: number, tmux: string, pane: string): DecodedRecord {
-  const command = 'printf \'AHUB_TMUX_BIND_V1\\n%s\\n%s\\n\\n\\n\' "$TMUX" "$TMUX_PANE"';
-  return record(ordinal, {
-    type: "response_item",
-    payload: {
-      type: "message",
-      role: "user",
-      content: [
-        {
-          type: "input_text",
-          text: `<user_shell_command>\n${command}\nAHUB_TMUX_BIND_V1\n${tmux}\n${pane}\n00000000-0000-4000-8000-000000000001\n\n</user_shell_command>`,
-        },
-      ],
-    },
-  });
-}
-
-it("reuses untouched maps and copies only changed maps, including same-batch matches", () => {
+it("correlates questions across append batches while ignoring ordinary tool events", () => {
   const normalizer = new DefaultSessionNormalizer();
-  const empty = normalizer.create(descriptor);
-  const message = normalizer.append(empty, [eventMessage(1, "agent_message", "hello")], []);
-  const keys = [
-    "directiveDetails",
-    "internalDetails",
-    "toolDetails",
-    "pendingToolCalls",
-    "pendingUserInputRequests",
-  ] as const;
-  for (const key of keys) expect(message[key]).toBe(empty[key]);
-  const unmatched = normalizer.append(message, [toolOutput(2, "absent", "result")], []);
-  expect(unmatched.pendingToolCalls).toBe(message.pendingToolCalls);
-  expect(unmatched.pendingUserInputRequests).toBe(message.pendingUserInputRequests);
-  expect(unmatched.toolDetails).not.toBe(message.toolDetails);
-  expect(message.toolDetails.size).toBe(0);
-  const matched = normalizer.append(
-    message,
+  const first = normalizer.append(
+    normalizer.create(descriptor),
     [
-      toolCall(2, "call", "inspect", "input"),
-      toolOutput(3, "call", "output"),
-      userInputRequest(4, "question"),
-      toolOutput(5, "question", "{}"),
+      record(2, {
+        type: "response_item",
+        payload: { type: "function_call", name: "exec", call_id: "ignored", arguments: "ls" },
+      }),
+      record(5, {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "request_user_input",
+          call_id: "question",
+          arguments: JSON.stringify({
+            questions: [{ id: "choice", header: "Choice", question: "Which?", options: [] }],
+          }),
+        },
+      }),
+      record(8, {
+        type: "event_msg",
+        payload: { type: "agent_message", message: "Progress", phase: "commentary" },
+      }),
     ],
     [],
   );
-  expect(matched.pendingToolCalls.size).toBe(0);
-  expect(matched.pendingUserInputRequests.size).toBe(0);
-  expect(matched.pendingToolCalls).not.toBe(message.pendingToolCalls);
-  expect(matched.pendingUserInputRequests).not.toBe(message.pendingUserInputRequests);
-  expect(matched.directiveDetails).toBe(message.directiveDetails);
-  expect(matched.internalDetails).toBe(message.internalDetails);
-  expect(empty.timeline).toHaveLength(0);
+  const second = normalizer.append(
+    first,
+    [
+      record(12, {
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "question",
+          output: JSON.stringify({ answers: { choice: { answers: ["Selected"] } } }),
+        },
+      }),
+    ],
+    [],
+  );
+  expect(first.pendingUserInputRequests.size).toBe(1);
+  expect(second.pendingUserInputRequests.size).toBe(0);
+  expect(first.timeline.map((item) => item.ordinal)).toEqual([5, 8]);
+  expect(second.timeline.map((item) => item.ordinal)).toEqual([5, 8, 12]);
+  expect(second.timeline[0]).toBe(first.timeline[0]);
+  expect(second.timeline[2]).toMatchObject({
+    kind: "user_input",
+    outcome: "answered",
+    answers: [{ questionId: "choice", answers: ["Selected"] }],
+  });
 });

@@ -24,9 +24,9 @@ The status column records the lifecycle; scope notes identify later refinements.
 | [0006: Use conditional read cursors for session resources](0006-use-timeline-prefix-continuity.md) | superseded | [ADR-0009](0009-use-opaque-single-writer-timeline-cursors.md) |
 | [0007: Discover tmux interaction targets through adapters](0007-use-adapter-discovered-tmux-interaction.md) | superseded | [ADR-0016](0016-enable-hub-management-by-default.md) and [ADR-0018](0018-cache-validation-per-binding-record.md) |
 | [0008: Split the session catalog and reader into a multi-page application](0008-split-session-catalog-and-reader-into-an-mpa.md) | superseded | [ADR-0020](0020-use-a-unified-project-hub.md) |
-| [0009: Use opaque single-writer timeline cursors](0009-use-opaque-single-writer-timeline-cursors.md) | accepted | — |
+| [0009: Use opaque single-writer timeline cursors](0009-use-opaque-single-writer-timeline-cursors.md) | superseded | [ADR-0025](0025-unify-session-reading-on-ordinal-messages.md) |
 | [0010: Use opaque cursors for session-list pagination](0010-use-opaque-session-list-cursors.md) | superseded | [ADR-0021](0021-split-catalog-structure-and-activity.md) |
-| [0011: Use repository-probed bounded long polling for automatic updates](0011-use-repository-probed-bounded-long-polling.md) | accepted | cache policy replaced by [ADR-0018](0018-cache-validation-per-binding-record.md); toggle removed by [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md) |
+| [0011: Use repository-probed bounded long polling for automatic updates](0011-use-repository-probed-bounded-long-polling.md) | accepted | cache policy replaced by [ADR-0018](0018-cache-validation-per-binding-record.md); toggle removed by [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md); message protocol refined by [ADR-0025](0025-unify-session-reading-on-ordinal-messages.md) |
 | [0012: Use checkpointed incremental rollout loading with probe validation](0012-use-checkpointed-incremental-rollout-loading.md) | accepted | probe validation applies to unarchived rollouts; loaded archives reuse cached content |
 | [0013: Filter session archive state in the browser](0013-filter-session-archive-state-in-the-browser.md) | superseded | [ADR-0020](0020-use-a-unified-project-hub.md) |
 | [0014: Remember automatic updates per browser tab](0014-remember-automatic-updates-per-browser-tab.md) | superseded | [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md) |
@@ -40,3 +40,4 @@ The status column records the lifecycle; scope notes identify later refinements.
 | [0022: Separate session exit from archive](0022-separate-session-exit-from-archive.md) | accepted | — |
 | [0023: Separate runtime status from resume permission](0023-separate-runtime-status-from-resume-permission.md) | accepted | reader observations refined by [ADR-0024](0024-share-request-scoped-runtime-observations.md) |
 | [0024: Share runtime observations within each reader response](0024-share-request-scoped-runtime-observations.md) | accepted | — |
+| [0025: Unify session reading on ordinal messages](0025-unify-session-reading-on-ordinal-messages.md) | accepted | — |

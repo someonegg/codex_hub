@@ -6,15 +6,13 @@ export const messages: Record<keyof typeof english, string> = {
   top: "頂部",
   end: "底部",
   resumeUnavailable: "此工作階段無法恢復。",
-  toolCompleted: "已完成",
-  toolFailed: "失敗",
 
   enter: "Enter",
   aborted: "已中止",
   allHomes: "所有 Home",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "所有成功上傳的檔案都會保留，包括從草稿中移除的檔案。",
-  anInteractionIsAlreadyInProgress: "已有互動正在進行。",
+
   answered: "已回答",
   archiveSession: "封存工作階段",
   archived: "已封存",
@@ -22,7 +20,7 @@ export const messages: Record<keyof typeof english, string> = {
   assistant: "助手",
   assistantUpdate: "助手進展",
   assistantResponse: "助手回覆",
-  assistantResponsePlan: "助手回覆 · 計畫 ·",
+  assistantResponsePlan: "助手回覆 · 計畫",
   attachFiles: "新增附件",
   attachToTmuxBeforeTryingAgainCreatingAgainMayStartAnotherSession:
     "重試前請連線 tmux；再次建立可能啟動另一個工作階段。",
@@ -30,9 +28,7 @@ export const messages: Record<keyof typeof english, string> = {
   backToTop: "返回頂部",
   browseSessionsByProjectReadTheirHistoryAndContinueYourWork:
     "按專案瀏覽工作階段、閱讀歷史記錄並繼續工作。",
-  cacheWriteInput: "快取寫入",
-  cachedInput: "快取讀取",
-  callID: "呼叫 ID ·",
+
   cancel: "取消",
   capturingTerminalPane: "正在擷取終端窗格…",
   capturing: "正在擷取…",
@@ -46,7 +42,7 @@ export const messages: Record<keyof typeof english, string> = {
   closeNewSession: "關閉新增工作階段",
   closeResumeSession: "關閉恢復工作階段",
   closeTmuxAccess: "關閉 tmux 連線",
-  collapse: "收起",
+
   confirmDelete: "確認刪除",
   confirmingArchive: "正在確認封存",
   connected: "已連線",
@@ -67,12 +63,10 @@ export const messages: Record<keyof typeof english, string> = {
   deleteSessionLabel: "刪除工作階段？",
   deleteThisFile: "刪除此檔案？",
   deleting: "正在刪除…",
-  detailWasTruncatedForSafeDisplay: "為安全顯示，詳情已截斷。",
+
   diff: "差異",
   diffNotFoundOrAlreadyCleanedUp: "差異不存在或已被清理。",
-  directiveUnavailable: "指令不可用",
-  directiveWasTruncatedForSafeDisplay: "為安全顯示，指令已截斷。",
-  directive: "指令 ·",
+
   disconnected: "已斷開",
   dismiss: "關閉提示",
   dismissInteractionError: "關閉互動錯誤提示",
@@ -92,7 +86,7 @@ export const messages: Record<keyof typeof english, string> = {
   ensureTheOriginalSessionHasExited: "請確認原工作階段程序已經退出。",
   error: "錯誤",
   exitSession: "退出工作階段",
-  expand: "展開",
+
   fileDiffs: "檔案差異",
   filesMustBeAtMost20MiB: "單個檔案不能超過 20 MiB",
   filterByHome: "按 Home 篩選",
@@ -101,49 +95,43 @@ export const messages: Record<keyof typeof english, string> = {
   handOffThisPaneSBindingToTheActiveCodexSession: "將此窗格的繫結移交給目前活動的 Codex 工作階段。",
   handoff: "移交繫結",
   hide: "隱藏",
-  hideJSON: "隱藏 JSON",
-  hideDirective: "隱藏指令",
-  hideToolDetail: "隱藏工具詳情",
+
   home: "Home",
   homeLabel: "Home：",
   idle: "閒置",
-  input: "輸入",
-  internalEventUnavailable: "內部事件不可用",
-  internal: "內部事件 ·",
+
   interrupt: "中斷",
   invalidTerminalPreviewUpdateReconnecting: "終端預覽更新無效，正在重新連線",
-  jSONWasTruncatedForSafeDisplay: "為安全顯示，JSON 已截斷。",
+
   jumpToBottom: "跳到底部",
-  last: "最近",
+
   left: "向左",
   linkCopied: "連結已複製",
   live: "執行中",
   loadingDiff: "正在載入差異…",
-  loadingDirective: "正在載入指令…",
-  loadingInternalEvent: "正在載入內部事件…",
-  loadingMoreEvents: "正在載入更多事件…",
+
+  loadingMoreMessages: "正在載入更多訊息…",
   loadingPages: "正在載入頁面…",
   loadingSessions: "正在載入工作階段…",
-  loadingToolDetail: "正在載入工具詳情…",
+
   loadingUploads: "正在載入上傳記錄…",
   messageToAgent: "傳送給代理程式的訊息",
   newSession: "新增工作階段",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
     "尚未檢測到 Codex 工作階段。請連線 tmux 檢視啟動進度。",
   noAnswerRecorded: "尚無回答記錄。",
-  noDetailAvailable: "暫無詳情。",
+
   noMainSessionsYet: "暫無主工作階段",
   noPublishedWebPages: "暫無已發布網頁。",
   noUploadsYet: "暫無上傳記錄。",
-  noVisibleEventsInTheLoadedRangeKeepScrollingOrChangeAVisibilityFilter:
-    "已載入範圍內沒有可見事件。請繼續滾動或調整可見性篩選。",
+
   nothingToShow: "暫無內容",
   open: "開啟",
   openSession: "開啟工作階段",
   openingSession: "正在開啟工作階段…",
   operation: "操作",
   originalSessionID: "原始工作階段 ID ·",
-  output: "輸出",
+
   pagePosition: "頁面位置",
   pages: "網頁",
   parentSession: "父工作階段",
@@ -161,20 +149,20 @@ export const messages: Record<keyof typeof english, string> = {
   projectsAndMainSessions: "專案與主工作階段",
   publishedPages: "已發布網頁",
   publishedSnapshots: "已發布快照",
-  reasoningOutput: "推理輸出",
+
   reconnectBeforeAttachingFiles: "請重新連線後再新增附件",
   reconnecting: "正在重新連線…",
   recordedAnswer: "已記錄的回答",
   recordedAnswers: "已記錄的回答",
   refresh: "重新整理",
-  reloadLatestVersion: "重新載入最新版本",
+
   replacementSessionUnavailable: "替代工作階段不可用",
   requestDetailsUnavailable: "請求詳情不可用。",
   resume: "恢復",
   resumeSession: "恢復工作階段",
   automaticallyRetrying: "正在自動重試…",
   retry: "重試",
-  retryLoadingDetail: "重新載入詳情",
+
   retryOpeningSession: "重新開啟工作階段",
   retryPreview: "重試預覽",
   retryStatusCheck: "重試狀態檢查",
@@ -189,7 +177,7 @@ export const messages: Record<keyof typeof english, string> = {
   sendingExitCommand: "正在傳送退出命令",
   session: "工作階段",
   sessionList: "工作階段列表",
-  sessionContentHasChanged: "工作階段內容已更改",
+
   sessionCreated: "工作階段已建立。",
   sessionHome: "工作階段 Home",
   sessionInformation: "工作階段資訊",
@@ -199,9 +187,7 @@ export const messages: Record<keyof typeof english, string> = {
   sessionNotFound: "工作階段不存在",
   sessionTimeline: "工作階段時間線",
   show: "顯示",
-  showJSON: "顯示 JSON",
-  showDirective: "顯示指令",
-  showToolDetail: "顯示工具詳情",
+
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分內容未能完整解析，請檢視下方原文。",
   startingCodex: "正在啟動 Codex",
@@ -215,20 +201,16 @@ export const messages: Record<keyof typeof english, string> = {
   terminalControls: "終端控制",
   terminalOutputExceededThePreviewLimitTheBeginningWasOmitted:
     "終端輸出超過預覽限制，開頭內容已省略。",
-  theLocalHubCouldNotCompleteTheRequest: "本地 Hub 無法完成請求。",
-  theOperationWasAborted: "操作已中止",
+
   theTerminalPaneIsEmpty: "終端窗格是空的。",
-  thisSessionHasNoVisibleEvents: "此工作階段沒有可見事件",
+  thisSessionHasNoMessages: "此工作階段尚無訊息",
   timeUnavailable: "時間不可用",
-  timelineEventVisibility: "時間線事件可見性",
+
   tmuxAccess: "連線 tmux",
-  token: "Token ·",
-  toolDetailUnavailable: "工具詳情不可用",
-  total: "累計",
-  totalTokens: "Token 總數",
+
   trackingHasStoppedRefreshTheSessionListToCheckTheResult:
     "狀態追蹤已停止，請重新整理工作階段列表檢查結果。",
-  tryShowingMoreEventTypesOrWaitForTheSessionToUpdate: "請顯示更多事件型別，或等待工作階段更新。",
+
   unableToLoadDiff: "無法載入差異。",
   unableToLoadUploads: "無法載入上傳記錄",
   unavailable: "不可用",
@@ -240,23 +222,21 @@ export const messages: Record<keyof typeof english, string> = {
   uploadHistoryCodexHub: "上傳記錄 · Codex Hub",
   useTheOriginalActionButtonToTryAgain: "請使用原操作按鈕重試。",
   user: "使用者",
-  userInput: "使用者輸入 ·",
+  userInput: "使用者輸入",
   viewOriginalDiff: "檢視原始差異",
   waitForTheSessionToUpdate: "請等待工作階段更新。",
   waiting: "等待中",
   waitingForExit: "正在等待退出",
   working: "工作中",
   workingDirectory: "工作目錄 ·",
-  yourReadingPositionHasBeenPreservedReloadToReadTheLatestVersionFromTheFirstPage:
-    "已保留閱讀位置。重新載入後將從第一頁顯示最新版本。",
+
   tmuxAccessLabel: "連線 tmux",
   backToList: "← 返回列表",
   backToSession: "← 返回工作階段",
   parentSessionLabel: "← 父工作階段",
-  events_one: "{{count, number}} 條事件",
-  events_other: "{{count, number}} 條事件",
+
   characters: "{{count, number}} 個字元",
-  filesChanged_one: "{{count, number}} 個檔案變更",
+
   filesChanged_other: "{{count, number}} 個檔案變更",
   projectSessions: "{{project}}，{{count, number}} 個主工作階段",
   newProjectSession: "在 {{project}} 中新增工作階段",
@@ -266,21 +246,16 @@ export const messages: Record<keyof typeof english, string> = {
   collapseFile: "收起 {{filename}}",
   diffFor: "{{path}} 的差異",
   deleteArtifact: "刪除「{{title}}」及其所有快照？",
-  tokenUsage: "{{label}} Token 用量",
+
   shiftNewline: "Shift+Enter 換行。",
   shiftSend: "Shift+Enter 傳送。",
   messageLimit: "訊息為 {{size}} 個 UTF-8 位元組；上限為 {{limit}} 位元組。",
-  updatedSummary: "{{events}} · 更新於 {{time}}",
-  unknownUpdateSummary: "{{events}} · 更新時間不可用",
+
   uploadProgress: "正在上傳 {{current}}/{{total}}…",
   uploadBytes: "{{size}} 位元組",
-  toolCall: "工具呼叫 · {{ordinal}}",
-  toolOutput: "工具輸出 · {{status}} · {{ordinal}}",
+
   omittedImage: "[圖片已省略{{alt}}]",
-  directiveEvent: "指令",
-  toolEvent: "工具",
-  tokenEvent: "Token",
-  internalEvent: "內部事件",
+
   operationCreate: "建立",
   operationResume: "恢復",
   operationArchive: "封存",
@@ -296,7 +271,6 @@ export const messages: Record<keyof typeof english, string> = {
   requestNotFound: "請求的資源不存在。",
   requestDisconnected: "終端未連線，請重新連線或恢復工作階段。",
   requestTooLarge: "上傳檔案或訊息超過大小限制。",
-  requestConflict: "工作階段已更改，請重新整理後重試。",
 };
 
 import type { settings as englishSettings } from "./en";

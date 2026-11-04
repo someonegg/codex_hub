@@ -81,7 +81,7 @@ npx --package=@someonegg/codex-hub@latest ahub-cli --help
 ahub-cli session list --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
+ahub-cli session inspect <id> --follow --count 5 --json
 ```
 
 使用 `list` 返回的 ID 发送输入或查看会话。`list` 默认列出未归档的主会话（`--all` 包含已归档会话），`inspect` 也接受子会话 ID。
@@ -98,7 +98,7 @@ ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 
 会话命令默认连接 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
 HTTP 地址；此客户端不支持 HTTPS。用 `--timeout <seconds>` 修改默认的 15 秒超时
-（创建、恢复、退出、归档和删除为 45 秒）。使用 `inspect --follow` 时，它限制每次 HTTP
+（follow 为 30 秒；创建、恢复、退出、归档和删除为 45 秒）。使用 `inspect --follow` 时，它限制每次 HTTP
 请求；观察持续到按 Ctrl+C 停止或达到指定轮数。
 
 创建和恢复等待终端已连接且空闲；发送输入和普通按键默认要求空闲。使用

@@ -52,7 +52,7 @@ independently unique, nonempty `instanceKey` and `home`, using server domain typ
 
 HTTP path IDs are decoded once after segment splitting: nonempty, at most 1,024
 UTF-8 bytes, without controls, slashes, backslashes, or standalone `.` / `..`.
-Reads also validate item kind, ownership, and cursor bounds.
+Message reads validate ordinal bounds.
 
 Diagnostics affect logs only, never responses, policy, or revisions. Default stderr
 logging deduplicates by source/session/content, with per-source limits. Cleared
@@ -109,33 +109,41 @@ concurrent observations and bound socket concurrency; errors revoke Live and res
 
 ## Reader and automatic updates
 
-| GET endpoint                                   | Contract                                  |
-| ---------------------------------------------- | ----------------------------------------- |
-| `/api/v1/sessions/:id`                         | Session, interaction, update revision     |
-| `/api/v1/sessions/:id/items`                   | Timeline page; optional `limit`, `cursor` |
-| `/api/v1/sessions/:id/items/:itemId/directive` | Directive text; required `cursor`         |
-| `/api/v1/sessions/:id/items/:itemId/tool`      | Tool input/output; required `cursor`      |
-| `/api/v1/sessions/:id/items/:itemId/internal`  | Internal JSON; required `cursor`          |
-| `/api/v1/sessions/:id/updates`                 | Long poll; required `cursor`, `after`     |
+`GET /api/v1/sessions/:id/messages` is the single conversation read endpoint.
+Queries: `after` (nonnegative ordinal), `limit` (1–300, default 10), `wait`
+(boolean, default false), and optional `stateRevision` (43-character base64url).
+It returns `session`, `interaction`, `live`, `items`, `nextAfter`, `hasMore`, and
+`stateRevision`. Metadata remains available at `GET /api/v1/sessions/:id`.
 
-Pages return session metadata, items, `cursor`, `hasMore`, interaction, and
-`updateRevision`. Only item reads advance cursors; lazy details must be within
-the confirmed prefix. Changed prefixes/process restarts return `409 timeline_changed`;
-malformed cursors return `400 invalid_query`. See [paging limits](session-jsonl-filtering.md#truncation-and-paging).
+Without `after`, reads return the latest messages in original order. Web starts
+with `after=0` and pages forward. Ordinals retain adapter order and may have gaps.
+`nextAfter` is the consumed boundary; `hasMore` indicates remaining messages.
+Pages use binary search and an approximately 4 MiB item budget; the first item
+always returns to guarantee progress, even if oversized.
 
-Updates validate cursors without advancing them or returning items; use item reads
-for backlog. Probes run every 1.5 seconds, returning `204` after 25 unchanged seconds.
-Capacity (100/process, 10/session) is reserved before initial reads, even for immediate
-responses; overflow returns `429`, `Retry-After: 2`. Same-session requests share
-in-flight initial reads and each probe's immutable state, interaction, and revision;
-cursor/backlog decisions remain request-specific. Completed runtime observations
-are not cached. Bad cursors/cancellations affect only their request; disconnect,
-timeout, and shutdown release capacity even during unfinished reads.
+With `wait=true`, backlog returns immediately. At the end, a missing revision
+returns a baseline snapshot; a changed public session/interaction state also
+returns immediately. Matching state and no messages wait up to 25 seconds before
+bodyless `204`. Probes run every 1.5 seconds with capacity 100/process and
+10/session; overflow returns `429` and `Retry-After: 2`. Disconnect, timeout, and
+shutdown release capacity. Concurrent same-session probes share immutable source
+and runtime observations; pagination remains request-specific. Each response
+uses the same pane observation for status and interaction; effects revalidate.
 
-Reader metadata includes `resume: { allowed, reason }` (null reason when allowed).
-Public sessions/interaction determine reader revisions independently of catalog. Each response shares one pane observation;
-effects revalidate ownership. Only the opened unarchived reader subscribes;
-history paging preserves reading position during updates.
+Public response assembly belongs to `SessionReadService`. Interaction operations
+read internal facts through `InteractionSessionReader` over the same catalog,
+without calling the public response assembler. The interaction describer is
+injected at construction; no post-construction binding is required.
+
+`stateRevision` compares public state only, without validating historical content.
+An ordinal beyond the current range returns `400 after_out_of_range`; clients
+reload once from their initial position. Other history rewrites are accepted as
+undetected; reload the browser page. There are no signed timeline cursors or event
+detail endpoints. The terminal snapshot/delta protocol is independent.
+
+The browser serializes historical pages and tail waiting, starts waiting only at
+the end, and cancels requests on session changes, hiding, or unmount. It preserves
+reading position while appending. Resume policy remains `resume: {allowed, reason}`.
 
 ## Session CLI and observation
 
@@ -203,7 +211,7 @@ IDs, go directly to endpoints without catalog checks or parent redirection.
 
 Items expose messages and user input with `id`, `ordinal`, `timestamp`, `kind`.
 Messages add `role`, `phase`, `itemType`, `markdown`; only assistant messages with
-`phase=response` and `itemType=Plan` also include `inputHint`, preserving full
+`phase=response` and `itemType=plan` also include `inputHint`, preserving full
 Markdown. User input adds `stage`: requests add `questions` (header, question,
 and option labels/descriptions) and `inputHint`; responses add `outcome`:
 `answered` adds `answers: string[]` in original question/answer order;
@@ -216,39 +224,16 @@ hint to their full text. See [output formatting](../src/server/cli/session-outpu
 for labels and [ahub-control](../skills/ahub-control/SKILL.md#operation-state-machine)
 for the input workflow.
 
-### Messages and numbered pagination
-
-`GET /api/v1/sessions/:id/messages?limit=N&after=number` returns
-`session`, `live`, `interaction`, `items`, `nextAfter`, `hasMore`. Log/runtime
-observations are not atomic; missing sessions return `404`, not empty history.
-
-Visible item kinds match the CLI and browser defaults, including Plan markers.
-Roles, normalized phases, item types, IDs, ordinals, and call IDs remain; unknown
-phases stay unclassified. Raw ordinals may have gaps; requests/responses correlate
-by `callId`. Tools/directives/token usage/internal events are excluded.
-
-`limit` defaults to 10 (range 1–300). Without `after`, return latest N in original
-order; older history does not set `hasMore`. With `after`, start at the earliest
-visible ordinal beyond it (`0` starts history). The [item byte budget](session-jsonl-filtering.md#truncation-and-paging)
-may reduce counts without further body truncation; one oversized record still returns.
-Latest reads scan backward before budgeting; `after` binary-searches ordinals.
-Neither maintains a persistent visibility index.
-
-`nextAfter` is the consumed raw boundary: it can cross hidden records, never
-unreturned visible items. `hasMore` means visible records remain beyond it. Empty
-pages consume hidden tails and return current state. Rewrites are undetected;
-out-of-range numbers fail rather than reset. Browser cursors are unaffected.
-
 ### CLI continuous inspection
 
 `session inspect --follow` immediately reads the first page, drains pagination
-sequentially, then waits `--interval` seconds (default 3) before the next round.
+sequentially, then long-polls the same endpoint for the next round.
 `--count` is a positive safe integer counting rounds, including empty rounds;
-the final round drains every page. Both options require `--follow`. Without a
+the final round drains every page. `--count` requires `--follow`; `204` timeouts count as rounds. Without a
 count observation continues until canceled, including while idle, disconnected,
 or after an assistant response. Stopping observation does not stop the session.
 Task completion is judged by the caller against requirements and deliverables.
-Follow has no overall deadline; `--timeout` limits each HTTP request.
+Follow has no overall deadline; `--timeout` limits each HTTP request (default 30 seconds, above the server’s 25-second wait).
 
 The first result always prints. Later results print only for visible new items
 or changes to session/interaction fields. JSON output is NDJSON with the same
@@ -484,7 +469,7 @@ external-change scan or filesystem/tmux atomicity. Native commands use owning
 | Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.           |
 | Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks. |
 | Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                |
-| Delete    | Native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds.                                                                 |
+| Delete    | No prior archive or automatic exit; native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds.                             |
 
 Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
 `--worktree`/`--yolo` (off by default), and initial binding instruction. Resume uses

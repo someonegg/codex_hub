@@ -40,11 +40,8 @@ function setup() {
     parentId: null,
     childIds: [],
     agent: null,
-    messageCount: 0,
-    toolCount: 0,
     warningCount: 0,
     diagnostics: [],
-    itemCount: 0,
   };
   const bind = (id = "session", time = 1, valid = true) =>
     bindings.submit({

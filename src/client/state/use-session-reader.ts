@@ -1,345 +1,180 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import type {
-  InteractionResponse,
-  ItemPageResponse,
-  SessionUpdatesResponse,
-} from "../../shared/api-contract";
-import type { TimelineItem } from "../../shared/domain";
+import type { SessionMessagesResponse } from "../../shared/api-contract";
 
 import { api, ApiClientError } from "../api/client";
-import { createRequestChannel } from "./request-channel";
-import { isAbort, isTimelineConflict, messageFor } from "./request-errors";
+import { isAbort, messageFor } from "./request-errors";
 import {
   INITIAL_RETRY_MS,
   isRetryableRequestError,
   nextRetryMs,
   waitForRetry,
 } from "./retry-policy";
-import type { ReaderContext } from "./session-reader-state";
-import { type UpdatesSnapshot, useSessionUpdates } from "./use-session-updates";
 
-const TIMELINE_PAGE_SIZE = 300;
-
-type ReaderOperation = "open" | "page" | "poll" | "reload" | null;
-
-interface ReaderState {
-  operation: ReaderOperation;
-  context: ReaderContext | null;
-  items: TimelineItem[];
-  interaction: InteractionResponse | null;
+type Operation = "open" | "page" | "poll" | "reload" | null;
+interface ActiveRequest {
+  controller: AbortController;
+  operation: Exclude<Operation, null>;
+}
+interface ReadState {
+  page: SessionMessagesResponse | null;
+  operation: Operation;
   error: string | null;
   retrying: boolean;
   missing: boolean;
-  timelineConflict: boolean;
-  timelineRenderGeneration: number;
 }
-
-type ReaderAction =
-  | { type: "start"; operation: Exclude<ReaderOperation, null>; preserve: boolean }
-  | { type: "success"; page: ItemPageResponse; replace: boolean }
-  | { type: "updates-success"; response: SessionUpdatesResponse }
-  | { type: "request-error"; error: string; retrying: boolean }
-  | { type: "failure"; error: string; missing: boolean }
-  | { type: "timeline-conflict" }
-  | { type: "clear-error" };
-
-interface ActiveRequest {
-  controller: AbortController;
-  generation: number;
-}
-
-interface PageRequestMode {
-  readonly preserveCurrent: boolean;
-  readonly replaceItems: boolean;
-}
-
-const initialState: ReaderState = {
+const initial: ReadState = {
+  page: null,
   operation: null,
-  context: null,
-  items: [],
-  interaction: null,
   error: null,
   retrying: false,
   missing: false,
-  timelineConflict: false,
-  timelineRenderGeneration: 0,
 };
 
 export function useSessionReader(sessionId: string) {
-  const [state, dispatch] = useReducer(reducer, initialState);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
-  const [visible, setVisible] = useState(() => document.visibilityState !== "hidden");
-  useEffect(() => {
-    const visibility = () => setVisible(document.visibilityState !== "hidden");
-    document.addEventListener("visibilitychange", visibility);
-    return () => document.removeEventListener("visibilitychange", visibility);
-  }, []);
+  const [state, setState] = useState(initial);
+  const current = useRef(state);
+  current.current = state;
   const active = useRef<ActiveRequest | null>(null);
-  const channel = useRef(createRequestChannel());
-  const generation = useRef(0);
-  const stateRef = useRef(state);
-  stateRef.current = state;
+  const suspended = useRef<Exclude<Operation, null> | null>(null);
+  const [visible, setVisible] = useState(() => !document.hidden);
 
-  const markTimelineConflict = useCallback(() => {
-    generation.current += 1;
-    active.current?.controller.abort();
-    active.current = null;
-    dispatch({ type: "timeline-conflict" });
-  }, []);
-
-  const isCurrent = useCallback(
-    (request: ActiveRequest) =>
-      active.current === request &&
-      request.generation === generation.current &&
-      !request.controller.signal.aborted,
-    [],
-  );
-
-  const requestPage = useCallback(
-    async (
-      operation: Exclude<ReaderOperation, null>,
-      cursor: ReaderContext["cursor"] | undefined,
-      mode: PageRequestMode,
-    ): Promise<boolean> => {
-      if (active.current !== null) return false;
-      const request: ActiveRequest = {
-        controller: channel.current.begin().controller,
-        generation: generation.current,
-      };
+  const read = useCallback(
+    async (operation: Exclude<Operation, null>) => {
+      if (active.current) return false;
+      if (document.hidden) {
+        suspended.current = operation;
+        return false;
+      }
+      suspended.current = null;
+      const controller = new AbortController();
+      const request = { controller, operation };
       active.current = request;
-      dispatch({ type: "start", operation, preserve: mode.preserveCurrent });
+      const replace = operation === "open" || operation === "reload";
+      let page = replace ? null : current.current.page;
+      let recovered = false;
       let retryMs = INITIAL_RETRY_MS;
+      setState((s) => ({ ...s, operation, error: null, retrying: false }));
       try {
-        while (isCurrent(request)) {
+        for (;;) {
           try {
-            const page = await api.items(
+            const result = await api.messages(
               sessionId,
               {
-                cursor,
-                limit: TIMELINE_PAGE_SIZE,
+                after: page?.nextAfter ?? 0,
+                limit: 300,
+                wait: operation === "poll" && !recovered,
+                stateRevision: page?.stateRevision,
               },
-              request.controller.signal,
+              controller.signal,
             );
-            if (!isCurrent(request)) return false;
-            dispatch({ type: "success", page, replace: mode.replaceItems });
+            if (controller.signal.aborted) return false;
+            let nextPage: SessionMessagesResponse | null = null;
+            if (result) {
+              nextPage = { ...result };
+              if (!replace && !recovered) {
+                nextPage.items =
+                  result.items.length === 0 && page
+                    ? page.items
+                    : [...(page?.items ?? []), ...result.items];
+              }
+            }
+            setState((s) => ({
+              ...s,
+              page: nextPage ?? s.page,
+              operation: null,
+              error: null,
+              retrying: false,
+              missing: false,
+            }));
             return true;
           } catch (reason) {
-            if (!isCurrent(request) || isAbort(reason)) return false;
-            if (isTimelineConflict(reason)) {
-              markTimelineConflict();
-              return false;
+            if (controller.signal.aborted || isAbort(reason)) return false;
+            if (
+              reason instanceof ApiClientError &&
+              reason.code === "after_out_of_range" &&
+              !recovered
+            ) {
+              page = null;
+              recovered = true;
+              continue;
             }
-            const retryablePagination =
-              (operation === "page" || operation === "poll") && isRetryableRequestError(reason);
-            if (!retryablePagination) throw reason;
-            dispatch({ type: "request-error", error: messageFor(reason), retrying: true });
-            await waitForRetry(retryMs, request.controller.signal);
+            if (!isRetryableRequestError(reason)) throw reason;
+            setState((s) => ({ ...s, error: messageFor(reason), retrying: true }));
+            await waitForRetry(retryMs, controller.signal);
             retryMs = nextRetryMs(retryMs);
           }
         }
-        return false;
       } catch (reason) {
-        if (!isCurrent(request) || isAbort(reason)) return false;
-        const missing =
-          reason instanceof ApiClientError &&
-          reason.status === 404 &&
-          reason.code === "session_not_found";
-        dispatch({ type: "failure", error: messageFor(reason), missing });
+        if (!controller.signal.aborted)
+          setState((s) => ({
+            ...s,
+            operation: null,
+            error: messageFor(reason),
+            retrying: false,
+            missing: reason instanceof ApiClientError && reason.code === "session_not_found",
+          }));
         return false;
       } finally {
         if (active.current === request) active.current = null;
       }
     },
-    [isCurrent, markTimelineConflict, sessionId],
+    [sessionId],
   );
 
   useEffect(() => {
-    generation.current += 1;
-    active.current?.controller.abort();
-    active.current = null;
-    void requestPage("open", undefined, {
-      preserveCurrent: false,
-      replaceItems: true,
-    });
+    suspended.current = null;
+    setState(initial);
+    if (!document.hidden) void read("open");
     return () => {
-      generation.current += 1;
       active.current?.controller.abort();
       active.current = null;
+      suspended.current = null;
     };
-  }, [requestPage]);
+  }, [read]);
 
-  const loadMore = useCallback(() => {
-    const current = stateRef.current;
-    if (current.context === null || !current.context.hasMore || current.timelineConflict) {
-      return Promise.resolve(false);
+  useEffect(() => {
+    const visibility = () => {
+      setVisible(!document.hidden);
+      if (document.hidden) {
+        if (active.current) suspended.current = active.current.operation;
+        active.current?.controller.abort();
+        active.current = null;
+        setState((s) => ({ ...s, operation: null, retrying: false }));
+      }
+    };
+    document.addEventListener("visibilitychange", visibility);
+    return () => document.removeEventListener("visibilitychange", visibility);
+  }, []);
+
+  useEffect(() => {
+    if (!visible || state.operation) return;
+    if (suspended.current) {
+      void read(suspended.current);
+      return;
     }
-    return requestPage("page", current.context.cursor, {
-      preserveCurrent: true,
-      replaceItems: false,
-    });
-  }, [requestPage]);
+    if (state.error || state.page?.hasMore || state.page?.session.status === "archived") return;
+    // The same request slot serializes history pagination and tail waiting.
+    void read(state.page ? "poll" : "open");
+  }, [read, visible, state]);
 
-  const retryOpen = useCallback(
-    () =>
-      requestPage("open", undefined, {
-        preserveCurrent: false,
-        replaceItems: true,
-      }),
-    [requestPage],
+  const loadMore = useCallback(
+    () => (current.current.page?.hasMore ? read("page") : Promise.resolve(false)),
+    [read],
   );
-
-  const reloadLatest = useCallback(() => {
+  const refreshLatest = useCallback(() => {
     active.current?.controller.abort();
     active.current = null;
-    generation.current += 1;
-    setAutoRefreshEnabled(true);
-    return requestPage("reload", undefined, {
-      preserveCurrent: true,
-      replaceItems: true,
-    });
-  }, [requestPage]);
-
-  const onSessionUpdates = useCallback(
-    async (response: SessionUpdatesResponse, expected: UpdatesSnapshot) => {
-      const current = stateRef.current;
-      if (
-        current.context === null ||
-        current.timelineConflict ||
-        current.context.cursor !== expected.cursor ||
-        current.context.updateRevision !== expected.updateRevision ||
-        response.cursor !== expected.cursor
-      )
-        return;
-      if (active.current !== null) return;
-      if (response.hasMore) {
-        const version = generation.current;
-        const loaded = await requestPage("poll", expected.cursor, {
-          preserveCurrent: true,
-          replaceItems: false,
-        });
-        if (version === generation.current && !loaded && !stateRef.current.timelineConflict)
-          setAutoRefreshEnabled(false);
-        return;
-      }
-      dispatch({ type: "updates-success", response });
-    },
-    [requestPage],
-  );
-
-  useSessionUpdates({
-    sessionId,
-    enabled:
-      autoRefreshEnabled &&
-      state.operation === null &&
-      state.context !== null &&
-      state.context.session.id === sessionId &&
-      state.context.session.status !== "archived" &&
-      !state.timelineConflict,
-    snapshot:
-      state.context === null
-        ? null
-        : {
-            cursor: state.context.cursor,
-            updateRevision: state.context.updateRevision,
-          },
-    onUpdate: onSessionUpdates,
-    onTimelineConflict: markTimelineConflict,
-    onError: (reason, terminal) => {
-      dispatch({ type: "request-error", error: messageFor(reason), retrying: !terminal });
-      if (terminal) setAutoRefreshEnabled(false);
-    },
-    onSuccess: () => dispatch({ type: "clear-error" }),
-  });
-
-  const retryContinuesWhileHidden = state.operation === "page" || state.operation === "poll";
-
+    return read("reload");
+  }, [read]);
   return {
-    context: state.context,
-    items: state.items,
-    interaction: state.interaction,
+    context: state.page,
     operation: state.operation,
-    readerLoading:
-      state.operation === "open" || state.operation === "page" || state.operation === "reload",
+    readerLoading: state.operation !== null && state.operation !== "poll",
     readerError: state.error,
-    readerRetrying: state.retrying && (visible || retryContinuesWhileHidden),
+    readerRetrying: state.retrying,
     missing: state.missing,
-    timelineConflict: state.timelineConflict,
-    timelineRenderGeneration: state.timelineRenderGeneration,
     loadMore,
-    retryOpen,
-    markTimelineConflict,
-    refreshLatest: reloadLatest,
+    refreshLatest,
   };
-}
-
-function reducer(state: ReaderState, action: ReaderAction): ReaderState {
-  switch (action.type) {
-    case "start":
-      return action.preserve
-        ? { ...state, operation: action.operation, error: null, retrying: false }
-        : {
-            ...initialState,
-            operation: action.operation,
-            timelineRenderGeneration: state.timelineRenderGeneration,
-          };
-    case "success": {
-      const context: ReaderContext = {
-        session: action.page.session,
-        cursor: action.page.cursor,
-        hasMore: action.page.hasMore,
-        updateRevision: action.page.updateRevision,
-      };
-      return {
-        ...state,
-        operation: null,
-        context,
-        items: action.replace ? action.page.items : appendUnique(state.items, action.page.items),
-        interaction: action.page.interaction,
-        error: null,
-        retrying: false,
-        missing: false,
-        timelineConflict: false,
-        timelineRenderGeneration:
-          action.replace && state.timelineConflict
-            ? state.timelineRenderGeneration + 1
-            : state.timelineRenderGeneration,
-      };
-    }
-    case "updates-success":
-      if (state.context === null || action.response.cursor !== state.context.cursor) return state;
-      return {
-        ...state,
-        context: {
-          session: action.response.session,
-          cursor: action.response.cursor,
-          hasMore: action.response.hasMore,
-          updateRevision: action.response.updateRevision,
-        },
-        interaction: action.response.interaction,
-        error: null,
-        retrying: false,
-        missing: false,
-      };
-    case "request-error":
-      return { ...state, error: action.error, retrying: action.retrying };
-    case "failure":
-      return {
-        ...state,
-        operation: null,
-        error: action.error,
-        missing: action.missing,
-        retrying: false,
-      };
-    case "timeline-conflict":
-      return { ...state, operation: null, error: null, timelineConflict: true, retrying: false };
-    case "clear-error":
-      return state.error === null ? state : { ...state, error: null, retrying: false };
-  }
-}
-
-function appendUnique(existing: TimelineItem[], incoming: TimelineItem[]): TimelineItem[] {
-  const seen = new Set(existing.map((item) => item.id));
-  const additions = incoming.filter((item) => !seen.has(item.id));
-  return additions.length === 0 ? existing : [...existing, ...additions];
 }

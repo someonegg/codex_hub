@@ -3,7 +3,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ApiClientError } from "../../src/client/api/client";
 import { AttachCommand } from "../../src/client/components/AttachCommand";
 import { MessageItem } from "../../src/client/components/MessageItem";
 import { RequestError } from "../../src/client/components/RequestError";
@@ -117,17 +116,6 @@ it.each([
   }
   const namespaced = Object.values(partitionMessages(en)).flatMap((group) => Object.keys(group));
   expect(namespaced.sort()).toEqual(Object.keys(en).sort());
-});
-
-it("uses structured error codes and retains native diagnostic details", () => {
-  updatePreferences({ language: "en" });
-  render(
-    <RequestError error={new ApiClientError(409, "timeline_changed", "Native diagnostic /path")} />,
-  );
-  expect(screen.getByText("Native diagnostic /path")).toBeInTheDocument();
-  act(() => updatePreferences({ language: "zh-CN" }));
-  expect(screen.getByText(/会话已更改，请刷新后重试/)).toBeInTheDocument();
-  expect(screen.getByText("Native diagnostic /path")).toBeInTheDocument();
 });
 
 it("translates an existing local error from its key", () => {

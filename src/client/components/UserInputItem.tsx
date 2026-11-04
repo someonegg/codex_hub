@@ -35,7 +35,7 @@ export function UserInputItem({ entry }: { entry: UserInputCardEntry }) {
     <article className="user-input-card">
       <div className="user-input-heading">
         <p className="event-label">
-          {t("userInput")} {entry.ordinal}
+          {t("userInput")}
           <EventTime timestamp={entry.timestamp} />
         </p>
         <span className={`user-input-status ${statusClass(entry.response)}`}>

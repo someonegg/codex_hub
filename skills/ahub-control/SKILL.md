@@ -33,7 +33,7 @@ ahub-cli session inspect SESSION_ID --json
 # Save nextAfter as BASELINE.
 
 ahub-cli session send SESSION_ID --stdin --json < /absolute/task.txt
-ahub-cli session inspect SESSION_ID --after BASELINE --follow --interval 3 --count 10 --json
+ahub-cli session inspect SESSION_ID --after BASELINE --follow --count 10 --json
 # Retain the latest nextAfter. Continue observing, respond, or verify deliverables.
 
 # After verifying deliverables, if the user requested session exit:
@@ -44,7 +44,7 @@ ahub-cli session exit SESSION_ID --json
 
 - Prefer `--json`. Single inspection returns one object; follow emits NDJSON. Parse each line independently as a result or `error` object. Text follow emits separate blocks.
 - Without `--after`, inspect returns the latest 10 visible records; `--after 0` starts from the beginning. Continue with the returned `nextAfter`.
-- Follow checks immediately, then every `--interval` seconds (default 3). `--count N` limits polling rounds, including rounds with no changes.
+- Follow drains available messages immediately, then long-polls for messages or state changes. `--count N` limits polling rounds, including rounds with no changes.
 - Use continuous follow when the execution tool supports background processes and incremental output; otherwise use finite rounds and continue from the last received `nextAfter`. Allow opportunities to report progress to the user.
 - Follow prints the first result, then only new messages or state changes. Unchanged rounds are silent; use inspect when you need to confirm the current state.
 - Read `role`, `phase`, `itemType`, and message body. `phase=update` usually indicates progress; `phase=response` signals a reply. Neither idle nor response ends follow; verify completion separately.
@@ -80,12 +80,12 @@ For questions (not Plans), an alternative is to interrupt, organize the chosen a
 
 - Read and retain each new assistant `phase=response` reply. Continue observing until connected and idle, collecting any subsequent messages; if already connected and idle, proceed immediately.
 - Use the collected replies and verification of deliverables against the task's acceptance criteria to decide whether to finish or address questions, blockers, or remaining work. Neither idle nor a reply alone proves completion. Resolve output locations against the actual `workingDirectory`, which may differ from `projectDirectory` with explicit cwd or worktrees.
-- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete requires prior archive. Verify an uncertain exit before claiming success.
+- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete permanently removes session history without requiring prior archive. Verify an uncertain exit before claiming success.
 - Report deliverables, verification scope, and whether the session exited.
 
 ## Recover from errors
 
-- Defaults are 15 seconds for list, inspect, terminal, send, keys, and interrupt; 45 seconds for create, resume, exit, archive, and delete. `--timeout` limits the invocation, except in follow where it limits each HTTP request and there is no overall deadline.
+- Follow defaults to 30 seconds per request. Other defaults are 15 seconds for list, inspect, terminal, send, keys, and interrupt; 45 seconds for create, resume, exit, archive, and delete. `--timeout` limits the invocation, except in follow where it limits each HTTP request and there is no overall deadline.
 - Exit code 0 means command success, not task completion; 1 means a definite failure or query error; 2 means a submitted write has an uncertain result.
 - After a timeout or exit code 2, check state before repeating a write. Stopping the client does not cancel backend operations; resubmitting create/send can duplicate sessions or messages.
 - For create/resume errors, read `error.code`, `error.message`, `error.sessionId`, and `error.tmux`. Use inspect/terminal when an ID is known; otherwise use the project list and tmux diagnostics.

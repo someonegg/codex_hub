@@ -1,44 +1,31 @@
 import { memo, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { TimelineCursor } from "../../shared/api-contract";
 import type { TimelineItem } from "../../shared/domain";
 import type { UserInputItem as UserInputTimelineItem } from "../../shared/domain";
 
 import { t } from "../i18n";
-import { DirectiveItem } from "./DirectiveItem";
 import { EventMark } from "./EventMark";
 import { InfiniteScrollSentinel } from "./InfiniteScrollSentinel";
-import { InternalEventItem } from "./InternalEventItem";
 import { isPlan, MessageItem } from "./MessageItem";
-import { TokenItem } from "./TokenItem";
-import { ToolItem } from "./ToolItem";
 import { type UserInputCardEntry, UserInputItem } from "./UserInputItem";
 
 interface TimelineProps {
   items: TimelineItem[];
   sessionId: string;
-  cursor: TimelineCursor;
   hasMore: boolean;
   loading: boolean;
   readerBusy?: boolean;
-  paginationEnabled?: boolean;
-  paginationFrozen?: boolean;
   onLoadMore: () => void;
-  onTimelineConflict: () => void;
 }
 
 export const Timeline = memo(function Timeline({
   items,
   sessionId,
-  cursor,
   hasMore,
   loading,
   readerBusy = loading,
-  paginationEnabled = true,
-  paginationFrozen = false,
   onLoadMore,
-  onTimelineConflict,
 }: TimelineProps) {
   useTranslation();
   const latestPlanId = useMemo(() => {
@@ -79,19 +66,16 @@ export const Timeline = memo(function Timeline({
               item={item}
               planOpen={plans.openIds.has(item.id)}
               onTogglePlan={togglePlan}
-              sessionId={sessionId}
-              cursor={cursor}
-              onTimelineConflict={onTimelineConflict}
             />
           </li>
         ))}
       </ol>
-      {hasMore && paginationEnabled && !paginationFrozen ? (
+      {hasMore ? (
         <InfiniteScrollSentinel
           enabled={!readerBusy}
-          triggerKey={cursor}
+          triggerKey={String(items.at(-1)?.ordinal ?? 0)}
           loading={loading}
-          loadingLabel={t("loadingMoreEvents")}
+          loadingLabel={t("loadingMoreMessages")}
           onLoadMore={onLoadMore}
         />
       ) : null}
@@ -101,12 +85,9 @@ export const Timeline = memo(function Timeline({
 
 function TimelineContent({
   item,
-  sessionId,
-  cursor,
-  onTimelineConflict,
   planOpen,
   onTogglePlan,
-}: Pick<TimelineProps, "sessionId" | "cursor" | "onTimelineConflict"> & {
+}: {
   item: TimelineEntry;
   planOpen: boolean;
   onTogglePlan: (id: string) => void;
@@ -115,37 +96,8 @@ function TimelineContent({
   switch (item.kind) {
     case "message":
       return <MessageItem item={item} planOpen={planOpen} onTogglePlan={onTogglePlan} />;
-    case "directive":
-      return (
-        <DirectiveItem
-          item={item}
-          sessionId={sessionId}
-          cursor={cursor}
-          onTimelineConflict={onTimelineConflict}
-        />
-      );
-    case "tool":
-      return (
-        <ToolItem
-          item={item}
-          sessionId={sessionId}
-          cursor={cursor}
-          onTimelineConflict={onTimelineConflict}
-        />
-      );
     case "user_input":
       return <UserInputItem entry={item} />;
-    case "token":
-      return <TokenItem item={item} />;
-    case "internal":
-      return (
-        <InternalEventItem
-          item={item}
-          sessionId={sessionId}
-          cursor={cursor}
-          onTimelineConflict={onTimelineConflict}
-        />
-      );
   }
 }
 

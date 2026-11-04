@@ -256,19 +256,20 @@ try {
     // Read a hosted-page Markdown link through the actual session reader.
     await context.route("**/api/v1/sessions**", async (route) => {
       const path = new URL(route.request().url()).pathname;
-      const session = { ...docsSession, itemCount: 1, messageCount: 1 };
+      const session = { ...docsSession, messageCount: 1 };
       if (path === "/api/v1/sessions")
         return route.fulfill({ json: { revision: "demo", homes: [], projects: [], sessions: [] } });
-      if (path.endsWith("/updates")) return route.fulfill({ status: 204 });
+      if (new URL(route.request().url()).searchParams.get("wait") === "true")
+        return route.fulfill({ status: 204 });
       const snapshot = {
         session,
         interaction: { supported: false },
-        cursor: "demo",
-        updateRevision: "demo",
+        nextAfter: 1,
+        stateRevision: "demo",
         hasMore: false,
       };
       return route.fulfill({
-        json: path.endsWith("/items")
+        json: path.endsWith("/messages")
           ? {
               ...snapshot,
               items: [

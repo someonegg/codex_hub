@@ -73,19 +73,6 @@
   align-items: stretch;
   gap: 1rem;
 }
-.event-toggles {
-  display: flex;
-  max-width: 100%;
-  overflow-x: auto;
-  flex-wrap: wrap;
-  gap: 1rem;
-}
-.event-toggle {
-  flex: 0 0 auto;
-  margin-top: 0;
-  font-size: var(--text-control);
-  min-height: var(--control-height);
-}
 .timeline {
   padding: 2rem 0 0;
   margin: 0;
@@ -120,28 +107,6 @@
   padding-right: 3rem;
   color: var(--error-ink);
   background: var(--error-surface);
-}
-.continuity-notice {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin: 1.25rem 0;
-  padding: 0.9rem 1rem;
-  color: var(--error-ink);
-  background: var(--error-surface);
-}
-.continuity-notice p {
-  margin: 0.25rem 0 0;
-  font-size: var(--text-small);
-}
-.continuity-notice button {
-  flex: 0 0 auto;
-  padding: 0.48rem 0.72rem;
-  color: currentColor;
-  background: transparent;
-  border: 1px solid currentColor;
-  cursor: pointer;
 }
 .error-state .error-dismiss {
   position: absolute;
@@ -328,15 +293,7 @@
   .reader-controls {
     gap: var(--space-small);
   }
-  .event-toggles {
-    column-gap: var(--space-medium);
-    row-gap: 0;
-  }
-  .event-toggle,
   .session-information summary {
     min-height: 44px;
-  }
-  .continuity-notice {
-    flex-wrap: wrap;
   }
 }

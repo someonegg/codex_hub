@@ -185,8 +185,6 @@ it("connects the panel toggle to the socket lifecycle", () => {
         state: "connected",
         attachCommand: null,
       }}
-      itemCount={0}
-      updatedAt={null}
     />,
   );
   expect(MockWebSocket.instances).toHaveLength(0);
@@ -231,8 +229,6 @@ it.each([false, true])(
           supersededBySessionId: null,
           attachCommand: null,
         }}
-        itemCount={0}
-        updatedAt={null}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));

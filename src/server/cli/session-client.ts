@@ -1,7 +1,7 @@
 import { request } from "node:http";
 import { request as secureRequest } from "node:https";
 
-import { httpFailure } from "./command-error.js";
+import { CommandError, httpFailure } from "./command-error.js";
 
 /** Invocation-scoped HTTP state; submitted writes are never retried. */
 export class SessionClient {
@@ -53,4 +53,13 @@ export class SessionClient {
       req.end(payload);
     });
   };
+}
+
+/** Reset an invalidated message cursor before the caller's single recovery attempt. */
+export function recoverMessageQuery(error: unknown, query: URLSearchParams): boolean {
+  if (!(error instanceof CommandError) || error.code !== "after_out_of_range") return false;
+  query.set("after", "0");
+  query.delete("stateRevision");
+  query.delete("wait");
+  return true;
 }

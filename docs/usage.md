@@ -100,7 +100,7 @@ Start the hub, then run session commands from another terminal:
 ahub-cli session list --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
+ahub-cli session inspect <id> --follow --count 5 --json
 ```
 
 Use an ID from `list` to send input or inspect a conversation. `list` shows
@@ -120,7 +120,7 @@ Resume keeps the original home and accepts `--yolo`.
 
 Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
 or pass `--url` to use another HTTP address; HTTPS is not supported by this client.
-Use `--timeout <seconds>` to change the default 15-second timeout (45 seconds for
+Use `--timeout <seconds>` to change the default 15-second timeout (30 seconds for follow; 45 seconds for
 create, resume, exit, archive, and delete). With `inspect --follow`, it limits each
 HTTP request; observation continues until Ctrl+C or the requested round count.
 

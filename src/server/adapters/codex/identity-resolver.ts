@@ -5,6 +5,7 @@ import { nonEmptyAgentIdentity, taskNameFromAgentPath } from "./agent-identity.j
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
+import { nonEmptyString } from "./value-readers.js";
 
 export interface SessionMetadata {
   threadId: string | null;
@@ -117,13 +118,15 @@ function rawMetadata(value: unknown): RawMetadata | null {
   if (!isObject(value)) return null;
   const spawn = threadSpawn(value);
   return {
-    id: string(value.id),
-    agentVersion: string(value.cli_version ?? value.agent_version),
-    title: string(value.title),
-    cwd: string(value.cwd),
-    timestamp: string(value.timestamp),
+    id: nonEmptyString(value.id),
+    agentVersion: nonEmptyString(value.cli_version ?? value.agent_version),
+    title: nonEmptyString(value.title),
+    cwd: nonEmptyString(value.cwd),
+    timestamp: nonEmptyString(value.timestamp),
     parentThreadId:
-      string(value.parent_thread_id) ?? string(value.parent_id) ?? string(spawn?.parent_thread_id),
+      nonEmptyString(value.parent_thread_id) ??
+      nonEmptyString(value.parent_id) ??
+      nonEmptyString(spawn?.parent_thread_id),
     agent: rawAgent(value, spawn),
   };
 }
@@ -141,19 +144,17 @@ function rawAgent(
   const source = isObject(value.source) ? value.source : null;
   const subagent = source?.subagent;
   return nonEmptyAgentIdentity({
-    taskName: taskNameFromAgentPath(string(value.agent_path) ?? string(spawn?.agent_path)),
-    nickname: string(value.agent_nickname) ?? string(spawn?.agent_nickname),
+    taskName: taskNameFromAgentPath(
+      nonEmptyString(value.agent_path) ?? nonEmptyString(spawn?.agent_path),
+    ),
+    nickname: nonEmptyString(value.agent_nickname) ?? nonEmptyString(spawn?.agent_nickname),
     role:
-      string(value.agent_role) ??
-      string(spawn?.agent_role) ??
+      nonEmptyString(value.agent_role) ??
+      nonEmptyString(spawn?.agent_role) ??
       (typeof subagent === "string" ? subagent : null),
   });
 }
 
 function timestampOf(record: Record<string, unknown> | undefined): string | null {
-  return record === undefined ? null : string(record.timestamp);
-}
-
-function string(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
+  return record === undefined ? null : nonEmptyString(record.timestamp);
 }

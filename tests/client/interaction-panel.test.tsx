@@ -41,7 +41,6 @@ function props(value: InteractionResponse | null) {
   return {
     sessionId: "session-a",
     interaction: value,
-    itemCount: 12,
     updatedAt: "2026-08-08T12:00:00.000Z",
     interactionBusy: false,
     error: null,
@@ -192,7 +191,6 @@ describe("interaction panel", () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
     const { rerender } = render(<InteractionPanel {...handlers} />);
-    expect(screen.getByText(/12 events · Updated/)).toBeInTheDocument();
     expect(screen.getByRole("textbox")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Interrupt" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Send" }).parentElement).toHaveClass(

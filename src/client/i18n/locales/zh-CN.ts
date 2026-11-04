@@ -6,15 +6,13 @@ export const messages: Record<keyof typeof english, string> = {
   top: "顶部",
   end: "底部",
   resumeUnavailable: "此会话无法恢复。",
-  toolCompleted: "已完成",
-  toolFailed: "失败",
 
   enter: "Enter",
   aborted: "已中止",
   allHomes: "所有 Home",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "所有成功上传的文件都会保留，包括从草稿中移除的文件。",
-  anInteractionIsAlreadyInProgress: "已有交互正在进行。",
+
   answered: "已回答",
   archiveSession: "归档会话",
   archived: "已归档",
@@ -22,7 +20,7 @@ export const messages: Record<keyof typeof english, string> = {
   assistant: "助手",
   assistantUpdate: "助手进展",
   assistantResponse: "助手回复",
-  assistantResponsePlan: "助手回复 · 计划 ·",
+  assistantResponsePlan: "助手回复 · 计划",
   attachFiles: "添加附件",
   attachToTmuxBeforeTryingAgainCreatingAgainMayStartAnotherSession:
     "重试前请连接 tmux；再次创建可能启动另一个会话。",
@@ -30,9 +28,7 @@ export const messages: Record<keyof typeof english, string> = {
   backToTop: "返回顶部",
   browseSessionsByProjectReadTheirHistoryAndContinueYourWork:
     "按项目浏览会话、阅读历史记录并继续工作。",
-  cacheWriteInput: "缓存写入",
-  cachedInput: "缓存读取",
-  callID: "调用 ID ·",
+
   cancel: "取消",
   capturingTerminalPane: "正在捕获终端窗格…",
   capturing: "正在捕获…",
@@ -46,7 +42,7 @@ export const messages: Record<keyof typeof english, string> = {
   closeNewSession: "关闭新建会话",
   closeResumeSession: "关闭恢复会话",
   closeTmuxAccess: "关闭 tmux 连接",
-  collapse: "收起",
+
   confirmDelete: "确认删除",
   confirmingArchive: "正在确认归档",
   connected: "已连接",
@@ -67,12 +63,10 @@ export const messages: Record<keyof typeof english, string> = {
   deleteSessionLabel: "删除会话？",
   deleteThisFile: "删除此文件？",
   deleting: "正在删除…",
-  detailWasTruncatedForSafeDisplay: "为安全显示，详情已截断。",
+
   diff: "差异",
   diffNotFoundOrAlreadyCleanedUp: "差异不存在或已被清理。",
-  directiveUnavailable: "指令不可用",
-  directiveWasTruncatedForSafeDisplay: "为安全显示，指令已截断。",
-  directive: "指令 ·",
+
   disconnected: "已断开",
   dismiss: "关闭提示",
   dismissInteractionError: "关闭交互错误提示",
@@ -92,7 +86,7 @@ export const messages: Record<keyof typeof english, string> = {
   ensureTheOriginalSessionHasExited: "请确认原会话进程已经退出。",
   error: "错误",
   exitSession: "退出会话",
-  expand: "展开",
+
   fileDiffs: "文件差异",
   filesMustBeAtMost20MiB: "单个文件不能超过 20 MiB",
   filterByHome: "按 Home 筛选",
@@ -101,49 +95,43 @@ export const messages: Record<keyof typeof english, string> = {
   handOffThisPaneSBindingToTheActiveCodexSession: "将此窗格的绑定移交给当前活动的 Codex 会话。",
   handoff: "移交绑定",
   hide: "隐藏",
-  hideJSON: "隐藏 JSON",
-  hideDirective: "隐藏指令",
-  hideToolDetail: "隐藏工具详情",
+
   home: "Home",
   homeLabel: "Home：",
   idle: "空闲",
-  input: "输入",
-  internalEventUnavailable: "内部事件不可用",
-  internal: "内部事件 ·",
+
   interrupt: "中断",
   invalidTerminalPreviewUpdateReconnecting: "终端预览更新无效，正在重新连接",
-  jSONWasTruncatedForSafeDisplay: "为安全显示，JSON 已截断。",
+
   jumpToBottom: "跳到底部",
-  last: "最近",
+
   left: "向左",
   linkCopied: "链接已复制",
   live: "运行中",
   loadingDiff: "正在加载差异…",
-  loadingDirective: "正在加载指令…",
-  loadingInternalEvent: "正在加载内部事件…",
-  loadingMoreEvents: "正在加载更多事件…",
+
+  loadingMoreMessages: "正在加载更多消息…",
   loadingPages: "正在加载页面…",
   loadingSessions: "正在加载会话…",
-  loadingToolDetail: "正在加载工具详情…",
+
   loadingUploads: "正在加载上传记录…",
   messageToAgent: "发送给智能体的消息",
   newSession: "新建会话",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
     "尚未检测到 Codex 会话。请连接 tmux 查看启动进度。",
   noAnswerRecorded: "尚无回答记录。",
-  noDetailAvailable: "暂无详情。",
+
   noMainSessionsYet: "暂无主会话",
   noPublishedWebPages: "暂无已发布网页。",
   noUploadsYet: "暂无上传记录。",
-  noVisibleEventsInTheLoadedRangeKeepScrollingOrChangeAVisibilityFilter:
-    "已加载范围内没有可见事件。请继续滚动或调整可见性筛选。",
+
   nothingToShow: "暂无内容",
   open: "打开",
   openSession: "打开会话",
   openingSession: "正在打开会话…",
   operation: "操作",
   originalSessionID: "原始会话 ID ·",
-  output: "输出",
+
   pagePosition: "页面位置",
   pages: "网页",
   parentSession: "父会话",
@@ -161,20 +149,20 @@ export const messages: Record<keyof typeof english, string> = {
   projectsAndMainSessions: "项目与主会话",
   publishedPages: "已发布网页",
   publishedSnapshots: "已发布快照",
-  reasoningOutput: "推理输出",
+
   reconnectBeforeAttachingFiles: "请重新连接后再添加附件",
   reconnecting: "正在重新连接…",
   recordedAnswer: "已记录的回答",
   recordedAnswers: "已记录的回答",
   refresh: "刷新",
-  reloadLatestVersion: "重新加载最新版本",
+
   replacementSessionUnavailable: "替代会话不可用",
   requestDetailsUnavailable: "请求详情不可用。",
   resume: "恢复",
   resumeSession: "恢复会话",
   automaticallyRetrying: "正在自动重试…",
   retry: "重试",
-  retryLoadingDetail: "重新加载详情",
+
   retryOpeningSession: "重新打开会话",
   retryPreview: "重试预览",
   retryStatusCheck: "重试状态检查",
@@ -189,7 +177,7 @@ export const messages: Record<keyof typeof english, string> = {
   sendingExitCommand: "正在发送退出命令",
   session: "会话",
   sessionList: "会话列表",
-  sessionContentHasChanged: "会话内容已更改",
+
   sessionCreated: "会话已创建。",
   sessionHome: "会话 Home",
   sessionInformation: "会话信息",
@@ -199,9 +187,7 @@ export const messages: Record<keyof typeof english, string> = {
   sessionNotFound: "会话不存在",
   sessionTimeline: "会话时间线",
   show: "显示",
-  showJSON: "显示 JSON",
-  showDirective: "显示指令",
-  showToolDetail: "显示工具详情",
+
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分内容未能完整解析，请查看下方原文。",
   startingCodex: "正在启动 Codex",
@@ -215,20 +201,16 @@ export const messages: Record<keyof typeof english, string> = {
   terminalControls: "终端控制",
   terminalOutputExceededThePreviewLimitTheBeginningWasOmitted:
     "终端输出超过预览限制，开头内容已省略。",
-  theLocalHubCouldNotCompleteTheRequest: "本地 Hub 无法完成请求。",
-  theOperationWasAborted: "操作已中止",
+
   theTerminalPaneIsEmpty: "终端窗格为空。",
-  thisSessionHasNoVisibleEvents: "此会话没有可见事件",
+  thisSessionHasNoMessages: "此会话暂无消息",
   timeUnavailable: "时间不可用",
-  timelineEventVisibility: "时间线事件可见性",
+
   tmuxAccess: "连接 tmux",
-  token: "Token ·",
-  toolDetailUnavailable: "工具详情不可用",
-  total: "累计",
-  totalTokens: "Token 总数",
+
   trackingHasStoppedRefreshTheSessionListToCheckTheResult:
     "状态跟踪已停止，请刷新会话列表检查结果。",
-  tryShowingMoreEventTypesOrWaitForTheSessionToUpdate: "请显示更多事件类型，或等待会话更新。",
+
   unableToLoadDiff: "无法加载差异。",
   unableToLoadUploads: "无法加载上传记录",
   unavailable: "不可用",
@@ -240,23 +222,21 @@ export const messages: Record<keyof typeof english, string> = {
   uploadHistoryCodexHub: "上传记录 · Codex Hub",
   useTheOriginalActionButtonToTryAgain: "请使用原操作按钮重试。",
   user: "用户",
-  userInput: "用户输入 ·",
+  userInput: "用户输入",
   viewOriginalDiff: "查看原始差异",
   waitForTheSessionToUpdate: "请等待会话更新。",
   waiting: "等待中",
   waitingForExit: "正在等待退出",
   working: "工作中",
   workingDirectory: "工作目录 ·",
-  yourReadingPositionHasBeenPreservedReloadToReadTheLatestVersionFromTheFirstPage:
-    "已保留阅读位置。重新加载后将从第一页显示最新版本。",
+
   tmuxAccessLabel: "连接 tmux",
   backToList: "← 返回列表",
   backToSession: "← 返回会话",
   parentSessionLabel: "← 父会话",
-  events_one: "{{count, number}} 条事件",
-  events_other: "{{count, number}} 条事件",
+
   characters: "{{count, number}} 个字符",
-  filesChanged_one: "{{count, number}} 个文件变更",
+
   filesChanged_other: "{{count, number}} 个文件变更",
   projectSessions: "{{project}}，{{count, number}} 个主会话",
   newProjectSession: "在 {{project}} 中新建会话",
@@ -266,21 +246,16 @@ export const messages: Record<keyof typeof english, string> = {
   collapseFile: "收起 {{filename}}",
   diffFor: "{{path}} 的差异",
   deleteArtifact: "删除“{{title}}”及其所有快照？",
-  tokenUsage: "{{label}} Token 用量",
+
   shiftNewline: "Shift+Enter 换行。",
   shiftSend: "Shift+Enter 发送。",
   messageLimit: "消息为 {{size}} 个 UTF-8 字节；上限为 {{limit}} 字节。",
-  updatedSummary: "{{events}} · 更新于 {{time}}",
-  unknownUpdateSummary: "{{events}} · 更新时间不可用",
+
   uploadProgress: "正在上传 {{current}}/{{total}}…",
   uploadBytes: "{{size}} 字节",
-  toolCall: "工具调用 · {{ordinal}}",
-  toolOutput: "工具输出 · {{status}} · {{ordinal}}",
+
   omittedImage: "[图片已省略{{alt}}]",
-  directiveEvent: "指令",
-  toolEvent: "工具",
-  tokenEvent: "Token",
-  internalEvent: "内部事件",
+
   operationCreate: "创建",
   operationResume: "恢复",
   operationArchive: "归档",
@@ -296,7 +271,6 @@ export const messages: Record<keyof typeof english, string> = {
   requestNotFound: "请求的资源不存在。",
   requestDisconnected: "终端未连接，请重新连接或恢复会话。",
   requestTooLarge: "上传文件或消息超过大小限制。",
-  requestConflict: "会话已更改，请刷新后重试。",
 };
 
 import type { settings as englishSettings } from "./en";

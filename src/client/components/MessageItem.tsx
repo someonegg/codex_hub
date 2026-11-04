@@ -116,7 +116,7 @@ export const MessageItem = memo(function MessageItem({
     >
       <p className="event-label">
         {messageLabel(item)}
-        {itemType} · {item.ordinal}
+        {itemType}
         <EventTime timestamp={item.timestamp} />
       </p>
       <div className="message-content">
@@ -148,7 +148,7 @@ function PlanMessage({ item, planOpen, onTogglePlan }: MessageItemProps) {
         }}
       >
         <span className="event-label">
-          {t("assistantResponsePlan")} {item.ordinal}
+          {t("assistantResponsePlan")}
           <EventTime timestamp={item.timestamp} />
         </span>
         <span className="plan-toggle-action">
@@ -193,7 +193,7 @@ function messageLabel(item: Message): string {
 }
 
 export function isPlan(item: Message): boolean {
-  return item.role === "assistant" && item.phase === "response" && item.itemType === "Plan";
+  return item.role === "assistant" && item.phase === "response" && item.itemType === "plan";
 }
 
 function parsePlanPreview(markdown: string): string {

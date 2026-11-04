@@ -2,7 +2,6 @@ import {
   appendFile,
   cp,
   mkdir,
-  readFile,
   rename,
   stat,
   symlink,
@@ -210,69 +209,6 @@ describe("catalog discovery", () => {
       },
     });
     await expect(broken.refresh()).rejects.toThrow("decoder invariant");
-  });
-
-  it("incrementally publishes appended records while preserving old normalized values", async () => {
-    const home = await createTempDirectory("codex-adapter-append-");
-    await mkdir(join(home, "sessions"));
-    const path = join(home, "sessions/rollout-incremental.jsonl");
-    await writeFile(
-      path,
-      [
-        JSON.stringify({
-          type: "session_meta",
-          payload: { id: "incremental", title: "Incremental" },
-        }),
-        JSON.stringify({
-          type: "response_item",
-          payload: {
-            type: "function_call",
-            name: "inspect",
-            call_id: "cross-refresh",
-            arguments: "input",
-          },
-        }),
-        "",
-      ].join("\n"),
-    );
-    const source = new CodexSessionSource(home, "codex-append");
-
-    const first = await source.refresh();
-    const oldNormalized = first.sessions[0]!.normalized;
-    const oldItem = oldNormalized.timeline[0]!;
-    const oldDetail = oldNormalized.toolDetails.get(oldItem.id);
-    await appendFile(
-      path,
-      `${JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "cross-refresh",
-          output: "result",
-        },
-      })}\n`,
-    );
-
-    const second = await source.refresh();
-    const nextNormalized = second.sessions[0]!.normalized;
-    expect(source.lastRefreshTelemetry()).toMatchObject({
-      fullFiles: 0,
-      appendFiles: 1,
-    });
-    expect(source.lastRefreshTelemetry().decodeBytes).toBeLessThan(
-      Buffer.byteLength(await readFile(path)),
-    );
-    expect(nextNormalized.timeline).toHaveLength(2);
-    expect(nextNormalized.timeline[0]).toBe(oldItem);
-    expect(nextNormalized.toolDetails.get(oldItem.id)).toBe(oldDetail);
-    expect(nextNormalized.timeline[1]).toMatchObject({
-      kind: "tool",
-      stage: "output",
-      callId: "cross-refresh",
-      toolName: "inspect",
-    });
-    expect(oldNormalized.timeline).toEqual([oldItem]);
-    expect(oldNormalized.toolDetails.size).toBe(1);
   });
 
   it("keeps the prior source checkpoint after an incremental derivation failure", async () => {

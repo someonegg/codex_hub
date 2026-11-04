@@ -2,10 +2,8 @@ import type { SessionDetail, SessionSummary, TimelineItem } from "./domain.js";
 
 export * from "./interaction.js";
 
-declare const timelineCursorBrand: unique symbol;
-export type TimelineCursor = string & { readonly [timelineCursorBrand]: true };
-declare const updateRevisionBrand: unique symbol;
-export type UpdateRevision = string & { readonly [updateRevisionBrand]: true };
+declare const stateRevisionBrand: unique symbol;
+export type UpdateRevision = string & { readonly [stateRevisionBrand]: true };
 
 export interface ApiError {
   error: {
@@ -37,17 +35,20 @@ export interface SessionListResponse {
 export interface SessionDetailResponse {
   session: SessionDetail;
   interaction: InteractionResponse;
-  updateRevision: UpdateRevision;
+  stateRevision: UpdateRevision;
 }
 
 export interface SessionMessagesQuery {
   limit?: number;
   after?: number;
+  wait?: boolean;
+  stateRevision?: UpdateRevision;
 }
 
 export interface SessionMessagesResponse {
   session: SessionDetail;
   live: boolean;
+  stateRevision: UpdateRevision;
   interaction: InteractionResponse;
   items: TimelineItem[];
   nextAfter: number;
@@ -58,61 +59,6 @@ export interface TerminalResponse {
   content: string;
   truncated: boolean;
   capturedAt: string;
-}
-
-export interface ItemPageQuery {
-  limit?: number;
-  cursor?: TimelineCursor;
-}
-
-export interface ItemPageResponse {
-  session: SessionDetail;
-  cursor: TimelineCursor;
-  hasMore: boolean;
-  items: TimelineItem[];
-  interaction: InteractionResponse;
-  updateRevision: UpdateRevision;
-}
-
-export interface SessionUpdatesQuery {
-  cursor: TimelineCursor;
-  after: UpdateRevision;
-}
-
-export interface SessionUpdatesResponse {
-  session: SessionDetail;
-  cursor: TimelineCursor;
-  hasMore: boolean;
-  interaction: InteractionResponse;
-  updateRevision: UpdateRevision;
-}
-
-export interface ToolDetailResponse {
-  input: string | null;
-  output: string | null;
-  truncated: boolean;
-}
-
-export interface ToolDetailQuery {
-  cursor: TimelineCursor;
-}
-
-export interface DirectiveDetailResponse {
-  text: string;
-  truncated: boolean;
-}
-
-export interface DirectiveDetailQuery {
-  cursor: TimelineCursor;
-}
-
-export interface InternalDetailResponse {
-  json: string;
-  truncated: boolean;
-}
-
-export interface InternalDetailQuery {
-  cursor: TimelineCursor;
 }
 
 export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected" | "superseded";

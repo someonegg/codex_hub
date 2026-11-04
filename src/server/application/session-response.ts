@@ -4,7 +4,7 @@ import { reconcileSessionState } from "../interaction/reconcile-session-state.js
 import { type UpdateRevisionFactory, withUpdateRevision } from "../updates/update-revision.js";
 import type { InteractionSessionSnapshot } from "./session-reader.js";
 
-export interface SessionInteractionReader {
+export interface SessionInteractionDescriber {
   describeSnapshot(
     sessionId: string,
     snapshot: InteractionSessionSnapshot,
@@ -17,7 +17,7 @@ export async function assembleSessionResponse<
     readonly session: SessionDetail;
     readonly interactionSession: InteractionSessionSnapshot;
   },
->(input: T, interaction: SessionInteractionReader | undefined, revision: UpdateRevisionFactory) {
+>(input: T, interaction: SessionInteractionDescriber | undefined, revision: UpdateRevisionFactory) {
   const { interactionSession, ...response } = input;
   const description = interaction
     ? await interaction.describeSnapshot(input.session.id, interactionSession)

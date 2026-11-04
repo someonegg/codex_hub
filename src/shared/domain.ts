@@ -47,105 +47,65 @@ export interface SessionDetail {
   parentId: SessionId | null;
   childIds: SessionId[];
   agent: AgentIdentity | null;
-  messageCount: number;
-  toolCount: number;
   sourceId: string | null;
-  itemCount: number;
 }
 
 interface TimelineItemBase {
-  id: ItemId;
-  ordinal: number;
-  timestamp: string | null;
+  readonly id: ItemId;
+  readonly ordinal: number;
+  readonly timestamp: string | null;
 }
 
 export interface MessageItem extends TimelineItemBase {
-  kind: "message";
-  role: "user" | "assistant";
-  phase: "update" | "response" | null;
-  itemType: string | null;
-  markdown: string;
+  readonly kind: "message";
+  readonly role: "user" | "assistant";
+  readonly phase: "update" | "response" | null;
+  readonly itemType: "plan" | null;
+  readonly markdown: string;
 }
-
-interface DirectiveItemBase extends TimelineItemBase {
-  kind: "directive";
-}
-
-export interface InlineDirectiveItem extends DirectiveItemBase {
-  hasDetail: false;
-  text: string;
-}
-
-export interface LazyDirectiveItem extends DirectiveItemBase {
-  hasDetail: true;
-  summary: string;
-  charCount: number;
-}
-
-export type DirectiveItem = InlineDirectiveItem | LazyDirectiveItem;
-
-interface ToolItemBase extends TimelineItemBase {
-  kind: "tool";
-  callId: string;
-  toolName: string;
-  preview: string | null;
-  charCount: number;
-  hasDetail: boolean;
-}
-
-export interface ToolCallItem extends ToolItemBase {
-  stage: "call";
-}
-
-export interface ToolOutputItem extends ToolItemBase {
-  stage: "output";
-  status: "completed" | "failed";
-}
-
-export type ToolItem = ToolCallItem | ToolOutputItem;
 
 export interface UserInputOption {
-  label: string;
-  description: string;
+  readonly label: string;
+  readonly description: string;
 }
 
 export interface UserInputQuestion {
-  id: string;
-  header: string;
-  question: string;
-  options: UserInputOption[];
+  readonly id: string;
+  readonly header: string;
+  readonly question: string;
+  readonly options: readonly UserInputOption[];
 }
 
 export interface UserInputAnswer {
-  questionId: string;
-  answers: string[];
+  readonly questionId: string;
+  readonly answers: readonly string[];
 }
 
 interface UserInputItemBase extends TimelineItemBase {
-  kind: "user_input";
-  callId: string;
+  readonly kind: "user_input";
+  readonly callId: string;
 }
 
 export interface UserInputRequestItem extends UserInputItemBase {
-  stage: "request";
-  questions: UserInputQuestion[];
+  readonly stage: "request";
+  readonly questions: readonly UserInputQuestion[];
 }
 
 export interface AnsweredUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "answered";
-  answers: UserInputAnswer[];
+  readonly stage: "response";
+  readonly outcome: "answered";
+  readonly answers: readonly UserInputAnswer[];
 }
 
 export interface AbortedUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "aborted";
+  readonly stage: "response";
+  readonly outcome: "aborted";
 }
 
 export interface UnavailableUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "unavailable";
-  summary: string;
+  readonly stage: "response";
+  readonly outcome: "unavailable";
+  readonly summary: string;
 }
 
 export type UserInputItem =
@@ -154,32 +114,4 @@ export type UserInputItem =
   | AbortedUserInputItem
   | UnavailableUserInputItem;
 
-export interface TokenUsageCounters {
-  totalTokens: number | null;
-  inputTokens: number | null;
-  cachedInputTokens: number | null;
-  cacheWriteInputTokens: number | null;
-  outputTokens: number | null;
-  reasoningOutputTokens: number | null;
-}
-
-export interface TokenItem extends TimelineItemBase {
-  kind: "token";
-  tokenUsage: {
-    total: TokenUsageCounters | null;
-    last: TokenUsageCounters | null;
-  };
-}
-
-export interface InternalEventItem extends TimelineItemBase {
-  kind: "internal";
-  eventType: string;
-}
-
-export type TimelineItem =
-  | MessageItem
-  | DirectiveItem
-  | ToolItem
-  | UserInputItem
-  | TokenItem
-  | InternalEventItem;
+export type TimelineItem = MessageItem | UserInputItem;

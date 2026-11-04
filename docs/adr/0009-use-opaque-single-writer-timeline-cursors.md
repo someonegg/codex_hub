@@ -1,9 +1,11 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-01
 ---
 
 # Use opaque single-writer timeline cursors
+
+Superseded by [ADR-0025](0025-unify-session-reading-on-ordinal-messages.md).
 
 ## Context and Problem Statement
 

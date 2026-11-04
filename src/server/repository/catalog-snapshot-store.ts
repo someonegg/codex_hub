@@ -16,11 +16,6 @@ import {
   RefreshDiagnosticLogger,
 } from "./diagnostic-logger.js";
 import { RefreshCoordinator } from "./refresh-coordinator.js";
-import {
-  type IndexedSession,
-  type TimelinePrefixIndexBuilder,
-  TimelinePrefixRegistry,
-} from "./timeline-prefix-registry.js";
 
 export const DEFAULT_CATALOG_FRESHNESS_MS = 1_500;
 export const MAX_CATALOG_DIAGNOSTICS = 50;
@@ -28,18 +23,16 @@ export const MAX_CATALOG_DIAGNOSTICS = 50;
 export interface CatalogSnapshot {
   readonly signature: string;
   readonly diagnostics: readonly DomainDiagnostic[];
-  readonly sessions: ReadonlyMap<DomainSessionId, IndexedSession>;
+  readonly sessions: ReadonlyMap<DomainSessionId, NormalizedSession>;
 }
 
 export interface CatalogSnapshotStoreDependencies {
   readonly diagnosticLogger?: DiagnosticLogger;
-  readonly timelinePrefixIndexBuilder?: TimelinePrefixIndexBuilder;
 }
 
 export class CatalogSnapshotStore {
   readonly #coordinator = new RefreshCoordinator<CatalogSnapshot>();
   readonly #diagnosticLogger: RefreshDiagnosticLogger;
-  readonly #prefixes: TimelinePrefixRegistry;
   readonly #sources: readonly SessionSource[];
   #snapshot: CatalogSnapshot | null = null;
   #aggregate: AggregateState | null = null;
@@ -55,7 +48,6 @@ export class CatalogSnapshotStore {
     assertUniqueSources(sources);
     this.#diagnosticLogger = new RefreshDiagnosticLogger(dependencies.diagnosticLogger);
     this.#sources = [...sources];
-    this.#prefixes = new TimelinePrefixRegistry(dependencies.timelinePrefixIndexBuilder);
   }
 
   async current(): Promise<CatalogSnapshot> {
@@ -105,13 +97,11 @@ export class CatalogSnapshotStore {
     );
     const diagnostics = [...sourceDiagnostics, ...linked.diagnostics];
     const normalizedSessions = linked.sessions;
-    const preparedPrefixes = this.#prefixes.prepare(normalizedSessions, linked.dirtyIds);
     const snapshot: CatalogSnapshot = {
       signature,
       diagnostics,
-      sessions: preparedPrefixes.sessions,
+      sessions: normalizedSessions,
     };
-    preparedPrefixes.commit();
     this.#aggregate = {
       inputs: linked.inputs,
       nativeBuckets: linked.nativeBuckets,
@@ -296,9 +286,6 @@ function linkRelationships(
         childIds: [...(children.get(id) ?? [])].sort(compareCodeUnits),
       },
       timeline: item.normalized.timeline,
-      toolDetails: item.normalized.toolDetails,
-      directiveDetails: item.normalized.directiveDetails,
-      internalDetails: item.normalized.internalDetails,
       interaction: item.normalized.interaction ?? null,
     });
   }

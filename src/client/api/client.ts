@@ -4,20 +4,12 @@ import type {
   CapabilitiesResponse,
   CreateSessionRequest,
   DiffResponse,
-  DirectiveDetailQuery,
-  DirectiveDetailResponse,
   HubOperation,
   InteractionKey,
-  InternalDetailQuery,
-  InternalDetailResponse,
-  ItemPageQuery,
-  ItemPageResponse,
   SessionListQuery,
   SessionListResponse,
-  SessionUpdatesQuery,
-  SessionUpdatesResponse,
-  ToolDetailQuery,
-  ToolDetailResponse,
+  SessionMessagesQuery,
+  SessionMessagesResponse,
 } from "../../shared/api-contract";
 import type { UploadAttachment } from "../../shared/uploads";
 
@@ -127,42 +119,11 @@ export const api = {
       `/api/v1/sessions${queryString({ after: query.after })}`,
       signal,
     ).then((value) => value ?? null),
-  items: (id: string, query: ItemPageQuery, signal?: AbortSignal) =>
-    request<ItemPageResponse>(
-      `/api/v1/sessions/${encodeURIComponent(id)}/items${queryString({
-        limit: query.limit,
-        cursor: query.cursor,
-      })}`,
-      signal,
-    ),
-  updates: (id: string, query: SessionUpdatesQuery, signal?: AbortSignal) =>
-    request<SessionUpdatesResponse | null>(
-      `/api/v1/sessions/${encodeURIComponent(id)}/updates${queryString({
-        cursor: query.cursor,
-        after: query.after,
-      })}`,
+  messages: (id: string, query: SessionMessagesQuery, signal?: AbortSignal) =>
+    request<SessionMessagesResponse | null>(
+      `/api/v1/sessions/${encodeURIComponent(id)}/messages${queryString({ ...query })}`,
       signal,
     ).then((value) => value ?? null),
-  tool: (sessionId: string, itemId: string, query: ToolDetailQuery, signal?: AbortSignal) =>
-    request<ToolDetailResponse>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/tool${queryString({ cursor: query.cursor })}`,
-      signal,
-    ),
-  directive: (
-    sessionId: string,
-    itemId: string,
-    query: DirectiveDetailQuery,
-    signal?: AbortSignal,
-  ) =>
-    request<DirectiveDetailResponse>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/directive${queryString({ cursor: query.cursor })}`,
-      signal,
-    ),
-  internal: (sessionId: string, itemId: string, query: InternalDetailQuery, signal?: AbortSignal) =>
-    request<InternalDetailResponse>(
-      `/api/v1/sessions/${encodeURIComponent(sessionId)}/items/${encodeURIComponent(itemId)}/internal${queryString({ cursor: query.cursor })}`,
-      signal,
-    ),
   sendMessage: (sessionId: string, message: string, signal?: AbortSignal) =>
     postJson<void>(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages`,

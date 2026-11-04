@@ -14,7 +14,6 @@ import { type ApiRouter, sendJson } from "./router.js";
 import { createSessionInteractionRoutes } from "./session-interaction-routes.js";
 import { createSessionManagementRoutes } from "./session-management-routes.js";
 import { createSessionReadRoutes } from "./session-read-routes.js";
-import { createSessionUpdatesRoutes } from "./session-updates-routes.js";
 import { createUploadRoutes } from "./upload-routes.js";
 
 export interface ApiErrorLogger {
@@ -61,7 +60,6 @@ export function createApiRouter(
       dependencies.sessions,
     ),
     createSessionManagementRoutes(dependencies.operations),
-    createSessionUpdatesRoutes(dependencies.updates),
     createSessionInteractionRoutes(dependencies.interaction),
     createSessionReadRoutes(dependencies),
   ];

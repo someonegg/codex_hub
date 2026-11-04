@@ -31,9 +31,6 @@ const base = {
     parentId: "secret",
     childIds: ["secret"],
     sourceId: "secret",
-    messageCount: 8,
-    toolCount: 5,
-    itemCount: 9,
   },
   live: true,
   nextAfter: 44,
@@ -50,22 +47,6 @@ const base = {
   secret: "secret",
 } as unknown as SessionMessagesResponse;
 const record = { id: "record", ordinal: 42, timestamp: null, secret: "secret" };
-const request = {
-  ...record,
-  kind: "user_input",
-  stage: "request",
-  callId: "call",
-  questions: [
-    {
-      id: "q",
-      header: "选择修复方式",
-      question: "采用哪种实现？",
-      secret: "secret",
-      options: [{ label: "最小改动", description: "仅修复当前问题", secret: "secret" }],
-    },
-    { id: "q2", header: "验证方式", question: "如何验证？", options: [] },
-  ],
-};
 
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
   const response = {
@@ -122,87 +103,6 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
   });
 });
 
-it("whitelists nested records and renders Markdown, input hints, flattened answers and pagination", () => {
-  const mapped = mapInspect({
-    ...base,
-    items: [
-      {
-        ...record,
-        kind: "message",
-        role: "assistant",
-        phase: "update",
-        itemType: null,
-        markdown: "**检查**\n正在检查登录流程。",
-      },
-      request,
-      {
-        ...record,
-        ordinal: 44,
-        kind: "user_input",
-        stage: "response",
-        callId: "call",
-        outcome: "answered",
-        answers: [
-          { questionId: "q", answers: ["最小改动", "补充选择"], secret: "secret" },
-          { questionId: "outside", answers: ["原文"] },
-        ],
-      },
-      { ...record, kind: "tool", toolName: "secret" },
-      { ...record, kind: "future", secret: "secret" },
-    ],
-  } as unknown as SessionMessagesResponse);
-  expect(Object.keys(mapped)).toEqual(["session", "interaction", "items", "nextAfter", "hasMore"]);
-  expect(Object.keys(mapped.session)).toEqual([
-    "id",
-    "title",
-    "status",
-    "home",
-    "agentName",
-    "workingDirectory",
-    "projectDirectory",
-    "createdAt",
-    "updatedAt",
-    "resume",
-  ]);
-  expect(mapped.items).toHaveLength(3);
-  expect(JSON.stringify(mapped)).not.toContain("secret");
-  expect(mapped.session.home).toBe("work");
-  const text = formatResult("inspect", mapped);
-  expect(text).not.toContain("secret");
-  expect(text).toContain(
-    "Title: 修复 登录 问题\nStatus: live\nInteraction: connected\nActivity: working",
-  );
-  expect(text).toContain("--- #42 Assistant · update ---\n**检查**\n正在检查登录流程。");
-  expect(mapped.items[1]).toEqual({
-    id: "record",
-    ordinal: 42,
-    timestamp: null,
-    kind: "user_input",
-    stage: "request",
-    questions: [
-      {
-        header: "选择修复方式",
-        question: "采用哪种实现？",
-        options: [{ label: "最小改动", description: "仅修复当前问题" }],
-      },
-      { header: "验证方式", question: "如何验证？", options: [] },
-    ],
-    inputHint: expect.stringContaining("session terminal child"),
-  });
-  expect(mapped.items[2]).toMatchObject({ answers: ["最小改动", "补充选择", "原文"] });
-  for (const hidden of ["callId", "questionId", '"id":"q"', '"id":"q2"'])
-    expect(JSON.stringify(mapped)).not.toContain(hidden);
-  expect(text).toContain(
-    "Question ---\n\n选择修复方式\n采用哪种实现？\n1. 最小改动\n   仅修复当前问题\n\n验证方式\n如何验证？",
-  );
-  expect(text).toContain("Wait for connected and idle");
-  expect(text).toContain("session keys child <key...>");
-  expect(text).toContain("--- #44 Answer ---\n- 最小改动\n- 补充选择\n- 原文");
-  const responseOnly = { ...mapped, items: [mapped.items[2]!] };
-  expect(formatResult("inspect", responseOnly)).toContain("- 最小改动\n- 补充选择\n- 原文");
-  expect(text).toContain("Next after: 44\nHas more: yes");
-});
-
 it("renders unsupported, empty pages, cancelled and unavailable outcomes", () => {
   const mapped = mapInspect({
     ...base,
@@ -245,8 +145,8 @@ it("maps terminal fields explicitly", () => {
 });
 
 it.each([
-  ["assistant", "response", "Plan", true],
-  ["assistant", "update", "Plan", false],
+  ["assistant", "response", "plan", true],
+  ["assistant", "update", "plan", false],
 ] as const)(
   "adds hints only to assistant response Plans (%s %s %s)",
   (role, phase, itemType, hinted) => {

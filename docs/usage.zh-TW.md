@@ -19,7 +19,7 @@ npx @someonegg/codex-hub@latest
 - **建立：**點選專案旁的 **+**，或全域 **+** 後選擇專案、輸入本機絕對目錄。可選啟用 worktree 或 YOLO。
 - **恢復：**開啟已退出工作階段，在可用時點選**恢復**。使用原 Home 與可用的原工作目錄或專案目錄繼續同一工作階段。
 - **退出：**使用工作階段的 **…** 選單停止已連線終端窗格，不封存工作階段。
-- **封存或刪除：**使用工作階段的 **…** 選單。僅封存工作階段支援永久刪除，並需要確認。
+- **封存或刪除：**使用工作階段的 **…** 選單。永久刪除需要確認。
 
 建立與恢復使用 tmux。如果啟動需要登入、權限或信任確認，使用 **… → 連線 tmux**，
 或執行 Hub 顯示的連線命令，在終端完成操作。恢復從其他位置啟動的工作階段前，請確認原處理程序已經退出。
@@ -81,7 +81,7 @@ npx --package=@someonegg/codex-hub@latest ahub-cli --help
 ahub-cli session list --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
+ahub-cli session inspect <id> --follow --count 5 --json
 ```
 
 使用 `list` 傳回的 ID 傳送輸入或檢視工作階段。`list` 預設列出未封存的主工作階段（`--all` 包含已封存工作階段），`inspect` 也接受子工作階段 ID。
@@ -94,11 +94,11 @@ ahub-cli session inspect <id> --follow --interval 3 --count 5 --json
 建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立需要 `--project`，支援 `--cwd`、`--home`、`--worktree`
 和 `--yolo`；恢復保留原 Home，支援 `--yolo`。省略 `--home` 時選擇第一個已設定 Home。
 省略 `--cwd` 時從專案目錄啟動；明確指定其他工作目錄時仍保留 `--project` 的專案歸屬。
-兩個目錄均可使用相對路徑，CLI 會將其轉為絕對路徑。刪除前必須先封存工作階段。
+兩個目錄均可使用相對路徑，CLI 會將其轉為絕對路徑。
 
 工作階段命令預設連線至 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
 HTTP 位址；此用戶端不支援 HTTPS。用 `--timeout <seconds>` 修改預設的 15 秒逾時
-（建立、恢復、退出、封存和刪除為 45 秒）。使用 `inspect --follow` 時，它限制每次 HTTP
+（follow 為 30 秒；建立、恢復、退出、封存和刪除為 45 秒）。使用 `inspect --follow` 時，它限制每次 HTTP
 請求；觀察持續到按 Ctrl+C 停止或達到指定輪數。
 
 建立和恢復等待終端已連線且閒置；傳送輸入和一般按鍵預設要求閒置。使用

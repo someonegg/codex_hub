@@ -41,10 +41,7 @@ function session(id = "session", operationId?: string): DomainSession {
     parentId: null,
     childIds: [],
     agent: null,
-    messageCount: 0,
-    toolCount: 0,
     warningCount: 0,
-    itemCount: 0,
     diagnostics: [],
     origin: {
       sourceType: "codex-jsonl",
