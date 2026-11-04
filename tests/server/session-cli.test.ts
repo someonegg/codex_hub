@@ -464,6 +464,7 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
           attachCommand: "private",
         },
         items: [],
+        stateRevision: "state",
         nextAfter: 0,
         hasMore: false,
       });
@@ -635,21 +636,13 @@ it("prints a follow error as a separate NDJSON line without retry", async () => 
         session: { id: "id", origin: {}, resume: {} },
         interaction: { supported: false },
         items: [],
+        stateRevision: "state",
         nextAfter: 0,
         hasMore: false,
       });
     else reply(res, { error: { message: "Backend unavailable" } }, 503);
   });
-  const result = await cli([
-    "inspect",
-    "id",
-    "--follow",
-    "--interval",
-    "0.01",
-    "--url",
-    base,
-    "--json",
-  ]);
+  const result = await cli(["inspect", "id", "--follow", "--url", base, "--json"]);
   expect(result.code).toBe(1);
   const lines = result.stdout
     .trim()
@@ -698,6 +691,7 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
         activity: page === 1 ? "working" : "idle",
       },
       items: event ? [{ ...record, ...event }] : [],
+      stateRevision: "state",
       nextAfter: page,
       hasMore: page === 1,
     });
@@ -708,8 +702,6 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
     "--follow",
     "--count",
     "2",
-    "--interval",
-    "0.01",
     "--url",
     base,
     ...(json ? ["--json"] : []),
@@ -717,8 +709,8 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
   expect(result.code).toBe(0);
   expect(paths).toEqual([
     "/api/v1/sessions/id/messages",
-    "/api/v1/sessions/id/messages?after=1",
-    "/api/v1/sessions/id/messages?after=2",
+    "/api/v1/sessions/id/messages?stateRevision=state&after=1",
+    "/api/v1/sessions/id/messages?stateRevision=state&after=2&wait=true",
   ]);
   expect(result.stdout).toContain("session terminal id");
   expect(result.stdout).toContain("Selected");
@@ -770,4 +762,28 @@ it.each([false, true])("filters archived sessions with all=%s", async (include) 
 
 it("rejects all outside list", () => {
   expect(() => parseSessionArguments(["inspect", "id", "--all"])).toThrow();
+});
+
+it("retries an out-of-range inspect once from the start", async () => {
+  const paths: string[] = [];
+  const base = await serve((req, res) => {
+    paths.push(req.url!);
+    if (paths.length === 1)
+      reply(res, { error: { code: "after_out_of_range", message: "rewritten" } }, 400);
+    else
+      reply(res, {
+        session: { id: "id", origin: {}, resume: {} },
+        interaction: { supported: false },
+        items: [],
+        nextAfter: 0,
+        hasMore: false,
+        stateRevision: "state",
+      });
+  });
+  const result = await cli(["inspect", "id", "--after", "99", "--url", base, "--json"]);
+  expect(result.code).toBe(0);
+  expect(paths).toEqual([
+    "/api/v1/sessions/id/messages?after=99",
+    "/api/v1/sessions/id/messages?after=0",
+  ]);
 });

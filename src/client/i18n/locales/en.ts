@@ -5,15 +5,13 @@ export const messages = {
   top: "TOP",
   end: "END",
   resumeUnavailable: "This session cannot be resumed.",
-  toolCompleted: "completed",
-  toolFailed: "failed",
 
   enter: "Enter",
   aborted: "Aborted",
   allHomes: "All homes",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "All successful uploads are retained, including files removed from drafts.",
-  anInteractionIsAlreadyInProgress: "An interaction is already in progress.",
+
   answered: "Answered",
   archiveSession: "Archive session",
   archived: "Archived",
@@ -21,7 +19,7 @@ export const messages = {
   assistant: "Assistant",
   assistantUpdate: "Assistant update",
   assistantResponse: "Assistant response",
-  assistantResponsePlan: "Assistant response · Plan ·",
+  assistantResponsePlan: "Assistant response · Plan",
   attachFiles: "Attach files",
   attachToTmuxBeforeTryingAgainCreatingAgainMayStartAnotherSession:
     "Attach to tmux before trying again; creating again may start another session.",
@@ -29,9 +27,7 @@ export const messages = {
   backToTop: "Back to top",
   browseSessionsByProjectReadTheirHistoryAndContinueYourWork:
     "Browse sessions by project, read their history, and continue your work.",
-  cacheWriteInput: "Cache write input",
-  cachedInput: "Cached input",
-  callID: "Call ID ·",
+
   cancel: "Cancel",
   capturingTerminalPane: "Capturing terminal pane…",
   capturing: "Capturing…",
@@ -45,7 +41,7 @@ export const messages = {
   closeNewSession: "Close new session",
   closeResumeSession: "Close resume session",
   closeTmuxAccess: "Close tmux access",
-  collapse: "Collapse",
+
   confirmDelete: "Confirm delete",
   confirmingArchive: "Confirming archive",
   connected: "Connected",
@@ -68,12 +64,10 @@ export const messages = {
   deleteSessionLabel: "Delete session?",
   deleteThisFile: "Delete this file?",
   deleting: "Deleting…",
-  detailWasTruncatedForSafeDisplay: "Detail was truncated for safe display.",
+
   diff: "Diff",
   diffNotFoundOrAlreadyCleanedUp: "Diff not found or already cleaned up.",
-  directiveUnavailable: "Directive unavailable",
-  directiveWasTruncatedForSafeDisplay: "Directive was truncated for safe display.",
-  directive: "Directive ·",
+
   disconnected: "Disconnected",
   dismiss: "Dismiss",
   dismissInteractionError: "Dismiss interaction error",
@@ -93,7 +87,7 @@ export const messages = {
   ensureTheOriginalSessionHasExited: "Ensure the original session has exited.",
   error: "Error",
   exitSession: "Exit session",
-  expand: "Expand",
+
   fileDiffs: "File diffs",
   filesMustBeAtMost20MiB: "Files must be at most 20 MiB",
   filterByHome: "Filter by home",
@@ -103,49 +97,43 @@ export const messages = {
     "Hand off this pane’s binding to the active Codex session.",
   handoff: "Handoff",
   hide: "Hide",
-  hideJSON: "Hide JSON",
-  hideDirective: "Hide directive",
-  hideToolDetail: "Hide tool detail",
+
   home: "Home",
   homeLabel: "Home:",
   idle: "Idle",
-  input: "Input",
-  internalEventUnavailable: "Internal event unavailable",
-  internal: "Internal ·",
+
   interrupt: "Interrupt",
   invalidTerminalPreviewUpdateReconnecting: "Invalid terminal preview update; reconnecting",
-  jSONWasTruncatedForSafeDisplay: "JSON was truncated for safe display.",
+
   jumpToBottom: "Jump to bottom",
-  last: "Last",
+
   left: "Left",
   linkCopied: "Link copied",
   live: "Live",
   loadingDiff: "Loading diff…",
-  loadingDirective: "Loading directive…",
-  loadingInternalEvent: "Loading internal event…",
-  loadingMoreEvents: "Loading more events…",
+
+  loadingMoreMessages: "Loading more messages…",
   loadingPages: "Loading pages…",
   loadingSessions: "Loading sessions…",
-  loadingToolDetail: "Loading tool detail…",
+
   loadingUploads: "Loading uploads…",
   messageToAgent: "Message to agent",
   newSession: "New session",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
     "No Codex session detected yet. Attach to tmux to check startup progress.",
   noAnswerRecorded: "No answer recorded.",
-  noDetailAvailable: "No detail available.",
+
   noMainSessionsYet: "No main sessions yet",
   noPublishedWebPages: "No published web pages.",
   noUploadsYet: "No uploads yet.",
-  noVisibleEventsInTheLoadedRangeKeepScrollingOrChangeAVisibilityFilter:
-    "No visible events in the loaded range. Keep scrolling or change a visibility filter.",
+
   nothingToShow: "Nothing to show",
   open: "Open",
   openSession: "Open session",
   openingSession: "Opening session…",
   operation: "Operation",
   originalSessionID: "Original session ID ·",
-  output: "Output",
+
   pagePosition: "Page position",
   pages: "Pages",
   parentSession: "Parent session",
@@ -163,20 +151,20 @@ export const messages = {
   projectsAndMainSessions: "Projects and main sessions",
   publishedPages: "Published pages",
   publishedSnapshots: "Published snapshots",
-  reasoningOutput: "Reasoning output",
+
   reconnectBeforeAttachingFiles: "Reconnect before attaching files",
   reconnecting: "Reconnecting…",
   recordedAnswer: "Recorded answer",
   recordedAnswers: "Recorded answers",
   refresh: "Refresh",
-  reloadLatestVersion: "Reload latest version",
+
   replacementSessionUnavailable: "Replacement session unavailable",
   requestDetailsUnavailable: "Request details unavailable.",
   resume: "Resume",
   resumeSession: "Resume session",
   automaticallyRetrying: "Automatically retrying…",
   retry: "Retry",
-  retryLoadingDetail: "Retry loading detail",
+
   retryOpeningSession: "Retry opening session",
   retryPreview: "Retry preview",
   retryStatusCheck: "Retry status check",
@@ -191,7 +179,7 @@ export const messages = {
   sendingExitCommand: "Sending exit command",
   session: "Session",
   sessionList: "Session list",
-  sessionContentHasChanged: "Session content has changed",
+
   sessionCreated: "Session created.",
   sessionHome: "Session home",
   sessionInformation: "Session information",
@@ -201,9 +189,7 @@ export const messages = {
   sessionNotFound: "Session not found",
   sessionTimeline: "Session timeline",
   show: "Show",
-  showJSON: "Show JSON",
-  showDirective: "Show directive",
-  showToolDetail: "Show tool detail",
+
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "Some content could not be fully parsed. Check the original text below.",
   startingCodex: "Starting Codex",
@@ -217,21 +203,16 @@ export const messages = {
   terminalControls: "Terminal controls",
   terminalOutputExceededThePreviewLimitTheBeginningWasOmitted:
     "Terminal output exceeded the preview limit; the beginning was omitted.",
-  theLocalHubCouldNotCompleteTheRequest: "The local hub could not complete the request.",
-  theOperationWasAborted: "The operation was aborted",
+
   theTerminalPaneIsEmpty: "The terminal pane is empty.",
-  thisSessionHasNoVisibleEvents: "This session has no visible events",
+  thisSessionHasNoMessages: "This session has no messages",
   timeUnavailable: "Time unavailable",
-  timelineEventVisibility: "Timeline event visibility",
+
   tmuxAccess: "Tmux access",
-  token: "Token ·",
-  toolDetailUnavailable: "Tool detail unavailable",
-  total: "Total",
-  totalTokens: "Total tokens",
+
   trackingHasStoppedRefreshTheSessionListToCheckTheResult:
     "Tracking has stopped. Refresh the session list to check the result.",
-  tryShowingMoreEventTypesOrWaitForTheSessionToUpdate:
-    "Try showing more event types, or wait for the session to update.",
+
   unableToLoadDiff: "Unable to load diff.",
   unableToLoadUploads: "Unable to load uploads",
   unavailable: "Unavailable",
@@ -243,23 +224,21 @@ export const messages = {
   uploadHistoryCodexHub: "Upload history · Codex Hub",
   useTheOriginalActionButtonToTryAgain: "Use the original action button to try again.",
   user: "User",
-  userInput: "User input ·",
+  userInput: "User input",
   viewOriginalDiff: "View original diff",
   waitForTheSessionToUpdate: "Wait for the session to update.",
   waiting: "Waiting",
   waitingForExit: "Waiting for exit",
   working: "Working",
   workingDirectory: "Working Directory ·",
-  yourReadingPositionHasBeenPreservedReloadToReadTheLatestVersionFromTheFirstPage:
-    "Your reading position has been preserved. Reload to read the latest version from the first page.",
+
   tmuxAccessLabel: "tmux access",
   backToList: "← Back to list",
   backToSession: "← Back to session",
   parentSessionLabel: "← Parent session",
-  events_one: "{{count, number}} event",
-  events_other: "{{count, number}} events",
+
   characters: "{{count, number}} characters",
-  filesChanged_one: "{{count, number}} files changed",
+
   filesChanged_other: "{{count, number}} files changed",
   projectSessions: "{{project}}, {{count, number}} main sessions",
   newProjectSession: "New session in {{project}}",
@@ -269,21 +248,16 @@ export const messages = {
   collapseFile: "Collapse {{filename}}",
   diffFor: "Diff for {{path}}",
   deleteArtifact: "Delete “{{title}}” and all its snapshots?",
-  tokenUsage: "{{label}} token usage",
+
   shiftNewline: "Shift+Enter for newline.",
   shiftSend: "Shift+Enter to send.",
   messageLimit: "Message is {{size}} UTF-8 bytes; the limit is {{limit}} bytes.",
-  updatedSummary: "{{events}} · Updated {{time}}",
-  unknownUpdateSummary: "{{events}} · Update time unavailable",
+
   uploadProgress: "Uploading {{current}}/{{total}}…",
   uploadBytes: "{{size}} bytes",
-  toolCall: "Tool call · {{ordinal}}",
-  toolOutput: "Tool output · {{status}} · {{ordinal}}",
+
   omittedImage: "[Image omitted{{alt}}]",
-  directiveEvent: "directive",
-  toolEvent: "tool",
-  tokenEvent: "token",
-  internalEvent: "internal",
+
   operationCreate: "create",
   operationResume: "resume",
   operationArchive: "archive",
@@ -299,7 +273,6 @@ export const messages = {
   requestNotFound: "The requested resource was not found.",
   requestDisconnected: "The terminal is not connected. Reconnect or resume the session.",
   requestTooLarge: "The upload or message exceeds the size limit.",
-  requestConflict: "The session changed. Refresh before retrying.",
 } as const;
 
 export const settings = {

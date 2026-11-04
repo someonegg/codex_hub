@@ -44,5 +44,8 @@ export function httpFailure(
         "Operation result unknown; use list, inspect, or terminal to check the current state.",
       2,
     );
-  return new CommandError("request_failed", error?.message ?? `HTTP ${status}`);
+  return new CommandError(
+    error?.code === "after_out_of_range" ? error.code : "request_failed",
+    error?.message ?? `HTTP ${status}`,
+  );
 }

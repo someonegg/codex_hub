@@ -1,13 +1,6 @@
-import type { ServerResponse } from "node:http";
+import type { IncomingMessage, ServerResponse } from "node:http";
 
-import type {
-  DirectiveDetailQuery,
-  InternalDetailQuery,
-  ItemPageQuery,
-  SessionListQuery,
-  TimelineCursor,
-  ToolDetailQuery,
-} from "../../shared/api-contract.js";
+import type { SessionListQuery, UpdateRevision } from "../../shared/api-contract.js";
 import type { SessionReader } from "../application/session-reader.js";
 import {
   assembleSessionResponse,
@@ -18,19 +11,20 @@ import {
   type SessionCatalogService,
 } from "../catalog/session-catalog-service.js";
 import { RepositoryQueryError } from "../repository/session-queries.js";
-import type { SessionUpdatesService } from "../updates/session-updates-service.js";
+import {
+  SessionUpdatesError,
+  type SessionUpdatesService,
+} from "../updates/session-updates-service.js";
 import type { ApiRouteHandler } from "./api-route-handler.js";
 import { invalid, only, optional } from "./query-params.js";
 import { sendJson } from "./router.js";
 import { isOpaqueId, readPathname, SESSION_ROOT, sessionPath } from "./session-path.js";
 
-type InteractionReader = SessionInteractionReader;
-
 export function createSessionReadRoutes(dependencies: {
   readonly sessions: SessionReader;
   readonly updates: SessionUpdatesService;
   readonly catalog: SessionCatalogService;
-  readonly interaction?: InteractionReader;
+  readonly interaction?: SessionInteractionReader;
 }): ApiRouteHandler {
   return {
     matches: () => true,
@@ -41,59 +35,39 @@ export function createSessionReadRoutes(dependencies: {
       if (!readMethod) return false;
       if (pathname === SESSION_ROOT) {
         const query = parseListQuery(url.searchParams);
-        const abort = new AbortController();
-        const disconnect = () => {
-          if (!response.writableEnded) abort.abort();
-        };
-        request.once("aborted", disconnect);
-        response.once("close", disconnect);
-        response.setHeader("Cache-Control", "no-store");
-        try {
-          const result = await dependencies.catalog.wait(
-            headOnly ? undefined : query.after,
-            abort.signal,
-          );
-          if (abort.signal.aborted || response.destroyed) return true;
-          if (result === null) {
-            response.statusCode = 204;
-            response.end();
-          } else sendJson(response, 200, result, headOnly);
-        } finally {
-          request.removeListener("aborted", disconnect);
-          response.removeListener("close", disconnect);
-        }
-        return true;
+        return sendWaitResponse(request, response, headOnly, (signal) =>
+          dependencies.catalog.wait(headOnly ? undefined : query.after, signal),
+        );
       }
       if (!pathname.startsWith(`${SESSION_ROOT}/`)) {
         return notFound(response, headOnly);
       }
       const { id, segments } = sessionPath(pathname);
       if (!isOpaqueId(id)) return notFound(response, headOnly);
-      const itemId =
-        segments.length === 3 && segments[0] === "items" ? decodeItemId(segments[1] ?? "") : "";
-
       if (segments.length === 1 && segments[0] === "messages") {
-        only(url.searchParams, ["limit", "after"]);
+        only(url.searchParams, ["limit", "after", "wait", "stateRevision"]);
         const limit = optional(url.searchParams, "limit");
         const after = optional(url.searchParams, "after");
-        const result = await dependencies.sessions.messages(id, {
-          ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
-          ...(after === undefined ? {} : { after: integer(after, "after") }),
-        });
-        if (!result) return notFound(response, headOnly, "session_not_found");
-        const assembled = await assembleSessionResponse(
-          result,
-          dependencies.interaction,
-          dependencies.updates.revision.bind(dependencies.updates),
+        const wait = optional(url.searchParams, "wait");
+        const stateRevision = optional(url.searchParams, "stateRevision");
+        if (wait !== undefined && wait !== "true" && wait !== "false")
+          invalid("wait must be true or false");
+        if (stateRevision !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(stateRevision))
+          invalid("stateRevision is malformed");
+        return sendWaitResponse(request, response, headOnly, (signal) =>
+          dependencies.updates.wait(
+            id,
+            {
+              ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
+              ...(after === undefined ? {} : { after: integer(after, "after") }),
+              wait: !headOnly && wait === "true",
+              ...(stateRevision === undefined
+                ? {}
+                : { stateRevision: stateRevision as UpdateRevision }),
+            },
+            signal,
+          ),
         );
-        const { updateRevision: _, ...publicResult } = assembled;
-        sendJson(
-          response,
-          200,
-          { ...publicResult, live: publicResult.session.status === "live" },
-          headOnly,
-        );
-        return true;
       }
       if (segments.length === 0) {
         if ([...url.searchParams].length > 0) {
@@ -115,62 +89,20 @@ export function createSessionReadRoutes(dependencies: {
         );
         return true;
       }
-      if (segments.length === 1 && segments[0] === "items") {
-        const result = await dependencies.sessions.getItems(id, parseItemQuery(url.searchParams));
-        if (result === null) {
-          return notFound(response, headOnly, "session_not_found");
-        }
-        sendJson(
-          response,
-          200,
-          await assembleSessionResponse(
-            result,
-            dependencies.interaction,
-            dependencies.updates.revision.bind(dependencies.updates),
-          ),
-          headOnly,
-        );
-        return true;
-      }
-      if (segments.length === 3 && segments[0] === "items" && segments[2] === "tool") {
-        const result = await dependencies.sessions.getToolDetail(
-          id,
-          itemId,
-          parseToolQuery(url.searchParams),
-        );
-        if (result === null) {
-          return notFound(response, headOnly, "tool_not_found");
-        }
-        sendJson(response, 200, result, headOnly);
-        return true;
-      }
-      if (segments.length === 3 && segments[0] === "items" && segments[2] === "internal") {
-        const result = await dependencies.sessions.getInternalDetail(
-          id,
-          itemId,
-          parseInternalQuery(url.searchParams),
-        );
-        if (result === null) {
-          return notFound(response, headOnly, "internal_not_found");
-        }
-        sendJson(response, 200, result, headOnly);
-        return true;
-      }
-      if (segments.length === 3 && segments[0] === "items" && segments[2] === "directive") {
-        const result = await dependencies.sessions.getDirectiveDetail(
-          id,
-          itemId,
-          parseDirectiveQuery(url.searchParams),
-        );
-        if (result === null) {
-          return notFound(response, headOnly, "directive_not_found");
-        }
-        sendJson(response, 200, result, headOnly);
-        return true;
-      }
       return notFound(response, headOnly);
     },
     mapError(error, request, response) {
+      if (error instanceof SessionUpdatesError) {
+        const status = error.code === "session_not_found" ? 404 : 429;
+        if (status === 429) response.setHeader("Retry-After", "2");
+        sendJson(
+          response,
+          status,
+          { error: { code: error.code, message: error.message } },
+          request.method === "HEAD",
+        );
+        return true;
+      }
       if (error instanceof CatalogCapacityError) {
         response.setHeader("Retry-After", "2");
         sendJson(
@@ -189,18 +121,42 @@ export function createSessionReadRoutes(dependencies: {
         return true;
       }
       if (!(error instanceof RepositoryQueryError)) return false;
-      const status = error.code === "timeline_changed" ? 409 : 400;
       sendJson(
         response,
-        status,
-        {
-          error: { code: error.code, message: error.message },
-        },
+        400,
+        { error: { code: error.code, message: error.message } },
         request.method === "HEAD",
       );
       return true;
     },
   };
+}
+
+async function sendWaitResponse(
+  request: IncomingMessage,
+  response: ServerResponse,
+  headOnly: boolean,
+  read: (signal: AbortSignal) => Promise<object | null>,
+): Promise<true> {
+  const abort = new AbortController();
+  const disconnect = () => {
+    if (!response.writableEnded) abort.abort();
+  };
+  request.once("aborted", disconnect);
+  response.once("close", disconnect);
+  response.setHeader("Cache-Control", "no-store");
+  try {
+    const result = await read(abort.signal);
+    if (abort.signal.aborted || response.destroyed) return true;
+    if (result === null) {
+      response.statusCode = 204;
+      response.end();
+    } else sendJson(response, 200, result, headOnly);
+    return true;
+  } finally {
+    request.removeListener("aborted", disconnect);
+    response.removeListener("close", disconnect);
+  }
 }
 
 function parseListQuery(params: URLSearchParams): SessionListQuery {
@@ -210,37 +166,6 @@ function parseListQuery(params: URLSearchParams): SessionListQuery {
   return after === undefined ? {} : { after };
 }
 
-function parseItemQuery(params: URLSearchParams): ItemPageQuery {
-  only(params, ["limit", "cursor"]);
-  const query: ItemPageQuery = {};
-  const cursor = optional(params, "cursor");
-  if (cursor !== undefined) query.cursor = cursor as TimelineCursor;
-  const limit = optional(params, "limit");
-  if (limit !== undefined) query.limit = integer(limit, "limit");
-  return query;
-}
-
-function parseToolQuery(params: URLSearchParams): ToolDetailQuery {
-  only(params, ["cursor"]);
-  return { cursor: requiredCursor(params, "tool detail") };
-}
-
-function parseDirectiveQuery(params: URLSearchParams): DirectiveDetailQuery {
-  only(params, ["cursor"]);
-  return { cursor: requiredCursor(params, "directive detail") };
-}
-
-function parseInternalQuery(params: URLSearchParams): InternalDetailQuery {
-  only(params, ["cursor"]);
-  return { cursor: requiredCursor(params, "internal detail") };
-}
-
-function requiredCursor(params: URLSearchParams, resource: string): TimelineCursor {
-  const cursor = optional(params, "cursor");
-  if (cursor === undefined) invalid(`cursor is required for ${resource}`);
-  return cursor as TimelineCursor;
-}
-
 function integer(value: string, name: string): number {
   if (!/^\d+$/.test(value)) invalid(`${name} must be an integer`);
   const result = Number(value);
@@ -248,25 +173,6 @@ function integer(value: string, name: string): number {
     invalid(`${name} is outside the supported range`);
   }
   return result;
-}
-
-function decodeItemId(value: string): string {
-  let decoded: string;
-  try {
-    decoded = decodeURIComponent(value);
-  } catch {
-    return invalid("item ID is malformed");
-  }
-  if (
-    !decoded ||
-    Buffer.byteLength(decoded, "utf8") > 1024 ||
-    /[\u0000-\u001f\u007f-\u009f/\\]/u.test(decoded) ||
-    decoded === "." ||
-    decoded === ".."
-  ) {
-    invalid("item ID is malformed");
-  }
-  return decoded;
 }
 
 function notFound(response: ServerResponse, headOnly: boolean, code = "not_found"): true {

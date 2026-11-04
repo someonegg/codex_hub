@@ -20,9 +20,7 @@ export const docsSession = {
   childIds: [],
   agent: null,
   messageCount: 0,
-  toolCount: 0,
   sourceId: null,
-  itemCount: 0,
 };
 
 export const connectedInteraction = {

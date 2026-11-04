@@ -4,8 +4,8 @@ import type {
   DomainUserInputRecord,
 } from "../../domain/session-domain.js";
 import { MAX_PREVIEW_CHARS, truncateText } from "../../domain/session-text.js";
+import type { ToolOutput } from "./response-item-parser.js";
 import { isObject } from "./rollout-decoder.js";
-import type { ToolOutput } from "./tool-normalizer.js";
 
 export interface UserInputRequest {
   readonly callId: string;

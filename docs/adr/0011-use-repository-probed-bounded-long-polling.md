@@ -11,6 +11,11 @@ only concurrent checks are shared; completed results are not cached.
 [ADR-0019](0019-enable-automatic-updates-for-unarchived-sessions.md) removes the
 automatic updates toggle. See the [reader reference](../technical-reference.md#reader-and-automatic-updates).
 
+Scope refinement: [ADR-0025](0025-unify-session-reading-on-ordinal-messages.md)
+moves conversation polling to `/messages` with ordinal progress and public
+`stateRevision`. Bounded waiting, probe cadence, capacity, and cancellation remain;
+the separate updates endpoint and prefix validation are removed.
+
 ## Context and Problem Statement
 
 The session reader needs to observe timeline appends, public session metadata, and effective interaction state without issuing fixed-interval browser refreshes. Changes are discovered through immutable repository snapshots, while the opaque timeline cursor must remain the sole mechanism that confirms and advances a loaded timeline prefix.

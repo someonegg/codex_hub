@@ -35,12 +35,10 @@ export function applyLanguage(language: Language) {
   document.querySelector('meta[name="description"]')?.setAttribute("content", t("metaDescription"));
 }
 
-export type MessageKey = keyof typeof en | "events" | "filesChanged";
+export type MessageKey = keyof typeof en | "filesChanged";
 type Template<K extends MessageKey> = K extends keyof typeof en
   ? (typeof en)[K]
-  : K extends "events"
-    ? (typeof en)["events_other"]
-    : (typeof en)["filesChanged_other"];
+  : (typeof en)["filesChanged_other"];
 type ParameterName<S extends string> = S extends `${infer Name}, number` ? Name : S;
 type ParameterNames<S extends string> = S extends `${string}{{${infer Name}}}${infer Rest}`
   ? ParameterName<Name> | ParameterNames<Rest>

@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from "node:crypto";
 
 import type {
   InteractionResponse,
-  SessionUpdatesResponse,
+  SessionMessagesResponse,
   UpdateRevision,
 } from "../../shared/api-contract.js";
 import type { SessionDetail } from "../../shared/domain.js";
@@ -31,10 +31,10 @@ export function withUpdateRevision<
 >(
   value: T,
   createRevision: UpdateRevisionFactory,
-): T & Pick<SessionUpdatesResponse, "updateRevision"> {
+): T & Pick<SessionMessagesResponse, "stateRevision"> {
   return {
     ...value,
-    updateRevision: createRevision(value.session, value.interaction),
+    stateRevision: createRevision(value.session, value.interaction),
   };
 }
 

@@ -18,7 +18,7 @@ import type {
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
 import type { PlainMessageKey } from "../i18n";
-import { formatDate, formatNumber, t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { LocalizedError } from "../i18n/localized-error";
 import { usePreferences } from "../state/preferences";
 import { useSessionDraft } from "../state/session-drafts";
@@ -36,8 +36,6 @@ interface InteractionPanelProps {
 
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
-  itemCount: number;
-  updatedAt: string | null;
   interactionBusy: boolean;
   error: string | null;
   errorDetail?: unknown;
@@ -64,8 +62,6 @@ export function InteractionPanel({
   operationStatus,
   interaction,
   onNavigate,
-  itemCount,
-  updatedAt,
   interactionBusy,
   error,
   errorDetail,
@@ -332,7 +328,6 @@ export function InteractionPanel({
             ) : null}
             {operationStatus}
             {previewConnected ? renderConnectedInteraction(attachmentMenu) : null}
-            <p className="interaction-summary">{sessionSummary(itemCount, updatedAt)}</p>
           </div>
         </section>
       )}
@@ -601,10 +596,3 @@ const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
   { key: "down", label: "down", glyph: "↓" },
   { key: "right", label: "right", glyph: "→" },
 ];
-
-function sessionSummary(itemCount: number, updatedAt: string | null): string {
-  const events = t("events", { count: itemCount });
-  const date = updatedAt === null ? null : new Date(updatedAt);
-  if (date === null || Number.isNaN(date.valueOf())) return t("unknownUpdateSummary", { events });
-  return t("updatedSummary", { events, time: formatDate(date, { timeStyle: "medium" }) });
-}

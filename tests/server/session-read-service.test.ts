@@ -1,4 +1,4 @@
-import { appendFile, cp, mkdir, rename, writeFile } from "node:fs/promises";
+import { cp, mkdir, rename, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
@@ -26,15 +26,6 @@ async function fixtureRepository() {
   const home = await createTempDirectory("codex-repository-");
   await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
   return { home, repository: await createCodexSessionReadService(home) };
-}
-
-async function basicFixtureSession() {
-  const { home, repository } = await fixtureRepository();
-  const catalogSessions = (await repository.list()).sessions;
-  const session = catalogSessions.find(({ title }) => title === "Synthetic trace");
-  if (session === undefined) throw new Error("Expected the basic fixture session");
-  const rollout = join(home, "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl");
-  return { catalogSessions, home, repository, rollout, session };
 }
 
 describe("SessionReadService", () => {
@@ -84,7 +75,7 @@ describe("SessionReadService", () => {
     const basic = (await repository.list()).sessions.find(
       ({ title }) => title === "Synthetic trace",
     )!;
-    const firstItems = await repository.getItems(basic.id, { limit: 1 });
+    const firstItems = await repository.messages(basic.id, { limit: 1 });
 
     await writeFile(
       join(home, "session_index.jsonl"),
@@ -109,167 +100,19 @@ describe("SessionReadService", () => {
       title: "Current nickname",
     });
     expect(detail?.session).not.toHaveProperty("nickname");
-    const continuedItems = await repository.getItems(basic.id, {
-      cursor: firstItems!.cursor,
+    const continuedItems = await repository.messages(basic.id, {
+      after: firstItems!.nextAfter,
       limit: 1,
     });
     expect(continuedItems?.session).toMatchObject({
       title: "Current nickname",
     });
     expect(continuedItems?.session).not.toHaveProperty("nickname");
-    const updates = await repository.getSessionUpdates(basic.id, firstItems!.cursor);
+    const updates = await repository.messages(basic.id, { after: firstItems!.nextAfter });
     expect(updates?.session).toMatchObject({
       title: "Current nickname",
     });
     expect(updates?.session).not.toHaveProperty("nickname");
-  });
-
-  it("does not revise a session until an appended JSONL tail is terminated", async () => {
-    const home = await createTempDirectory("codex-silent-tail-");
-    const directory = join(home, "sessions");
-    await mkdir(directory, { recursive: true });
-    const rollout = join(directory, "rollout-silent-tail.jsonl");
-    await writeFile(
-      rollout,
-      '{"timestamp":"2026-07-28T10:00:00Z","type":"session_meta","payload":{"id":"silent-tail","title":"Silent tail"}}\n',
-    );
-    const repository = await createCodexSessionReadService(home);
-    const sessionId = (await repository.list()).sessions[0]!.id;
-    const before = await repository.getSession(sessionId);
-    const beforePage = await repository.getItems(sessionId, {});
-
-    await appendFile(
-      rollout,
-      '{"timestamp":"2026-07-28T10:00:01Z","type":"response_item","payload":{"type":"function_call","name":"pending","arguments":"input","call_id":"tail-call"}}',
-    );
-    await repository.refresh();
-    const pending = await repository.getSession(sessionId);
-    expect(pending!.session).toEqual(before!.session);
-    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor })).resolves.toEqual(
-      expect.objectContaining({ items: [] }),
-    );
-
-    await appendFile(rollout, "\n");
-    await repository.refresh();
-    const committed = await repository.getSession(sessionId);
-    expect(committed!.session).toMatchObject({ toolCount: 1, itemCount: 1 });
-    await expect(repository.getItems(sessionId, { cursor: beforePage!.cursor })).resolves.toEqual(
-      expect.objectContaining({
-        items: [expect.objectContaining({ kind: "tool" })],
-      }),
-    );
-  });
-
-  it("keeps session A reader requests valid while only session B changes", async () => {
-    const sessionA = normalizedSession("session-a", "Session A", null, [
-      {
-        kind: "message",
-        id: "message-1",
-        ordinal: 1,
-        timestamp: null,
-        role: "user",
-        phase: null,
-        itemType: null,
-        markdown: "first",
-      },
-      {
-        kind: "directive",
-        id: "directive-2",
-        ordinal: 2,
-        timestamp: null,
-        summary: "detail",
-        charCount: 6,
-        hasDetail: true,
-      },
-      {
-        kind: "message",
-        id: "message-3",
-        ordinal: 3,
-        timestamp: null,
-        role: "assistant",
-        phase: "response",
-        itemType: null,
-        markdown: "later",
-      },
-    ]);
-    let sessionAWithDetail: NormalizedSession = {
-      ...sessionA,
-      directiveDetails: new Map([["directive-2", { text: "secret", truncated: false }]]),
-    };
-    let sourceSignature = "initial";
-    let sessionB = normalizedSession("session-b", "Session B", null, []);
-    const source: SessionSource = {
-      ...staticSource("mutable", []),
-      async refresh() {
-        return {
-          signature: sourceSignature,
-          sessions: [
-            sourceEntry("session-a", sessionAWithDetail),
-            sourceEntry("session-b", sessionB),
-          ],
-          diagnostics: [],
-        };
-      },
-    };
-    const repository = new SessionReadService([source]);
-    const list = await repository.list();
-    const sessionAId = list.sessions.find((session) => session.title === "Session A")!.id;
-    const first = await repository.getItems(sessionAId, {
-      limit: 2,
-    });
-    const directive = first!.items.find((item) => item.kind === "directive")!;
-
-    for (const change of ["changed-once", "changed-twice"]) {
-      sourceSignature = `session-b-${change}`;
-      sessionB = normalizedSession("session-b", `Session B ${change}`, null, []);
-      await repository.refresh();
-      expect((await repository.getSession(sessionAId))?.session.title).toBe("Session A");
-    }
-
-    await expect(
-      repository.getItems(sessionAId, {
-        cursor: first!.cursor,
-        limit: 2,
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        items: [expect.objectContaining({ id: "message-3" })],
-      }),
-    );
-    await expect(
-      repository.getDirectiveDetail(sessionAId, directive.id, {
-        cursor: first!.cursor,
-      }),
-    ).resolves.toEqual(expect.objectContaining({ text: "secret" }));
-
-    const currentList = await repository.list();
-    const sessionBId = currentList.sessions.find(
-      (session) => session.title === "Session B changed-twice",
-    )!.id;
-    const sessionBPage = await repository.getItems(sessionBId, {});
-    sessionAWithDetail = {
-      ...sessionAWithDetail,
-      session: { ...sessionAWithDetail.session, title: "Session A changed" },
-    };
-    sourceSignature = "session-a-changed";
-    await repository.refresh();
-
-    await expect(
-      repository.getItems(sessionAId, {
-        cursor: first!.cursor,
-        limit: 2,
-      }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        session: expect.objectContaining({ title: "Session A changed" }),
-      }),
-    );
-    await expect(
-      repository.getItems(sessionBId, {
-        cursor: sessionBPage!.cursor,
-        limit: 2,
-      }),
-    ).resolves.toEqual(expect.objectContaining({ items: [] }));
   });
 
   it("discovers an archived root created after repository startup", async () => {
@@ -354,11 +197,11 @@ describe("SessionReadService", () => {
     ]);
     const session = (await repository.list()).sessions[0]!;
     expect(session.id).not.toBe("native");
-    const first = (await repository.getItems(session.id, { limit: 2 }))!;
+    const first = (await repository.messages(session.id, { after: 0, limit: 2 }))!;
     expect(first.session.id).toBe(session.id);
     expect(first.items).toEqual(timeline.slice(0, 2));
     expect(first.hasMore).toBe(true);
-    const tail = (await repository.getItems(session.id, { cursor: first.cursor }))!;
+    const tail = (await repository.messages(session.id, { after: first.nextAfter }))!;
     expect(tail.session.id).toBe(session.id);
     expect(tail.items).toEqual([timeline[2]]);
     expect(tail.hasMore).toBe(false);
@@ -395,15 +238,10 @@ function normalizedSession(
       childIds: [],
       agent: null,
       messageCount: timeline.filter((item) => item.kind === "message").length,
-      toolCount: timeline.filter((item) => item.kind === "tool" && item.stage === "call").length,
       warningCount: 0,
       diagnostics: [],
-      itemCount: timeline.length,
     },
     timeline,
-    toolDetails: new Map(),
-    directiveDetails: new Map(),
-    internalDetails: new Map(),
   };
 }
 
@@ -531,17 +369,18 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   const updates = new SessionUpdatesService(reader, { interaction, probeIntervalMs: 2 });
   try {
     const live = await reader.list();
-    const page = (await reader.getItems(initial.id, {}))!;
+    const page = (await reader.messages(initial.id, {}))!;
     expect(live.sessions[0]!.status).toBe("live");
     expect(page.session.status).toBe("live");
     const baseline = (await updates.wait(initial.id, {
-      cursor: page.cursor,
-      after: "different" as never,
+      after: page.nextAfter,
+      stateRevision: "different" as never,
     }))!;
     const changedCatalog = catalog.wait(live.revision);
     const changedDetail = updates.wait(initial.id, {
-      cursor: page.cursor,
-      after: baseline.updateRevision,
+      after: page.nextAfter,
+      wait: true,
+      stateRevision: baseline.stateRevision,
     });
     resolveTarget.mockResolvedValue(null);
     const normal = (await changedDetail)!;
@@ -553,8 +392,9 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     expect((await reader.getSession(initial.id))!.session.status).toBe("normal");
     resolveTarget.mockRejectedValue(new Error("timeout"));
     const failed = (await updates.wait(initial.id, {
-      cursor: page.cursor,
-      after: normal.updateRevision,
+      after: page.nextAfter,
+      wait: true,
+      stateRevision: normal.stateRevision,
     }))!;
     expect(failed.interaction).toMatchObject({ state: "unknown" });
     expect(failed.session).toMatchObject({ status: "normal", resume: { allowed: false } });
@@ -565,28 +405,4 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
     updates.close();
     catalog.close();
   }
-});
-
-it("binds update cursor decisions to the captured snapshot across refreshes", async () => {
-  const { repository, rollout, session } = await basicFixtureSession();
-  const page = (await repository.getItems(session.id, { limit: 300 }))!;
-  const read = (await repository.readSessionUpdates(session.id))!;
-  expect(read(page.cursor).hasMore).toBe(false);
-  await appendFile(
-    rollout,
-    JSON.stringify({
-      timestamp: "2026-07-28T12:00:00Z",
-      type: "response_item",
-      payload: {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text: "appended" }],
-      },
-    }) + "\n",
-  );
-  await repository.refresh();
-  expect(read(page.cursor).hasMore).toBe(false);
-  expect((await repository.getSessionUpdates(session.id, page.cursor))!.hasMore).toBe(true);
-  const latest = (await repository.getItems(session.id, { cursor: page.cursor }))!;
-  expect(() => read(latest.cursor)).toThrow();
 });

@@ -1,7 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { TimelineCursor } from "../../src/shared/api-contract";
 import type { UserInputItem, UserInputRequestItem } from "../../src/shared/domain";
 
 import { Timeline } from "../../src/client/components/Timeline";
@@ -39,7 +38,7 @@ describe("user input timeline cards", () => {
 
     const answeredCard = screen.getByText("Answered").closest("article");
     expect(answeredCard).toBe(pendingCard);
-    expect(screen.getAllByText(/User input ·/)).toHaveLength(1);
+    expect(screen.getAllByText(/User input/)).toHaveLength(1);
     expect(within(answeredCard!).getByText("Second").closest("li")).toHaveClass("selected");
     expect(within(answeredCard!).getByText("A custom answer")).toBeInTheDocument();
   });
@@ -94,11 +93,9 @@ function timeline(items: UserInputItem[]) {
     <Timeline
       items={items}
       sessionId="session"
-      cursor={"opaque.timeline.cursor" as TimelineCursor}
       hasMore={false}
       loading={false}
       onLoadMore={vi.fn()}
-      onTimelineConflict={vi.fn()}
     />
   );
 }

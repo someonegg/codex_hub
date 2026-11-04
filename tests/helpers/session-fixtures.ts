@@ -23,9 +23,7 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
     childIds: [],
     agent: null,
     messageCount: 0,
-    toolCount: 0,
     sourceId: "session",
-    itemCount: 0,
     ...overrides,
   };
 }
@@ -39,8 +37,5 @@ export function normalizedSession(overrides: Partial<DomainSession> = {}): Norma
   return {
     session: domainSession(overrides),
     timeline: [],
-    toolDetails: new Map(),
-    directiveDetails: new Map(),
-    internalDetails: new Map(),
   };
 }

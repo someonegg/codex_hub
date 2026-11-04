@@ -7,7 +7,6 @@ import { LocalizedError } from "../i18n/localized-error";
 const errorKeys = {
   not_found: "requestNotFound",
   interaction_not_connected: "requestDisconnected",
-  timeline_changed: "requestConflict",
   payload_too_large: "requestTooLarge",
   upload_too_large: "requestTooLarge",
 } as const;

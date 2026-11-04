@@ -1,15 +1,7 @@
 import type {
-  DirectiveDetailQuery,
-  DirectiveDetailResponse,
-  InternalDetailQuery,
-  InternalDetailResponse,
-  ItemPageQuery,
   SessionHome,
   SessionListResponse,
   SessionMessagesQuery,
-  TimelineCursor,
-  ToolDetailQuery,
-  ToolDetailResponse,
 } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionId } from "../../shared/domain.js";
 import { SessionApiMapper, type SessionDisplayTitleResolver } from "../api/session-api-mapper.js";
@@ -23,11 +15,9 @@ import { SessionQueries } from "../repository/session-queries.js";
 import type { SessionSource } from "../source/session-source.js";
 import type {
   InteractionSessionSnapshot,
-  SessionItemPageResponse,
+  SessionMessagesRead,
   SessionReadDetailResponse,
   SessionReader,
-  SessionUpdatesRead,
-  SessionUpdatesSnapshot,
 } from "./session-reader.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
@@ -92,82 +82,25 @@ export class SessionReadService implements SessionReader {
   }
 
   async messages(id: SessionId, query: SessionMessagesQuery) {
+    return (await this.readMessages(id))?.(query) ?? null;
+  }
+
+  async readMessages(id: SessionId): Promise<SessionMessagesRead | null> {
     const snapshot = await this.#store.current();
-    const result = this.#queries.messages(snapshot, id, query);
-    if (!result) return null;
-    const session = this.#mapper.sessionDetail(result.session);
+    const source = this.#queries.session(snapshot, id);
+    if (!source) return null;
+    const session = this.#mapper.sessionDetail(source);
     const interactionSession = await this.#runtimeDetail(session, snapshot);
-    return {
-      ...result,
-      session,
-      items: result.items.map((item) => this.#mapper.timelineItem(item)),
-      interactionSession,
-    };
-  }
-
-  async getItems(id: SessionId, query: ItemPageQuery): Promise<SessionItemPageResponse | null> {
-    const snapshot = await this.#store.current();
-    const result = this.#queries.items(snapshot, id, query);
-    if (result === null) return null;
-    const response = this.#mapper.itemPage(result);
-    const interactionSession = await this.#runtimeDetail(response.session, snapshot);
-    return { ...response, interactionSession };
-  }
-
-  async getSessionUpdates(
-    id: SessionId,
-    cursor: TimelineCursor,
-  ): Promise<SessionUpdatesSnapshot | null> {
-    const read = await this.readSessionUpdates(id);
-    return read?.(cursor) ?? null;
-  }
-
-  async readSessionUpdates(id: SessionId): Promise<SessionUpdatesRead | null> {
-    const snapshot = await this.#store.current();
-    const current = snapshot.sessions.get(id);
-    if (!current) return null;
-    const session = this.#mapper.sessionDetail(current.normalized.session);
-    const interactionSession = await this.#runtimeDetail(session, snapshot);
-    const read = (cursor: TimelineCursor): SessionUpdatesSnapshot => {
-      const context = this.#queries.updates(snapshot, id, cursor)!;
+    const read = (query: SessionMessagesQuery) => {
+      const result = this.#queries.messages(snapshot, id, query)!;
       return {
+        ...result,
         session,
-        cursor: context.cursor as TimelineCursor,
-        hasMore: context.hasMore,
         interactionSession,
+        items: result.items.map((item) => this.#mapper.timelineItem(item)),
       };
     };
     return Object.assign(read, { state: { session, interactionSession } });
-  }
-
-  async getToolDetail(
-    id: SessionId,
-    itemId: string,
-    query: ToolDetailQuery,
-  ): Promise<ToolDetailResponse | null> {
-    const snapshot = await this.#store.current();
-    const result = this.#queries.toolDetail(snapshot, id, itemId, query);
-    return result === null ? null : this.#mapper.toolDetail(result);
-  }
-
-  async getDirectiveDetail(
-    id: SessionId,
-    itemId: string,
-    query: DirectiveDetailQuery,
-  ): Promise<DirectiveDetailResponse | null> {
-    const snapshot = await this.#store.current();
-    const result = this.#queries.directiveDetail(snapshot, id, itemId, query);
-    return result === null ? null : this.#mapper.directiveDetail(result);
-  }
-
-  async getInternalDetail(
-    id: SessionId,
-    itemId: string,
-    query: InternalDetailQuery,
-  ): Promise<InternalDetailResponse | null> {
-    const snapshot = await this.#store.current();
-    const result = this.#queries.internalDetail(snapshot, id, itemId, query);
-    return result === null ? null : this.#mapper.internalDetail(result);
   }
 
   async #runtimeDetail(

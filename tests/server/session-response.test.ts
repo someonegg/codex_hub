@@ -43,7 +43,7 @@ async function setup() {
   );
   const runtime = new SessionRuntime(transport, managers, bindings);
   const reader = new SessionReadService([source], { runtime, diagnosticLogger: { log: () => {} } });
-  const initialPage = (await reader.getItems(session.id, { limit: 300 }))!;
+  const initialPage = (await reader.messages(session.id, { limit: 300 }))!;
   resolveDirectory.mockClear();
   const interaction = closeAfterEach(
     new SessionInteractionService(reader, transport, {
@@ -94,13 +94,13 @@ describe("request-scoped session responses", () => {
         const response =
           kind === "updates"
             ? await f.updates.wait(f.session.id, {
-                cursor: f.initialPage.cursor,
-                after: "different" as never,
+                after: f.initialPage.nextAfter,
+                stateRevision: "different" as never,
               })
             : await assembleSessionResponse(
                 (kind === "metadata"
                   ? await f.reader.getSession(f.session.id)
-                  : await f.reader.getItems(f.session.id, { limit: 300 }))!,
+                  : await f.reader.messages(f.session.id, { limit: 300 }))!,
                 f.interaction,
                 revision,
               );
@@ -108,7 +108,7 @@ describe("request-scoped session responses", () => {
         expect(response).toMatchObject({
           session: { status: "live", resume: { allowed: false } },
           interaction: { supported: true, activity: "unknown", state: "connected" },
-          updateRevision: expect.any(String),
+          stateRevision: expect.any(String),
         });
         expect(response).not.toHaveProperty("interactionSession");
         expect(JSON.stringify(response)).not.toContain('"observation"');

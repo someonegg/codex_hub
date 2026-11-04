@@ -14,8 +14,6 @@ interface SessionInteractionProps {
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
   sessionId: string;
-  itemCount: number;
-  updatedAt: string | null;
   previewAutoExpandKey?: string | null;
 }
 
@@ -27,8 +25,6 @@ export function SessionInteraction({
   interaction,
   onNavigate,
   sessionId,
-  itemCount,
-  updatedAt,
   previewAutoExpandKey = null,
 }: SessionInteractionProps) {
   const previewAvailable = interaction?.supported === true && interaction.state === "connected";
@@ -45,8 +41,6 @@ export function SessionInteraction({
       operationStatus={operationStatus}
       interaction={interaction}
       onNavigate={onNavigate}
-      itemCount={itemCount}
-      updatedAt={updatedAt}
       interactionBusy={controller.interactionBusy || !!managementBusy}
       error={controller.error}
       errorDetail={controller.errorDetail}

@@ -75,6 +75,10 @@ smoke test. Native integration suites run separately; see
 
 ## Update documentation images
 
+Reader changes should cover ordinal pagination, state/message wakeups, timeout, cancellation,
+and one-time out-of-range recovery in existing tests. Protocol details live in the
+[technical reference](technical-reference.md#reader-and-automatic-updates).
+
 UI changes must regenerate affected README screenshots and animations in all
 three languages. Install `playwright-cli` and its browser; GIF generation also
 requires Python 3 with Pillow.

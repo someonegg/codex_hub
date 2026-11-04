@@ -13,7 +13,6 @@ import { t } from "./i18n";
 import { browserStorage } from "./state/browser-storage";
 import { useHubOperation } from "./state/use-hub-operation";
 import { useSessionReader } from "./state/use-session-reader";
-import { useTimelineVisibility } from "./state/use-timeline-visibility";
 
 interface SessionPageProps {
   homes?: readonly SessionHome[];
@@ -44,7 +43,6 @@ export function SessionPage({
     () => browserStorage.getItem(childSessionsKey) === "true",
   );
   const focused = useRef(false);
-  const timelineVisibility = useTimelineVisibility();
   const reader = useSessionReader(sessionId);
   const [managementOperation, setManagementOperation] = useState(false);
   const operation = useHubOperation(sessionId, (op) => {
@@ -164,14 +162,9 @@ export function SessionPage({
           items={reader.items}
           interaction={reader.interaction}
           onNavigate={onNavigate}
-          visibility={timelineVisibility.visibility}
-          onVisibilityChange={timelineVisibility.setVisibility}
           readerLoading={reader.readerLoading}
           readerBusy={reader.operation !== null}
           onLoadMore={reader.loadMore}
-          onTimelineConflict={reader.markTimelineConflict}
-          timelineConflict={reader.timelineConflict}
-          timelineRenderGeneration={reader.timelineRenderGeneration}
           onRefreshLatest={reader.refreshLatest}
           error={reader.readerError}
           retrying={reader.readerRetrying}

@@ -14,7 +14,7 @@ import {
 
 const { origin, output, language } = docsOptions("docs/images/ahub-session-interaction.png");
 const directory = await mkdtemp(join(tmpdir(), "ahub-interaction-"));
-const browserSession = `interaction-${Date.now()}`;
+const browserSession = `interaction-${language}-${Date.now()}`;
 
 async function capture(
   page,
@@ -117,13 +117,13 @@ async function capture(
   };
   const errors = [];
   demo.on("pageerror", (error) => errors.push(error.message));
-  session = { ...session, messageCount: 2, itemCount: items.length };
+  session = { ...session, messageCount: 2 };
   demo.setDefaultTimeout(10000);
   const snapshot = {
     session,
     interaction,
-    cursor: "demo-cursor",
-    updateRevision: "demo-revision",
+    nextAfter: items.at(-1)?.ordinal ?? 0,
+    stateRevision: "demo-revision",
     hasMore: false,
   };
   const sentMessages = [];
@@ -187,7 +187,10 @@ async function capture(
       return route.fulfill({ status: 204 });
     }
     if (route.request().method() !== "GET") return route.abort();
-    if (path.endsWith("/updates") || url.searchParams.has("after")) {
+    if (
+      url.searchParams.get("wait") === "true" ||
+      (path === "/api/v1/sessions" && url.searchParams.has("after"))
+    ) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
       return route.fulfill({ status: 204 });
     }
@@ -226,7 +229,7 @@ async function capture(
         },
       });
     }
-    if (path.endsWith("/items")) {
+    if (path.endsWith("/messages")) {
       return route.fulfill({
         json: {
           ...snapshot,

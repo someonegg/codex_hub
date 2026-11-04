@@ -221,7 +221,6 @@ describe("hub management", () => {
     const session = {
       ...baseSession,
       sourceId: "native",
-      itemCount: 0,
       status: "archived" as const,
     };
     render(<ManageSession session={session} onChanged={onChanged} />);
@@ -233,7 +232,6 @@ describe("hub management", () => {
     const session = {
       ...baseSession,
       sourceId: "native",
-      itemCount: 0,
       status: "normal" as const,
     };
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);

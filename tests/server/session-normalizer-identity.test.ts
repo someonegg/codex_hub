@@ -10,52 +10,6 @@ import {
 } from "./session-normalizer.fixtures.js";
 
 describe("session identity and recovery", () => {
-  it("normalizes the representative rollout without leaking private payloads", async () => {
-    const normalized = await normalizeFixture("rollout-2026-07-28T10-00-00-basic-session.jsonl");
-    const directives = normalized.timeline.filter((item) => item.kind === "directive");
-    expect(directives.find((item) => item.id === "directive-4")).toEqual(
-      expect.objectContaining({
-        id: "directive-4",
-        summary: "Directive configuration summary",
-        charCount: 1_206,
-        hasDetail: true,
-      }),
-    );
-    expect(normalized.directiveDetails.get("directive-4")).toEqual({
-      text: expect.stringContaining("DIRECTIVE_DETAIL_CANARY"),
-      truncated: false,
-    });
-    expect(directives.find((item) => item.id === "directive-5")).toEqual(
-      expect.objectContaining({
-        id: "directive-5",
-        text: "DEVELOPER_DIRECTIVE_CANARY",
-        hasDetail: false,
-      }),
-    );
-    expect(normalized.directiveDetails.has("directive-5")).toBe(false);
-    expect(normalized.session.sourceId).toBe("basic-session");
-    expect(
-      normalized.timeline.filter(
-        (item) => item.kind === "internal" && item.eventType === "reasoning",
-      ),
-    ).toEqual([
-      expect.objectContaining({
-        id: "internal-6",
-        eventType: "reasoning",
-      }),
-      expect.objectContaining({
-        id: "internal-18",
-        eventType: "reasoning",
-      }),
-    ]);
-    expect(JSON.stringify(normalized.timeline)).not.toContain("REASONING_CANARY_NEVER_RENDER");
-    expect(JSON.stringify(normalized.timeline)).not.toContain(
-      "EMPTY_REASONING_CANARY_NEVER_RENDER",
-    );
-    expect(JSON.stringify(normalized.timeline)).not.toContain("INTERNAL_PAYLOAD_CANARY");
-    expect(normalized.session.title).toBe("Synthetic trace");
-  });
-
   it("bounds JSONL titles to the first non-empty line", () => {
     const longLine = "A JSONL title that should stay compact ".repeat(8);
     const normalized = normalizeRecords("long-title-session", [], {

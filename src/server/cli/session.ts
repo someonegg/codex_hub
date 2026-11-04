@@ -32,13 +32,13 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
   create --project <directory> [--task <name>] [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin) [--force]
-  inspect <id> [--limit 1-300] [--after <number>] [--follow [--interval <seconds>] [--count <N>]]
+  inspect <id> [--limit 1-300] [--after <number>] [--follow [--count <N>]]
   terminal <id>
   keys <id> <key...> [--force]
   interrupt <id>
   handoff <id>
   exit <id> | archive <id> | delete <id>
-Options: --url <http(s)-url> --json --timeout <seconds> (default 15; create/resume/exit/archive/delete: 45)
+Options: --url <http(s)-url> --json --timeout <seconds> (default 15; follow: 30; create/resume/exit/archive/delete: 45)
 List: excludes archived sessions unless --all is set.
 Follow: timeout applies to each HTTP request; observation continues until stopped.
 Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
@@ -70,7 +70,6 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         limit: { type: "string" },
         after: { type: "string" },
         follow: { type: "boolean" },
-        interval: { type: "string" },
         count: { type: "string" },
         help: { type: "boolean" },
       },
@@ -85,7 +84,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     create: ["task", "cwd", "project", "home", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin", "force"],
-    inspect: ["limit", "after", "follow", "interval", "count"],
+    inspect: ["limit", "after", "follow", "count"],
     terminal: [],
     keys: ["force"],
     interrupt: [],
@@ -132,7 +131,9 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
     );
   const defaultSeconds = ["create", "resume", "exit", "archive", "delete"].includes(command)
     ? 45
-    : 15;
+    : values.follow
+      ? 30
+      : 15;
   const seconds = values.timeout === undefined ? defaultSeconds : Number(values.timeout);
   if (!Number.isFinite(seconds) || seconds <= 0 || seconds * 1000 > 2_147_483_647)
     throw new CommandError(
@@ -147,13 +148,8 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   if (base.username || base.password || base.search || base.hash || base.pathname !== "/")
     throw new CommandError("invalid_arguments", "URL must contain only an HTTP or HTTPS origin");
 
-  if ((values.interval !== undefined || values.count !== undefined) && !values.follow)
-    throw new CommandError("invalid_arguments", "--interval and --count require --follow");
-  if (
-    values.interval !== undefined &&
-    (!Number.isFinite(Number(values.interval)) || Number(values.interval) <= 0)
-  )
-    throw new CommandError("invalid_arguments", "interval must be a finite positive number");
+  if (values.count !== undefined && !values.follow)
+    throw new CommandError("invalid_arguments", "--count requires --follow");
   if (
     values.count !== undefined &&
     (!/^\d+$/.test(values.count) ||
@@ -225,13 +221,18 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           base,
           signal: abort.signal,
           timeoutMs: seconds * 1000,
-          intervalMs: Number(values.interval ?? 3) * 1000,
           count: values.count === undefined ? undefined : Number(values.count),
           json,
         });
         return;
       }
-      result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
+      try {
+        result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
+      } catch (error) {
+        if (!(error instanceof CommandError) || error.code !== "after_out_of_range") throw error;
+        query.set("after", "0");
+        result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
+      }
     } else if (command === "terminal")
       result = mapTerminal(await api<TerminalResponse>(`${path}/terminal`));
     else if (["send", "keys", "interrupt", "handoff"].includes(command)) {

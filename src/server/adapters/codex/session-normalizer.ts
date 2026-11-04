@@ -1,29 +1,19 @@
 import type {
   DomainDiagnostic,
-  DomainDirectiveDetail,
-  DomainInternalDetail,
   DomainSession,
   DomainSessionOrigin,
   DomainTimelineRecord,
-  DomainToolDetail,
   NormalizedSession,
 } from "../../domain/session-domain.js";
 import { normalizeSessionTitle, sessionTitleFromMarkdown } from "../../domain/session-text.js";
 import type { SessionMetadata } from "./identity-resolver.js";
 import { codexInteraction } from "./interaction-parser.js";
-import { internalDetail, internalItem, internalItemFromPayload } from "./internal-event-parser.js";
 import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import { eventMessage } from "./message-normalizer.js";
 import { type ParsedResponseItem, parseResponseItem } from "./response-item-parser.js";
 import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
 import { isObject } from "./rollout-decoder.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
-import {
-  type NormalizedTool,
-  normalizeToolCall,
-  normalizeToolOutput,
-  type ToolCall,
-} from "./tool-normalizer.js";
 import {
   type NormalizedUserInput,
   normalizeUserInputRequest,
@@ -53,17 +43,12 @@ export interface SessionNormalizer {
 export interface SessionNormalizerState {
   readonly descriptor: RolloutDescriptor;
   readonly timeline: readonly DomainTimelineRecord[];
-  readonly directiveDetails: ReadonlyMap<string, DomainDirectiveDetail>;
-  readonly internalDetails: ReadonlyMap<string, DomainInternalDetail>;
-  readonly toolDetails: ReadonlyMap<string, DomainToolDetail>;
-  readonly pendingToolCalls: ReadonlyMap<string, ToolCall>;
   readonly pendingUserInputRequests: ReadonlyMap<string, UserInputRequest>;
   readonly decoderDiagnostics: readonly DomainDiagnostic[];
   readonly normalizerDiagnostics: readonly DomainDiagnostic[];
   readonly hasFirstUserMessage: boolean;
   readonly firstUserTitle: string | null;
   readonly messageCount: number;
-  readonly toolCount: number;
 }
 
 export class DefaultSessionNormalizer implements SessionNormalizer {
@@ -71,17 +56,12 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     return {
       descriptor,
       timeline: [],
-      directiveDetails: new Map(),
-      internalDetails: new Map(),
-      toolDetails: new Map(),
-      pendingToolCalls: new Map(),
       pendingUserInputRequests: new Map(),
       decoderDiagnostics: [],
       normalizerDiagnostics: [],
       hasFirstUserMessage: false,
       firstUserTitle: null,
       messageCount: 0,
-      toolCount: 0,
     };
   }
 
@@ -100,29 +80,15 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
     }
 
     const items: DomainTimelineRecord[] = [];
-    const directiveDetails = new LazyMap(state.directiveDetails);
-    const internalDetails = new LazyMap(state.internalDetails);
-    const toolDetails = new LazyMap(state.toolDetails);
-    const pendingToolCalls = new LazyMap(state.pendingToolCalls);
     const pendingUserInputRequests = new LazyMap(state.pendingUserInputRequests);
     const normalizerDiagnostics = [...state.normalizerDiagnostics];
     for (const record of records) {
-      consumeRecord(
-        record,
-        items,
-        directiveDetails,
-        internalDetails,
-        toolDetails,
-        pendingToolCalls,
-        pendingUserInputRequests,
-        normalizerDiagnostics,
-      );
+      consumeRecord(record, items, pendingUserInputRequests, normalizerDiagnostics);
     }
 
     let hasFirstUserMessage = state.hasFirstUserMessage;
     let firstTitle = state.firstUserTitle;
     let messageCount = state.messageCount;
-    let toolCount = state.toolCount;
     for (const item of items) {
       if (item.kind === "message") {
         messageCount += 1;
@@ -130,18 +96,12 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
           hasFirstUserMessage = true;
           firstTitle = sessionTitleFromMarkdown(item.markdown);
         }
-      } else if (item.kind === "tool" && item.stage === "call") {
-        toolCount += 1;
       }
     }
 
     return {
       ...state,
       timeline: items.length === 0 ? state.timeline : [...state.timeline, ...items],
-      directiveDetails: directiveDetails.result,
-      internalDetails: internalDetails.result,
-      toolDetails: toolDetails.result,
-      pendingToolCalls: pendingToolCalls.result,
       pendingUserInputRequests: pendingUserInputRequests.result,
       decoderDiagnostics: decoderDiagnosticsUnchanged
         ? state.decoderDiagnostics
@@ -150,7 +110,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       hasFirstUserMessage,
       firstUserTitle: firstTitle,
       messageCount,
-      toolCount,
     };
   }
 
@@ -177,17 +136,12 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       childIds: [],
       agent: metadata.agent ?? null,
       messageCount: state.messageCount,
-      toolCount: state.toolCount,
       warningCount,
       diagnostics,
-      itemCount: state.timeline.length,
     };
     return {
       session,
       timeline: state.timeline,
-      toolDetails: state.toolDetails,
-      directiveDetails: state.directiveDetails,
-      internalDetails: state.internalDetails,
       interaction: codexInteraction(),
     };
   }
@@ -231,7 +185,6 @@ function sameDiagnostics(
 }
 
 interface MapOperations<K, V> {
-  get(key: K): V | undefined;
   set(key: K, value: V): void;
   delete(key: K): boolean;
 }
@@ -241,9 +194,6 @@ class LazyMap<K, V> implements MapOperations<K, V> {
   constructor(private readonly original: ReadonlyMap<K, V>) {}
   get result(): ReadonlyMap<K, V> {
     return this.#copy ?? this.original;
-  }
-  get(key: K): V | undefined {
-    return this.result.get(key);
   }
   set(key: K, value: V): void {
     if (this.result.has(key) && this.result.get(key) === value) return;
@@ -266,72 +216,32 @@ const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
 function consumeRecord(
   record: DecodedRecord,
   items: DomainTimelineRecord[],
-  directiveDetails: MapOperations<string, DomainDirectiveDetail>,
-  internalDetails: MapOperations<string, DomainInternalDetail>,
-  toolDetails: MapOperations<string, DomainToolDetail>,
-  pendingToolCalls: MapOperations<string, ToolCall>,
   pendingUserInputRequests: MapOperations<string, UserInputRequest>,
   diagnostics: DomainDiagnostic[],
 ): void {
   const timestamp = string(record.value.timestamp);
   const payload = record.value.payload;
-  if (record.value.type === "response_item" && isObject(payload)) {
+  if (!isObject(payload)) {
+    if (typeof record.value.type !== "string")
+      appendDiagnostic(diagnostics, {
+        code: "unknown_record",
+        severity: "info",
+        message: "A record without a recognized type was reduced to a safe diagnostic.",
+        ordinal: record.ordinal,
+      });
+    return;
+  }
+  if (record.value.type === "response_item") {
     consumeParsedResponse(
       parseResponseItem(record.ordinal, timestamp, payload),
       items,
-      directiveDetails,
-      toolDetails,
-      pendingToolCalls,
       pendingUserInputRequests,
       diagnostics,
     );
-    const item = items.at(-1);
-    if (item?.kind === "internal" && item.ordinal === record.ordinal) {
-      addInternalDetail(item, record, internalDetails);
-    }
-    return;
-  }
-  if (record.value.type === "event_msg" && isObject(payload)) {
+  } else if (record.value.type === "event_msg") {
     const message = eventMessage(record.ordinal, timestamp, payload);
-    if (message !== null) items.push(message);
-    else {
-      const item = internalItemFromPayload(record.ordinal, timestamp, payload);
-      items.push(item);
-      if (item.kind === "internal") {
-        addInternalDetail(item, record, internalDetails);
-      }
-    }
-    return;
+    if (message) items.push(message);
   }
-  if (record.value.type === "session_meta") return;
-  if (record.value.type === "turn_context") {
-    const item = internalItem(record.ordinal, timestamp, "turn_context");
-    items.push(item);
-    addInternalDetail(item, record, internalDetails);
-    return;
-  }
-  const eventType = string(record.value.type);
-  if (eventType !== null) {
-    const item = internalItem(record.ordinal, timestamp, eventType);
-    items.push(item);
-    addInternalDetail(item, record, internalDetails);
-    return;
-  }
-  appendDiagnostic(diagnostics, {
-    code: "unknown_record",
-    severity: "info",
-    message: "A record without a recognized type was reduced to a safe diagnostic.",
-    ordinal: record.ordinal,
-  });
-}
-
-function addInternalDetail(
-  item: Extract<DomainTimelineRecord, { kind: "internal" }>,
-  record: DecodedRecord,
-  details: MapOperations<string, DomainInternalDetail>,
-): void {
-  const detail = internalDetail(record.value);
-  details.set(item.id, detail);
 }
 
 function appendDiagnostic(diagnostics: DomainDiagnostic[], diagnostic: DomainDiagnostic): void {
@@ -343,33 +253,13 @@ function appendDiagnostic(diagnostics: DomainDiagnostic[], diagnostic: DomainDia
 function consumeParsedResponse(
   parsed: ParsedResponseItem,
   items: DomainTimelineRecord[],
-  directiveDetails: MapOperations<string, DomainDirectiveDetail>,
-  toolDetails: MapOperations<string, DomainToolDetail>,
-  pendingToolCalls: MapOperations<string, ToolCall>,
   pendingUserInputRequests: MapOperations<string, UserInputRequest>,
   diagnostics: DomainDiagnostic[],
 ): void {
   switch (parsed.kind) {
-    case "directive":
-      items.push(parsed.value.item);
-      if (parsed.value.detail !== null) {
-        directiveDetails.set(parsed.value.item.id, parsed.value.detail);
-      }
-      break;
-    case "timeline":
-      items.push(parsed.value);
-      break;
-    case "tool_call":
-      pendingToolCalls.set(parsed.value.callId, parsed.value);
-      addTool(normalizeToolCall(parsed.value), items, toolDetails);
-      break;
     case "tool_output": {
       if (pendingUserInputRequests.delete(parsed.value.callId)) {
         addUserInput(normalizeUserInputResponse(parsed.value), items, diagnostics);
-      } else {
-        const call = pendingToolCalls.get(parsed.value.callId);
-        pendingToolCalls.delete(parsed.value.callId);
-        addTool(normalizeToolOutput(parsed.value, call), items, toolDetails);
       }
       break;
     }
@@ -396,15 +286,6 @@ function addUserInput(
       ordinal: accumulated.item.ordinal,
     });
   }
-}
-
-function addTool(
-  tool: NormalizedTool,
-  items: DomainTimelineRecord[],
-  details: MapOperations<string, DomainToolDetail>,
-): void {
-  items.push(tool.item);
-  details.set(tool.item.id, tool.detail);
 }
 
 function string(value: unknown): string | null {

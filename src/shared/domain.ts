@@ -48,9 +48,7 @@ export interface SessionDetail {
   childIds: SessionId[];
   agent: AgentIdentity | null;
   messageCount: number;
-  toolCount: number;
   sourceId: string | null;
-  itemCount: number;
 }
 
 interface TimelineItemBase {
@@ -66,43 +64,6 @@ export interface MessageItem extends TimelineItemBase {
   itemType: string | null;
   markdown: string;
 }
-
-interface DirectiveItemBase extends TimelineItemBase {
-  kind: "directive";
-}
-
-export interface InlineDirectiveItem extends DirectiveItemBase {
-  hasDetail: false;
-  text: string;
-}
-
-export interface LazyDirectiveItem extends DirectiveItemBase {
-  hasDetail: true;
-  summary: string;
-  charCount: number;
-}
-
-export type DirectiveItem = InlineDirectiveItem | LazyDirectiveItem;
-
-interface ToolItemBase extends TimelineItemBase {
-  kind: "tool";
-  callId: string;
-  toolName: string;
-  preview: string | null;
-  charCount: number;
-  hasDetail: boolean;
-}
-
-export interface ToolCallItem extends ToolItemBase {
-  stage: "call";
-}
-
-export interface ToolOutputItem extends ToolItemBase {
-  stage: "output";
-  status: "completed" | "failed";
-}
-
-export type ToolItem = ToolCallItem | ToolOutputItem;
 
 export interface UserInputOption {
   label: string;
@@ -154,32 +115,4 @@ export type UserInputItem =
   | AbortedUserInputItem
   | UnavailableUserInputItem;
 
-export interface TokenUsageCounters {
-  totalTokens: number | null;
-  inputTokens: number | null;
-  cachedInputTokens: number | null;
-  cacheWriteInputTokens: number | null;
-  outputTokens: number | null;
-  reasoningOutputTokens: number | null;
-}
-
-export interface TokenItem extends TimelineItemBase {
-  kind: "token";
-  tokenUsage: {
-    total: TokenUsageCounters | null;
-    last: TokenUsageCounters | null;
-  };
-}
-
-export interface InternalEventItem extends TimelineItemBase {
-  kind: "internal";
-  eventType: string;
-}
-
-export type TimelineItem =
-  | MessageItem
-  | DirectiveItem
-  | ToolItem
-  | UserInputItem
-  | TokenItem
-  | InternalEventItem;
+export type TimelineItem = MessageItem | UserInputItem;

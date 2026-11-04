@@ -10,20 +10,8 @@
 .trace-event.human {
   --trace-color: var(--human);
 }
-.trace-event.tool {
-  --trace-color: var(--signal);
-}
 .trace-event.user_input {
   --trace-color: var(--human);
-}
-.trace-event.directive {
-  --trace-color: #7a4f2d;
-}
-.trace-event.internal {
-  --trace-color: #68777c;
-}
-.trace-event.token {
-  --trace-color: #496c65;
 }
 .trace-mark {
   position: absolute;
@@ -36,29 +24,15 @@
   border: 2px solid var(--trace-color);
   border-radius: 50%;
 }
-.tool .trace-mark {
-  border-radius: 1px;
-}
 .user_input .trace-mark {
   border-radius: 50% 50% 50% 2px;
   top: 0.97rem;
   left: 0.85rem;
 }
-.directive .trace-mark {
-  border-style: dashed;
-  border-radius: 1px;
-}
 .response .trace-mark {
   background: var(--current);
   transform: rotate(45deg) scale(0.78);
   border-radius: 0;
-}
-.internal .trace-mark {
-  border-style: dotted;
-}
-.token .trace-mark {
-  border-radius: 50%;
-  border-style: double;
 }
 .trace-event article {
   min-width: 0;
@@ -156,29 +130,7 @@
   min-width: 100%;
   margin: 0;
 }
-.event-detail pre {
-  max-width: 100%;
-  overflow: auto;
-  padding: 1rem;
-  color: var(--code-ink);
-  background: var(--code-surface);
-  border: 1px solid var(--code-border);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.directive-block {
-  max-width: 100%;
-  overflow: auto;
-  padding: 1rem;
-  color: var(--code-ink);
-  background: var(--code-surface);
-  border: 1px solid var(--code-border);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.markdown-scroll-code pre,
-.event-detail pre,
-.directive-block {
+.markdown-scroll-code pre {
   font-size: var(--text-control);
 }
 .message-body a {
@@ -239,34 +191,6 @@
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
-}
-.event-detail {
-  margin-top: 0.8rem;
-}
-.detail-summary strong,
-.internal-event-body > p > strong {
-  font-weight: var(--weight-medium);
-}
-.character-count {
-  display: inline-flex;
-  flex: 0 0 auto;
-  padding: 0.12rem 0.42rem;
-  color: var(--current);
-  background: color-mix(in srgb, var(--current) 9%, transparent);
-  border-radius: 999px;
-  font-family: var(--body-font);
-  font-size: var(--text-small);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: normal;
-  white-space: nowrap;
-}
-.tool-call-id {
-  color: var(--ink-soft);
-  font-size: var(--text-small);
-}
-.tool-call-id code {
-  font-family: var(--mono-font);
-  overflow-wrap: anywhere;
 }
 .user-input-card {
   padding: 0.75rem 0.85rem;
@@ -382,49 +306,6 @@
   color: var(--ink-soft);
   font-size: var(--text-small);
 }
-.event-detail h4 {
-  font-family: var(--body-font);
-  font-size: var(--text-small);
-  font-weight: var(--weight-medium);
-  text-transform: none;
-  margin: 1rem 0 0.35rem;
-}
-.token-usage {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1.5rem;
-  margin-top: 0.8rem;
-}
-.token-usage h4 {
-  font-family: var(--body-font);
-  font-size: var(--text-small);
-  text-transform: none;
-  margin: 0 0 0.45rem;
-}
-.token-usage dl {
-  margin: 0;
-  font-family: var(--body-font);
-  font-size: var(--text-small);
-}
-.token-usage dl > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.18rem 0;
-  border-bottom: 1px solid var(--mist);
-}
-.token-usage dt {
-  color: var(--ink-soft);
-}
-.token-usage dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-}
-.token-usage-unavailable {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: var(--text-small);
-}
 .truncated {
   color: #7a4f2d;
   font-size: var(--text-small);
@@ -436,11 +317,6 @@
 .trace-event .plan-toggle > .event-label {
   margin-bottom: 0;
   text-align: left;
-}
-@media (max-width: 720px) {
-  .token-usage {
-    grid-template-columns: 1fr;
-  }
 }
 @media (max-width: 480px) {
   .message-body :is(ul, ol) {
@@ -455,18 +331,12 @@
     transition: transform 140ms ease-out;
   }
 }
-
 .markdown-scroll-code,
-.event-detail pre,
-.directive-block,
 .user-input-card,
 .user-input-options li,
 .user-input-freeform {
   border-radius: var(--radius-panel);
 }
-.event-detail pre,
-.directive-block,
-.markdown-scroll-code pre,
-.tool-call-id code {
+.markdown-scroll-code pre {
   font-family: var(--mono-font);
 }

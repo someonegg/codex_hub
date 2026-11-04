@@ -1,8 +1,8 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { MessageItem as Message, SessionDetail } from "../../src/shared/domain";
+import type { MessageItem as Message } from "../../src/shared/domain";
 
 import {
   MessageItem,
@@ -11,64 +11,14 @@ import {
 } from "../../src/client/components/MessageItem";
 import { SessionHeader } from "../../src/client/components/SessionHeader";
 import { Timeline } from "../../src/client/components/Timeline";
-import { DEFAULT_TIMELINE_VISIBILITY } from "../../src/client/state/timeline-visibility";
 import { firstPage, SESSION_ID } from "./session.fixtures";
 
 // @vitest-environment jsdom
 
 describe("session reader components", () => {
-  it("keeps technical details collapsed while event filters remain visible", async () => {
-    const user = userEvent.setup();
-    const session: SessionDetail = {
-      ...firstPage.session,
-      projectDirectory: "/project/main",
-      workingDirectory: "/worktrees/task",
-    };
-    const header = (value: typeof session) => (
-      <SessionHeader
-        session={value}
-        visibility={DEFAULT_TIMELINE_VISIBILITY}
-        onVisibilityChange={vi.fn()}
-      />
-    );
-    const view = render(header(session));
-    const details = screen.getByText("Session information").closest("details")!;
-    expect(details).not.toHaveAttribute("open");
-    expect(screen.getByRole("group", { name: "Timeline event visibility" })).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: /^tool$/ })).toBeVisible();
-    expect(screen.getByText(/Project Directory/)).not.toBeVisible();
-    await user.click(screen.getByText("Session information"));
-    expect(details).toHaveAttribute("open");
-    expect(screen.getByText(/Project Directory/)).toBeVisible();
-    expect(screen.getByRole("group", { name: "Timeline event visibility" })).toBeVisible();
-    expect(screen.getByRole("checkbox", { name: /^tool$/ })).toBeVisible();
-    expect(screen.getByText(/Project Directory/)).toHaveTextContent(
-      "Project Directory · /project/main",
-    );
-    expect(screen.getByText(/Working Directory/)).toHaveTextContent(
-      "Working Directory · /worktrees/task",
-    );
-    view.rerender(header({ ...session, workingDirectory: session.projectDirectory }));
-    expect(screen.getAllByText("/project/main")).toHaveLength(2);
-    expect(details).toHaveAttribute("open");
-    view.rerender(header({ ...session, workingDirectory: null, projectDirectory: null }));
-    expect(screen.getByText(/Project Directory/)).toHaveTextContent(
-      "Project Directory · Unavailable",
-    );
-    expect(screen.getByText(/Working Directory/)).toHaveTextContent(
-      "Working Directory · Unavailable",
-    );
-  });
-
   it("closes session information when switching sessions", async () => {
     const user = userEvent.setup();
-    const header = (id: string) => (
-      <SessionHeader
-        session={{ ...firstPage.session, id }}
-        visibility={DEFAULT_TIMELINE_VISIBILITY}
-        onVisibilityChange={vi.fn()}
-      />
-    );
+    const header = (id: string) => <SessionHeader session={{ ...firstPage.session, id }} />;
     const view = render(header("first"));
     await user.click(screen.getByText("Session information"));
     expect(screen.getByText("Session information").closest("details")).toHaveAttribute("open");
@@ -109,66 +59,15 @@ describe("session reader components", () => {
           },
         ]}
         sessionId={SESSION_ID}
-        cursor={firstPage.cursor}
         hasMore={false}
         loading={false}
         onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
       />,
     );
 
     expect(
       [...document.querySelectorAll("time")].map((node) => node.getAttribute("datetime")),
     ).toEqual(["2026-07-28T10:00:00.000Z", "2026-07-28T10:00:02.000Z"]);
-  });
-
-  it("renders detailed total and last token usage in separate groups", () => {
-    render(
-      <Timeline
-        items={[
-          {
-            kind: "token",
-            id: "token-7",
-            ordinal: 7,
-            timestamp: null,
-            tokenUsage: {
-              total: {
-                totalTokens: 12_345,
-                inputTokens: 10_000,
-                cachedInputTokens: 4_000,
-                cacheWriteInputTokens: 500,
-                outputTokens: 2_000,
-                reasoningOutputTokens: 345,
-              },
-              last: {
-                totalTokens: 678,
-                inputTokens: 500,
-                cachedInputTokens: 100,
-                cacheWriteInputTokens: null,
-                outputTokens: 150,
-                reasoningOutputTokens: null,
-              },
-            },
-          },
-        ]}
-        sessionId={SESSION_ID}
-        cursor={firstPage.cursor}
-        hasMore={false}
-        loading={false}
-        onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
-      />,
-    );
-
-    const total = screen.getByRole("region", { name: "Total token usage" });
-    const last = screen.getByRole("region", { name: "Last token usage" });
-    expect(within(total).getByText("12,345")).toBeInTheDocument();
-    expect(within(total).getByText("4,000")).toBeInTheDocument();
-    expect(within(total).getByText("500")).toBeInTheDocument();
-    expect(within(last).getByText("678")).toBeInTheDocument();
-    expect(within(last).getByText("150")).toBeInTheDocument();
-    expect(within(last).queryByText("Cache write input")).toBeNull();
-    expect(within(last).queryByText("Reasoning output")).toBeNull();
   });
 
   it("renders Markdown without raw HTML, external images, or dangerous links", () => {
@@ -303,7 +202,7 @@ describe("session reader components", () => {
       />,
     );
 
-    const toggle = screen.getByRole("button", { name: /Assistant response · Plan · 12.*Show/ });
+    const toggle = screen.getByRole("button", { name: /Assistant response · Plan.*Show/ });
     expect(toggle.querySelector(".message-avatar")).toBeNull();
     expect(toggle).toHaveAttribute("aria-expanded", "false");
     expect(document.querySelector(".plan-preview")).toHaveTextContent(
@@ -347,16 +246,14 @@ describe("session reader components", () => {
       <Timeline
         items={items}
         sessionId={sessionId}
-        cursor={firstPage.cursor}
         hasMore={true}
         loading={false}
         paginationEnabled={false}
         onLoadMore={vi.fn()}
-        onTimelineConflict={vi.fn()}
       />
     );
     const toggle = (ordinal: number) =>
-      screen.getByRole("button", { name: new RegExp(`Assistant response · Plan · ${ordinal}`) });
+      screen.getAllByRole("button", { name: /Assistant response · Plan/ })[ordinal - 1]!;
     const view = render(timeline([plan(1), plan(2)]));
     expect(toggle(1)).toHaveAttribute("aria-expanded", "false");
     expect(toggle(2)).toHaveAttribute("aria-expanded", "true");
@@ -419,11 +316,7 @@ describe("session reader components", () => {
 
 it("only displays task metadata inside session information when configured", async () => {
   const header = (taskName?: string) => (
-    <SessionHeader
-      session={{ ...firstPage.session, taskName }}
-      visibility={DEFAULT_TIMELINE_VISIBILITY}
-      onVisibilityChange={vi.fn()}
-    />
+    <SessionHeader session={{ ...firstPage.session, taskName }} />
   );
   const view = render(header());
   expect(screen.queryByText("Task")).not.toBeInTheDocument();

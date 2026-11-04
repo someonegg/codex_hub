@@ -360,12 +360,7 @@ describe("secure HTTP foundation", () => {
       list: fail,
       getSession: fail,
       messages: async () => null,
-      getItems: fail,
-      readSessionUpdates: fail,
-      getSessionUpdates: fail,
-      getToolDetail: fail,
-      getDirectiveDetail: fail,
-      getInternalDetail: fail,
+      readMessages: async () => null,
       getInteractionSession: fail,
       refresh: fail,
     };

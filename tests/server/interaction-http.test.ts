@@ -19,12 +19,7 @@ async function start() {
       interactionSession: { archived: false, interaction: null },
     }),
     messages: async () => null,
-    getItems: unavailable,
-    readSessionUpdates: unavailable,
-    getSessionUpdates: unavailable,
-    getToolDetail: unavailable,
-    getDirectiveDetail: unavailable,
-    getInternalDetail: unavailable,
+    readMessages: async () => null,
     getInteractionSession: unavailable,
     refresh: vi.fn(),
   };

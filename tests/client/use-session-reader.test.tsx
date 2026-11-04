@@ -1,196 +1,173 @@
 // @vitest-environment jsdom
-import { act, renderHook } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
-
-import type { ItemPageResponse } from "../../src/shared/api-contract";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
 
 import { api, ApiClientError } from "../../src/client/api/client";
 import { useSessionReader } from "../../src/client/state/use-session-reader";
-import { firstPage, NEXT_TIMELINE_CURSOR, SESSION_ID, TIMELINE_CURSOR } from "./session.fixtures";
+import { firstPage, SESSION_ID } from "./session.fixtures";
+beforeEach(() => {
+  Object.defineProperty(document, "hidden", { configurable: true, value: false });
+});
+it("serializes forward pagination and tail waiting, appending each message once", async () => {
+  const mock = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, nextAfter: 7, hasMore: true })
+    .mockResolvedValueOnce({ ...firstPage, items: [], nextAfter: 7, hasMore: false })
+    .mockImplementation(() => new Promise(() => {}));
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(hook.result.current.context?.nextAfter).toBe(7));
+  expect(mock).toHaveBeenCalledTimes(1);
+  await act(() => hook.result.current.loadMore());
+  await waitFor(() => expect(mock).toHaveBeenCalledTimes(3));
+  expect(mock.mock.calls.map((call) => call[1])).toMatchObject([
+    { after: 0 },
+    { after: 7, wait: false },
+    { after: 7, wait: true },
+  ]);
+  expect(hook.result.current.items).toEqual(firstPage.items);
+  hook.unmount();
+  expect(mock.mock.calls[2]![2]!.aborted).toBe(true);
+});
+it("reloads once from zero after an out-of-range ordinal", async () => {
+  const mock = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, nextAfter: 9, hasMore: false })
+    .mockRejectedValueOnce(new ApiClientError(400, "after_out_of_range", "rewritten"))
+    .mockResolvedValueOnce({ ...firstPage, hasMore: true, nextAfter: 1 });
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(mock).toHaveBeenCalledTimes(3));
+  expect(mock.mock.calls[2]![1]).toMatchObject({ after: 0, wait: false });
+  expect(hook.result.current.items).toEqual(firstPage.items);
+});
+it("cancels tail waiting while hidden and resumes on visibility", async () => {
+  const mock = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, hasMore: false })
+    .mockImplementation(() => new Promise(() => {}));
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(mock).toHaveBeenCalledTimes(2));
+  act(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: true });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(mock.mock.calls[1]![2]!.aborted).toBe(true);
+  act(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await waitFor(() => expect(mock).toHaveBeenCalledTimes(3));
+  hook.unmount();
+});
 
-const initial = { ...firstPage, hasMore: true };
-const next = { ...firstPage, cursor: NEXT_TIMELINE_CURSOR, hasMore: false };
+function setHidden(hidden: boolean) {
+  act(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: hidden });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+}
 async function flush() {
   await act(async () => {
     await Promise.resolve();
   });
 }
-function setup() {
-  vi.spyOn(api, "updates").mockReturnValue(new Promise(() => {}));
-  return vi.spyOn(api, "items");
-}
 
-function openReaderWithUpdateFailure(status: number) {
-  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
-  vi.spyOn(api, "items").mockResolvedValue({ ...firstPage, hasMore: false });
-  const updates = vi
-    .spyOn(api, "updates")
-    .mockRejectedValueOnce(new ApiClientError(status, "request_failed", "Offline"))
-    .mockResolvedValueOnce(null)
-    .mockImplementation(() => new Promise(() => {}));
-  return { ...renderHook(() => useSessionReader(SESSION_ID)), updates };
-}
-
-it("retries pagination at the boundary using the original cursor", async () => {
+it.each([
+  ["page", new Error("Offline")],
+  ["page", new ApiClientError(429, "capacity", "Busy")],
+  ["page", new ApiClientError(503, "unavailable", "Unavailable")],
+  ["poll", new Error("Offline")],
+  ["poll", new ApiClientError(429, "capacity", "Busy")],
+  ["poll", new ApiClientError(503, "unavailable", "Unavailable")],
+] as const)("resumes %s backoff after visibility returns (%s)", async (operation, error) => {
   vi.useFakeTimers();
-  vi.spyOn(Math, "random").mockReturnValue(0.5);
-  const request = setup()
-    .mockResolvedValueOnce(initial)
-    .mockRejectedValueOnce(new ApiClientError(503, "busy", "Busy"))
-    .mockResolvedValueOnce(next);
-  const { result } = renderHook(() => useSessionReader(SESSION_ID));
+  const request = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, nextAfter: 7, hasMore: operation === "page" })
+    .mockRejectedValueOnce(error)
+    .mockResolvedValueOnce({ ...firstPage, items: [], nextAfter: 9, hasMore: true });
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
   await flush();
-  let loading!: Promise<boolean>;
-  act(() => {
-    loading = result.current.loadMore();
-  });
-  await flush();
-  expect(result.current.readerError).toBe("Busy");
-  expect(result.current.readerRetrying).toBe(true);
-  expect(result.current.context?.cursor).toBe(TIMELINE_CURSOR);
-  await act(() => vi.advanceTimersByTimeAsync(999));
-  expect(request).toHaveBeenCalledTimes(2);
-  await act(() => vi.advanceTimersByTimeAsync(1));
-  await act(async () => {
-    await loading;
-  });
-  expect(request).toHaveBeenLastCalledWith(
-    SESSION_ID,
-    { cursor: TIMELINE_CURSOR, limit: 300 },
-    expect.any(AbortSignal),
-  );
-  expect(result.current.context?.cursor).toBe(NEXT_TIMELINE_CURSOR);
-  expect(result.current.readerError).toBeNull();
-  expect(result.current.readerRetrying).toBe(false);
-});
-
-it("stops pagination retries on a terminal error while preserving loaded data", async () => {
-  vi.useFakeTimers();
-  const request = setup()
-    .mockResolvedValueOnce(initial)
-    .mockRejectedValueOnce(new ApiClientError(400, "invalid_query", "Stop timeline"));
-  const { result } = renderHook(() => useSessionReader(SESSION_ID));
-  await flush();
-  await act(async () => {
-    expect(await result.current.loadMore()).toBe(false);
-  });
-  expect(result.current.readerError).toBe("Stop timeline");
-  expect(result.current.readerRetrying).toBe(false);
-  expect(result.current.items).toEqual(initial.items);
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
-  expect(request).toHaveBeenCalledTimes(2);
-});
-
-it.each(["success", "failure"])("ignores canceled page %s after refreshing", async (outcome) => {
-  let resolve!: (page: ItemPageResponse) => void;
-  let reject!: (reason: unknown) => void;
-  const pending = new Promise<ItemPageResponse>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  const request = setup()
-    .mockResolvedValueOnce(initial)
-    .mockReturnValueOnce(pending)
-    .mockResolvedValueOnce(next);
-  const { result } = renderHook(() => useSessionReader(SESSION_ID));
-  await flush();
-  act(() => {
-    void result.current.loadMore();
-  });
-  await act(async () => {
-    await result.current.refreshLatest();
-  });
-  expect(request.mock.calls[1]![2]!.aborted).toBe(true);
-  await act(async () => {
-    if (outcome === "success") resolve(initial);
-    else reject(new Error("obsolete"));
-  });
-  expect(result.current.context?.cursor).toBe(NEXT_TIMELINE_CURSOR);
-  expect(result.current.items).toEqual(next.items);
-  expect(result.current.readerError).toBeNull();
-  expect(result.current.operation).toBeNull();
-});
-
-it("cancels a pagination retry on session replacement", async () => {
-  vi.useFakeTimers();
-  const request = setup()
-    .mockResolvedValueOnce(initial)
-    .mockRejectedValueOnce(new ApiClientError(503, "busy", "Busy"))
-    .mockResolvedValueOnce(next);
-  const { result, rerender } = renderHook(({ id }) => useSessionReader(id), {
-    initialProps: { id: SESSION_ID },
-  });
-  await flush();
-  act(() => {
-    void result.current.loadMore();
-  });
-  await flush();
-  rerender({ id: "replacement" });
-  await flush();
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
-  expect(request).toHaveBeenCalledTimes(3);
-  expect(result.current.readerError).toBeNull();
-});
-
-it.each(["success", "failure"])(
-  "ignores obsolete updates %s after pagination advances the snapshot",
-  async (outcome) => {
-    let resolve!: (value: Awaited<ReturnType<typeof api.updates>>) => void;
-    let reject!: (reason: unknown) => void;
-    const old = new Promise<Awaited<ReturnType<typeof api.updates>>>((yes, no) => {
-      resolve = yes;
-      reject = no;
+  if (operation === "page") {
+    act(() => {
+      void hook.result.current.loadMore();
     });
-    const updates = vi
-      .spyOn(api, "updates")
-      .mockReturnValueOnce(old)
-      .mockReturnValue(new Promise(() => {}));
-    vi.spyOn(api, "items").mockResolvedValueOnce(initial).mockResolvedValueOnce(next);
-    const { result } = renderHook(() => useSessionReader(SESSION_ID));
     await flush();
-    await act(async () => {
-      await result.current.loadMore();
-    });
-    expect(updates.mock.calls[0]![2]!.aborted).toBe(true);
-    await act(async () => {
-      if (outcome === "success")
-        resolve({ ...initial, session: { ...initial.session, title: "Obsolete" } });
-      else reject(new Error("obsolete"));
-    });
-    expect(result.current.context?.session.title).toBe(next.session.title);
-    expect(result.current.context?.cursor).toBe(NEXT_TIMELINE_CURSOR);
-    expect(result.current.readerError).toBeNull();
-  },
-);
-
-it("reports update recovery, hides it while backgrounded, and clears it after success", async () => {
-  vi.useFakeTimers();
-  vi.spyOn(Math, "random").mockReturnValue(0.5);
-  const { result, unmount } = openReaderWithUpdateFailure(503);
+  }
+  expect(hook.result.current.readerRetrying).toBe(true);
+  setHidden(true);
   await flush();
-  expect(result.current.readerError).toBe("Offline");
-  expect(result.current.readerRetrying).toBe(true);
-
-  Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
-  act(() => document.dispatchEvent(new Event("visibilitychange")));
-  expect(result.current.readerRetrying).toBe(false);
-  Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
-  act(() => document.dispatchEvent(new Event("visibilitychange")));
-  expect(result.current.readerRetrying).toBe(true);
-
-  await act(() => vi.advanceTimersByTimeAsync(1000));
-  expect(result.current.readerError).toBeNull();
-  expect(result.current.readerRetrying).toBe(false);
-  unmount();
+  expect(request.mock.calls[1]![2]!.aborted).toBe(true);
+  expect(vi.getTimerCount()).toBe(0);
+  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  expect(request).toHaveBeenCalledTimes(2);
+  setHidden(false);
+  await flush();
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(request.mock.calls[2]![1]).toEqual(request.mock.calls[1]![1]);
+  expect(hook.result.current.context?.nextAfter).toBe(9);
+  expect(hook.result.current.items).toEqual(firstPage.items);
+  expect(hook.result.current.readerError).toBeNull();
+  expect(hook.result.current.readerRetrying).toBe(false);
 });
 
-it("does not report or request recovery after a terminal update error", async () => {
-  vi.useFakeTimers();
-  const { result, updates, unmount } = openReaderWithUpdateFailure(400);
+it("resumes an interrupted history page without retriggering its sentinel", async () => {
+  let finishOldPage!: (page: typeof firstPage) => void;
+  const request = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, nextAfter: 7, hasMore: true })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOldPage = resolve;
+        }),
+    )
+    .mockResolvedValueOnce({ ...firstPage, items: [], nextAfter: 9, hasMore: true });
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(hook.result.current.context?.nextAfter).toBe(7));
+  act(() => {
+    void hook.result.current.loadMore();
+  });
+  setHidden(true);
+  expect(request.mock.calls[1]![2]!.aborted).toBe(true);
+  setHidden(false);
+  await waitFor(() => expect(hook.result.current.context?.nextAfter).toBe(9));
+  expect(request).toHaveBeenCalledTimes(3);
+  expect(request.mock.calls[2]![1]).toMatchObject({ after: 7, wait: false });
+  await act(async () => {
+    finishOldPage({ ...firstPage, nextAfter: 99 });
+  });
+  expect(hook.result.current.context?.nextAfter).toBe(9);
+  expect(hook.result.current.items).toEqual(firstPage.items);
+});
+
+it("keeps terminal errors stopped after visibility changes", async () => {
+  const request = vi
+    .spyOn(api, "messages")
+    .mockRejectedValue(new ApiClientError(400, "invalid_query", "Invalid query"));
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(hook.result.current.readerError).toBe("Invalid query"));
+  setHidden(true);
+  setHidden(false);
   await flush();
-  expect(result.current.readerError).toBe("Offline");
-  expect(result.current.readerRetrying).toBe(false);
-  await act(() => vi.advanceTimersByTimeAsync(60_000));
-  expect(updates).toHaveBeenCalledTimes(1);
-  unmount();
+  expect(request).toHaveBeenCalledOnce();
+  expect(hook.result.current.readerRetrying).toBe(false);
+});
+
+it("discards suspended pagination when switching sessions while hidden", async () => {
+  const request = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, nextAfter: 7, hasMore: true })
+    .mockImplementationOnce(() => new Promise(() => {}))
+    .mockResolvedValueOnce({ ...firstPage, hasMore: true });
+  const hook = renderHook(({ id }) => useSessionReader(id), { initialProps: { id: SESSION_ID } });
+  await waitFor(() => expect(hook.result.current.context?.nextAfter).toBe(7));
+  act(() => {
+    void hook.result.current.loadMore();
+  });
+  setHidden(true);
+  hook.rerender({ id: "another-session" });
+  setHidden(false);
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
+  expect(request.mock.calls[2]![0]).toBe("another-session");
+  expect(request.mock.calls[2]![1]).toMatchObject({ after: 0, wait: false });
 });

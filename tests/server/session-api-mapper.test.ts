@@ -30,7 +30,6 @@ const session = domainSession({
       ordinal: 2,
     },
   ],
-  itemCount: 1,
 });
 
 describe("session API mapping", () => {

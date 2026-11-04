@@ -1,7 +1,7 @@
 import type {
   InteractionResponse,
-  SessionUpdatesQuery,
-  SessionUpdatesResponse,
+  SessionMessagesQuery,
+  SessionMessagesResponse,
 } from "../../shared/api-contract.js";
 import type { SessionReader } from "../application/session-reader.js";
 import { assembleSessionResponse } from "../application/session-response.js";
@@ -37,18 +37,18 @@ export interface SessionUpdatesServiceOptions {
 }
 
 interface Waiter {
-  readonly query: SessionUpdatesQuery;
-  readonly finish: (value: SessionUpdatesResponse | null) => void;
+  readonly query: SessionMessagesQuery;
+  readonly finish: (value: SessionMessagesResponse | null) => void;
   readonly fail: (error: unknown) => void;
 }
-type UpdatesProbe = (query: SessionUpdatesQuery) => SessionUpdatesResponse;
+type UpdatesProbe = (query: SessionMessagesQuery) => SessionMessagesResponse;
 
 interface ProbeGroup {
   readonly waiters: Set<Waiter>;
   pending: Promise<UpdatesProbe> | null;
   timer?: ReturnType<typeof setTimeout>;
 }
-type SessionUpdatesReader = Pick<SessionReader, "readSessionUpdates">;
+type SessionUpdatesReader = Pick<SessionReader, "readMessages">;
 
 export class SessionUpdatesService {
   readonly #createRevision: UpdateRevisionFactory;
@@ -77,9 +77,9 @@ export class SessionUpdatesService {
 
   async wait(
     sessionId: string,
-    query: SessionUpdatesQuery,
+    query: SessionMessagesQuery,
     signal?: AbortSignal,
-  ): Promise<SessionUpdatesResponse | null> {
+  ): Promise<SessionMessagesResponse | null> {
     if (this.#closed || signal?.aborted) throw abortError();
     let group = this.#groups.get(sessionId);
     if (
@@ -142,8 +142,14 @@ export class SessionUpdatesService {
   #evaluate(waiter: Waiter, read: UpdatesProbe) {
     try {
       const result = read(waiter.query);
-      if (result.updateRevision !== waiter.query.after || result.hasMore) waiter.finish(result);
-      else if (result.session.status === "archived") waiter.finish(null);
+      if (
+        !waiter.query.wait ||
+        waiter.query.stateRevision === undefined ||
+        result.stateRevision !== waiter.query.stateRevision ||
+        result.items.length > 0 ||
+        result.hasMore
+      )
+        waiter.finish(result);
     } catch (error) {
       waiter.fail(error);
     }
@@ -152,16 +158,22 @@ export class SessionUpdatesService {
   #read(sessionId: string, group: ProbeGroup) {
     if (group.pending) return group.pending;
     const pending = (async () => {
-      const read = await this.sessions.readSessionUpdates(sessionId);
+      const read = await this.sessions.readMessages(sessionId);
       if (!read) throw new SessionUpdatesError("session_not_found", "Session not found");
-      const assembled = await assembleSessionResponse(
+      const state = await assembleSessionResponse(
         read.state,
         this.options.interaction,
         this.#createRevision,
       );
-      return (query: SessionUpdatesQuery): SessionUpdatesResponse => {
-        const progress = read(query.cursor);
-        return { ...assembled, cursor: progress.cursor, hasMore: progress.hasMore };
+      return (query: SessionMessagesQuery): SessionMessagesResponse => {
+        const result = read(query);
+        return {
+          ...state,
+          items: result.items,
+          nextAfter: result.nextAfter,
+          hasMore: result.hasMore,
+          live: state.session.status === "live",
+        };
       };
     })();
     group.pending = pending;

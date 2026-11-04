@@ -36,12 +36,7 @@ function repository(snapshot: InteractionSessionSnapshot | null): SessionReader 
     list: vi.fn(),
     getSession: vi.fn(),
     messages: async () => null,
-    getItems: vi.fn(),
-    readSessionUpdates: vi.fn(),
-    getSessionUpdates: vi.fn(),
-    getToolDetail: vi.fn(),
-    getDirectiveDetail: vi.fn(),
-    getInternalDetail: vi.fn(),
+    readMessages: async () => null,
     getInteractionSession: vi.fn().mockResolvedValue(snapshot),
     refresh: vi.fn(),
   };

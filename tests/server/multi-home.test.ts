@@ -125,30 +125,29 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
       supersededBySessionId: work!.id,
     });
     expect(await hub.interaction.describe(work!.id)).toMatchObject({ state: "connected" });
-    const personalPage = (await hub.sessions.getItems(personal!.id, { limit: 300 }))!;
-    const workPage = (await hub.sessions.getItems(work!.id, { limit: 300 }))!;
+    const personalPage = (await hub.sessions.messages(personal!.id, { limit: 300 }))!;
+    const workPage = (await hub.sessions.messages(work!.id, { limit: 300 }))!;
     await appendFile(
       rollout(0),
       JSON.stringify({
         timestamp: "2026-07-28T13:00:00.000Z",
-        type: "response_item",
+        type: "event_msg",
         payload: {
-          type: "message",
-          role: "assistant",
-          content: [{ type: "output_text", text: "Personal update only" }],
+          type: "agent_message",
+          message: "Personal update only",
         },
       }) + "\n",
     );
     await hub.sessions.refresh();
     const updates = await hub.updates.wait(personal!.id, {
-      cursor: personalPage.cursor,
-      after: "unseen" as UpdateRevision,
+      after: personalPage.nextAfter,
+      stateRevision: "unseen" as UpdateRevision,
     });
-    expect(updates!.hasMore).toBe(true);
+    expect(updates!.items).toHaveLength(1);
     expect(updates!.session.origin.home).toBe(personal!.home);
     const other = await hub.updates.wait(work!.id, {
-      cursor: workPage.cursor,
-      after: "unseen" as UpdateRevision,
+      after: workPage.nextAfter,
+      stateRevision: "unseen" as UpdateRevision,
     });
     expect(other!.hasMore).toBe(false);
   } finally {
