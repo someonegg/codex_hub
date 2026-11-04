@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import { SessionCatalogService } from "../../src/server/catalog/session-catalog-service.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
@@ -79,4 +79,41 @@ it("long-polls messages with baseline, timeout and disconnect cleanup", async ()
   });
   abort.abort();
   await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+});
+
+it("serves plain and HEAD message reads even when long-poll capacity is full", async () => {
+  const sessions = await createCodexSessionReadService(resolve("tests/fixtures/codex-home"));
+  const catalog = new SessionCatalogService(sessions);
+  const updates = new SessionUpdatesService(sessions, { maxWaiters: 1 });
+  const { base } = await startHttpServer(createApiRouter({ sessions, catalog, updates }), () => {
+    catalog.close();
+    updates.close();
+  });
+  const id = (await sessions.list()).sessions[0]!.id;
+  const page = (await sessions.messages(id, { after: 0, limit: 300 }))!;
+  const abort = new AbortController();
+  const pending = updates
+    .wait(
+      id,
+      {
+        after: page.nextAfter,
+        wait: true,
+        stateRevision: page.stateRevision,
+      },
+      abort.signal,
+    )
+    .catch((error: unknown) => error);
+  const root = `${base}/api/v1/sessions/${id}/messages`;
+  try {
+    const read = vi.spyOn(sessions, "messages");
+    expect((await fetch(`${root}?wait=true`)).status).toBe(429);
+    for (const query of ["", "?wait=false", "?after=0&limit=1"]) {
+      expect((await fetch(`${root}${query}`)).status).toBe(200);
+    }
+    expect((await fetch(`${root}?wait=true`, { method: "HEAD" })).status).toBe(200);
+    expect(read).toHaveBeenCalledTimes(4);
+  } finally {
+    abort.abort();
+    await pending;
+  }
 });

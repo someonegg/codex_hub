@@ -38,7 +38,8 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     { now: () => now },
   );
   const catalogService = new SessionCatalogService(sessions);
-  const updates = new SessionUpdatesService(sessions, { interaction });
+  sessions.bindInteraction(interaction);
+  const updates = new SessionUpdatesService(sessions);
   const { base: origin } = await startHttpServer(
     createApiRouter({ sessions, catalog: catalogService, interaction, operations, updates }),
     () => {

@@ -1,5 +1,6 @@
 import { isObject } from "./rollout-decoder.js";
 import { parseUserInputQuestions, type UserInputRequest } from "./user-input-normalizer.js";
+import { nonEmptyString } from "./value-readers.js";
 
 export interface ToolOutput {
   callId: string;
@@ -32,7 +33,7 @@ function userInputRequest(
   payload: Record<string, unknown>,
 ): UserInputRequest | null {
   if (payload.type !== "function_call" || payload.name !== "request_user_input") return null;
-  const callId = string(payload.call_id);
+  const callId = nonEmptyString(payload.call_id);
   if (callId === null) return null;
   const questions = parseUserInputQuestions(payload.arguments);
   return {
@@ -49,9 +50,9 @@ function toolOutput(
   timestamp: string | null,
   payload: Record<string, unknown>,
 ): ToolOutput | null {
-  const type = string(payload.type);
+  const type = nonEmptyString(payload.type);
   if (type !== "function_call_output" && type !== "custom_tool_call_output") return null;
-  const callId = string(payload.call_id);
+  const callId = nonEmptyString(payload.call_id);
   if (callId === null) return null;
   return {
     callId,
@@ -76,11 +77,10 @@ function toolOutputText(value: unknown): string | null {
   if (!Array.isArray(value)) return serializeText(value);
   const parts = value
     .filter(isObject)
-    .map((part) => string(part.text) ?? string(part.output_text) ?? serializeText(part))
+    .map(
+      (part) =>
+        nonEmptyString(part.text) ?? nonEmptyString(part.output_text) ?? serializeText(part),
+    )
     .filter((part): part is string => part !== null);
   return parts.length === 0 ? serializeText(value) : parts.join("\n\n");
-}
-
-function string(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
 }

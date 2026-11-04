@@ -23,7 +23,6 @@ export const baseSession: SessionDetail = {
   parentId: null,
   childIds: [],
   agent: null,
-  messageCount: 2,
 };
 
 export const listBody = {

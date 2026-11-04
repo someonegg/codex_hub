@@ -16,7 +16,7 @@ import { TASK_NAME_ERROR, validTaskName } from "../../shared/task-name.js";
 import { normalizeMessage } from "../interaction/message.js";
 import { CommandError, commandFailure } from "./command-error.js";
 import { output, outputFailure } from "./output.js";
-import { SessionClient } from "./session-client.js";
+import { recoverMessageQuery, SessionClient } from "./session-client.js";
 import { followInspect } from "./session-follow.js";
 import {
   type CliResult,
@@ -229,8 +229,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
       try {
         result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
       } catch (error) {
-        if (!(error instanceof CommandError) || error.code !== "after_out_of_range") throw error;
-        query.set("after", "0");
+        if (!recoverMessageQuery(error, query)) throw error;
         result = mapInspect(await api<SessionMessagesResponse>(`${path}/messages?${query}`));
       }
     } else if (command === "terminal")

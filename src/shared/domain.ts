@@ -47,66 +47,65 @@ export interface SessionDetail {
   parentId: SessionId | null;
   childIds: SessionId[];
   agent: AgentIdentity | null;
-  messageCount: number;
   sourceId: string | null;
 }
 
 interface TimelineItemBase {
-  id: ItemId;
-  ordinal: number;
-  timestamp: string | null;
+  readonly id: ItemId;
+  readonly ordinal: number;
+  readonly timestamp: string | null;
 }
 
 export interface MessageItem extends TimelineItemBase {
-  kind: "message";
-  role: "user" | "assistant";
-  phase: "update" | "response" | null;
-  itemType: string | null;
-  markdown: string;
+  readonly kind: "message";
+  readonly role: "user" | "assistant";
+  readonly phase: "update" | "response" | null;
+  readonly itemType: "plan" | null;
+  readonly markdown: string;
 }
 
 export interface UserInputOption {
-  label: string;
-  description: string;
+  readonly label: string;
+  readonly description: string;
 }
 
 export interface UserInputQuestion {
-  id: string;
-  header: string;
-  question: string;
-  options: UserInputOption[];
+  readonly id: string;
+  readonly header: string;
+  readonly question: string;
+  readonly options: readonly UserInputOption[];
 }
 
 export interface UserInputAnswer {
-  questionId: string;
-  answers: string[];
+  readonly questionId: string;
+  readonly answers: readonly string[];
 }
 
 interface UserInputItemBase extends TimelineItemBase {
-  kind: "user_input";
-  callId: string;
+  readonly kind: "user_input";
+  readonly callId: string;
 }
 
 export interface UserInputRequestItem extends UserInputItemBase {
-  stage: "request";
-  questions: UserInputQuestion[];
+  readonly stage: "request";
+  readonly questions: readonly UserInputQuestion[];
 }
 
 export interface AnsweredUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "answered";
-  answers: UserInputAnswer[];
+  readonly stage: "response";
+  readonly outcome: "answered";
+  readonly answers: readonly UserInputAnswer[];
 }
 
 export interface AbortedUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "aborted";
+  readonly stage: "response";
+  readonly outcome: "aborted";
 }
 
 export interface UnavailableUserInputItem extends UserInputItemBase {
-  stage: "response";
-  outcome: "unavailable";
-  summary: string;
+  readonly stage: "response";
+  readonly outcome: "unavailable";
+  readonly summary: string;
 }
 
 export type UserInputItem =

@@ -20,7 +20,6 @@ const session = domainSession({
   updatedAt: "2026-07-28T01:00:00Z",
   childIds: ["child"],
   agent: { taskName: "task", nickname: null, role: "worker" },
-  messageCount: 1,
   warningCount: 1,
   diagnostics: [
     {

@@ -17,20 +17,21 @@ function fixture() {
   const service = new SessionUpdatesService(
     {
       readMessages: async () => {
-        const snapshot = {
+        const state = {
           session: sessionDetail({ title }),
-          interactionSession: { archived: false, interaction: null },
-          items,
-          nextAfter: items.at(-1)?.ordinal ?? 0,
-          hasMore: false,
+          interaction: { supported: false as const, attachCommand: null },
+          stateRevision: title as never,
         };
-        return Object.assign(
-          (query: { after?: number }) => ({
-            ...snapshot,
-            items: snapshot.items.filter((item) => item.ordinal > (query.after ?? 0)),
+        return {
+          state,
+          page: (query: { after?: number }) => ({
+            ...state,
+            items: items.filter((item) => item.ordinal > (query.after ?? 0)),
+            nextAfter: items.at(-1)?.ordinal ?? 0,
+            hasMore: false,
+            live: false,
           }),
-          { state: snapshot },
-        );
+        };
       },
     },
     { probeIntervalMs: 10, waitTimeoutMs: 50, maxWaiters: 2, maxWaitersPerSession: 1 },
@@ -60,7 +61,7 @@ function fixture() {
 it("returns a baseline without a revision and returns backlog immediately", async () => {
   const f = fixture();
   const baseline = await f.service.wait("s", { after: 0, wait: true });
-  expect(baseline?.stateRevision).toMatch(/^[\w-]{43}$/);
+  expect(baseline?.stateRevision).toBe("Session");
   f.append();
   const result = await f.service.wait("s", {
     after: 0,

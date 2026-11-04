@@ -40,7 +40,6 @@ function setup() {
     parentId: null,
     childIds: [],
     agent: null,
-    messageCount: 0,
     warningCount: 0,
     diagnostics: [],
   };

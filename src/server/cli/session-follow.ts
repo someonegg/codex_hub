@@ -1,7 +1,7 @@
 import type { SessionMessagesResponse } from "../../shared/api-contract.js";
 import { CommandError } from "./command-error.js";
 import { output } from "./output.js";
-import { SessionClient } from "./session-client.js";
+import { recoverMessageQuery, SessionClient } from "./session-client.js";
 import { formatResult, mapInspect } from "./session-output.js";
 
 /** Each round drains backlog before the next bounded tail wait. */
@@ -32,11 +32,8 @@ export async function followInspect(options: {
           `${path}/messages?${query}`,
         );
       } catch (error) {
-        if (error instanceof CommandError && error.code === "after_out_of_range" && !recovered) {
+        if (!recovered && recoverMessageQuery(error, query)) {
           recovered = true;
-          query.set("after", "0");
-          query.delete("stateRevision");
-          query.delete("wait");
           continue;
         }
         throw error;

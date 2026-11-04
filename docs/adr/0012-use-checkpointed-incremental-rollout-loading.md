@@ -9,6 +9,9 @@ Current scope (updated 2026-10-18): this validation policy applies to unarchived
 rollouts. Successfully loaded archives reuse cached content; directory discovery
 is unchanged. See the [cache rules](../technical-reference.md) for details.
 
+Current reader scope: timeline paging uses ordinal offsets rather than signed
+cursors or a repository prefix index. See the [reader contract](../technical-reference.md#reader-and-automatic-updates).
+
 ## Context and Problem Statement
 
 Codex rollout files are append-heavy JSONL streams, but the generation-based source rereads and renormalizes an entire changed file. Large active sessions therefore make each refresh proportional to historical size. Incremental state must preserve incomplete-tail, malformed-line, diagnostic, tool-pairing, atomic snapshot, paging, and cursor semantics while safely recovering from truncation or replacement.
@@ -39,14 +42,14 @@ previous generations or weaken timeline-prefix continuity.
 The [current cache contract](../technical-reference.md#discovery-and-caching)
 defines probes and fallback conditions; the
 [Codex source](../../src/server/adapters/codex/codex-session-source.ts) and
-[prefix index](../../src/server/repository/timeline-prefix-index.ts) own checkpoint
+[normalizer](../../src/server/adapters/codex/session-normalizer.ts) own checkpoint
 and reference-reuse details.
 
 ### Positive Consequences
 
 - Normal append reads and decodes only two probes, the unfinished tail, and appended bytes.
 - Tool output and user-input responses can pair with calls or requests from earlier refreshes.
-- Previously issued timeline cursors remain valid across pure append without changing the protocol.
+- Stable item ordinals allow readers to continue after an append; offsets beyond the current timeline require recovery after a rewrite.
 - Parser or normalizer version changes, truncation, and common replacements recover automatically through full rebuild.
 - Restart behavior remains simple because checkpoints are process-local and disposable.
 
@@ -77,6 +80,6 @@ and reference-reuse details.
 
 - Good: Bounds normal validation I/O while preserving a whole-file fallback.
 - Good: Keeps offsets and file probes inside the Codex adapter.
-- Good: Allows stable normalized objects and repository prefix slots to be reused.
+- Good: Allows stable normalized objects to be reused.
 - Bad: Accepts the documented possibility of an undetected middle rewrite.
 - Bad: Requires explicit decoder and normalizer version invalidation.

@@ -15,7 +15,7 @@ first; diagnostics appear in logs only.
 
 `user_message` and `agent_message` events publish nonempty message text.
 Completed `UserMessage` accepts `text` parts; `AgentMessage` accepts `Text` parts;
-`Plan` accepts `item.text` and publishes an assistant response with `itemType: Plan`.
+`Plan` accepts `item.text` and publishes an assistant response with `itemType: plan`.
 Parts join with blank lines. `commentary` maps to `update`; `final` and
 `final_answer` map to `response`. Other phases remain null.
 

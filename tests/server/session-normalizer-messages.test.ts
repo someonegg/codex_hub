@@ -46,7 +46,6 @@ describe("message and directive normalization", () => {
     expect(normalized.session).toEqual(
       expect.objectContaining({
         title: "First user line",
-        messageCount: 1,
       }),
     );
     expect(JSON.stringify(normalized)).not.toContain("NON_TEXT_MUST_NOT_RENDER");
@@ -102,7 +101,7 @@ describe("message and directive normalization", () => {
         kind: "message",
         role: "assistant",
         phase: "response",
-        itemType: "Plan",
+        itemType: "plan",
         markdown: "# Plan\n\n- First step",
       }),
     ]);

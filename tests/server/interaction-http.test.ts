@@ -16,7 +16,14 @@ async function start() {
     list: vi.fn(),
     getSession: vi.fn().mockResolvedValue({
       session: SESSION,
-      interactionSession: { archived: false, interaction: null },
+      interaction: {
+        supported: true,
+        activity: "unknown",
+        supersededBySessionId: null,
+        attachCommand: null,
+        state: "connected",
+      },
+      stateRevision: "r" as never,
     }),
     messages: async () => null,
     readMessages: async () => null,
@@ -89,10 +96,6 @@ describe("interaction HTTP API", () => {
         }),
       }),
     );
-    expect(interaction.describeSnapshot).toHaveBeenCalledWith(SESSION_ID, {
-      archived: false,
-      interaction: null,
-    });
     expect(interaction.describe).not.toHaveBeenCalled();
     const message = "first\r\nsecond 🌊";
     const sent = await fetch(`${base}/api/v1/sessions/${SESSION_ID}/messages`, {

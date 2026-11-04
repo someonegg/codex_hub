@@ -1,11 +1,9 @@
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { InteractionResponse } from "../../shared/api-contract";
-import type { TimelineItem } from "../../shared/domain";
+import type { SessionMessagesResponse } from "../../shared/api-contract";
 
 import { t } from "../i18n";
-import type { ReaderContext } from "../state/session-reader-state";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { PageJumpControls } from "./PageJumpControls";
@@ -21,9 +19,7 @@ interface SessionReaderProps {
   management?: ReactNode;
   onNavigate?: (sessionId: string) => void;
   related?: ReactNode;
-  context: ReaderContext;
-  items: TimelineItem[];
-  interaction: InteractionResponse | null;
+  context: SessionMessagesResponse;
   readerLoading: boolean;
   readerBusy: boolean;
   onLoadMore: () => void;
@@ -41,8 +37,6 @@ export function SessionReader({
   onNavigate,
   related,
   context,
-  items,
-  interaction,
   readerLoading,
   readerBusy,
   onLoadMore,
@@ -52,15 +46,8 @@ export function SessionReader({
 }: SessionReaderProps) {
   useTranslation();
   const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
-  const hasMore = context.hasMore;
-  let latestMessage: TimelineItem | null = null;
-  for (let index = items.length - 1; index >= 0; index -= 1) {
-    const item = items[index]!;
-    if (item.kind === "message" || item.kind === "user_input") {
-      latestMessage = item;
-      break;
-    }
-  }
+  const { hasMore, items, interaction } = context;
+  const latestMessage = items.at(-1) ?? null;
   const previewAutoExpandKey =
     !hasMore &&
     latestMessage &&
@@ -68,7 +55,7 @@ export function SessionReader({
       (latestMessage.kind === "message" &&
         latestMessage.role === "assistant" &&
         latestMessage.phase === "response" &&
-        latestMessage.itemType === "Plan"))
+        latestMessage.itemType === "plan"))
       ? latestMessage.id
       : null;
   return (
@@ -93,7 +80,6 @@ export function SessionReader({
           hasMore={hasMore}
           loading={readerLoading}
           readerBusy={readerBusy}
-          paginationEnabled={true}
           onLoadMore={onLoadMore}
         />
       ) : null}

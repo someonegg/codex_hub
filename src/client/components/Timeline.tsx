@@ -16,8 +16,6 @@ interface TimelineProps {
   hasMore: boolean;
   loading: boolean;
   readerBusy?: boolean;
-  paginationEnabled?: boolean;
-  paginationFrozen?: boolean;
   onLoadMore: () => void;
 }
 
@@ -27,8 +25,6 @@ export const Timeline = memo(function Timeline({
   hasMore,
   loading,
   readerBusy = loading,
-  paginationEnabled = true,
-  paginationFrozen = false,
   onLoadMore,
 }: TimelineProps) {
   useTranslation();
@@ -74,7 +70,7 @@ export const Timeline = memo(function Timeline({
           </li>
         ))}
       </ol>
-      {hasMore && paginationEnabled && !paginationFrozen ? (
+      {hasMore ? (
         <InfiniteScrollSentinel
           enabled={!readerBusy}
           triggerKey={String(items.at(-1)?.ordinal ?? 0)}

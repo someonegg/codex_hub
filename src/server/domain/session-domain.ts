@@ -1,7 +1,7 @@
+import type { TimelineItem } from "../../shared/domain.js";
 import type { InteractionKey } from "../../shared/interaction.js";
 
 export type DomainSessionId = string;
-export type DomainItemId = string;
 
 export type DomainDiagnosticSeverity = "info" | "warning" | "error";
 
@@ -96,76 +96,19 @@ export interface DomainSession {
   readonly parentId: DomainSessionId | null;
   readonly childIds: readonly DomainSessionId[];
   readonly agent: DomainAgentIdentity | null;
-  readonly messageCount: number;
   readonly warningCount: number;
   readonly diagnostics: readonly DomainDiagnostic[];
 }
 
-interface DomainTimelineRecordBase {
-  readonly id: DomainItemId;
-  readonly ordinal: number;
-  readonly timestamp: string | null;
-}
+export type {
+  MessageItem as DomainMessageRecord,
+  UserInputAnswer as DomainUserInputAnswer,
+  UserInputOption as DomainUserInputOption,
+  UserInputQuestion as DomainUserInputQuestion,
+  UserInputItem as DomainUserInputRecord,
+} from "../../shared/domain.js";
 
-export interface DomainMessageRecord extends DomainTimelineRecordBase {
-  readonly kind: "message";
-  readonly role: "user" | "assistant";
-  readonly phase: "update" | "response" | null;
-  readonly itemType: string | null;
-  readonly markdown: string;
-}
-
-export interface DomainUserInputOption {
-  readonly label: string;
-  readonly description: string;
-}
-
-export interface DomainUserInputQuestion {
-  readonly id: string;
-  readonly header: string;
-  readonly question: string;
-  readonly options: readonly DomainUserInputOption[];
-}
-
-export interface DomainUserInputAnswer {
-  readonly questionId: string;
-  readonly answers: readonly string[];
-}
-
-interface DomainUserInputRecordBase extends DomainTimelineRecordBase {
-  readonly kind: "user_input";
-  readonly callId: string;
-}
-
-export interface DomainUserInputRequestRecord extends DomainUserInputRecordBase {
-  readonly stage: "request";
-  readonly questions: readonly DomainUserInputQuestion[];
-}
-
-export interface DomainAnsweredUserInputRecord extends DomainUserInputRecordBase {
-  readonly stage: "response";
-  readonly outcome: "answered";
-  readonly answers: readonly DomainUserInputAnswer[];
-}
-
-export interface DomainAbortedUserInputRecord extends DomainUserInputRecordBase {
-  readonly stage: "response";
-  readonly outcome: "aborted";
-}
-
-export interface DomainUnavailableUserInputRecord extends DomainUserInputRecordBase {
-  readonly stage: "response";
-  readonly outcome: "unavailable";
-  readonly summary: string;
-}
-
-export type DomainUserInputRecord =
-  | DomainUserInputRequestRecord
-  | DomainAnsweredUserInputRecord
-  | DomainAbortedUserInputRecord
-  | DomainUnavailableUserInputRecord;
-
-export type DomainTimelineRecord = DomainMessageRecord | DomainUserInputRecord;
+export type DomainTimelineRecord = TimelineItem;
 
 export interface NormalizedSession {
   readonly session: DomainSession;

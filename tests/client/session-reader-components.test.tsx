@@ -195,7 +195,7 @@ describe("session reader components", () => {
           timestamp: null,
           role: "assistant",
           phase: "response",
-          itemType: "Plan",
+          itemType: "plan",
           markdown:
             "<proposed_plan>\n# Release plan\n\n- First **important** step\n- Read the [docs](https://example.com)\n</proposed_plan>",
         }}
@@ -239,16 +239,15 @@ describe("session reader components", () => {
       timestamp: null,
       role: "assistant",
       phase: "response",
-      itemType: "Plan",
+      itemType: "plan",
       markdown: `# Plan ${ordinal}`,
     });
     const timeline = (items: Message[], sessionId = SESSION_ID) => (
       <Timeline
         items={items}
         sessionId={sessionId}
-        hasMore={true}
+        hasMore={false}
         loading={false}
-        paginationEnabled={false}
         onLoadMore={vi.fn()}
       />
     );

@@ -31,7 +31,6 @@ const base = {
     parentId: "secret",
     childIds: ["secret"],
     sourceId: "secret",
-    messageCount: 8,
   },
   live: true,
   nextAfter: 44,
@@ -146,8 +145,8 @@ it("maps terminal fields explicitly", () => {
 });
 
 it.each([
-  ["assistant", "response", "Plan", true],
-  ["assistant", "update", "Plan", false],
+  ["assistant", "response", "plan", true],
+  ["assistant", "update", "plan", false],
 ] as const)(
   "adds hints only to assistant response Plans (%s %s %s)",
   (role, phase, itemType, hinted) => {

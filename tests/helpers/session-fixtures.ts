@@ -22,7 +22,6 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
     parentId: null,
     childIds: [],
     agent: null,
-    messageCount: 0,
     sourceId: "session",
     ...overrides,
   };

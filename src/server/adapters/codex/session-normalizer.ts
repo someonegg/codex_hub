@@ -20,6 +20,7 @@ import {
   normalizeUserInputResponse,
   type UserInputRequest,
 } from "./user-input-normalizer.js";
+import { nonEmptyString } from "./value-readers.js";
 
 export interface SessionNormalizer {
   create(descriptor: RolloutDescriptor): SessionNormalizerState;
@@ -48,7 +49,6 @@ export interface SessionNormalizerState {
   readonly normalizerDiagnostics: readonly DomainDiagnostic[];
   readonly hasFirstUserMessage: boolean;
   readonly firstUserTitle: string | null;
-  readonly messageCount: number;
 }
 
 export class DefaultSessionNormalizer implements SessionNormalizer {
@@ -61,7 +61,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       normalizerDiagnostics: [],
       hasFirstUserMessage: false,
       firstUserTitle: null,
-      messageCount: 0,
     };
   }
 
@@ -88,14 +87,10 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
 
     let hasFirstUserMessage = state.hasFirstUserMessage;
     let firstTitle = state.firstUserTitle;
-    let messageCount = state.messageCount;
     for (const item of items) {
-      if (item.kind === "message") {
-        messageCount += 1;
-        if (!hasFirstUserMessage && item.role === "user") {
-          hasFirstUserMessage = true;
-          firstTitle = sessionTitleFromMarkdown(item.markdown);
-        }
+      if (!hasFirstUserMessage && item.kind === "message" && item.role === "user") {
+        hasFirstUserMessage = true;
+        firstTitle = sessionTitleFromMarkdown(item.markdown);
       }
     }
 
@@ -109,7 +104,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       normalizerDiagnostics,
       hasFirstUserMessage,
       firstUserTitle: firstTitle,
-      messageCount,
     };
   }
 
@@ -135,7 +129,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       parentId: metadata.parentThreadId,
       childIds: [],
       agent: metadata.agent ?? null,
-      messageCount: state.messageCount,
       warningCount,
       diagnostics,
     };
@@ -219,7 +212,7 @@ function consumeRecord(
   pendingUserInputRequests: MapOperations<string, UserInputRequest>,
   diagnostics: DomainDiagnostic[],
 ): void {
-  const timestamp = string(record.value.timestamp);
+  const timestamp = nonEmptyString(record.value.timestamp);
   const payload = record.value.payload;
   if (!isObject(payload)) {
     if (typeof record.value.type !== "string")
@@ -286,8 +279,4 @@ function addUserInput(
       ordinal: accumulated.item.ordinal,
     });
   }
-}
-
-function string(value: unknown): string | null {
-  return typeof value === "string" && value.length > 0 ? value : null;
 }

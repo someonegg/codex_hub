@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
 
+import type * as SessionClientModule from "../../src/server/cli/session-client.js";
+
 const request = vi.hoisted(() => vi.fn());
-vi.mock("../../src/server/cli/session-client.js", () => ({
+vi.mock("../../src/server/cli/session-client.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SessionClientModule>()),
   SessionClient: class {
     constructor(_base: URL, signal: AbortSignal) {
       this.request = (path: string) => request(path, signal);

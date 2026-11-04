@@ -1,7 +1,9 @@
 import type {
+  SessionDetailResponse,
   SessionHome,
   SessionListResponse,
   SessionMessagesQuery,
+  SessionMessagesResponse,
 } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionId } from "../../shared/domain.js";
 import { SessionApiMapper, type SessionDisplayTitleResolver } from "../api/session-api-mapper.js";
@@ -13,12 +15,14 @@ import {
 } from "../repository/catalog-snapshot-store.js";
 import { SessionQueries } from "../repository/session-queries.js";
 import type { SessionSource } from "../source/session-source.js";
+import type { UpdateRevisionFactory } from "../updates/update-revision.js";
+import { createProcessUpdateRevisionFactory } from "../updates/update-revision.js";
 import type {
   InteractionSessionSnapshot,
   SessionMessagesRead,
-  SessionReadDetailResponse,
   SessionReader,
 } from "./session-reader.js";
+import { assembleSessionResponse, type SessionInteractionReader } from "./session-response.js";
 
 export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDependencies {
   readonly freshnessMs?: number;
@@ -33,6 +37,8 @@ export class SessionReadService implements SessionReader {
   readonly #store: CatalogSnapshotStore;
   readonly #queries: SessionQueries;
   readonly #mapper: SessionApiMapper;
+  readonly #createRevision: UpdateRevisionFactory = createProcessUpdateRevisionFactory();
+  #interaction?: SessionInteractionReader;
 
   constructor(sources: readonly SessionSource[], options: SessionReadServiceDependencies = {}) {
     const {
@@ -72,17 +78,15 @@ export class SessionReadService implements SessionReader {
     return this.#mapper.list(sessions, byId);
   }
 
-  async getSession(id: SessionId): Promise<SessionReadDetailResponse | null> {
-    const snapshot = await this.#store.current();
-    const result = this.#queries.session(snapshot, id);
-    if (result === null) return null;
-    const response = this.#mapper.detail(result);
-    const interactionSession = await this.#runtimeDetail(response.session, snapshot);
-    return { ...response, interactionSession };
+  async getSession(id: SessionId): Promise<SessionDetailResponse | null> {
+    return (await this.readMessages(id))?.state ?? null;
   }
 
-  async messages(id: SessionId, query: SessionMessagesQuery) {
-    return (await this.readMessages(id))?.(query) ?? null;
+  async messages(
+    id: SessionId,
+    query: SessionMessagesQuery,
+  ): Promise<SessionMessagesResponse | null> {
+    return (await this.readMessages(id))?.page(query) ?? null;
   }
 
   async readMessages(id: SessionId): Promise<SessionMessagesRead | null> {
@@ -91,16 +95,29 @@ export class SessionReadService implements SessionReader {
     if (!source) return null;
     const session = this.#mapper.sessionDetail(source);
     const interactionSession = await this.#runtimeDetail(session, snapshot);
-    const read = (query: SessionMessagesQuery) => {
-      const result = this.#queries.messages(snapshot, id, query)!;
-      return {
-        ...result,
-        session,
-        interactionSession,
-        items: result.items.map((item) => this.#mapper.timelineItem(item)),
-      };
+    const state = await assembleSessionResponse(
+      { session, interactionSession },
+      this.#interaction,
+      this.#createRevision,
+    );
+    return {
+      state,
+      page: (query) => {
+        const result = this.#queries.messages(snapshot, id, query)!;
+        return {
+          ...state,
+          items: result.items,
+          nextAfter: result.nextAfter,
+          hasMore: result.hasMore,
+          live: state.session.status === "live",
+        };
+      },
     };
-    return Object.assign(read, { state: { session, interactionSession } });
+  }
+
+  /** Bind the interaction describer once it is constructed; it depends on this service. */
+  bindInteraction(interaction: SessionInteractionReader): void {
+    this.#interaction = interaction;
   }
 
   async #runtimeDetail(

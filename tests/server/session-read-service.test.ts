@@ -237,7 +237,6 @@ function normalizedSession(
       parentId: null,
       childIds: [],
       agent: null,
-      messageCount: timeline.filter((item) => item.kind === "message").length,
       warningCount: 0,
       diagnostics: [],
     },
@@ -296,7 +295,6 @@ describe("catalog structure and updatedAt isolation", () => {
         session: {
           ...entry.normalized.session,
           updatedAt: "2030-01-01T00:00:00Z",
-          messageCount: 42,
           diagnostics: [
             { code: "warning", severity: "warning", message: "warning", ordinal: null },
           ],
@@ -366,7 +364,8 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   );
 
   const catalog = new SessionCatalogService(reader);
-  const updates = new SessionUpdatesService(reader, { interaction, probeIntervalMs: 2 });
+  reader.bindInteraction(interaction);
+  const updates = new SessionUpdatesService(reader, { probeIntervalMs: 2 });
   try {
     const live = await reader.list();
     const page = (await reader.messages(initial.id, {}))!;

@@ -153,7 +153,7 @@ export function mapInspect(value: SessionMessagesResponse): CliInspect {
             phase: item.phase,
             itemType: item.itemType,
             markdown: item.markdown,
-            ...(item.role === "assistant" && item.phase === "response" && item.itemType === "Plan"
+            ...(item.role === "assistant" && item.phase === "response" && item.itemType === "plan"
               ? { inputHint: inputHint(s.id) }
               : {}),
           },

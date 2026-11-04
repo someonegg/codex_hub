@@ -1,16 +1,5 @@
-import type {
-  InteractionResponse,
-  SessionMessagesQuery,
-  SessionMessagesResponse,
-} from "../../shared/api-contract.js";
+import type { SessionMessagesQuery, SessionMessagesResponse } from "../../shared/api-contract.js";
 import type { SessionReader } from "../application/session-reader.js";
-import { assembleSessionResponse } from "../application/session-response.js";
-import type { SessionInteractionService } from "../interaction/interaction-service.js";
-import {
-  createProcessUpdateRevisionFactory,
-  type UpdateRevisionFactory,
-  type UpdateRevisionSession,
-} from "./update-revision.js";
 
 export const UPDATES_PROBE_INTERVAL_MS = 1_500;
 export const UPDATES_WAIT_TIMEOUT_MS = 25_000;
@@ -28,8 +17,6 @@ export class SessionUpdatesError extends Error {
 }
 
 export interface SessionUpdatesServiceOptions {
-  readonly interaction?: Pick<SessionInteractionService, "describeSnapshot">;
-  readonly createRevision?: UpdateRevisionFactory;
   readonly probeIntervalMs?: number;
   readonly waitTimeoutMs?: number;
   readonly maxWaiters?: number;
@@ -50,8 +37,11 @@ interface ProbeGroup {
 }
 type SessionUpdatesReader = Pick<SessionReader, "readMessages">;
 
+/**
+ * Bounded long-poll waiting for message reads. Plain (non-waiting) reads bypass
+ * this service and call the session reader directly.
+ */
 export class SessionUpdatesService {
-  readonly #createRevision: UpdateRevisionFactory;
   readonly #probeIntervalMs: number;
   readonly #waitTimeoutMs: number;
   readonly #maxWaiters: number;
@@ -62,17 +52,12 @@ export class SessionUpdatesService {
 
   constructor(
     private readonly sessions: SessionUpdatesReader,
-    private readonly options: SessionUpdatesServiceOptions = {},
+    options: SessionUpdatesServiceOptions = {},
   ) {
-    this.#createRevision = options.createRevision ?? createProcessUpdateRevisionFactory();
     this.#probeIntervalMs = options.probeIntervalMs ?? UPDATES_PROBE_INTERVAL_MS;
     this.#waitTimeoutMs = options.waitTimeoutMs ?? UPDATES_WAIT_TIMEOUT_MS;
     this.#maxWaiters = options.maxWaiters ?? MAX_UPDATES_WAITERS;
     this.#maxWaitersPerSession = options.maxWaitersPerSession ?? MAX_UPDATES_WAITERS_PER_SESSION;
-  }
-
-  revision(session: UpdateRevisionSession, interaction: InteractionResponse) {
-    return this.#createRevision(session, interaction);
   }
 
   async wait(
@@ -143,7 +128,6 @@ export class SessionUpdatesService {
     try {
       const result = read(waiter.query);
       if (
-        !waiter.query.wait ||
         waiter.query.stateRevision === undefined ||
         result.stateRevision !== waiter.query.stateRevision ||
         result.items.length > 0 ||
@@ -157,25 +141,10 @@ export class SessionUpdatesService {
 
   #read(sessionId: string, group: ProbeGroup) {
     if (group.pending) return group.pending;
-    const pending = (async () => {
-      const read = await this.sessions.readMessages(sessionId);
+    const pending = this.sessions.readMessages(sessionId).then((read) => {
       if (!read) throw new SessionUpdatesError("session_not_found", "Session not found");
-      const state = await assembleSessionResponse(
-        read.state,
-        this.options.interaction,
-        this.#createRevision,
-      );
-      return (query: SessionMessagesQuery): SessionMessagesResponse => {
-        const result = read(query);
-        return {
-          ...state,
-          items: result.items,
-          nextAfter: result.nextAfter,
-          hasMore: result.hasMore,
-          live: state.session.status === "live",
-        };
-      };
-    })();
+      return read.page;
+    });
     group.pending = pending;
     const clearPending = () => {
       group.pending = null;

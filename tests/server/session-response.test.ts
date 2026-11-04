@@ -4,14 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
-import { assembleSessionResponse } from "../../src/server/application/session-response.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { SessionUpdatesService } from "../../src/server/updates/session-updates-service.js";
-import { createProcessUpdateRevisionFactory } from "../../src/server/updates/update-revision.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
@@ -54,7 +52,8 @@ async function setup() {
     }),
   );
 
-  const updates = new SessionUpdatesService(reader, { interaction });
+  const updates = new SessionUpdatesService(reader);
+  reader.bindInteraction(interaction);
   const bind = (valid = true, ordinal = 1) =>
     bindings.submit({
       sessionId: session.id,
@@ -83,8 +82,6 @@ async function setup() {
   };
 }
 
-const revision = createProcessUpdateRevisionFactory(Buffer.alloc(32, 1));
-
 describe("request-scoped session responses", () => {
   it.each(["metadata", "items", "updates"] as const)(
     "uses one pane observation for %s and keeps internal facts out of the response",
@@ -97,13 +94,9 @@ describe("request-scoped session responses", () => {
                 after: f.initialPage.nextAfter,
                 stateRevision: "different" as never,
               })
-            : await assembleSessionResponse(
-                (kind === "metadata"
-                  ? await f.reader.getSession(f.session.id)
-                  : await f.reader.messages(f.session.id, { limit: 300 }))!,
-                f.interaction,
-                revision,
-              );
+            : kind === "metadata"
+              ? await f.reader.getSession(f.session.id)
+              : await f.reader.messages(f.session.id, { limit: 300 });
         expect(f.resolveTarget).toHaveBeenCalledTimes(1);
         expect(response).toMatchObject({
           session: { status: "live", resume: { allowed: false } },
@@ -121,21 +114,13 @@ describe("request-scoped session responses", () => {
   it("makes fresh observations for subsequent reads and input operations", async () => {
     const f = await setup();
     try {
-      await assembleSessionResponse(
-        (await f.reader.getSession(f.session.id))!,
-        f.interaction,
-        revision,
-      );
+      await f.reader.getSession(f.session.id);
       expect(f.resolveTarget).toHaveBeenCalledTimes(1);
       await f.interaction.sendKeys(f.session.id, ["enter"]);
       expect(f.resolveTarget).toHaveBeenCalledTimes(2);
       expect(f.sendKeys).toHaveBeenCalledTimes(1);
       f.resolveTarget.mockResolvedValue(null);
-      const next = await assembleSessionResponse(
-        (await f.reader.getSession(f.session.id))!,
-        f.interaction,
-        revision,
-      );
+      const next = await f.reader.getSession(f.session.id);
       expect(f.resolveTarget).toHaveBeenCalledTimes(3);
       expect(next).toMatchObject({
         session: { status: "normal", resume: { allowed: true } },
@@ -150,15 +135,18 @@ describe("request-scoped session responses", () => {
     const f = await setup();
     try {
       f.resolveTarget.mockResolvedValue(null);
-      const input = (await f.reader.getSession(f.session.id))!;
-      expect(input.session.resume.allowed).toBe(true);
-      f.bind(false, 2);
-      const response = await assembleSessionResponse(input, f.interaction, revision);
+      // The binding is revoked while the same read is still validating the directory.
+      f.resolveDirectory.mockImplementation(async () => {
+        f.bind(false, 2);
+        return { directory: "/project" };
+      });
+      const response = await f.reader.getSession(f.session.id);
       expect(response).toMatchObject({
         session: { status: "normal", resume: { allowed: false } },
         interaction: { state: "unknown" },
       });
       expect(f.resolveTarget).toHaveBeenCalledTimes(1);
+      expect(f.resolveDirectory).toHaveBeenCalledTimes(1);
     } finally {
       f.close();
     }
@@ -168,11 +156,7 @@ describe("request-scoped session responses", () => {
     const f = await setup();
     try {
       f.resolveTarget.mockRejectedValue(new Error("timeout"));
-      const response = await assembleSessionResponse(
-        (await f.reader.getSession(f.session.id))!,
-        f.interaction,
-        revision,
-      );
+      const response = await f.reader.getSession(f.session.id);
       expect(response).toMatchObject({
         session: { status: "normal", resume: { allowed: false } },
         interaction: { state: "unknown" },

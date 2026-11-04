@@ -185,7 +185,6 @@ function normalizedSession(id: string, title: string): NormalizedSession {
       parentId: null,
       childIds: [],
       agent: null,
-      messageCount: 0,
       warningCount: 0,
       diagnostics: [],
     },

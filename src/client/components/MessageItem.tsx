@@ -193,7 +193,7 @@ function messageLabel(item: Message): string {
 }
 
 export function isPlan(item: Message): boolean {
-  return item.role === "assistant" && item.phase === "response" && item.itemType === "Plan";
+  return item.role === "assistant" && item.phase === "response" && item.itemType === "plan";
 }
 
 function parsePlanPreview(markdown: string): string {

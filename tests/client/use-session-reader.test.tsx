@@ -24,9 +24,36 @@ it("serializes forward pagination and tail waiting, appending each message once"
     { after: 7, wait: false },
     { after: 7, wait: true },
   ]);
-  expect(hook.result.current.items).toEqual(firstPage.items);
+  expect(hook.result.current.context?.items).toEqual(firstPage.items);
   hook.unmount();
   expect(mock.mock.calls[2]![2]!.aborted).toBe(true);
+});
+it("preserves timeline items when a poll only updates session state", async () => {
+  let finishPoll!: (page: typeof firstPage) => void;
+  const request = vi
+    .spyOn(api, "messages")
+    .mockResolvedValueOnce({ ...firstPage, hasMore: false })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishPoll = resolve;
+        }),
+    )
+    .mockImplementation(() => new Promise(() => {}));
+  const hook = renderHook(() => useSessionReader(SESSION_ID));
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+  const items = hook.result.current.context!.items;
+  await act(async () => {
+    finishPoll({
+      ...firstPage,
+      items: [],
+      hasMore: false,
+      session: { ...firstPage.session, title: "Updated title" },
+    });
+  });
+  expect(hook.result.current.context?.items).toBe(items);
+  expect(hook.result.current.context?.session.title).toBe("Updated title");
+  hook.unmount();
 });
 it("reloads once from zero after an out-of-range ordinal", async () => {
   const mock = vi
@@ -37,7 +64,7 @@ it("reloads once from zero after an out-of-range ordinal", async () => {
   const hook = renderHook(() => useSessionReader(SESSION_ID));
   await waitFor(() => expect(mock).toHaveBeenCalledTimes(3));
   expect(mock.mock.calls[2]![1]).toMatchObject({ after: 0, wait: false });
-  expect(hook.result.current.items).toEqual(firstPage.items);
+  expect(hook.result.current.context?.items).toEqual(firstPage.items);
 });
 it("cancels tail waiting while hidden and resumes on visibility", async () => {
   const mock = vi
@@ -46,15 +73,9 @@ it("cancels tail waiting while hidden and resumes on visibility", async () => {
     .mockImplementation(() => new Promise(() => {}));
   const hook = renderHook(() => useSessionReader(SESSION_ID));
   await waitFor(() => expect(mock).toHaveBeenCalledTimes(2));
-  act(() => {
-    Object.defineProperty(document, "hidden", { configurable: true, value: true });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
+  setHidden(true);
   expect(mock.mock.calls[1]![2]!.aborted).toBe(true);
-  act(() => {
-    Object.defineProperty(document, "hidden", { configurable: true, value: false });
-    document.dispatchEvent(new Event("visibilitychange"));
-  });
+  setHidden(false);
   await waitFor(() => expect(mock).toHaveBeenCalledTimes(3));
   hook.unmount();
 });
@@ -105,7 +126,7 @@ it.each([
   expect(request).toHaveBeenCalledTimes(3);
   expect(request.mock.calls[2]![1]).toEqual(request.mock.calls[1]![1]);
   expect(hook.result.current.context?.nextAfter).toBe(9);
-  expect(hook.result.current.items).toEqual(firstPage.items);
+  expect(hook.result.current.context?.items).toEqual(firstPage.items);
   expect(hook.result.current.readerError).toBeNull();
   expect(hook.result.current.readerRetrying).toBe(false);
 });
@@ -137,7 +158,7 @@ it("resumes an interrupted history page without retriggering its sentinel", asyn
     finishOldPage({ ...firstPage, nextAfter: 99 });
   });
   expect(hook.result.current.context?.nextAfter).toBe(9);
-  expect(hook.result.current.items).toEqual(firstPage.items);
+  expect(hook.result.current.context?.items).toEqual(firstPage.items);
 });
 
 it("keeps terminal errors stopped after visibility changes", async () => {

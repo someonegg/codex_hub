@@ -10,6 +10,8 @@ export class RepositoryQueryError extends Error {
   }
 }
 export class SessionQueries {
+  // Published timeline records are immutable; release cached sizes with their records.
+  readonly #itemBytes = new WeakMap<DomainTimelineRecord, number>();
   session(snapshot: CatalogSnapshot, id: string) {
     return snapshot.sessions.get(id)?.normalized.session ?? null;
   }
@@ -44,7 +46,12 @@ export class SessionQueries {
     for (; index < timeline.length; index++) {
       const item = timeline[index]!;
       if (items.length >= limit) break;
-      const size = Buffer.byteLength(JSON.stringify(item), "utf8") + (items.length ? 1 : 0);
+      let itemBytes = this.#itemBytes.get(item);
+      if (itemBytes === undefined) {
+        itemBytes = Buffer.byteLength(JSON.stringify(item), "utf8");
+        this.#itemBytes.set(item, itemBytes);
+      }
+      const size = itemBytes + (items.length ? 1 : 0);
       if (items.length > 0 && bytes + size > MAX_ITEM_PAGE_BYTES) break;
       items.push(item);
       bytes += size;

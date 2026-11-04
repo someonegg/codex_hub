@@ -73,7 +73,10 @@ export function useSessionReader(sessionId: string) {
             if (result) {
               nextPage = { ...result };
               if (!replace && !recovered) {
-                nextPage.items = [...(page?.items ?? []), ...result.items];
+                nextPage.items =
+                  result.items.length === 0 && page
+                    ? page.items
+                    : [...(page?.items ?? []), ...result.items];
               }
             }
             setState((s) => ({
@@ -166,15 +169,12 @@ export function useSessionReader(sessionId: string) {
   }, [read]);
   return {
     context: state.page,
-    items: state.page?.items ?? [],
-    interaction: state.page?.interaction ?? null,
     operation: state.operation,
     readerLoading: state.operation !== null && state.operation !== "poll",
     readerError: state.error,
     readerRetrying: state.retrying,
     missing: state.missing,
     loadMore,
-    retryOpen: refreshLatest,
     refreshLatest,
   };
 }

@@ -206,7 +206,7 @@ IDs, go directly to endpoints without catalog checks or parent redirection.
 
 Items expose messages and user input with `id`, `ordinal`, `timestamp`, `kind`.
 Messages add `role`, `phase`, `itemType`, `markdown`; only assistant messages with
-`phase=response` and `itemType=Plan` also include `inputHint`, preserving full
+`phase=response` and `itemType=plan` also include `inputHint`, preserving full
 Markdown. User input adds `stage`: requests add `questions` (header, question,
 and option labels/descriptions) and `inputHint`; responses add `outcome`:
 `answered` adds `answers: string[]` in original question/answer order;

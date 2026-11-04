@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 
 import type {
   DomainSession,
@@ -31,7 +31,6 @@ const session: DomainSession = {
   parentId: null,
   childIds: [],
   agent: null,
-  messageCount: 0,
   warningCount: 0,
   diagnostics: [],
 };
@@ -199,4 +198,24 @@ it("fills byte-bounded pages and reads every long UTF-8 message exactly once", (
     MAX_ITEM_PAGE_BYTES + 2,
   );
   expect([...first.items, ...second.items, ...last.items]).toEqual(timeline);
+});
+
+it("reuses exact byte sizes across immutable snapshots without retaining stale item sizes", () => {
+  const queries = new SessionQueries();
+  const first = message(0);
+  const next = message(1);
+  const stringify = vi.spyOn(JSON, "stringify");
+  try {
+    queries.messages(snapshot(normalized([first])), session.id, { after: 0 });
+    queries.messages(snapshot(normalized([first, next])), session.id, { after: 0 });
+    expect(stringify.mock.calls.filter(([value]) => value === first)).toHaveLength(1);
+    const rewritten = { ...first, markdown: "界".repeat(MAX_ITEM_PAGE_BYTES) };
+    const page = queries.messages(snapshot(normalized([rewritten, next])), session.id, {
+      after: 0,
+    })!;
+    expect(page.items).toEqual([rewritten]);
+    expect(page.hasMore).toBe(true);
+  } finally {
+    stringify.mockRestore();
+  }
 });

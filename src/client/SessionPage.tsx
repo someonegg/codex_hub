@@ -84,7 +84,10 @@ export function SessionPage({
             !showManagementStatus ? <OperationStatus controller={operation} /> : null
           }
           recoveryActions={
-            !(reader.interaction?.supported && reader.interaction.state === "connected") ? (
+            !(
+              reader.context.interaction?.supported &&
+              reader.context.interaction.state === "connected"
+            ) ? (
               <ResumeSession
                 key={sessionId}
                 session={reader.context.session}
@@ -96,7 +99,7 @@ export function SessionPage({
           management={
             <ManageSession
               key={sessionId}
-              interaction={reader.interaction}
+              interaction={reader.context.interaction}
               controller={operation}
               showStatus={showManagementStatus}
               onStart={() => setManagementOperation(true)}
@@ -159,8 +162,6 @@ export function SessionPage({
             </>
           }
           context={reader.context}
-          items={reader.items}
-          interaction={reader.interaction}
           onNavigate={onNavigate}
           readerLoading={reader.readerLoading}
           readerBusy={reader.operation !== null}
@@ -174,7 +175,7 @@ export function SessionPage({
           <ErrorState
             title={reader.missing ? t("sessionNotFound") : t("couldNotLoadSession")}
             message={reader.readerError}
-            onRetry={reader.missing ? undefined : () => void reader.retryOpen()}
+            onRetry={reader.missing ? undefined : () => void reader.refreshLatest()}
             retryLabel={t("retryOpeningSession")}
           />
           {reader.missing ? (

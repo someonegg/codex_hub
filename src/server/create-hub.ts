@@ -50,6 +50,7 @@ export async function createCodexHub({
     bindings: paneBindings,
     runtime,
   });
+  sessions.bindInteraction(interaction);
   const cleanup: (() => void)[] = [() => interaction.close()];
   let closed = false;
   const close = () => {
@@ -60,7 +61,7 @@ export async function createCodexHub({
   try {
     const catalog = new SessionCatalogService(sessions);
     cleanup.push(() => catalog.close());
-    const updates = new SessionUpdatesService(sessions, { interaction });
+    const updates = new SessionUpdatesService(sessions);
     cleanup.push(() => updates.close());
     const operations = new OperationService(sessions, interaction, managers, {
       bindings: paneBindings,

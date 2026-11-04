@@ -3,10 +3,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionListQuery, UpdateRevision } from "../../shared/api-contract.js";
 import type { SessionReader } from "../application/session-reader.js";
 import {
-  assembleSessionResponse,
-  type SessionInteractionReader,
-} from "../application/session-response.js";
-import {
   CatalogCapacityError,
   type SessionCatalogService,
 } from "../catalog/session-catalog-service.js";
@@ -20,11 +16,13 @@ import { invalid, only, optional } from "./query-params.js";
 import { sendJson } from "./router.js";
 import { isOpaqueId, readPathname, SESSION_ROOT, sessionPath } from "./session-path.js";
 
+/** Shape produced by the update-revision HMAC factory (base64url SHA-256). */
+const REVISION_PATTERN = /^[A-Za-z0-9_-]{43}$/;
+
 export function createSessionReadRoutes(dependencies: {
   readonly sessions: SessionReader;
   readonly updates: SessionUpdatesService;
   readonly catalog: SessionCatalogService;
-  readonly interaction?: SessionInteractionReader;
 }): ApiRouteHandler {
   return {
     matches: () => true,
@@ -52,21 +50,26 @@ export function createSessionReadRoutes(dependencies: {
         const stateRevision = optional(url.searchParams, "stateRevision");
         if (wait !== undefined && wait !== "true" && wait !== "false")
           invalid("wait must be true or false");
-        if (stateRevision !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(stateRevision))
+        if (stateRevision !== undefined && !REVISION_PATTERN.test(stateRevision))
           invalid("stateRevision is malformed");
+        const query = {
+          ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
+          ...(after === undefined ? {} : { after: integer(after, "after") }),
+          wait: !headOnly && wait === "true",
+          ...(stateRevision === undefined
+            ? {}
+            : { stateRevision: stateRevision as UpdateRevision }),
+        };
+        if (!query.wait) {
+          // Plain reads go straight to the reader; waiter capacity bounds only long polls.
+          const result = await dependencies.sessions.messages(id, query);
+          if (result === null) return notFound(response, headOnly, "session_not_found");
+          response.setHeader("Cache-Control", "no-store");
+          sendJson(response, 200, result, headOnly);
+          return true;
+        }
         return sendWaitResponse(request, response, headOnly, (signal) =>
-          dependencies.updates.wait(
-            id,
-            {
-              ...(limit === undefined ? {} : { limit: integer(limit, "limit") }),
-              ...(after === undefined ? {} : { after: integer(after, "after") }),
-              wait: !headOnly && wait === "true",
-              ...(stateRevision === undefined
-                ? {}
-                : { stateRevision: stateRevision as UpdateRevision }),
-            },
-            signal,
-          ),
+          dependencies.updates.wait(id, query, signal),
         );
       }
       if (segments.length === 0) {
@@ -77,16 +80,7 @@ export function createSessionReadRoutes(dependencies: {
         if (result === null) {
           return notFound(response, headOnly, "session_not_found");
         }
-        sendJson(
-          response,
-          200,
-          await assembleSessionResponse(
-            result,
-            dependencies.interaction,
-            dependencies.updates.revision.bind(dependencies.updates),
-          ),
-          headOnly,
-        );
+        sendJson(response, 200, result, headOnly);
         return true;
       }
       return notFound(response, headOnly);
@@ -162,7 +156,7 @@ async function sendWaitResponse(
 function parseListQuery(params: URLSearchParams): SessionListQuery {
   only(params, ["after"]);
   const after = optional(params, "after");
-  if (after !== undefined && !/^[A-Za-z0-9_-]{43}$/.test(after)) invalid("after is malformed");
+  if (after !== undefined && !REVISION_PATTERN.test(after)) invalid("after is malformed");
   return after === undefined ? {} : { after };
 }
 

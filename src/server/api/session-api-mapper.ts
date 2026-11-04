@@ -5,8 +5,8 @@ import type {
   SessionHome,
   SessionListResponse,
 } from "../../shared/api-contract.js";
-import type { SessionDetail, SessionStatus, TimelineItem } from "../../shared/domain.js";
-import type { DomainSession, DomainTimelineRecord } from "../domain/session-domain.js";
+import type { SessionDetail, SessionStatus } from "../../shared/domain.js";
+import type { DomainSession } from "../domain/session-domain.js";
 
 export type SessionDisplayTitleResolver = (session: DomainSession) => string | null;
 
@@ -73,71 +73,8 @@ export class SessionApiMapper {
       parentId: session.parentId,
       childIds: [...session.childIds],
       agent: session.agent === null ? null : { ...session.agent },
-      messageCount: session.messageCount,
       sourceId: session.sourceId,
     };
-  }
-
-  timelineItem(item: DomainTimelineRecord): TimelineItem {
-    const base = { id: item.id, ordinal: item.ordinal, timestamp: item.timestamp };
-    switch (item.kind) {
-      case "message":
-        return {
-          ...base,
-          kind: "message",
-          role: item.role,
-          phase: item.phase,
-          itemType: item.itemType,
-          markdown: item.markdown,
-        };
-      case "user_input":
-        if (item.stage === "request") {
-          return {
-            ...base,
-            kind: "user_input",
-            stage: "request",
-            callId: item.callId,
-            questions: item.questions.map((question) => ({
-              id: question.id,
-              header: question.header,
-              question: question.question,
-              options: question.options.map((option) => ({
-                label: option.label,
-                description: option.description,
-              })),
-            })),
-          };
-        }
-        if (item.outcome === "answered") {
-          return {
-            ...base,
-            kind: "user_input",
-            stage: "response",
-            callId: item.callId,
-            outcome: "answered",
-            answers: item.answers.map((answer) => ({
-              questionId: answer.questionId,
-              answers: [...answer.answers],
-            })),
-          };
-        }
-        return item.outcome === "unavailable"
-          ? {
-              ...base,
-              kind: "user_input",
-              stage: "response",
-              callId: item.callId,
-              outcome: "unavailable",
-              summary: item.summary,
-            }
-          : {
-              ...base,
-              kind: "user_input",
-              stage: "response",
-              callId: item.callId,
-              outcome: "aborted",
-            };
-    }
   }
 }
 
