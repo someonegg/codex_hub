@@ -65,7 +65,7 @@ describe("hub management", () => {
         document.querySelectorAll(".session-action-menu button"),
         (button) => button.textContent,
       ),
-    ).toEqual(["Tmux access", "Archive session", "Exit session"]);
+    ).toEqual(["Tmux access", "Archive session", "Delete session", "Exit session"]);
     fireEvent.click(screen.getByRole("button", { name: "Tmux access" }));
     expect(document.querySelector(".session-action-menu")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Copy command" }));
@@ -103,7 +103,9 @@ describe("hub management", () => {
     render(<ManageSession session={session} onChanged={vi.fn()} />);
     render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
-    expect(document.querySelector(".session-action-menu")?.textContent).toBe("Archive session");
+    expect(document.querySelector(".session-action-menu")?.textContent).toBe(
+      "Archive sessionDelete session",
+    );
     fireEvent.click(screen.getByRole("button", { name: "Archive session" }));
     expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
     fireEvent.click(screen.getByRole("button", { name: "Create session" }));
@@ -227,12 +229,12 @@ describe("hub management", () => {
     expect(onChanged).toHaveBeenCalledOnce();
     expect(sessionStorage.getItem(`ahub.operation.${SESSION_ID}`)).toBeNull();
   });
-  it("requires confirmation before deleting an archived session", async () => {
+  it("requires confirmation before deleting an unarchived session", async () => {
     const session = {
       ...baseSession,
       sourceId: "native",
       itemCount: 0,
-      status: "archived" as const,
+      status: "normal" as const,
     };
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const deletion = vi
@@ -243,14 +245,14 @@ describe("hub management", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
     expect(deletion).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
-    expect(screen.getByRole("dialog", { name: "Delete archived session" })).toBeVisible();
+    expect(screen.getByRole("dialog", { name: "Delete session" })).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(deletion).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
     fireEvent(
-      screen.getByRole("dialog", { name: "Delete archived session" }),
+      screen.getByRole("dialog", { name: "Delete session" }),
       new Event("cancel", { cancelable: true }),
     );
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();

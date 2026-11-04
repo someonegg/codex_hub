@@ -377,18 +377,7 @@ function ManageSessionControls({
               {t("tmuxAccess")}
             </button>
           ) : null}
-          {session.status === "archived" ? (
-            <button
-              type="button"
-              disabled={controller.busy}
-              onClick={() => {
-                closeMenu();
-                setDeleteOpen(true);
-              }}
-            >
-              {t("deleteSession")}
-            </button>
-          ) : (
+          {session.status !== "archived" ? (
             <button
               type="button"
               disabled={controller.busy}
@@ -400,7 +389,17 @@ function ManageSessionControls({
             >
               {t("archiveSession")}
             </button>
-          )}
+          ) : null}
+          <button
+            type="button"
+            disabled={controller.busy}
+            onClick={() => {
+              closeMenu();
+              setDeleteOpen(true);
+            }}
+          >
+            {t("deleteSession")}
+          </button>
           {interaction?.supported && interaction.state === "connected" ? (
             <button
               type="button"
@@ -422,18 +421,16 @@ function ManageSessionControls({
       <dialog
         ref={deleteDialog}
         className="create-session"
-        aria-label={t("deleteArchivedSession")}
+        aria-label={t("deleteSession")}
         onCancel={() => setDeleteOpen(false)}
         onClose={() => setDeleteOpen(false)}
       >
-        <h2>{t("deleteArchivedSessionLabel")}</h2>
-        <p>
-          {t("permanentlyDeleteThisArchivedSessionAndAllUploadedAttachmentsThisCannotBeUndone")}
-        </p>
+        <h2>{t("deleteSessionLabel")}</h2>
+        <p>{t("deleteSessionConfirmation")}</p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            if (controller.busy || session.status !== "archived") return;
+            if (controller.busy) return;
             setDeleteOpen(false);
             onStart?.();
             void controller.start(() => api.deleteSession(session.id));
@@ -442,7 +439,7 @@ function ManageSessionControls({
           <button type="button" autoFocus onClick={() => setDeleteOpen(false)}>
             {t("cancel")}
           </button>
-          <button type="submit" disabled={controller.busy || session.status !== "archived"}>
+          <button type="submit" disabled={controller.busy}>
             {t("confirmDelete")}
           </button>
         </form>

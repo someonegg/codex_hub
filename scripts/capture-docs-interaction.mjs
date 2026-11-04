@@ -98,7 +98,8 @@ async function capture(
     const menu = demo.locator(".session-action-menu");
     const labels = await menu.locator("button").allTextContents();
     if (
-      labels.join("|") !== ["Tmux access", "Archive session", "Exit session"].map(label).join("|")
+      labels.join("|") !==
+      ["Tmux access", "Archive session", "Delete session", "Exit session"].map(label).join("|")
     )
       throw new Error("Unexpected session menu order");
     const bounds = await menu.boundingBox();

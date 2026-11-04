@@ -23,7 +23,7 @@ with, and managing sessions by project.
 ## Decision Outcome
 
 Enable management and interaction by default. All unarchived sessions can be
-archived, including unbound sessions; only archived sessions can be deleted.
+archived, including unbound sessions.
 The Codex adapter handles native commands while tmux transport stays generic.
 Retain ADR-0007's socket ownership, pane liveness, and serialized-input constraints.
 

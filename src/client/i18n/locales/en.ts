@@ -61,10 +61,11 @@ export const messages = {
   createSession: "Create session",
   creating: "Creating…",
   delete: "Delete",
-  deleteArchivedSession: "Delete archived session",
-  deleteArchivedSessionLabel: "Delete archived session?",
   deleteFailed: "Delete failed",
   deleteSession: "Delete session",
+  deleteSessionConfirmation:
+    "Permanently delete this session and all uploaded attachments? This cannot be undone.",
+  deleteSessionLabel: "Delete session?",
   deleteThisFile: "Delete this file?",
   deleting: "Deleting…",
   detailWasTruncatedForSafeDisplay: "Detail was truncated for safe display.",
@@ -149,8 +150,6 @@ export const messages = {
   pages: "Pages",
   parentSession: "Parent session",
   pendingAttachments: "Pending attachments",
-  permanentlyDeleteThisArchivedSessionAndAllUploadedAttachmentsThisCannotBeUndone:
-    "Permanently delete this archived session and all uploaded attachments? This cannot be undone.",
   plan: "Plan",
   planContentUnavailable: "Plan content unavailable.",
   previewUnavailable: "Preview unavailable",

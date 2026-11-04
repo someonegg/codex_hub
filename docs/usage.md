@@ -26,8 +26,7 @@ session URL with another device that can access the hub.
   working or project directory.
 - **Exit session:** use the session's **…** menu to stop the connected terminal
   pane without archiving the conversation.
-- **Archive or delete:** use the session's **…** menu. Permanent deletion is
-  available for archived sessions and requires confirmation.
+- **Archive or delete:** use the session's **…** menu. Permanent deletion requires confirmation.
 
 Creating and resuming sessions use tmux. If startup needs login, permission, or
 trust confirmation, use **Tmux access** in the session's **…** menu or the attach
@@ -117,7 +116,7 @@ and accepts `--cwd`, `--home`, `--worktree`, and `--yolo`. Omitting `--cwd` star
 in the project directory; specifying it starts elsewhere while retaining the
 `--project` association. Omitting `--home` selects the first configured home.
 Both directories accept relative paths, which the CLI converts to absolute paths.
-Resume keeps the original home and accepts `--yolo`. Archive a session before deleting it.
+Resume keeps the original home and accepts `--yolo`.
 
 Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
 or pass `--url` to use another HTTP address; HTTPS is not supported by this client.

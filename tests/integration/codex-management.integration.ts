@@ -485,8 +485,8 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     await cli("exit", id);
     expect(await new TmuxInteractionService().inspect(oldTarget)).toBe("exited");
     expect((await cli("resume", id)).sessionId).toBe(id);
-    await cli("archive", id);
-    expect((await hub.sessions.getSession(id))!.session.status).toBe("archived");
+    await cli("exit", id);
+    expect((await hub.sessions.getSession(id))!.session.status).not.toBe("archived");
     await cli("delete", id);
     expect((await cli("list")).sessions).toEqual([]);
   } finally {

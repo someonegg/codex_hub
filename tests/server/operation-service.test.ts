@@ -270,7 +270,7 @@ describe("observed management operations", () => {
     expect(manager.launch).toHaveBeenCalledTimes(1);
     expect(await setup().service.get(op.operationId)).toBeNull();
   });
-  it("archives unbound sessions and requires archive before deletion", async () => {
+  it("archives unbound sessions and deletes sessions", async () => {
     const { service, manager, set, interaction } = setup();
     const record = {
       ...session(),
@@ -295,9 +295,12 @@ describe("observed management operations", () => {
     set({ sessions: [session()] });
     const deletion = service.manage("delete", "session");
     await flush();
-    expect((await service.get(deletion.operationId))?.status).toBe("failed");
+    expect((await service.get(deletion.operationId))?.status).toBe("pending");
     expect(manager.archive).toHaveBeenCalledOnce();
-    expect(manager.delete).not.toHaveBeenCalled();
+    expect(manager.delete).toHaveBeenCalledWith(record.sourceId);
+    set({ sessions: [] });
+    await service.poll();
+    expect((await service.get(deletion.operationId))?.status).toBe("succeeded");
   });
   it("merges the same operation, rejects conflicts, and allows a new request after completion", async () => {
     const { service, manager, set } = setup();
