@@ -30,7 +30,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     expect(snapshot.sessions.get(childId)!.session.parentId).toBe(p1Id);
     expect(snapshot.sessions.get(p1Id)!.session.childIds).toEqual([childId]);
 
-    const beforeReparent = normalizedReferences(snapshot);
+    const beforeReparent = new Map(snapshot.sessions);
     entries = [
       sourceEntry("p1", parentOne, "native-p1"),
       sourceEntry("p2", parentTwo, "native-p2"),
@@ -43,13 +43,13 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     expect(snapshot.sessions.get(p2Id)!.session.childIds).toEqual([childId]);
     expectChanged(snapshot, beforeReparent, [p1Id, p2Id, childId]);
 
-    const beforeDelete = normalizedReferences(snapshot);
+    const beforeDelete = new Map(snapshot.sessions);
     entries = entries.filter((entry) => entry.localId !== "child");
     signature = "delete-child";
     snapshot = await store.refresh();
     expect(snapshot.sessions.get(p2Id)!.session.childIds).toEqual([]);
     expectChanged(snapshot, beforeDelete, [p2Id]);
-    expect(snapshot.sessions.get(p1Id)!).toBe(beforeDelete.get(p1Id));
+    expect(snapshot.sessions.get(p1Id)).toBe(beforeDelete.get(p1Id));
   });
 
   it("relinks a child when its missing parent appears, disappears, and reappears", async () => {
@@ -82,7 +82,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     entries = [...entries, sourceEntry("parent", parent, "native-parent")];
     signature = "parent-reappears";
     snapshot = await store.refresh();
-    expect(snapshot.sessions.get(parentId)!).not.toBe(firstParent);
+    expect(snapshot.sessions.get(parentId)).not.toBe(firstParent);
     expect(snapshot.sessions.get(childId)!.session.parentId).toBe(parentId);
   });
 
@@ -112,7 +112,7 @@ describe("CatalogSnapshotStore incremental derivation", () => {
     expect(snapshot.sessions.get(childId)!.session.parentId).toBeNull();
     expect(snapshot.sessions.get(parentId)!.session.childIds).toEqual([]);
 
-    const beforeRecovery = normalizedReferences(snapshot);
+    const beforeRecovery = new Map(snapshot.sessions);
     entries = entries.filter((entry) => entry.localId !== "duplicate");
     signature = "native-unique-again";
     snapshot = await store.refresh();
@@ -200,16 +200,12 @@ function idByTitle(snapshot: CatalogSnapshot, title: string): DomainSessionId {
   return matches[0]![0];
 }
 
-function normalizedReferences(snapshot: CatalogSnapshot): Map<string, NormalizedSession> {
-  return new Map(snapshot.sessions);
-}
-
 function expectChanged(
   snapshot: CatalogSnapshot,
   before: ReadonlyMap<string, NormalizedSession>,
   ids: readonly string[],
 ): void {
   for (const id of ids) {
-    expect(snapshot.sessions.get(id)!).not.toBe(before.get(id));
+    expect(snapshot.sessions.get(id)).not.toBe(before.get(id));
   }
 }
