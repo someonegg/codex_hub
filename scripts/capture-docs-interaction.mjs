@@ -713,7 +713,7 @@ async function capture(
       timestamp,
       role: "assistant",
       phase: "response",
-      itemType: "Plan",
+      itemType: "plan",
       markdown: `# Plan ${ordinal}`,
     }));
     await demo.reload();

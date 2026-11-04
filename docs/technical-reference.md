@@ -133,7 +133,7 @@ uses the same pane observation for status and interaction; effects revalidate.
 `stateRevision` compares public state only, without validating historical content.
 An ordinal beyond the current range returns `400 after_out_of_range`; clients
 reload once from their initial position. Other history rewrites are accepted as
-undetected; use manual refresh. There are no signed timeline cursors or event
+undetected; reload the browser page. There are no signed timeline cursors or event
 detail endpoints. The terminal snapshot/delta protocol is independent.
 
 The browser serializes historical pages and tail waiting, starts waiting only at

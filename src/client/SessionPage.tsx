@@ -166,7 +166,6 @@ export function SessionPage({
           readerLoading={reader.readerLoading}
           readerBusy={reader.operation !== null}
           onLoadMore={reader.loadMore}
-          onRefreshLatest={reader.refreshLatest}
           error={reader.readerError}
           retrying={reader.readerRetrying}
         />

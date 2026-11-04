@@ -23,7 +23,6 @@ interface SessionReaderProps {
   readerLoading: boolean;
   readerBusy: boolean;
   onLoadMore: () => void;
-  onRefreshLatest: () => Promise<unknown>;
   error?: string | null;
   retrying?: boolean;
 }
@@ -40,7 +39,6 @@ export function SessionReader({
   readerLoading,
   readerBusy,
   onLoadMore,
-  onRefreshLatest,
   error,
   retrying,
 }: SessionReaderProps) {
@@ -64,8 +62,6 @@ export function SessionReader({
         homeNickname={homeNickname}
         management={management}
         session={context.session}
-        onRefresh={() => void onRefreshLatest()}
-        refreshing={readerLoading}
       />
       {related}
       {items.length === 0 && !readerLoading ? (

@@ -11,17 +11,9 @@ interface SessionHeaderProps {
   homeNickname?: string;
   management?: ReactNode;
   session: SessionDetail;
-  onRefresh?: () => void;
-  refreshing?: boolean;
 }
 
-export function SessionHeader({
-  homeNickname,
-  management,
-  session,
-  onRefresh,
-  refreshing,
-}: SessionHeaderProps) {
+export function SessionHeader({ homeNickname, management, session }: SessionHeaderProps) {
   useTranslation();
   const updatedAt = formatTimestamp(session.updatedAt);
 
@@ -51,11 +43,6 @@ export function SessionHeader({
           <UploadHistoryLink sessionId={session.id} className="session-uploads-link" />
         </div>
         <div className="reader-controls">
-          {onRefresh ? (
-            <button type="button" disabled={refreshing} onClick={onRefresh}>
-              {t("refresh")}
-            </button>
-          ) : null}
           <details className="session-information" key={session.id}>
             <summary>{t("sessionInformation")}</summary>
             <div className="session-information-content">

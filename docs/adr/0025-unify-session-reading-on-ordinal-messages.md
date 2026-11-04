@@ -36,7 +36,7 @@ serializes paging and tail waiting. CLI drains pages per round; timeouts count
 as rounds and `--interval` is removed.
 
 An out-of-range ordinal causes one automatic reload. Accept that other historical
-rewrites are not automatically detected; manual refresh is available. Do not add
+rewrites are not automatically detected; browser reload is available. Do not add
 bidirectional paging, generations, or content fingerprints.
 
 This replaces [ADR-0009](0009-use-opaque-single-writer-timeline-cursors.md) and
@@ -47,4 +47,4 @@ refines the scope of [ADR-0011](0011-use-repository-probed-bounded-long-polling.
 - Web and CLI share one compact protocol and conversation model.
 - Incremental parsing and request-scoped runtime observations remain efficient.
 - Advanced event inspection and old API consumers are intentionally unsupported.
-- Rewrites that keep ordinals in range can leave loaded history stale until refresh.
+- Rewrites that keep ordinals in range can leave loaded history stale until the browser page is reloaded.
