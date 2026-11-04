@@ -51,7 +51,6 @@ export class SessionLifecycleExecutor {
       const nativeId = session.sourceId;
       if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
       if (type === "delete") {
-        if (!session.archived) throw new Error("Only archived sessions can be deleted");
         this.control.transition(entry, { kind: "delete", phase: "deleting", nativeId });
         await manager.delete(nativeId);
         if (!this.control.pending(entry)) return;
