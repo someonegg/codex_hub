@@ -97,12 +97,14 @@ export function safeUrlTransform(url: string): string {
 
 interface MessageItemProps {
   item: Message;
+  preview?: boolean;
   planOpen?: boolean;
   onTogglePlan?: (id: string) => void;
 }
 
 export const MessageItem = memo(function MessageItem({
   item,
+  preview = false,
   planOpen,
   onTogglePlan,
 }: MessageItemProps) {
@@ -116,6 +118,7 @@ export const MessageItem = memo(function MessageItem({
     >
       <p className="event-label">
         {messageLabel(item)}
+        {preview ? ` · ${t("messagePreview")}` : null}
         {itemType}
         <EventTime timestamp={item.timestamp} />
       </p>

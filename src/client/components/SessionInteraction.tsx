@@ -14,6 +14,8 @@ interface SessionInteractionProps {
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
   sessionId: string;
+  updatedAt: string | null;
+  onMessagePreview?: (message: string) => () => void;
   previewAutoExpandKey?: string | null;
 }
 
@@ -25,6 +27,8 @@ export function SessionInteraction({
   interaction,
   onNavigate,
   sessionId,
+  updatedAt,
+  onMessagePreview,
   previewAutoExpandKey = null,
 }: SessionInteractionProps) {
   const previewAvailable = interaction?.supported === true && interaction.state === "connected";
@@ -32,10 +36,23 @@ export function SessionInteraction({
 
   const preview = useTerminalPreview(sessionId, previewAvailable, previewAutoExpandKey);
 
+  const sendMessage = async (message: string) => {
+    const dismissPreview = /^\/[A-Za-z]+$/.test(message.trimEnd())
+      ? undefined
+      : onMessagePreview?.(message);
+    try {
+      await controller.sendMessage(message);
+    } catch (reason) {
+      dismissPreview?.();
+      throw reason;
+    }
+  };
+
   return (
     <InteractionPanel
       key={sessionId}
       sessionId={sessionId}
+      updatedAt={updatedAt}
       onPanelElement={onPanelElement}
       recoveryActions={recoveryActions}
       operationStatus={operationStatus}
@@ -45,7 +62,7 @@ export function SessionInteraction({
       error={controller.error}
       errorDetail={controller.errorDetail}
       onDismissError={controller.clearError}
-      onSendMessage={controller.sendMessage}
+      onSendMessage={sendMessage}
       onSendKeys={controller.sendKeys}
       onHandoffPaneBinding={controller.handoffPaneBinding}
       {...preview}

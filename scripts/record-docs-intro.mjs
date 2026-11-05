@@ -153,7 +153,6 @@ async function record(
     }
     if (path.endsWith("/messages") && route.request().method() === "POST") {
       if (route.request().postDataJSON().message !== prompt) throw new Error("Unexpected prompt");
-      stage = 1;
       return route.fulfill({ status: 204 });
     }
     throw new Error(`Unexpected demo API: ${route.request().method()} ${path}`);
@@ -207,6 +206,10 @@ async function record(
     }
     await demo.getByRole("button", { name: label("Send"), exact: true }).click();
     await demo.waitForFunction(() => document.querySelector("textarea")?.value === "");
+    await demo.locator(".message-preview").waitFor();
+    await capture(900);
+    stage = 1;
+    await demo.locator(".message-preview").waitFor({ state: "hidden" });
     await demo.getByText(label(prompt), { exact: true }).waitFor();
     await capture(1100);
     stage = 2;

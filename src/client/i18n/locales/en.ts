@@ -206,6 +206,8 @@ export const messages = {
 
   theTerminalPaneIsEmpty: "The terminal pane is empty.",
   thisSessionHasNoMessages: "This session has no messages",
+  messagePreview: "Pending",
+  lastUpdatedTime: "Updated at {{time}}",
   timeUnavailable: "Time unavailable",
 
   tmuxAccess: "Tmux access",
