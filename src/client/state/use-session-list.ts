@@ -62,6 +62,7 @@ export function useSessionList() {
             retryMs = INITIAL_RETRY_MS;
           } catch (reason) {
             if (!request.isCurrent()) return;
+            revision.current = undefined;
             setError(messageFor(reason));
             const retryable = isRetryableRequestError(reason);
             setRetrying(retryable);

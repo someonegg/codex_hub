@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 
 import type {
   InteractionResponse,
@@ -14,14 +14,13 @@ export type UpdateRevisionFactory = (
 
 export type UpdateRevisionSession = SessionDetail;
 
-export function createProcessUpdateRevisionFactory(
-  secret: Uint8Array = randomBytes(32),
-): UpdateRevisionFactory {
-  return ({ updatedAt, ...session }, interaction) =>
-    createHmac("sha256", secret)
-      .update(canonicalJson({ session, interaction }))
-      .digest("base64url") as UpdateRevision;
-}
+export const createUpdateRevision: UpdateRevisionFactory = (
+  { updatedAt, ...session },
+  interaction,
+) =>
+  createHash("sha256")
+    .update(canonicalJson({ session, interaction }))
+    .digest("base64url") as UpdateRevision;
 
 export function withUpdateRevision<
   T extends {
