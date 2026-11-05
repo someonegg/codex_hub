@@ -232,7 +232,7 @@ function materializeClaudeSession(
         state.customTitle ??
         state.aiTitle ??
         (state.firstUser ? sessionTitleFromMarkdown(state.firstUser) : null) ??
-        nativeId,
+        "Untitled session",
       workingDirectory: state.cwd,
       projectDirectory,
       taskName: state.taskName,

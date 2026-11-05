@@ -117,7 +117,8 @@ permission-mode, annotations or multi-select domain fields are synthesized.
 
 Project association uses valid V1/V2 shell binding metadata, otherwise the first
 valid cwd; execution uses the latest valid cwd. Titles prefer the latest nonempty
-`custom-title`, then `ai-title`, first ordinary user text, then native ID.
+`custom-title`, then `ai-title`, then first ordinary user text; otherwise the title is
+`Untitled session`, matching Codex.
 Explicit titles use the first nonempty trimmed line and an 80-character limit;
 user titles share Markdown heading extraction.
 `agent-name` does not supply a task name. Only main native user `<bash-stdout>`
@@ -130,10 +131,9 @@ The adapter instead waits up to 30 seconds for the native interactive prompt,
 then pastes the complete `! printf ...` binding command. It reads
 `"${TMUX%%,*}"` and `"$TMUX_PANE"` using native shell expansion; avoiding command
 substitution also permits binding under Claude's worktree isolation checks.
-Claude records the binding itself. Trust/onboarding failures retain the target
-and attach command as an unknown launch result; workspace trust errors also
-include the command to run after approval. A running process alone never confirms
-launch: public management still verifies operation ID, pane ownership, project,
+Claude records the binding itself. Failure to reach the interactive prompt retains
+the target and attach command as an unknown launch result. A running process alone
+never confirms launch: public management still verifies operation ID, pane ownership, project,
 and original identity on resume.
 
 Interrupt clears input with Ctrl-U, waits 100 ms, then sends Escape, matching

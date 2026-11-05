@@ -266,6 +266,8 @@ it("keeps the accepted duplicate path until it becomes invalid", async () => {
 it("uses bounded Unicode-safe explicit titles and Markdown user titles", async () => {
   const { home, path } = await createSessionHome("claude-titles-");
   const source = await createClaudeSessionSource(home);
+  await writeFile(path, JSON.stringify({ type: "system", sessionId: id }) + "\n");
+  expect((await source.refresh()).sessions[0]!.normalized.session.title).toBe("Untitled session");
   await writeFile(
     path,
     JSON.stringify({ type: "user", message: { role: "user", content: "intro\n\n# Heading" } }) +

@@ -32,15 +32,6 @@ export class ClaudeSessionManager implements SessionManager {
       const deadline = Date.now() + LAUNCH_ATTACH_DELAY_MS;
       while (Date.now() < deadline) {
         const { content } = await this.tmux.transport.captureTerminal(target);
-        if (/Is this a project you created or one you trust/.test(content))
-          throw new Error(
-            "Claude requires workspace trust. Attach to tmux, approve the directory, then run: " +
-              claudeBindingCommand(
-                options.operationId,
-                options.projectDirectory,
-                options.taskName ?? null,
-              ),
-          );
         if (/^❯[ \u00a0]*$/m.test(content)) {
           await this.tmux.transport.sendMessage(
             target,

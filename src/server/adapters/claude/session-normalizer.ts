@@ -91,16 +91,20 @@ export function appendClaudeRecords(
     return previous;
   const state = {
     ...previous,
-    timeline: [...previous.timeline],
     diagnostics: [...previous.normalizerDiagnostics],
-    questions: new Map(previous.questions),
+  };
+  const newItems: TimelineItem[] = [];
+  let pendingQuestions = previous.questions;
+  const mutableQuestions = () => {
+    if (pendingQuestions === previous.questions) pendingQuestions = new Map(previous.questions);
+    return pendingQuestions as Map<string, readonly UserInputQuestion[]>;
   };
   type NewItem<T = TimelineItem> = T extends TimelineItem ? Omit<T, "id" | "ordinal"> : never;
   const emit = (item: NewItem) => {
-    const ordinal = state.timeline.length;
+    const ordinal = previous.timeline.length + newItems.length;
     if (item.kind === "message")
       item = { ...item, markdown: truncateText(item.markdown, MAX_MESSAGE_CHARS).text };
-    state.timeline.push({ ...item, id: `${state.nativeId}:${ordinal}`, ordinal } as TimelineItem);
+    newItems.push({ ...item, id: `${state.nativeId}:${ordinal}`, ordinal } as TimelineItem);
   };
   const retainDiagnostic = (diagnostic: DomainDiagnostic) => {
     const index = state.diagnostics.findIndex(
@@ -187,7 +191,7 @@ export function appendClaudeRecords(
         }
         if (block.name === "AskUserQuestion" && callId && Array.isArray(block.input.questions)) {
           const questions = normalizeQuestions(callId, block.input.questions);
-          state.questions.set(callId, questions);
+          mutableQuestions().set(callId, questions);
           emit({ kind: "user_input", stage: "request", callId, questions, timestamp });
         }
       }
@@ -197,7 +201,7 @@ export function appendClaudeRecords(
         typeof block.tool_use_id === "string"
       ) {
         const callId = block.tool_use_id;
-        const questions = state.questions.get(callId);
+        const questions = pendingQuestions.get(callId);
         if (!questions) continue;
         let result: unknown = block.content;
         if (typeof result === "string") {
@@ -241,7 +245,7 @@ export function appendClaudeRecords(
             outcome: "unavailable",
             summary: "Answer could not be reliably interpreted",
           });
-        state.questions.delete(callId);
+        mutableQuestions().delete(callId);
       }
     }
     flush();
@@ -252,6 +256,8 @@ export function appendClaudeRecords(
   );
   return {
     ...state,
+    timeline: newItems.length ? [...previous.timeline, ...newItems] : previous.timeline,
+    questions: pendingQuestions,
     project: metadata.projectDirectory,
     taskName: metadata.taskName,
     decoderDiagnostics: diagnostics,

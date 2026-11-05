@@ -93,33 +93,6 @@ it.each([false, true])(
   },
 );
 
-it("keeps startup uncertain and supplies tmux recovery when Claude requires workspace trust", async () => {
-  const tmux = new TmuxLauncher();
-  const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
-  vi.spyOn(tmux, "launch").mockResolvedValue(target);
-  vi.spyOn(tmux.transport, "captureTerminal").mockResolvedValue({
-    content: "Is this a project you created or one you trust?",
-    truncated: false,
-  });
-  const send = vi.spyOn(tmux.transport, "sendMessage");
-  const manager = new ClaudeSessionManager("/home", tmux);
-  await expect(
-    manager.launch({
-      operationId: "00000000-0000-4000-8000-000000000001",
-      workingDirectory: "/project",
-      projectDirectory: "/project",
-      worktree: false,
-      yolo: false,
-    }),
-  ).rejects.toMatchObject({
-    outcome: "unknown",
-    target,
-    attachCommand: expect.stringContaining("ahub-00000000-0000-4000-8000-000000000001"),
-    message: expect.stringContaining("AHUB_TMUX_BIND_V2"),
-  });
-  expect(send).not.toHaveBeenCalled();
-});
-
 it("uses the shared Codex interrupt and exit key timings", () => {
   expect(claudeInteraction(null, null).interruptSteps()).toEqual([
     { keys: ["C-u"], delayMs: 0 },
@@ -132,41 +105,45 @@ it("uses the shared Codex interrupt and exit key timings", () => {
   ]);
 });
 
-it.each([true, false])("binds only after the native prompt is ready (ready=%s)", async (ready) => {
-  vi.useFakeTimers();
-  try {
-    const tmux = new TmuxLauncher();
-    const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
-    const options = {
-      operationId: "00000000-0000-4000-8000-000000000001",
-      workingDirectory: "/project",
-      worktree: false,
-      yolo: false,
-    };
-    vi.spyOn(tmux, "launch").mockResolvedValue(target);
-    vi.spyOn(tmux.transport, "captureTerminal").mockResolvedValue({
-      content: ready ? "❯ " : "Starting…",
-      truncated: false,
-    });
-    const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
-    const launch = new ClaudeSessionManager("/home", tmux).launch(options);
-    if (ready) {
-      await expect(launch).resolves.toEqual(target);
-      expect(send).toHaveBeenCalledExactlyOnceWith(
-        target,
-        claudeBindingCommand(options.operationId),
-      );
-    } else {
-      const result = expect(launch).rejects.toMatchObject({
-        outcome: "unknown",
-        target,
-        attachCommand: expect.any(String),
+it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?"])(
+  "binds only after the native prompt is ready (terminal=%s)",
+  async (content) => {
+    const ready = content === "❯ ";
+    vi.useFakeTimers();
+    try {
+      const tmux = new TmuxLauncher();
+      const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
+      const options = {
+        operationId: "00000000-0000-4000-8000-000000000001",
+        workingDirectory: "/project",
+        worktree: false,
+        yolo: false,
+      };
+      vi.spyOn(tmux, "launch").mockResolvedValue(target);
+      vi.spyOn(tmux.transport, "captureTerminal").mockResolvedValue({
+        content,
+        truncated: false,
       });
-      await vi.advanceTimersByTimeAsync(LAUNCH_ATTACH_DELAY_MS);
-      await result;
-      expect(send).not.toHaveBeenCalled();
+      const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
+      const launch = new ClaudeSessionManager("/home", tmux).launch(options);
+      if (ready) {
+        await expect(launch).resolves.toEqual(target);
+        expect(send).toHaveBeenCalledExactlyOnceWith(
+          target,
+          claudeBindingCommand(options.operationId),
+        );
+      } else {
+        const result = expect(launch).rejects.toMatchObject({
+          outcome: "unknown",
+          target,
+          attachCommand: expect.any(String),
+        });
+        await vi.advanceTimersByTimeAsync(LAUNCH_ATTACH_DELAY_MS);
+        await result;
+        expect(send).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.useRealTimers();
     }
-  } finally {
-    vi.useRealTimers();
-  }
-});
+  },
+);
