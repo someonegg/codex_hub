@@ -228,7 +228,10 @@ describe("hub management", () => {
     expect(onChanged).toHaveBeenCalledOnce();
     expect(sessionStorage.getItem(`ahub.operation.${SESSION_ID}`)).toBeNull();
   });
-  it("requires confirmation before deleting an unarchived session", async () => {
+  it.each([
+    ["deleting", "Deleting history"],
+    ["confirming_delete", "Confirming deletion"],
+  ] as const)("requires confirmation and displays the %s phase", async (phase, label) => {
     const session = {
       ...baseSession,
       sourceId: "native",
@@ -237,7 +240,7 @@ describe("hub management", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const deletion = vi
       .spyOn(api, "deleteSession")
-      .mockResolvedValue({ ...pending, type: "delete", sessionId: SESSION_ID });
+      .mockResolvedValue({ ...pending, type: "delete", phase, sessionId: SESSION_ID });
     render(<ManageSession session={session} onChanged={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete session" }));
@@ -261,6 +264,7 @@ describe("hub management", () => {
     await flush();
     expect(confirm).not.toHaveBeenCalled();
     expect(deletion).toHaveBeenCalledOnce();
+    expect(screen.getByText(label)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Session management" }));
     expect(screen.getByRole("button", { name: "Delete session" })).toBeDisabled();
@@ -650,7 +654,7 @@ it("initializes creation options only when opening the dialog", () => {
   act(() => updatePreferences({ defaultHome: "" }));
 });
 
-it("hides unsupported Claude archive and delete while keeping exit", async () => {
+it("hides unsupported Claude archive while keeping delete and exit", async () => {
   const session = {
     ...baseSession,
     origin: { ...baseSession.origin, home: "glm", agentName: "Claude Code" },
@@ -658,7 +662,7 @@ it("hides unsupported Claude archive and delete while keeping exit", async () =>
   render(
     <ManageSession
       session={session}
-      management={{ archive: false, delete: false }}
+      management={{ archive: false }}
       interaction={{
         supported: true,
         state: "connected",
@@ -671,6 +675,6 @@ it("hides unsupported Claude archive and delete while keeping exit", async () =>
   );
   fireEvent.click(screen.getByRole("button", { name: "Session management" }));
   expect(screen.queryByRole("button", { name: "Archive session" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Exit session" })).toBeInTheDocument();
 });

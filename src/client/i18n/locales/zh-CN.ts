@@ -44,6 +44,8 @@ export const messages: Record<keyof typeof english, string> = {
   closeTmuxAccess: "关闭 tmux 连接",
 
   confirmDelete: "确认删除",
+  deletingHistory: "正在删除历史",
+  confirmingDelete: "正在确认删除结果",
   confirmingArchive: "正在确认归档",
   connected: "已连接",
   connectionUnknown: "连接状态未知",

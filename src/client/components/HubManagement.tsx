@@ -30,6 +30,8 @@ const PHASE_LABELS = {
   waiting_exit: "waitingForExit",
   archiving: "archiving",
   confirming_archive: "confirmingArchive",
+  deleting: "deletingHistory",
+  confirming_delete: "confirmingDelete",
 } as const;
 
 // getRandomValues is available over HTTP as well as in secure contexts.
@@ -396,18 +398,16 @@ function ManageSessionControls({
               {t("archiveSession")}
             </button>
           ) : null}
-          {management?.delete !== false ? (
-            <button
-              type="button"
-              disabled={controller.busy}
-              onClick={() => {
-                closeMenu();
-                setDeleteOpen(true);
-              }}
-            >
-              {t("deleteSession")}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            disabled={controller.busy}
+            onClick={() => {
+              closeMenu();
+              setDeleteOpen(true);
+            }}
+          >
+            {t("deleteSession")}
+          </button>
           {interaction?.supported && interaction.state === "connected" ? (
             <button
               type="button"

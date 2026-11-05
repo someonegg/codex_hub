@@ -43,6 +43,8 @@ export const messages = {
   closeTmuxAccess: "Close tmux access",
 
   confirmDelete: "Confirm delete",
+  deletingHistory: "Deleting history",
+  confirmingDelete: "Confirming deletion",
   confirmingArchive: "Confirming archive",
   connected: "Connected",
   connectionUnknown: "Connection unknown",

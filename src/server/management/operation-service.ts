@@ -164,9 +164,9 @@ export class OperationService {
   }
 
   async assertSupported(type: "exit" | "archive" | "delete", sessionId: string): Promise<void> {
-    if (type === "exit") return;
+    if (type !== "archive") return;
     const session = (await this.sessions.managementSnapshot()).byId.get(sessionId);
-    if (session && typeof this.managers.get(session.origin.home)[type] !== "function")
+    if (session && typeof this.managers.get(session.origin.home).archive !== "function")
       throw new ManagementError(
         409,
         "Operation is not supported by this session source",
@@ -396,13 +396,9 @@ export class OperationService {
 
 function operationPhase(context: OperationStage): HubOperation["phase"] {
   if (context.kind === "exiting") return context.task.phase;
-  if (context.kind !== "archive") return null;
-  switch (context.phase) {
-    case "confirming":
-      return "confirming_archive";
-    case "resolving_target":
-      return null;
-    case "archiving":
-      return context.phase;
-  }
+  if (context.kind === "archive")
+    return context.phase === "confirming" ? "confirming_archive" : "archiving";
+  if (context.kind === "delete")
+    return context.phase === "confirming" ? "confirming_delete" : "deleting";
+  return null;
 }

@@ -4,6 +4,7 @@ import {
   type OperationControl,
   type OperationEntry,
   type OperationTimeouts,
+  type SessionHistoryOperation,
 } from "./operation-state.js";
 import { SessionExitService } from "./session-exit-service.js";
 import { type ManagementSnapshot, type SessionManagerRegistry } from "./session-manager.js";
@@ -40,7 +41,7 @@ export class SessionLifecycleExecutor {
       }
       entry.home = session.origin.home;
       const manager = this.managers.get(entry.home);
-      if (type !== "exit" && typeof manager[type] !== "function")
+      if (type === "archive" && typeof manager.archive !== "function")
         throw new Error(
           "operation_not_supported: Operation is not supported by this session source",
         );
@@ -54,15 +55,7 @@ export class SessionLifecycleExecutor {
       }
       const nativeId = session.sourceId;
       if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
-      if (type === "delete") {
-        this.control.transition(entry, { kind: "delete", phase: "deleting", nativeId });
-        await manager.delete!(nativeId);
-        if (!this.control.pending(entry)) return;
-        this.control.transition(entry, { kind: "delete", phase: "confirming", nativeId });
-      } else {
-        this.control.transition(entry, { kind: "archive", phase: "resolving_target", nativeId });
-        await this.#startExit(entry, sessionId, nativeId);
-      }
+      await this.#startExit(entry, sessionId, { type, nativeId });
       if (this.control.pending(entry)) await this.control.observe(entry);
     } catch (error) {
       this.control.error(entry, error);
@@ -82,11 +75,11 @@ export class SessionLifecycleExecutor {
         if (phase !== context.task.phase)
           entry.metadata.updatedAt = new Date(this.now()).toISOString();
         if (!exited) return;
-        if (context.nativeId === null) {
+        if (context.next === null) {
           this.control.finish(entry, "succeeded", null);
           return;
         }
-        await this.#archive(entry, context.nativeId);
+        await this.#nativeOperation(entry, context.next);
         if (!this.control.pending(entry)) return;
       } catch (error) {
         if (this.control.pending(entry))
@@ -123,12 +116,12 @@ export class SessionLifecycleExecutor {
         console.error("Session attachment cleanup failed", { sessionId: id, error });
       });
   }
-  async #startExit(entry: OperationEntry, sessionId: string, nativeId: string | null) {
+  async #startExit(entry: OperationEntry, sessionId: string, next: SessionHistoryOperation | null) {
     const target = await this.interaction.resolveTarget(sessionId);
     if (!this.control.pending(entry)) return;
     if (!target) {
-      if (nativeId === null) this.control.finish(entry, "succeeded", null);
-      else await this.#archive(entry, nativeId);
+      if (next === null) this.control.finish(entry, "succeeded", null);
+      else await this.#nativeOperation(entry, next);
       return;
     }
     const task = this.#exit.start(sessionId, target, this.managers.get(entry.home), () => {
@@ -137,26 +130,30 @@ export class SessionLifecycleExecutor {
     });
     this.control.transition(
       entry,
-      { kind: "exiting", task, nativeId },
+      { kind: "exiting", task, next },
       this.now() + (this.waitMs.exit ?? this.waitMs.archive),
     );
     await this.control.observe(entry);
   }
 
-  async #archive(entry: OperationEntry, nativeId: string) {
+  async #nativeOperation(entry: OperationEntry, { type, nativeId }: SessionHistoryOperation) {
     if (!this.control.pending(entry)) return;
     this.control.transition(
       entry,
-      { kind: "archive", phase: "archiving", nativeId },
+      type === "archive"
+        ? { kind: type, phase: "archiving", nativeId }
+        : { kind: type, phase: "deleting", nativeId },
       this.now() + 25_000,
     );
     try {
-      await this.managers.get(entry.home).archive!(nativeId);
+      const manager = this.managers.get(entry.home);
+      if (type === "archive") await manager.archive!(nativeId);
+      else await manager.delete(nativeId);
       if (!this.control.pending(entry)) return;
       this.control.transition(
         entry,
-        { kind: "archive", phase: "confirming", nativeId },
-        this.now() + this.waitMs.archive,
+        { kind: type, phase: "confirming", nativeId },
+        this.now() + this.waitMs[type],
       );
     } catch (error) {
       if (!this.control.pending(entry)) return;

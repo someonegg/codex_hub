@@ -2,13 +2,22 @@ import type { HubOperation } from "../../shared/api-contract.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 import type { SessionExitTask } from "./session-exit-service.js";
 
+export interface SessionHistoryOperation {
+  type: "archive" | "delete";
+  nativeId: string;
+}
+
 export type OperationContext =
   | { kind: "create"; phase: "resolving" | "launching" }
   | { kind: "create"; phase: "observing"; target: TmuxBinding; project: string; startedAt: number }
   | { kind: "manage"; phase: "resolving" }
   | { kind: "delete"; phase: "deleting" | "confirming"; nativeId: string }
-  | { kind: "archive"; phase: "resolving_target" | "archiving" | "confirming"; nativeId: string }
-  | { kind: "exiting"; task: SessionExitTask; nativeId: string | null };
+  | { kind: "archive"; phase: "archiving" | "confirming"; nativeId: string }
+  | {
+      kind: "exiting";
+      task: SessionExitTask;
+      next: SessionHistoryOperation | null;
+    };
 export type OperationStage = OperationContext & { deadline: number | null };
 export interface OperationEntry {
   readonly metadata: Omit<HubOperation, "status" | "error" | "phase">;

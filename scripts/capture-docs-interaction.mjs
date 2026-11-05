@@ -776,6 +776,38 @@ async function capture(
     }, language);
     await demo.waitForFunction((value) => document.documentElement.lang === value, language);
     await otherTab.close();
+    // Verify exit, native deletion, and confirmation phases in the session view.
+    await demo.goto(origin + "/sessions/" + session.id);
+    let deletePhase = "sending_exit";
+    const deletion = () => ({
+      operationId: "docs-delete-exit",
+      type: "delete",
+      sessionId: session.id,
+      status: "pending",
+      phase: deletePhase,
+      error: null,
+      attachCommand: null,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await demo.route("**/api/v1/sessions/" + session.id, (route) =>
+      route.request().method() === "DELETE"
+        ? route.fulfill({ status: 202, json: deletion() })
+        : route.fallback(),
+    );
+    await demo.route("**/api/v1/operations/docs-delete-exit", (route) =>
+      route.fulfill({ json: deletion() }),
+    );
+    await demo.getByRole("button", { name: label("Session management"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Delete session"), exact: true }).click();
+    await demo.getByRole("button", { name: label("Confirm delete"), exact: true }).click();
+    await demo.getByText(label("Sending exit command"), { exact: true }).waitFor();
+    deletePhase = "waiting_exit";
+    await demo.getByText(label("Waiting for exit"), { exact: true }).waitFor();
+    deletePhase = "deleting";
+    await demo.getByText(label("Deleting history"), { exact: true }).waitFor();
+    deletePhase = "confirming_delete";
+    await demo.getByText(label("Confirming deletion"), { exact: true }).waitFor();
     if (errors.length) throw new Error(errors.join("\n"));
   } catch (error) {
     await demo.screenshot({ path: "/tmp/ahub-capture-failure.png" });

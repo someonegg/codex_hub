@@ -1,3 +1,6 @@
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+
 import { expect, it, vi } from "vitest";
 
 import {
@@ -166,4 +169,28 @@ it.each(["capture", "send"])("preserves recovery information when %s fails", asy
     message: `${failure} failed`,
   });
   expect(send).toHaveBeenCalledTimes(failure === "capture" ? 0 : 1);
+});
+
+it("deletes Claude logs and subagents across projects while preserving other content", async () => {
+  const home = await createTempDirectory("claude-delete-");
+  const id = "11111111-2222-4333-8444-555555555555";
+  for (const project of ["one", "two"]) {
+    const root = join(home, "projects", project);
+    await mkdir(join(root, id, "subagents", "nested"), { recursive: true });
+    await writeFile(join(root, `${id}.jsonl`), "history");
+    await writeFile(join(root, id, "subagents", "nested", "agent.jsonl"), "agent");
+    await writeFile(join(root, id, "keep"), "keep");
+    await writeFile(join(root, "other.jsonl"), "other");
+  }
+  const manager = new ClaudeSessionManager(home);
+  await expect(manager.delete("../invalid")).rejects.toThrow("Invalid Claude");
+  await manager.delete(id);
+  await manager.delete(id);
+  for (const project of ["one", "two"]) {
+    const root = join(home, "projects", project);
+    await expect(access(join(root, `${id}.jsonl`))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(access(join(root, id, "subagents"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(join(root, id, "keep"), "utf8")).toBe("keep");
+    expect(await readFile(join(root, "other.jsonl"), "utf8")).toBe("other");
+  }
 });

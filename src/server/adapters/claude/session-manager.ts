@@ -1,3 +1,5 @@
+import { lstat, readdir, rm, rmdir } from "node:fs/promises";
+import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
 import { attachCommand, TmuxLauncher } from "../../interaction/tmux-launcher.js";
@@ -55,6 +57,40 @@ export class ClaudeSessionManager implements SessionManager {
         attachCommand(target.socketPath, `ahub-${options.operationId}`),
         target,
       );
+    }
+  }
+  async delete(nativeId: string): Promise<void> {
+    if (!this.isValidNativeId(nativeId)) throw new Error("Invalid Claude session identity");
+    const projects = join(this.home, "projects");
+    let entries;
+    try {
+      entries = await readdir(projects, { withFileTypes: true });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    for (const project of entries) {
+      if (!project.isDirectory()) continue;
+      const directory = join(projects, project.name);
+      const session = join(directory, nativeId);
+      try {
+        if ((await lstat(session)).isDirectory()) {
+          await rm(join(session, "subagents"), { recursive: true, force: true });
+          try {
+            await rmdir(session);
+          } catch (error) {
+            if (
+              !["ENOENT", "ENOTEMPTY", "EEXIST"].includes(
+                (error as NodeJS.ErrnoException).code ?? "",
+              )
+            )
+              throw error;
+          }
+        }
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      }
+      await rm(join(directory, `${nativeId}.jsonl`), { force: true });
     }
   }
   exitSteps = exitSteps;
