@@ -420,7 +420,7 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
   fireEvent.click(within(sidebar).getByRole("button", { name: "New session" }));
   expect(screen.getByLabelText("Session home")).toHaveValue("empty");
 });
-it("requires explicit creation home in aggregate view and restores a stored filter", async () => {
+it("defaults creation to the first home in aggregate view and restores a stored filter", async () => {
   window.history.replaceState(null, "", "/");
   browserStorage.setItem("ahub.home", "removed-source");
   vi.mocked(api.sessions)
@@ -432,7 +432,7 @@ it("requires explicit creation home in aggregate view and restores a stored filt
   expect(screen.getByLabelText("Filter by home")).toHaveValue("");
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/project" } });
-  expect(screen.getByRole("button", { name: "Create session" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
   fireEvent.change(screen.getByLabelText("Session home"), { target: { value: "work" } });
   expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
   const create = vi
@@ -465,13 +465,13 @@ it("preselects the default creation home and respects an explicit home filter", 
   render(<App />);
   await flush();
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
-  expect(screen.getByLabelText("Session home")).toHaveValue("default");
+  expect(screen.getByLabelText("Session home")).toHaveValue(list.homes[0]!.nickname);
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/project" } });
   const create = vi.spyOn(api, "createSession").mockRejectedValue(new Error("Test stopped"));
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ home: "default", projectDirectory: "/project" }),
+    expect.objectContaining({ home: list.homes[0]!.nickname, projectDirectory: "/project" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close new session" }));
   fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });

@@ -11,20 +11,17 @@ npx @someonegg/codex-hub@latest
 Open <http://127.0.0.1:4173>, or the URL printed by the server. Press `Ctrl-C`
 to stop it. For installation and requirements, see the [README](../README.md#quick-start).
 
-By default, the hub reads `~/.codex` and listens only on this machine.
+By default, the hub reads both `codex=~/.codex` and `claude=~/.claude` and listens only on this machine.
 
-## Enable Claude Code
+## Claude Code
 
-Claude is opt-in; the default Codex home remains enabled:
+To read only Claude Code (see [Multiple homes](#multiple-homes) for configuration rules):
 
 ```sh
 codex-hub --claude-home claude=~/.claude
 ```
 
-Repeat `--claude-home nickname=path` for additional configurations. Nicknames must
-be unique across Codex and Claude homes. Choose the home when creating a session;
-resume uses its original home. Configure and authenticate the local `claude` CLI
-for each home first. Claude supports main-session reading, tmux interaction,
+Configure and authenticate the local `claude` CLI for each home first. Claude supports main-session reading, tmux interaction,
 create/resume, worktree, YOLO and exit; archive, delete and subagent reading are
 unavailable. Shell commands and their output stay out of the conversation reader.
 
@@ -162,19 +159,24 @@ output fields, exit codes, and failure semantics.
 
 ## Multiple homes
 
-To use a different Codex home, pass `--codex-home 'nickname=path'`. Point to the
-directory containing `sessions/`, not to `sessions/` itself. Repeat the option
-for multiple homes:
+Use `--codex-home 'nickname=path'` or `--claude-home 'nickname=path'` to choose
+homes. Point Codex homes to the directory containing `sessions/` and Claude homes
+to the directory containing `projects/`. Repeat or combine the options:
 
 ```sh
 codex-hub \
-  --codex-home 'personal=~/.codex' \
-  --codex-home 'work=/path/to/codex-work'
+  --claude-home 'claude=~/.claude' \
+  --codex-home 'codex=~/.codex'
 ```
 
-Explicit homes replace the default `~/.codex`. Give each home a unique nickname
-and directory. Use the sidebar home filter to narrow the session list, and choose
-the destination home when creating a session.
+Any explicit home replaces both defaults. Homes follow argument order; the first
+is the default. Without options, Codex comes first unless `~/.codex` is absent,
+in which case Claude comes first; both homes remain listed. Give each home a
+unique nickname and directory. `default` is an ordinary nickname.
+
+Use the sidebar home filter to narrow the session list and choose the destination
+when creating a session. An active home filter or valid default Home preference
+takes priority over the first home.
 
 ## Publish resources
 
@@ -239,8 +241,8 @@ for the full command-line help.
 
 | Option                          | Default            | Purpose                                             |
 | ------------------------------- | ------------------ | --------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `default=~/.codex` | Choose one or more Codex homes                      |
-| `--claude-home <nickname=path>` | Disabled           | Enable one or more Claude Code homes                |
+| `--codex-home <nickname=path>`  | `codex=~/.codex`   | Choose one or more Codex homes                      |
+| `--claude-home <nickname=path>` | `claude=~/.claude` | Choose one or more Claude Code homes                |
 | `--host <host>`                 | `127.0.0.1`        | Listen address                                      |
 | `--port <port>`                 | `4173`             | Listen port; `0` selects a free port                |
 | `--home-dir <path>`             | `~/.codex-hub`     | Hub data root (`uploads/` and `hosting/`)           |
@@ -286,7 +288,7 @@ external proxy traffic to it.
 ## Troubleshooting
 
 - **No sessions:** for Codex, point `--codex-home` to the directory containing
-  `sessions/`; for Claude, enable `--claude-home` and point it to the directory
+  `sessions/`; for Claude, point `--claude-home` to the directory
   containing `projects/`. Check the server's terminal output for unreadable or skipped files.
 - **Port in use:** choose another port, such as `codex-hub --port 4180`.
 - **Cannot send input:** the session needs a live, connected tmux pane. Complete

@@ -38,7 +38,7 @@ export class SessionApiMapper {
       })
       .sort((a, b) => compareIds(a.id, b.id));
     const structure = {
-      homes: [...this.homes].sort((a, b) => compareIds(a.nickname, b.nickname)),
+      homes: [...this.homes],
       projects: [...projectDirectories].sort(compareIds).map((directory) => ({ directory })),
       sessions: summaries.map(({ updatedAt, ...summary }) => summary),
     };

@@ -9,12 +9,12 @@ npx @someonegg/codex-hub@latest
 ```
 
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
-安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex`，且僅監聽本機。
+安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex` 和 `~/.claude`，且僅監聽本機。
 
-## 啟用 Claude Code
+## Claude Code
 
-使用 `codex-hub --claude-home claude=~/.claude` 明確啟用 Claude；預設 Codex home 仍保留。
-參數可重複，所有來源的 nickname 必須唯一。先為各 home 設定並登入本機 `claude`，建立時選擇 home，恢復沿用原 home。
+若僅讀取 Claude Code：`codex-hub --claude-home claude=~/.claude`。設定規則見[多個 Home](#多個-home)。
+先為各 Home 設定並登入本機 `claude`。
 支援主工作階段閱讀、tmux 互動、建立／恢復、worktree、YOLO 和結束；不支援封存、刪除及 subagent 閱讀。
 原生 shell 輸入、輸出不顯示在閱讀區。
 詳見[技術參考](technical-reference.md#claude-code-adapter)。
@@ -127,17 +127,22 @@ HTTP 或 HTTPS 位址。使用私有 CA 時，在啟動 CLI 前設定
 
 ## 多個 Home
 
-使用 `--codex-home 'nickname=path'` 指定 Codex Home。路徑應指向包含 `sessions/` 的目錄，
-而非 `sessions/` 本身。可重複傳入：
+使用 `--codex-home 'nickname=path'` 或 `--claude-home 'nickname=path'` 指定 Home。
+Codex Home 應指向包含 `sessions/` 的目錄，Claude Home 應指向包含 `projects/` 的目錄。
+可重複或混合傳入：
 
 ```sh
 codex-hub \
-  --codex-home 'personal=~/.codex' \
-  --codex-home 'work=/path/to/codex-work'
+  --claude-home 'claude=~/.claude' \
+  --codex-home 'codex=~/.codex'
 ```
 
-明確指定 Home 會替換預設的 `~/.codex`。每個 Home 需使用唯一暱稱與目錄。
+任何明確指定的 Home 都會替換兩個預設項，並按參數順序排列，第一項為預設。
+未設定時 Codex 在前；僅當 `~/.codex` 不存在時將 Claude 排在前面，兩項始終保留。
+每個 Home 需使用唯一暱稱與目錄；`default` 只是普通暱稱。
+
 透過側邊欄 Home 篩選器縮小工作階段範圍，建立時選擇目標 Home。
+目前有效的 Home 篩選或預設 Home 偏好優先於第一項。
 
 ## 發布資源
 
@@ -190,8 +195,8 @@ ahub-cli diff delete <uuid>
 
 | 選項                            | 預設值             | 用途                                               |
 | ------------------------------- | ------------------ | -------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `default=~/.codex` | 指定一個或多個 Codex Home                          |
-| `--claude-home <nickname=path>` | 關閉               | 啟用一個或多個 Claude Code Home                    |
+| `--codex-home <nickname=path>`  | `codex=~/.codex`   | 指定一個或多個 Codex Home                          |
+| `--claude-home <nickname=path>` | `claude=~/.claude` | 指定一個或多個 Claude Code Home                    |
 | `--host <host>`                 | `127.0.0.1`        | 監聽位址                                           |
 | `--port <port>`                 | `4173`             | 監聽連接埠，`0` 自動選擇閒置連接埠                 |
 | `--home-dir <path>`             | `~/.codex-hub`     | Hub 資料目錄，包含 `uploads/` 和 `hosting/`        |
@@ -231,7 +236,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 
 ## 疑難排解
 
-- **沒有工作階段：**Codex 的 `--codex-home` 應指向包含 `sessions/` 的目錄；Claude 需啟用 `--claude-home`，並指向包含 `projects/` 的目錄。檢視伺服器終端中的不可讀或跳過檔案提示。
+- **沒有工作階段：**Codex 的 `--codex-home` 應指向包含 `sessions/` 的目錄；Claude 的 `--claude-home` 應指向包含 `projects/` 的目錄。檢視伺服器終端中的不可讀或跳過檔案提示。
 - **連接埠占用：**選擇其他連接埠，例如 `codex-hub --port 4180`。
 - **無法傳送輸入：**工作階段需要已連線、執行中的 tmux 窗格。先在 tmux 完成 CLI 提示，或在可用時點選**恢復**。
   已封存工作階段唯讀，僅有日誌檔案並不意味著終端已連線。
