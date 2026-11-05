@@ -4,7 +4,7 @@ import { type FileHandle, open } from "node:fs/promises";
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
 import { MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 
-const PROBE_BYTES = 4 * 1024;
+export const PROBE_BYTES = 4 * 1024;
 
 export interface JsonlDescriptor {
   path: string;
@@ -242,7 +242,7 @@ function decodeLine(
       retainDiagnostic(diagnostics, batchDiagnostics, {
         code: "invalid_record",
         severity: "warning",
-        message: "A rollout line was not a JSON object and was skipped.",
+        message: "A JSONL line was not a JSON object and was skipped.",
         ordinal,
       });
       return;
@@ -252,7 +252,7 @@ function decodeLine(
     retainDiagnostic(diagnostics, batchDiagnostics, {
       code: "malformed_json",
       severity: "warning",
-      message: "A malformed rollout line was skipped.",
+      message: "A malformed JSONL line was skipped.",
       ordinal,
     });
   }
@@ -262,7 +262,7 @@ function lineTooLargeDiagnostic(ordinal: number): Diagnostic {
   return {
     code: "line_too_large",
     severity: "warning",
-    message: "A rollout record exceeded the decode limit and was skipped.",
+    message: "A JSONL record exceeded the decode limit and was skipped.",
     ordinal,
   };
 }

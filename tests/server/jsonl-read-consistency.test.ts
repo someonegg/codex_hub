@@ -84,7 +84,7 @@ it.each(["ESTALE", "EISDIR", "ELOOP", "EACCES"])(
     expect(isExpectedIoError(error)).toBe(true);
     try {
       for (const [operation, diagnostic] of [
-        ["stat", "rollout_unavailable"],
+        ["stat", "session_unavailable"],
         ["project", "project_unavailable"],
         ["readdir", "source_unavailable"],
       ]) {

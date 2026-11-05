@@ -22,6 +22,14 @@ export interface ClaudeState extends ClaudeIdentityState {
 }
 
 export type { ClaudeIdentityState } from "./identity.js";
+/** Decoder codes are renamed to adapter-neutral session diagnostics. */
+export function claudeDecoderDiagnostics(
+  diagnostics: readonly DomainDiagnostic[],
+): DomainDiagnostic[] {
+  return diagnostics.map((d) =>
+    d.code === "malformed_json" ? { ...d, code: "invalid_jsonl" } : d,
+  );
+}
 export function createClaudeState(nativeId: string): ClaudeState {
   return {
     timeline: [],

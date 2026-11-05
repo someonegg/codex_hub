@@ -10,6 +10,16 @@ import {
 import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 
+/**
+ * Fragile coupling to the Claude Code TUI: this matches the visual prompt the
+ * CLI renders once its interactive REPL is ready. A Claude Code release that
+ * changes the prompt glyph or spacing will keep launches working but degrade
+ * them to the LAUNCH_ATTACH_DELAY_MS timeout with a manual attach command in
+ * the launch error. Revisit this pattern when launches consistently time out
+ * right after a CLI upgrade.
+ */
+const INTERACTIVE_PROMPT_PATTERN = /^❯[ \u00a0]*$/m;
+
 export class ClaudeSessionManager implements SessionManager {
   constructor(
     private readonly home: string,
@@ -32,7 +42,7 @@ export class ClaudeSessionManager implements SessionManager {
       const deadline = Date.now() + LAUNCH_ATTACH_DELAY_MS;
       while (Date.now() < deadline) {
         const { content } = await this.tmux.transport.captureTerminal(target);
-        if (/^❯[ \u00a0]*$/m.test(content)) {
+        if (INTERACTIVE_PROMPT_PATTERN.test(content)) {
           await this.tmux.transport.sendMessage(
             target,
             claudeBindingCommand(

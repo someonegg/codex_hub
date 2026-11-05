@@ -8,6 +8,12 @@ import {
   appendClaudeRecords,
   createClaudeState,
 } from "../../src/server/adapters/claude/session-normalizer.js";
+import { PROBE_BYTES } from "../../src/server/adapters/shared/jsonl-decoder.js";
+import {
+  MAX_JSONL_LINE_BYTES,
+  MAX_MESSAGE_CHARS,
+  MAX_SESSION_DIAGNOSTICS,
+} from "../../src/server/adapters/shared/limits.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { opaqueIdForParts } from "../../src/server/security/opaque-id.js";
 import { appendClaudeLines } from "../helpers/claude-normalizer.js";
@@ -224,13 +230,16 @@ it("decodes only append bytes, skips unchanged files and caps resource usage", a
     JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n";
   await writeFile(
     path,
-    "bad\n".repeat(70) + "x".repeat(8 * 1024 * 1024 + 1) + "\n" + row("x".repeat(999999) + "😀end"),
+    "bad\n".repeat(MAX_SESSION_DIAGNOSTICS + 20) +
+      "x".repeat(MAX_JSONL_LINE_BYTES + 1) +
+      "\n" +
+      row("x".repeat(MAX_MESSAGE_CHARS - 1) + "😀end"),
   );
   const source = await createClaudeSessionSource(home);
   const first = await source.refresh();
-  expect(first.sessions[0]!.normalized.session.diagnostics).toHaveLength(50);
+  expect(first.sessions[0]!.normalized.session.diagnostics).toHaveLength(MAX_SESSION_DIAGNOSTICS);
   const item = first.sessions[0]!.normalized.timeline[0]!;
-  expect(item).toMatchObject({ markdown: "x".repeat(999999) });
+  expect(item).toMatchObject({ markdown: "x".repeat(MAX_MESSAGE_CHARS - 1) });
   expect(source.lastRefreshTelemetry().fullFiles).toBe(1);
   await source.refresh();
   expect(source.lastRefreshTelemetry()).toMatchObject({
@@ -246,7 +255,7 @@ it("decodes only append bytes, skips unchanged files and caps resource usage", a
     fullFiles: 0,
     appendFiles: 1,
     decodeBytes: Buffer.byteLength(append),
-    probeBytes: 8192,
+    probeBytes: PROBE_BYTES * 2,
   });
   expect(next.sessions[0]!.normalized.timeline).toHaveLength(2);
   expect(next.signature).not.toBe(first.signature);
@@ -303,7 +312,7 @@ it("treats a missing projects root as empty without warnings", async () => {
 
 it("caps scan diagnostics but continues accepting valid candidates", async () => {
   const home = await createTempDirectory("claude-scan-limit-");
-  for (let index = 0; index < 55; index++) {
+  for (let index = 0; index < MAX_SESSION_DIAGNOSTICS + 5; index++) {
     const directory = join(home, "projects", String(index).padStart(2, "0"));
     await mkdir(directory, { recursive: true });
     await writeFile(
@@ -314,13 +323,13 @@ it("caps scan diagnostics but continues accepting valid candidates", async () =>
   await mkdir(join(home, "projects/z"));
   await writeFile(join(home, "projects/z", `${id}.jsonl`), (await lines())[0] + "\n");
   const snapshot = await (await createClaudeSessionSource(home)).refresh();
-  expect(snapshot.diagnostics).toHaveLength(50);
+  expect(snapshot.diagnostics).toHaveLength(MAX_SESSION_DIAGNOSTICS);
   expect(snapshot.sessions).toHaveLength(1);
 });
 
 it("prioritizes decoder diagnostics without hiding identity conflicts across batches", () => {
   const records = [{ ordinal: 2, value: { type: "user", sessionId: "wrong" } }];
-  const diagnostics = Array.from({ length: 50 }, (_, index) => ({
+  const diagnostics = Array.from({ length: MAX_SESSION_DIAGNOSTICS }, (_, index) => ({
     code: "invalid_jsonl",
     severity: "warning" as const,
     message: "bad",
@@ -330,7 +339,7 @@ it("prioritizes decoder diagnostics without hiding identity conflicts across bat
   const first = appendClaudeRecords(createClaudeState(id), records);
   const incremental = appendClaudeRecords(first, [], diagnostics);
   expect(incremental).toEqual(full);
-  expect(full.diagnostics).toHaveLength(50);
+  expect(full.diagnostics).toHaveLength(MAX_SESSION_DIAGNOSTICS);
   expect(full.diagnostics[0]).toMatchObject({ code: "invalid_jsonl", ordinal: 3 });
   expect(full.identityConflict).toBe(true);
   expect(full.normalizerDiagnostics[0]).toMatchObject({
