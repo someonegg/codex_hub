@@ -17,7 +17,11 @@ import {
 import { SessionLaunchExecutor } from "./session-launch-executor.js";
 import { SessionLifecycleExecutor } from "./session-lifecycle-executor.js";
 import type { SessionManagerRegistry } from "./session-manager.js";
-import { type ManagementSnapshot, SessionLaunchError } from "./session-manager.js";
+import {
+  LAUNCH_ATTACH_DELAY_MS,
+  type ManagementSnapshot,
+  SessionLaunchError,
+} from "./session-manager.js";
 
 interface RequestRecord {
   readonly fingerprint: string;
@@ -27,6 +31,7 @@ export class ManagementError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly code = "management_error",
   ) {
     super(message);
   }
@@ -53,7 +58,7 @@ export class OperationService {
   readonly #lifecycle: SessionLifecycleExecutor;
 
   constructor(
-    sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
+    private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
     private readonly interaction: Pick<
       SessionInteractionService,
       | "describe"
@@ -157,6 +162,17 @@ export class OperationService {
     return this.#project(entry);
   }
 
+  async assertSupported(type: "exit" | "archive" | "delete", sessionId: string): Promise<void> {
+    if (type === "exit") return;
+    const session = (await this.sessions.managementSnapshot()).byId.get(sessionId);
+    if (session && typeof this.managers.get(session.origin.home)[type] !== "function")
+      throw new ManagementError(
+        409,
+        "Operation is not supported by this session source",
+        "operation_not_supported",
+      );
+  }
+
   manage(type: "exit" | "archive" | "delete", sessionId: string): HubOperation {
     const active = this.#active.get(sessionId);
     if (active) {
@@ -194,7 +210,7 @@ export class OperationService {
       if (
         context.kind === "create" &&
         context.phase === "observing" &&
-        this.now() - context.startedAt >= 30_000
+        this.now() - context.startedAt >= LAUNCH_ATTACH_DELAY_MS
       ) {
         this.#attach(
           entry,
@@ -283,7 +299,7 @@ export class OperationService {
         entry,
         "unknown",
         entry.metadata.type === "create"
-          ? "No Codex session detected. Tracking has stopped. Attach to tmux or refresh the session list to check the result; creating again may start another session."
+          ? "No agent session detected. Tracking has stopped. Attach to tmux or refresh the session list to check the result; creating again may start another session."
           : "Timed out; result is unknown. Refresh the session list before submitting again.",
       );
     }

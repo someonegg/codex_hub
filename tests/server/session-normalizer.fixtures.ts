@@ -4,12 +4,13 @@ import {
   IdentityResolver,
   type SessionMetadata,
 } from "../../src/server/adapters/codex/identity-resolver.js";
-import {
-  CheckpointedRolloutDecoder,
-  type DecodedRecord,
-  type DecodedRollout,
-} from "../../src/server/adapters/codex/rollout-decoder.js";
+import type { RolloutDescriptor } from "../../src/server/adapters/codex/rollout-descriptor.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
+import {
+  CheckpointedJsonlDecoder,
+  type DecodedRecord,
+} from "../../src/server/adapters/shared/jsonl-decoder.js";
+import type { DomainDiagnostic } from "../../src/server/domain/session-domain.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 
 const fixtureHome = resolve("tests/fixtures/codex-home");
@@ -20,9 +21,9 @@ export async function normalizeFixture(fileName: string) {
     resolve(fixtureHome, "sessions/2026/07/28", fileName),
   );
   if (descriptor === null) throw new Error(`Fixture rollout was not discovered: ${fileName}`);
-  const decoded = await new CheckpointedRolloutDecoder().decode(descriptor);
-  const metadata = new IdentityResolver().resolve(decoded);
-  return new DefaultSessionNormalizer().normalize(decoded, metadata);
+  const decoded = { ...(await new CheckpointedJsonlDecoder().decode(descriptor)), descriptor };
+  const metadata = resolveIdentity(decoded);
+  return normalizeDecoded(decoded, metadata);
 }
 
 export function normalizeRecords(
@@ -30,10 +31,7 @@ export function normalizeRecords(
   records: DecodedRecord[],
   metadata: Partial<SessionMetadata> = {},
 ) {
-  return new DefaultSessionNormalizer().normalize(
-    decodedRollout(id, records),
-    sessionMetadata(metadata),
-  );
+  return normalizeDecoded(decodedRollout(id, records), sessionMetadata(metadata));
 }
 
 export function decodedRollout(id: string, records: DecodedRecord[]): DecodedRollout {
@@ -64,4 +62,21 @@ export function sessionMetadata(overrides: Partial<SessionMetadata> = {}): Sessi
     archived: false,
     ...overrides,
   };
+}
+
+export interface DecodedRollout {
+  descriptor: RolloutDescriptor;
+  records: DecodedRecord[];
+  diagnostics: DomainDiagnostic[];
+}
+export function resolveIdentity(decoded: DecodedRollout) {
+  const resolver = new IdentityResolver();
+  return resolver.metadata(resolver.append(resolver.create(decoded.descriptor), decoded.records));
+}
+export function normalizeDecoded(decoded: DecodedRollout, metadata: SessionMetadata) {
+  const normalizer = new DefaultSessionNormalizer();
+  return normalizer.materialize(
+    normalizer.append(normalizer.create(decoded.descriptor), decoded.records, decoded.diagnostics),
+    metadata,
+  );
 }

@@ -92,7 +92,7 @@ export const messages: Record<keyof typeof english, string> = {
   filterByHome: "按 Home 筛选",
   foldersAreNotSupported: "不支持文件夹",
   goToBoundSession: "前往已绑定会话",
-  handOffThisPaneSBindingToTheActiveCodexSession: "将此窗格的绑定移交给当前活动的 Codex 会话。",
+  handOffThisPaneSBindingToTheActiveCodexSession: "将此窗格的绑定移交给当前活动的 agent 会话。",
   handoff: "移交绑定",
   hide: "隐藏",
 
@@ -118,7 +118,7 @@ export const messages: Record<keyof typeof english, string> = {
   messageToAgent: "发送给智能体的消息",
   newSession: "新建会话",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
-    "尚未检测到 Codex 会话。请连接 tmux 查看启动进度。",
+    "尚未检测到 agent 会话。请连接 tmux 查看启动进度。",
   noAnswerRecorded: "尚无回答记录。",
 
   noMainSessionsYet: "暂无主会话",
@@ -190,7 +190,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分内容未能完整解析，请查看下方原文。",
-  startingCodex: "正在启动 Codex",
+  startingCodex: "正在启动 agent",
   superseded: "已被替代",
   takePhoto: "拍照",
   terminalPreview: "终端预览",

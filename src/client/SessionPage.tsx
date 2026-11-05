@@ -98,6 +98,10 @@ export function SessionPage({
           }
           management={
             <ManageSession
+              management={
+                homes.find((home) => home.nickname === reader.context!.session.origin.home)
+                  ?.management
+              }
               key={sessionId}
               interaction={reader.context.interaction}
               controller={operation}

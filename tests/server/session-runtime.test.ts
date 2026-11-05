@@ -30,7 +30,6 @@ function setup() {
       home: "home",
       agentName: "Codex",
       agentVersion: null,
-      formatVersion: null,
     },
     title: "Session",
     workingDirectory: "/project",

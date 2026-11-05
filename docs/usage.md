@@ -13,6 +13,26 @@ to stop it. For installation and requirements, see the [README](../README.md#qui
 
 By default, the hub reads `~/.codex` and listens only on this machine.
 
+## Enable Claude Code
+
+Claude is opt-in; the default Codex home remains enabled:
+
+```sh
+codex-hub --claude-home claude=~/.claude
+```
+
+Repeat `--claude-home nickname=path` for additional configurations. Nicknames must
+be unique across Codex and Claude homes. Choose the home when creating a session;
+resume uses its original home. Configure and authenticate the local `claude` CLI
+for each home first. Claude supports main-session reading, tmux interaction,
+create/resume, worktree, YOLO and exit; archive, delete and subagent reading are
+unavailable. Shell commands and their output stay out of the conversation reader.
+
+If Claude requests workspace trust, attach using the command in the startup
+result, approve the project directory, then execute the supplied `!` binding
+command. Refresh the list to find the session; do not create another copy merely
+because startup tracking stopped. See [adapter contracts](technical-reference.md#claude-code-adapter).
+
 ## Reading and managing sessions
 
 Choose a project and main session in the sidebar; open child sessions from their
@@ -39,7 +59,7 @@ started elsewhere, make sure its original process has exited.
 The latest loaded plan opens automatically and collapses earlier plans. Use
 **Show** or **Hide** to review plans individually; you can open several at once.
 
-## Interacting with Codex
+## Interacting with sessions
 
 A green **Live** badge indicates a connected terminal. Send prompts from the
 message input and expand **Terminal Preview** to inspect the CLI. Use

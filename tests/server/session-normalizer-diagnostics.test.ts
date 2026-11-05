@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import type { DomainDiagnostic as Diagnostic } from "../../src/server/domain/session-domain.js";
+import { normalizeDecoded } from "./session-normalizer.fixtures.js";
 import { decodedRollout, sessionMetadata } from "./session-normalizer.fixtures.js";
 
 describe("session normalizer diagnostics", () => {
@@ -9,7 +9,7 @@ describe("session normalizer diagnostics", () => {
     const decoded = decodedRollout("custom-decoder-diagnostics", [{ ordinal: 61, value: {} }]);
     decoded.diagnostics = diagnostics(60);
 
-    const normalized = new DefaultSessionNormalizer().normalize(decoded, sessionMetadata());
+    const normalized = normalizeDecoded(decoded, sessionMetadata());
 
     expect(normalized.session.diagnostics).toEqual(decoded.diagnostics.slice(0, 50));
     expect(normalized.session.warningCount).toBe(50);

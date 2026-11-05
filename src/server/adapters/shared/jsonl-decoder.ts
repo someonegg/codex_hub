@@ -2,71 +2,74 @@ import { createHash } from "node:crypto";
 import { type FileHandle, open } from "node:fs/promises";
 
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
-import { DECODER_VERSION, MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
-import type { RolloutDescriptor } from "./rollout-descriptor.js";
+import { MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 
 const PROBE_BYTES = 4 * 1024;
+
+export interface JsonlDescriptor {
+  path: string;
+}
 
 export interface DecodedRecord {
   ordinal: number;
   value: Record<string, unknown>;
 }
 
-export interface RolloutProbe {
+export interface JsonlProbe {
   readonly offset: number;
   readonly length: number;
   readonly sha256: string;
 }
 
-export interface RolloutCheckpoint {
-  readonly decoderVersion: number;
+export interface JsonlCheckpoint {
   readonly observedEof: number;
   readonly committedOffset: number;
   readonly physicalLineCount: number;
   readonly diagnostics: readonly Diagnostic[];
-  readonly headProbe: RolloutProbe;
-  readonly tailProbe: RolloutProbe;
+  readonly headProbe: JsonlProbe;
+  readonly tailProbe: JsonlProbe;
 }
 
-export interface RolloutDecodeTelemetry {
+export interface JsonlDecodeTelemetry {
   readonly probeBytes: number;
   readonly decodeBytes: number;
   readonly totalBytes: number;
 }
 
-export interface DecodedRollout {
-  descriptor: RolloutDescriptor;
+export interface DecodedJsonl {
+  descriptor: JsonlDescriptor;
   /** Records decoded by this invocation. A full decode returns every record. */
   records: DecodedRecord[];
   /** All retained decoder diagnostics through this checkpoint. */
   diagnostics: Diagnostic[];
 }
 
-export interface IncrementalDecodedRollout extends DecodedRollout {
+export interface IncrementalDecodedJsonl extends DecodedJsonl {
   /** Newly retained decoder diagnostics produced by this invocation. */
   readonly batchDiagnostics: Diagnostic[];
   readonly mode: "full" | "append";
-  readonly checkpoint: RolloutCheckpoint;
-  readonly telemetry: RolloutDecodeTelemetry;
+  readonly checkpoint: JsonlCheckpoint;
+  readonly telemetry: JsonlDecodeTelemetry;
 }
 
-export interface RolloutDecoder {
+export interface JsonlDecoder {
   decode(
-    descriptor: RolloutDescriptor,
-    checkpoint?: RolloutCheckpoint,
-  ): Promise<IncrementalDecodedRollout>;
+    descriptor: JsonlDescriptor,
+    checkpoint?: JsonlCheckpoint,
+  ): Promise<IncrementalDecodedJsonl>;
 }
 
-export class CheckpointedRolloutDecoder implements RolloutDecoder {
+export class CheckpointedJsonlDecoder implements JsonlDecoder {
   async decode(
-    descriptor: RolloutDescriptor,
-    checkpoint?: RolloutCheckpoint,
-  ): Promise<IncrementalDecodedRollout> {
+    descriptor: JsonlDescriptor,
+    checkpoint?: JsonlCheckpoint,
+  ): Promise<IncrementalDecodedJsonl> {
     const handle = await open(descriptor.path, "r");
     try {
-      const observedEof = (await handle.stat()).size;
+      const info = await handle.stat();
+      const observedEof = info.size;
       let probeBytes = 0;
-      let appendCheckpoint: RolloutCheckpoint | null = null;
+      let appendCheckpoint: JsonlCheckpoint | null = null;
       let validatedWindows: readonly ByteWindow[] = [];
       if (isCompatibleCheckpoint(checkpoint, observedEof)) {
         const validation = await validateProbes(handle, checkpoint);
@@ -87,8 +90,7 @@ export class CheckpointedRolloutDecoder implements RolloutDecoder {
         { offset: decoded.tailOffset, contents: decoded.tailBytes },
       ]);
       const checkpointDiagnostics = decoded.diagnostics.map(cloneDiagnostic);
-      const nextCheckpoint: RolloutCheckpoint = {
-        decoderVersion: DECODER_VERSION,
+      const nextCheckpoint: JsonlCheckpoint = {
         observedEof,
         committedOffset: decoded.committedOffset,
         physicalLineCount: decoded.physicalLineCount,
@@ -277,38 +279,15 @@ function retainDiagnostic(
 }
 
 function isCompatibleCheckpoint(
-  checkpoint: RolloutCheckpoint | undefined,
+  checkpoint: JsonlCheckpoint | undefined,
   observedEof: number,
-): checkpoint is RolloutCheckpoint {
-  return (
-    checkpoint !== undefined &&
-    checkpoint.decoderVersion === DECODER_VERSION &&
-    Number.isSafeInteger(checkpoint.observedEof) &&
-    Number.isSafeInteger(checkpoint.committedOffset) &&
-    Number.isSafeInteger(checkpoint.physicalLineCount) &&
-    checkpoint.observedEof >= checkpoint.committedOffset &&
-    checkpoint.committedOffset >= 0 &&
-    checkpoint.physicalLineCount >= 0 &&
-    checkpoint.diagnostics.length <= MAX_SESSION_DIAGNOSTICS &&
-    validProbeGeometry(checkpoint) &&
-    observedEof > checkpoint.observedEof
-  );
-}
-
-function validProbeGeometry(checkpoint: RolloutCheckpoint): boolean {
-  const headLength = Math.min(PROBE_BYTES, checkpoint.observedEof);
-  const tailOffset = Math.max(0, checkpoint.observedEof - PROBE_BYTES);
-  return (
-    checkpoint.headProbe.offset === 0 &&
-    checkpoint.headProbe.length === headLength &&
-    checkpoint.tailProbe.offset === tailOffset &&
-    checkpoint.tailProbe.length === checkpoint.observedEof - tailOffset
-  );
+): checkpoint is JsonlCheckpoint {
+  return checkpoint !== undefined && observedEof > checkpoint.observedEof;
 }
 
 async function validateProbes(
   handle: FileHandle,
-  checkpoint: RolloutCheckpoint,
+  checkpoint: JsonlCheckpoint,
 ): Promise<{ matches: boolean; bytesRead: number; windows: readonly ByteWindow[] }> {
   const head = await readProbe(handle, checkpoint.headProbe);
   const tail = await readProbe(handle, checkpoint.tailProbe);
@@ -325,7 +304,7 @@ async function validateProbes(
 function createProbes(
   observedEof: number,
   windows: readonly ByteWindow[],
-): { head: RolloutProbe; tail: RolloutProbe } {
+): { head: JsonlProbe; tail: JsonlProbe } {
   const headLength = Math.min(PROBE_BYTES, observedEof);
   const tailOffset = Math.max(0, observedEof - PROBE_BYTES);
   return {
@@ -338,7 +317,7 @@ async function probeAt(
   handle: FileHandle,
   offset: number,
   length: number,
-): Promise<{ probe: RolloutProbe; bytesRead: number; contents: Buffer }> {
+): Promise<{ probe: JsonlProbe; bytesRead: number; contents: Buffer }> {
   const buffer = Buffer.alloc(length);
   let bytesRead = 0;
   if (length > 0) {
@@ -358,15 +337,8 @@ async function probeAt(
 
 async function readProbe(
   handle: FileHandle,
-  expected: RolloutProbe,
+  expected: JsonlProbe,
 ): Promise<{ matches: boolean; bytesRead: number; contents: Buffer }> {
-  if (
-    !Number.isSafeInteger(expected.offset) ||
-    expected.offset < 0 ||
-    !Number.isSafeInteger(expected.length) ||
-    expected.length < 0
-  )
-    return { matches: false, bytesRead: 0, contents: Buffer.alloc(0) };
   const actual = await probeAt(handle, expected.offset, expected.length);
   const contents = actual.contents;
   return {
@@ -395,7 +367,7 @@ function probeFromWindows(
   offset: number,
   length: number,
   windows: readonly ByteWindow[],
-): RolloutProbe {
+): JsonlProbe {
   const contents = Buffer.alloc(length);
   let cursor = offset;
   while (cursor < offset + length) {

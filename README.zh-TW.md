@@ -5,6 +5,8 @@
 面向 Codex 的本地網頁中心，將清晰易讀的工作階段記錄與即時 CLI 互動結合起來。
 按專案瀏覽工作階段、跟進最新回覆，並從電腦或手機繼續工作。
 
+也可透過選用的 `--claude-home` adapter 接入 Claude Code 主工作階段，詳見[設定與支援範圍](docs/usage.zh-TW.md#啟用-claude-code)。
+
 ![建立工作階段、傳送提示並檢視已回答的使用者輸入卡片](docs/images/zh-TW/ahub-intro.gif)
 
 <details>
@@ -76,7 +78,7 @@ Home、連接埠與可選網頁／差異託管設定見[使用與設定](docs/us
 
 當 Codex 在同一終端中透過 `/clear`、`/resume` 或執行計畫切換工作階段時，在舊工作階段頁面點選**移交繫結**。
 顯示**已被替代**後，點選**前往已繫結工作階段**。未傳送草稿保留在舊頁面。
-詳見[與 Codex 互動](docs/usage.zh-TW.md#與-codex-互動)。
+詳見[與 Codex 互動](docs/usage.zh-TW.md#與工作階段互動)。
 
 ## 透過管理 CLI 操作工作階段
 

@@ -2,6 +2,9 @@ import { validProjectDirectory } from "../domain/project-directory.js";
 import type { DomainSession, TmuxKey } from "../domain/session-domain.js";
 import type { TmuxBinding } from "../interaction/transport.js";
 
+/** Time before startup needs terminal access, including adapter prompt readiness. */
+export const LAUNCH_ATTACH_DELAY_MS = 30_000;
+
 export interface ManagementSnapshot {
   readonly sessions: readonly DomainSession[];
   readonly byId: ReadonlyMap<string, DomainSession>;
@@ -34,8 +37,8 @@ export interface SessionManager extends SessionExitCapability {
   isValidNativeId(nativeId: string): boolean;
   resolveDirectory(directory: string): Promise<{ directory: string }>;
   launch(options: SessionLaunchOptions): Promise<TmuxBinding>;
-  archive(nativeId: string): Promise<void>;
-  delete(nativeId: string): Promise<void>;
+  archive?(nativeId: string): Promise<void>;
+  delete?(nativeId: string): Promise<void>;
 }
 
 /** A launch failure records whether a process may already be running. */
@@ -91,4 +94,11 @@ export async function resolveResumeDirectory(
     }
   }
   throw new Error("Session has no available working or project directory");
+}
+
+export function managementCapabilities(manager: SessionManager) {
+  return {
+    archive: typeof manager.archive === "function",
+    delete: typeof manager.delete === "function",
+  };
 }

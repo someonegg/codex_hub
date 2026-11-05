@@ -40,6 +40,10 @@ export class SessionLifecycleExecutor {
       }
       entry.home = session.origin.home;
       const manager = this.managers.get(entry.home);
+      if (type !== "exit" && typeof manager[type] !== "function")
+        throw new Error(
+          "operation_not_supported: Operation is not supported by this session source",
+        );
       if (type === "archive" && session.archived) {
         this.control.finish(entry, "succeeded", null);
         return;
@@ -52,7 +56,7 @@ export class SessionLifecycleExecutor {
       if (!nativeId?.trim()) throw new Error("Session has no valid native identity");
       if (type === "delete") {
         this.control.transition(entry, { kind: "delete", phase: "deleting", nativeId });
-        await manager.delete(nativeId);
+        await manager.delete!(nativeId);
         if (!this.control.pending(entry)) return;
         this.control.transition(entry, { kind: "delete", phase: "confirming", nativeId });
       } else {
@@ -147,7 +151,7 @@ export class SessionLifecycleExecutor {
       this.now() + 25_000,
     );
     try {
-      await this.managers.get(entry.home).archive(nativeId);
+      await this.managers.get(entry.home).archive!(nativeId);
       if (!this.control.pending(entry)) return;
       this.control.transition(
         entry,

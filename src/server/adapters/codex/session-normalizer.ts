@@ -6,13 +6,13 @@ import type {
   NormalizedSession,
 } from "../../domain/session-domain.js";
 import { normalizeSessionTitle, sessionTitleFromMarkdown } from "../../domain/session-text.js";
+import type { DecodedRecord } from "../shared/jsonl-decoder.js";
+import { isObject } from "../shared/jsonl-decoder.js";
 import type { SessionMetadata } from "./identity-resolver.js";
 import { codexInteraction } from "./interaction-parser.js";
 import { MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 import { eventMessage } from "./message-normalizer.js";
 import { type ParsedResponseItem, parseResponseItem } from "./response-item-parser.js";
-import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
-import { isObject } from "./rollout-decoder.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import {
   type NormalizedUserInput,
@@ -31,11 +31,6 @@ export interface SessionNormalizer {
   ): SessionNormalizerState;
   materialize(
     state: SessionNormalizerState,
-    metadata: SessionMetadata,
-    origin?: DomainSessionOrigin,
-  ): NormalizedSession;
-  normalize(
-    decoded: DecodedRollout,
     metadata: SessionMetadata,
     origin?: DomainSessionOrigin,
   ): NormalizedSession;
@@ -138,19 +133,6 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       interaction: codexInteraction(),
     };
   }
-
-  normalize(
-    decoded: DecodedRollout,
-    metadata: SessionMetadata,
-    origin: DomainSessionOrigin = DEFAULT_SESSION_ORIGIN,
-  ): NormalizedSession {
-    const state = this.append(
-      this.create(decoded.descriptor),
-      decoded.records,
-      decoded.diagnostics,
-    );
-    return this.materialize(state, metadata, origin);
-  }
 }
 
 function combinedDiagnostics(state: SessionNormalizerState): readonly DomainDiagnostic[] {
@@ -203,7 +185,6 @@ const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
   home: "test",
   agentName: "Test",
   agentVersion: null,
-  formatVersion: null,
 };
 
 function consumeRecord(

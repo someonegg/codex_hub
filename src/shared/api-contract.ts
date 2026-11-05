@@ -22,6 +22,7 @@ export interface SessionProject {
 }
 
 export interface SessionHome {
+  management?: { archive: boolean; delete: boolean };
   nickname: string;
 }
 

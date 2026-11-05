@@ -380,8 +380,7 @@ function sameOrigin(
     left.sourceType === right.sourceType &&
     left.home === right.home &&
     left.agentName === right.agentName &&
-    left.agentVersion === right.agentVersion &&
-    left.formatVersion === right.formatVersion
+    left.agentVersion === right.agentVersion
   );
 }
 

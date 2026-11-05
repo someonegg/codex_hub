@@ -6,6 +6,8 @@ A local web hub for Codex that pairs readable conversations with live CLI intera
 Browse sessions by project, follow responses in near real time, and keep working with
 Codex from desktop or mobile.
 
+Claude Code main sessions are also available through the opt-in `--claude-home` adapter; see [setup and supported operations](docs/usage.md#enable-claude-code).
+
 ![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 
 <details>
@@ -79,7 +81,7 @@ Press **Ctrl+C** or click **Interrupt** to interrupt; **Esc** collapses the prev
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's page. Once it shows
 **Superseded**, follow **Go to bound session**. Your draft stays on the old page.
-See [tmux interaction](docs/usage.md#interacting-with-codex) for details.
+See [tmux interaction](docs/usage.md#interacting-with-sessions) for details.
 
 ## Management CLI sessions
 

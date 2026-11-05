@@ -3,8 +3,8 @@ import { expect, it } from "vitest";
 import {
   codexBindingAttemptsFrom,
   codexBindingCommand,
-  codexInterruptSteps,
 } from "../../src/server/adapters/codex/interaction-parser.js";
+import { interruptSteps as codexInterruptSteps } from "../../src/server/adapters/shared/session-management.js";
 const operationId = "00000000-0000-4000-8000-000000000001";
 
 function response(ordinal: number, payload: Record<string, unknown>) {
@@ -187,4 +187,13 @@ it("interrupts with Ctrl+U then Escape after the configured delay", () => {
     { keys: ["C-u"], delayMs: 0 },
     { keys: ["Escape"], delayMs: 100 },
   ]);
+});
+
+it("ignores quoted shell wrappers in ordinary user prose", () => {
+  const text = "Please explain this example:\n" + shellText("/tmp/socket", "%7");
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+    ),
+  ).toEqual([]);
 });

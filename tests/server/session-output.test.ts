@@ -21,7 +21,6 @@ const base = {
       agentName: "Codex",
       home: "work",
       agentVersion: "secret",
-      formatVersion: "secret",
     },
     workingDirectory: "/project/worktree",
     projectDirectory: "/project",

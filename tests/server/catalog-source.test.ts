@@ -18,8 +18,8 @@ import {
   createCodexSessionSource,
 } from "../../src/server/adapters/codex/codex-session-source.js";
 import { JsonlCatalogSource } from "../../src/server/adapters/codex/jsonl-catalog-source.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
+import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -54,7 +54,7 @@ describe("catalog discovery", () => {
     const content = (id: string) =>
       JSON.stringify({ type: "session_meta", payload: { id } }) + "\n";
     await writeFile(file, content("first"));
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new CheckpointedJsonlDecoder();
     const decode = vi.fn(decoder.decode.bind(decoder));
     const source = new CodexSessionSource(home, "archive-once", { decode });
     const first = await source.refresh();
@@ -108,7 +108,7 @@ describe("catalog discovery", () => {
     const sessionsLink = join(home, "sessions");
     await symlink(firstRoot, sessionsLink);
 
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new CheckpointedJsonlDecoder();
     const decodedPaths: string[] = [];
     const source = new CodexSessionSource(home, "codex-cache-identity", {
       async decode(descriptor) {
@@ -158,7 +158,7 @@ describe("catalog discovery", () => {
         join(home, root, "rollout-error.jsonl"),
         '{"type":"session_meta","payload":{"id":"error"}}\n',
       );
-      const decoder = new CheckpointedRolloutDecoder();
+      const decoder = new CheckpointedJsonlDecoder();
       let attempts = 0;
       const recovering = new CodexSessionSource(home, "codex-errors", {
         async decode(descriptor) {

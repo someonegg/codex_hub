@@ -94,7 +94,7 @@ export const messages = {
   foldersAreNotSupported: "Folders are not supported",
   goToBoundSession: "Go to bound session",
   handOffThisPaneSBindingToTheActiveCodexSession:
-    "Hand off this pane’s binding to the active Codex session.",
+    "Hand off this pane’s binding to the active agent session.",
   handoff: "Handoff",
   hide: "Hide",
 
@@ -120,7 +120,7 @@ export const messages = {
   messageToAgent: "Message to agent",
   newSession: "New session",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
-    "No Codex session detected yet. Attach to tmux to check startup progress.",
+    "No agent session detected yet. Attach to tmux to check startup progress.",
   noAnswerRecorded: "No answer recorded.",
 
   noMainSessionsYet: "No main sessions yet",
@@ -192,7 +192,7 @@ export const messages = {
 
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "Some content could not be fully parsed. Check the original text below.",
-  startingCodex: "Starting Codex",
+  startingCodex: "Starting agent",
   superseded: "Superseded",
   takePhoto: "Take photo",
   terminalPreview: "Terminal Preview",

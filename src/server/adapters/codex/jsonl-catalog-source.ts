@@ -3,14 +3,14 @@ import { join, resolve } from "node:path";
 
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
 import { opaqueIdForPath } from "../../security/opaque-id.js";
-import type { CatalogDiscovery, CatalogEntry, CodexCatalogSource } from "./catalog-source.js";
+import type { CatalogDiscovery, CatalogEntry } from "./catalog-source.js";
 import { isExpectedIoError } from "./io-errors.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
 
 const MAX_DEPTH = 8;
 const ROLLOUT_NAME = /^rollout-[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl$/;
 
-export class JsonlCatalogSource implements CodexCatalogSource {
+export class JsonlCatalogSource {
   constructor(
     private readonly codexHome: string,
     private readonly archivedDescriptors: ReadonlyMap<string, RolloutDescriptor> = new Map(),

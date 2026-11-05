@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MAX_JSONL_LINE_BYTES } from "../../src/server/adapters/codex/limits.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
+import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
-describe("CheckpointedRolloutDecoder", () => {
+describe.each([CheckpointedJsonlDecoder])("%s", (Decoder) => {
   it("keeps physical ordinals, continues after malformed records, and ignores a partial tail", async () => {
     const home = await createTempDirectory("codex-decode-");
     const directory = join(home, "sessions", "2026", "07", "28");
@@ -19,7 +19,7 @@ describe("CheckpointedRolloutDecoder", () => {
     const descriptor = await rolloutDescriptor(home, path);
     expect(descriptor).not.toBeNull();
 
-    const decoded = await new CheckpointedRolloutDecoder().decode(descriptor!);
+    const decoded = await new Decoder().decode(descriptor!);
     expect(decoded.records.map((record) => [record.ordinal, record.value.type])).toEqual([
       [1, "one"],
       [3, "three"],
@@ -40,7 +40,7 @@ describe("CheckpointedRolloutDecoder", () => {
       "silent-tail",
       Buffer.concat([Buffer.from('{"type":"committed"}\n'), tail]),
     );
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
     const before = await decoder.decode(descriptor);
     expect(before.records.map((record) => record.value.type)).toEqual(["committed"]);
     expect(before.diagnostics).toEqual([]);
@@ -65,7 +65,7 @@ describe("CheckpointedRolloutDecoder", () => {
   it("warns about an oversized line only after its terminating newline arrives", async () => {
     const oversized = Buffer.alloc(8 * 1024 * 1024 + 1, 0x78);
     const { path, descriptor } = await rollout("oversized-tail", oversized);
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
 
     const before = await decoder.decode(descriptor);
     expect(before.diagnostics).toEqual([]);
@@ -84,7 +84,7 @@ describe("CheckpointedRolloutDecoder", () => {
     const { path, descriptor } = await rollout("crlf-limit", "");
     await appendFile(path, `${line}\r\n`);
 
-    const decoded = await new CheckpointedRolloutDecoder().decode(descriptor);
+    const decoded = await new Decoder().decode(descriptor);
     const value = decoded.records[0]?.value.value;
 
     expect(decoded.mode).toBe("full");
@@ -97,7 +97,7 @@ describe("CheckpointedRolloutDecoder", () => {
 
   it("accepts an appended CRLF record from a checkpoint boundary", async () => {
     const { path, descriptor } = await rollout("crlf-append", '{"type":"first"}\n');
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
     const before = await decoder.decode(descriptor);
     await appendFile(path, '{"type":"second"}\r\n');
 
@@ -120,7 +120,7 @@ describe("CheckpointedRolloutDecoder", () => {
     const descriptor = await rolloutDescriptor(home, path);
     expect(descriptor).not.toBeNull();
 
-    const decoded = await new CheckpointedRolloutDecoder().decode(descriptor!);
+    const decoded = await new Decoder().decode(descriptor!);
 
     expect(decoded.diagnostics).toHaveLength(50);
     expect(decoded.diagnostics.map((diagnostic) => diagnostic.ordinal)).toEqual(
@@ -134,7 +134,7 @@ describe("CheckpointedRolloutDecoder", () => {
   it("returns only newly committed records on a validated append", async () => {
     const initial = Buffer.from('{"type":"one"}\nmalformed\n{"type":"pending"}');
     const { path, descriptor } = await rollout("checkpoint-append", initial);
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
     const before = await decoder.decode(descriptor);
 
     expect(before.mode).toBe("full");
@@ -173,7 +173,7 @@ describe("CheckpointedRolloutDecoder", () => {
 
   it("re-reads an unterminated tail without duplicating ordinals or diagnostics", async () => {
     const { path, descriptor } = await rollout("checkpoint-tail", '{"type":"one"}\nmalformed');
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
     const first = await decoder.decode(descriptor);
     expect(first.records).toEqual([
       expect.objectContaining({ ordinal: 1, value: { type: "one" } }),
@@ -204,7 +204,7 @@ describe("CheckpointedRolloutDecoder", () => {
     async (probe) => {
       const prefix = `${'{"type":"first"}\n'}${" ".repeat(9_000)}`;
       const { path, descriptor } = await rollout("checkpoint-probe", prefix);
-      const decoder = new CheckpointedRolloutDecoder();
+      const decoder = new Decoder();
       const first = await decoder.decode(descriptor);
       const changed = Buffer.from(prefix);
       const position = probe === "head" ? 0 : changed.length - 1;
@@ -222,27 +222,48 @@ describe("CheckpointedRolloutDecoder", () => {
     },
   );
 
-  it("falls back on non-growth and an incompatible decoder version", async () => {
-    const { path, descriptor } = await rollout("checkpoint-compatibility", '{"type":"one"}\n');
-    const decoder = new CheckpointedRolloutDecoder();
+  it("falls back on non-growth", async () => {
+    const { descriptor } = await rollout("checkpoint-compatibility", '{"type":"one"}\n');
+    const decoder = new Decoder();
     const first = await decoder.decode(descriptor);
 
     expect((await decoder.decode(descriptor, first.checkpoint)).mode).toBe("full");
+  });
 
-    await appendFile(path, '{"type":"two"}\n');
-    const incompatible = {
-      ...first.checkpoint,
-      decoderVersion: first.checkpoint.decoderVersion + 1,
-    };
-    const next = await decoder.decode(descriptor, incompatible);
-    expect(next.mode).toBe("full");
-    expect(next.records.map(({ value }) => value.type)).toEqual(["one", "two"]);
+  it("preserves UTF-8 spanning stream chunks and CRLF physical ordinals", async () => {
+    const prefix = '{"value":"';
+    const padding = "x".repeat(65535 - Buffer.byteLength(prefix));
+    const value = padding + "😀中文";
+    const { descriptor } = await rollout(
+      "utf8-chunks",
+      JSON.stringify({ value }) + "\r\n\r\n{}\r\n",
+    );
+    const result = await new Decoder().decode(descriptor);
+    expect(result.records).toEqual([
+      { ordinal: 1, value: { value } },
+      { ordinal: 3, value: {} },
+    ]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("rebuilds on truncation and equal-length edits", async () => {
+    const { path, descriptor } = await rollout("rewrites", '{"value":"one"}\n{}\n');
+    const decoder = new Decoder();
+    const first = await decoder.decode(descriptor);
+    await writeFile(path, '{"value":"two"}\n{}\n');
+    const edited = await decoder.decode(descriptor, first.checkpoint);
+    expect(edited.mode).toBe("full");
+    expect(edited.records[0]?.value.value).toBe("two");
+    await writeFile(path, "{}\n");
+    const truncated = await decoder.decode(descriptor, edited.checkpoint);
+    expect(truncated.mode).toBe("full");
+    expect(truncated.records).toEqual([{ ordinal: 1, value: {} }]);
   });
 
   it("keeps cumulative decoder diagnostics capped across append checkpoints", async () => {
     const firstLines = Array.from({ length: 49 }, (_, index) => `bad-${index}`).join("\n");
     const { path, descriptor } = await rollout("checkpoint-diagnostics", `${firstLines}\n`);
-    const decoder = new CheckpointedRolloutDecoder();
+    const decoder = new Decoder();
     const first = await decoder.decode(descriptor);
     expect(first.diagnostics).toHaveLength(49);
 

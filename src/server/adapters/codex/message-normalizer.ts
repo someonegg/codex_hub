@@ -1,7 +1,7 @@
 import type { DomainMessageRecord } from "../../domain/session-domain.js";
 import { truncateText } from "../../domain/session-text.js";
+import { isObject } from "../shared/jsonl-decoder.js";
 import { MAX_MESSAGE_CHARS } from "./limits.js";
-import { isObject } from "./rollout-decoder.js";
 import { nonEmptyString } from "./value-readers.js";
 
 export function eventMessage(

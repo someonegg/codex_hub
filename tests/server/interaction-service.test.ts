@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  CODEX_INTERACTION_KEY_BINDINGS,
-  codexInterruptSteps,
-} from "../../src/server/adapters/codex/interaction-parser.js";
+  DEFAULT_KEY_BINDINGS as CODEX_INTERACTION_KEY_BINDINGS,
+  interruptSteps as codexInterruptSteps,
+} from "../../src/server/adapters/shared/session-management.js";
 import type {
   InteractionSessionSnapshot,
   SessionReader,

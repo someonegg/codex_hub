@@ -1,15 +1,17 @@
+import { createClaudeSessionSource } from "./adapters/claude/claude-session-source.js";
+import { createClaudeSessionManager } from "./adapters/claude/session-manager.js";
 import { createCodexSessionSource } from "./adapters/codex/codex-session-source.js";
 import { createCodexSessionManager } from "./adapters/codex/session-manager.js";
 import { CatalogInteractionSessionReader } from "./application/interaction-session-reader.js";
 import { SessionReadService } from "./application/session-read-service.js";
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
-import type { CodexHomeConfig } from "./config.js";
+import type { SessionHomeConfig } from "./config.js";
 import { SessionInteractionService } from "./interaction/interaction-service.js";
 import { PaneBindingManager } from "./interaction/pane-binding-manager.js";
 import { SessionRuntime } from "./interaction/session-runtime.js";
 import { TmuxInteractionService } from "./interaction/tmux-service.js";
 import { OperationService } from "./management/operation-service.js";
-import { SessionManagerRegistry } from "./management/session-manager.js";
+import { managementCapabilities, SessionManagerRegistry } from "./management/session-manager.js";
 import { CatalogSnapshotStore } from "./repository/catalog-snapshot-store.js";
 import { SessionUpdatesService } from "./updates/session-updates-service.js";
 import type { UploadCleanup } from "./uploads/store.js";
@@ -21,20 +23,29 @@ export async function createCodexHub({
   interactionEnabled = true,
   uploads,
 }: {
-  homes: readonly CodexHomeConfig[];
+  homes: readonly SessionHomeConfig[];
   socket?: string;
   interactionEnabled?: boolean;
   uploads?: UploadCleanup;
 }) {
   const paneBindings = new PaneBindingManager();
   const sources = await Promise.all(
-    homes.map((home) => createCodexSessionSource(home.path, paneBindings, home.nickname)),
+    homes.map((home) =>
+      (home.adapter === "claude" ? createClaudeSessionSource : createCodexSessionSource)(
+        home.path,
+        paneBindings,
+        home.nickname,
+      ),
+    ),
   );
   const managers = new SessionManagerRegistry(sources[0]!.descriptor.home);
   sources.forEach((source, index) =>
     managers.register(
       source.descriptor.home,
-      createCodexSessionManager(homes[index]!.path, socket),
+      (homes[index]!.adapter === "claude" ? createClaudeSessionManager : createCodexSessionManager)(
+        homes[index]!.path,
+        socket,
+      ),
     ),
   );
   const transport = new TmuxInteractionService();
@@ -57,7 +68,10 @@ export async function createCodexHub({
       sources
         .find((source) => source.descriptor.home === session.origin.home)
         ?.displayTitleFor(session) ?? null,
-    homes: sources.map((source) => ({ nickname: source.descriptor.home })),
+    homes: sources.map((source) => ({
+      nickname: source.descriptor.home,
+      management: managementCapabilities(managers.get(source.descriptor.home)),
+    })),
   });
   const cleanup: (() => void)[] = [() => interaction.close()];
   let closed = false;

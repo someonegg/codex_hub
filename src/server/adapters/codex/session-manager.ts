@@ -1,10 +1,9 @@
 import { execFile } from "node:child_process";
-import { realpath, stat } from "node:fs/promises";
 import { promisify } from "node:util";
 
-import { validProjectDirectory } from "../../domain/project-directory.js";
 import { TmuxLauncher } from "../../interaction/tmux-launcher.js";
 import type { SessionLaunchOptions, SessionManager } from "../../management/session-manager.js";
+import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { codexBindingCommand } from "./interaction-parser.js";
 
 const execute = promisify(execFile);
@@ -14,13 +13,7 @@ export class CodexSessionManager implements SessionManager {
     private readonly tmux = new TmuxLauncher(),
   ) {}
 
-  async resolveDirectory(input: string) {
-    if (!validProjectDirectory(input)) throw new Error("Directory must be an absolute local path");
-    const directory = await realpath(input);
-    if (!(await stat(directory)).isDirectory())
-      throw Object.assign(new Error("Path is not a directory"), { code: "ENOTDIR" });
-    return { directory };
-  }
+  resolveDirectory = resolveDirectory;
   isValidNativeId(nativeId: string): boolean {
     return /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(nativeId);
   }
@@ -47,13 +40,7 @@ export class CodexSessionManager implements SessionManager {
       codexBindingCommand(operationId, projectDirectory, taskName ?? null),
     ]);
   }
-  exitSteps() {
-    return [
-      { keys: ["C-c"] as const, delayMs: 0 },
-      { keys: ["C-c"] as const, delayMs: 1_000 },
-      { keys: ["C-c"] as const, delayMs: 1_000 },
-    ];
-  }
+  exitSteps = exitSteps;
   async archive(nativeId: string) {
     await this.#command(["archive", nativeId]);
   }

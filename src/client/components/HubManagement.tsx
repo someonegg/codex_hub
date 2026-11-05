@@ -256,6 +256,7 @@ export function CreateSession({
   );
 }
 interface ManageSessionProps {
+  management?: SessionHome["management"];
   interaction?: InteractionResponse | null;
   session: SessionDetail;
   onChanged: () => void;
@@ -268,6 +269,7 @@ interface ManageSessionProps {
 export function ManageSession(props: ManageSessionProps) {
   return props.controller ? (
     <ManageSessionControls
+      management={props.management}
       session={props.session}
       interaction={props.interaction}
       controller={props.controller}
@@ -284,6 +286,7 @@ export function ManageSession(props: ManageSessionProps) {
 }
 
 function StandaloneManageSession({
+  management,
   session,
   interaction,
   onChanged,
@@ -297,6 +300,7 @@ function StandaloneManageSession({
   });
   return (
     <ManageSessionControls
+      management={management}
       session={session}
       interaction={interaction}
       controller={controller}
@@ -306,6 +310,7 @@ function StandaloneManageSession({
 }
 
 function ManageSessionControls({
+  management,
   interaction,
   session,
   controller,
@@ -313,6 +318,7 @@ function ManageSessionControls({
   onStart,
 }: {
   session: SessionDetail;
+  management?: SessionHome["management"];
   interaction?: InteractionResponse | null;
   controller: OperationController;
   showStatus: boolean;
@@ -377,7 +383,7 @@ function ManageSessionControls({
               {t("tmuxAccess")}
             </button>
           ) : null}
-          {session.status !== "archived" ? (
+          {management?.archive !== false && session.status !== "archived" ? (
             <button
               type="button"
               disabled={controller.busy}
@@ -390,16 +396,18 @@ function ManageSessionControls({
               {t("archiveSession")}
             </button>
           ) : null}
-          <button
-            type="button"
-            disabled={controller.busy}
-            onClick={() => {
-              closeMenu();
-              setDeleteOpen(true);
-            }}
-          >
-            {t("deleteSession")}
-          </button>
+          {management?.delete !== false ? (
+            <button
+              type="button"
+              disabled={controller.busy}
+              onClick={() => {
+                closeMenu();
+                setDeleteOpen(true);
+              }}
+            >
+              {t("deleteSession")}
+            </button>
+          ) : null}
           {interaction?.supported && interaction.state === "connected" ? (
             <button
               type="button"

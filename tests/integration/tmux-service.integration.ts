@@ -3,13 +3,13 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
+import { interruptSteps as codexInterruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import type {
   TerminalPreviewMessage,
   TerminalPreviewSnapshot,
 } from "../../src/shared/api-contract.js";
 
 import { applyPreview } from "../../src/client/state/terminal-preview-patch.js";
-import { codexInterruptSteps } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { TerminalPreviewService } from "../../src/server/interaction/terminal-preview-service.js";
 import type { PreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
