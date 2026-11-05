@@ -2,7 +2,6 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { attachCommand, TmuxLauncher } from "../../interaction/tmux-launcher.js";
 import {
-  LAUNCH_ATTACH_DELAY_MS,
   SessionLaunchError,
   type SessionLaunchOptions,
   type SessionManager,
@@ -10,12 +9,8 @@ import {
 import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 
-/**
- * Matches the Claude Code TUI ready prompt. If a CLI upgrade changes its glyph
- * or spacing, startup continues but prompt detection times out after
- * LAUNCH_ATTACH_DELAY_MS; the launch error includes a manual attach command.
- * Recheck this pattern when launches consistently time out after an upgrade.
- */
+/** Prompt detection is an optimization; send once after this delay regardless. */
+export const BINDING_PROMPT_WAIT_MS = 15_000;
 const INTERACTIVE_PROMPT_PATTERN = /^❯[ \u00a0]*$/m;
 
 export class ClaudeSessionManager implements SessionManager {
@@ -23,6 +18,7 @@ export class ClaudeSessionManager implements SessionManager {
     private readonly home: string,
     private readonly tmux = new TmuxLauncher(),
   ) {}
+  readonly interruptAfterBinding = true;
   isValidNativeId = validClaudeId;
   resolveDirectory = resolveDirectory;
   async launch(options: SessionLaunchOptions) {
@@ -37,25 +33,21 @@ export class ClaudeSessionManager implements SessionManager {
       ...(options.yolo ? ["--dangerously-skip-permissions"] : []),
     ]);
     try {
-      const deadline = Date.now() + LAUNCH_ATTACH_DELAY_MS;
+      const deadline = Date.now() + BINDING_PROMPT_WAIT_MS;
       while (Date.now() < deadline) {
         const { content } = await this.tmux.transport.captureTerminal(target);
-        if (INTERACTIVE_PROMPT_PATTERN.test(content)) {
-          await this.tmux.transport.sendMessage(
-            target,
-            claudeBindingCommand(
-              options.operationId,
-              options.projectDirectory,
-              options.taskName ?? null,
-            ),
-          );
-          return target;
-        }
+        if (INTERACTIVE_PROMPT_PATTERN.test(content)) break;
         await delay(100);
       }
-      throw new Error(
-        "Claude did not reach its interactive prompt. Attach to tmux to complete startup and run the binding command.",
+      await this.tmux.transport.sendMessage(
+        target,
+        claudeBindingCommand(
+          options.operationId,
+          options.projectDirectory,
+          options.taskName ?? null,
+        ),
       );
+      return target;
     } catch (error) {
       throw new SessionLaunchError(
         "unknown",

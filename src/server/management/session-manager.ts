@@ -34,6 +34,7 @@ export interface SessionLaunchOptions {
 }
 
 export interface SessionManager extends SessionExitCapability {
+  readonly interruptAfterBinding?: boolean;
   isValidNativeId(nativeId: string): boolean;
   resolveDirectory(directory: string): Promise<{ directory: string }>;
   launch(options: SessionLaunchOptions): Promise<TmuxBinding>;

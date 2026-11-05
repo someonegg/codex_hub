@@ -65,6 +65,7 @@ export class OperationService {
       | "matchesTarget"
       | "resolveTarget"
       | "sendExitKeys"
+      | "interruptLaunch"
       | "killTarget"
       | "inspectTarget"
       | "setBusy"
@@ -74,7 +75,7 @@ export class OperationService {
   ) {
     const {
       now = Date.now,
-      waitMs = { create: 300_000, exit: 30_000, archive: 30_000, delete: 30_000 },
+      waitMs = { create: 60_000, exit: 30_000, archive: 30_000, delete: 30_000 },
       bindings = paneBindings,
       runtime,
       uploads,
