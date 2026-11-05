@@ -31,6 +31,26 @@ async function fixtureRepository() {
 }
 
 describe("SessionReadService", () => {
+  it("preserves state revisions across reader instances without replaying history", async () => {
+    const { home, repository } = await fixtureRepository();
+    const session = (await repository.list()).sessions[0]!;
+    const baseline = (await repository.messages(session.id, { after: 0, limit: 300 }))!;
+    const restarted = await createCodexSessionReadService(home);
+    const page = (await restarted.messages(session.id, { after: baseline.nextAfter }))!;
+    expect(page.stateRevision).toBe(baseline.stateRevision);
+    expect(page.items).toEqual([]);
+    const updates = closeAfterEach(
+      new SessionUpdatesService(restarted, { waitTimeoutMs: 30, probeIntervalMs: 5 }),
+    );
+    await expect(
+      updates.wait(session.id, {
+        after: baseline.nextAfter,
+        stateRevision: baseline.stateRevision,
+        wait: true,
+      }),
+    ).resolves.toBeNull();
+  });
+
   it("coalesces concurrent refreshes, reuses a fresh snapshot, and permits a forced refresh", async () => {
     let discoveries = 0;
     let now = 0;

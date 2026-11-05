@@ -66,11 +66,12 @@ describe("session catalog", () => {
     expect(sessions.mock.calls.at(-1)?.[0]).toEqual({ after: listBody.revision });
     view.unmount();
   });
-  it("preserves successful data during failures and retries", async () => {
+  it("preserves data, retries without a revision, and resumes long polling after recovery", async () => {
     const sessions = vi
       .spyOn(api, "sessions")
       .mockResolvedValueOnce(listBody)
       .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(listBody)
       .mockImplementation(() => new Promise(() => {}));
     const view = renderHook(useSessionList);
     await flush();
@@ -78,7 +79,12 @@ describe("session catalog", () => {
     expect(view.result.current.listError).toBe("offline");
     expect(view.result.current.listRetrying).toBe(true);
     await act(async () => vi.advanceTimersByTimeAsync(INITIAL_RETRY_MS));
-    expect(sessions).toHaveBeenCalledTimes(3);
+    expect(sessions).toHaveBeenCalledTimes(4);
+    expect(sessions.mock.calls[1]?.[0]).toEqual({ after: listBody.revision });
+    expect(sessions.mock.calls[2]?.[0]).toEqual({ after: undefined });
+    expect(sessions.mock.calls[3]?.[0]).toEqual({ after: listBody.revision });
+    expect(view.result.current.listError).toBeNull();
+    expect(view.result.current.listRetrying).toBe(false);
     view.unmount();
   });
   it("retries immediately without leaving the old backoff timer running", async () => {

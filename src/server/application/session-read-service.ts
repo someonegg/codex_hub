@@ -15,8 +15,7 @@ import {
 } from "../repository/catalog-snapshot-store.js";
 import { SessionQueries } from "../repository/session-queries.js";
 import type { SessionSource } from "../source/session-source.js";
-import type { UpdateRevisionFactory } from "../updates/update-revision.js";
-import { createProcessUpdateRevisionFactory } from "../updates/update-revision.js";
+import { createUpdateRevision } from "../updates/update-revision.js";
 import { CatalogInteractionSessionReader } from "./interaction-session-reader.js";
 import type {
   InteractionSessionSnapshot,
@@ -41,7 +40,6 @@ export class SessionReadService implements SessionReader {
   readonly #store: CatalogSnapshotStore;
   readonly #queries: SessionQueries;
   readonly #mapper: SessionApiMapper;
-  readonly #createRevision: UpdateRevisionFactory = createProcessUpdateRevisionFactory();
   readonly #interaction?: SessionInteractionDescriber;
   readonly #interactionSessions: CatalogInteractionSessionReader;
 
@@ -105,7 +103,7 @@ export class SessionReadService implements SessionReader {
     const state = await assembleSessionResponse(
       { session, interactionSession },
       this.#interaction,
-      this.#createRevision,
+      createUpdateRevision,
     );
     return {
       state,
