@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendClaudeRecords,
-  createClaudeState,
   type ClaudeState,
+  createClaudeState,
 } from "../../src/server/adapters/claude/session-normalizer.js";
 
 const id = "claude-session";
