@@ -8,7 +8,7 @@ export const INTERACTION_KEYS = [
   "left",
   "right",
   "interrupt",
-  "plan",
+  "BTab",
   "0",
   "1",
   "2",

@@ -136,7 +136,7 @@ export const messages: Record<keyof typeof english, string> = {
   pages: "网页",
   parentSession: "父会话",
   pendingAttachments: "待发送附件",
-  plan: "计划",
+  BTab: "BTab",
   planContentUnavailable: "计划内容不可用。",
   previewUnavailable: "预览不可用",
   previewUnavailableDownloadTheFileBelow: "预览不可用，请在下方下载文件。",

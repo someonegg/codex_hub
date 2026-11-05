@@ -284,7 +284,7 @@
   -webkit-tap-highlight-color: transparent;
 }
 .terminal-key-enter,
-.terminal-key-plan {
+.terminal-key-BTab {
   font-size: var(--text-small);
   font-weight: var(--weight-semibold);
 }

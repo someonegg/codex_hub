@@ -438,12 +438,13 @@ export function InteractionPanel({
                     key={key}
                     type="button"
                     className={`terminal-key terminal-key-${key}`}
+                    tabIndex={-1}
                     aria-label={t(label)}
                     disabled={!previewConnected}
                     aria-disabled={inputUnavailable}
                     onClick={() => sendKeys([key])}
                   >
-                    <span aria-hidden="true">{key === "plan" ? t("plan") : glyph}</span>
+                    <span aria-hidden="true">{glyph}</span>
                   </button>
                 ))}
               </div>
@@ -595,13 +596,13 @@ const PREVIEW_KEYS: Readonly<Record<string, InteractionKey | undefined>> = {
 };
 
 const TERMINAL_CONTROL_KEYS: ReadonlyArray<{
-  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "plan">;
+  readonly key: Extract<InteractionKey, "up" | "down" | "left" | "right" | "enter" | "BTab">;
   readonly label: PlainMessageKey;
   readonly glyph: string;
 }> = [
   { key: "enter", label: "enter", glyph: "Enter" },
   { key: "up", label: "up", glyph: "↑" },
-  { key: "plan", label: "plan", glyph: "Plan" },
+  { key: "BTab", label: "BTab", glyph: "BTab" },
   { key: "left", label: "left", glyph: "←" },
   { key: "down", label: "down", glyph: "↓" },
   { key: "right", label: "right", glyph: "→" },

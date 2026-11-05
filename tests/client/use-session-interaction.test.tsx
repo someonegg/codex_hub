@@ -39,9 +39,9 @@ describe("session interaction state", () => {
     const sendKeys = vi.spyOn(api, "sendKeys").mockResolvedValue(undefined);
     const { result } = renderHook(() => useSessionInteraction("session-a"));
 
-    await act(async () => result.current.sendKeys(["interrupt", "plan", "left"]));
+    await act(async () => result.current.sendKeys(["interrupt", "BTab", "left"]));
 
-    expect(sendKeys).toHaveBeenCalledWith("session-a", ["interrupt", "plan", "left"]);
+    expect(sendKeys).toHaveBeenCalledWith("session-a", ["interrupt", "BTab", "left"]);
     expect(result.current.interactionBusy).toBe(false);
     expect(result.current.error).toBeNull();
   });

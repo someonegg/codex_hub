@@ -151,7 +151,7 @@ describe("session interaction policy", () => {
       "left",
       "right",
       "interrupt",
-      "plan",
+      "BTab",
       "0",
       "1",
       "2",

@@ -115,9 +115,11 @@ describe("interaction HTTP API", () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-    const invalidKeys = await post("keys", { keys: [] });
-    expect(invalidKeys.status).toBe(400);
-    expect(await invalidKeys.json()).toMatchObject({ error: { code: "invalid_json" } });
+    for (const keys of [[], ["plan"]]) {
+      const invalidKeys = await post("keys", { keys });
+      expect(invalidKeys.status).toBe(400);
+      expect(await invalidKeys.json()).toMatchObject({ error: { code: "invalid_json" } });
+    }
     const invalidMessage = await post("messages", { message: " " });
     expect(invalidMessage.status).toBe(400);
     expect(await invalidMessage.json()).toMatchObject({ error: { code: "invalid_message" } });
