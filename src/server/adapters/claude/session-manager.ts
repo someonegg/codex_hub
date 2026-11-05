@@ -1,7 +1,5 @@
-import { realpath, stat } from "node:fs/promises";
 import { setTimeout as delay } from "node:timers/promises";
 
-import { validProjectDirectory } from "../../domain/project-directory.js";
 import { attachCommand, TmuxLauncher } from "../../interaction/tmux-launcher.js";
 import {
   LAUNCH_ATTACH_DELAY_MS,
@@ -9,6 +7,7 @@ import {
   type SessionLaunchOptions,
   type SessionManager,
 } from "../../management/session-manager.js";
+import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 
 export class ClaudeSessionManager implements SessionManager {
@@ -17,13 +16,7 @@ export class ClaudeSessionManager implements SessionManager {
     private readonly tmux = new TmuxLauncher(),
   ) {}
   isValidNativeId = validClaudeId;
-  async resolveDirectory(input: string) {
-    if (!validProjectDirectory(input)) throw new Error("Directory must be an absolute local path");
-    const directory = await realpath(input);
-    if (!(await stat(directory)).isDirectory())
-      throw Object.assign(new Error("Path is not a directory"), { code: "ENOTDIR" });
-    return { directory };
-  }
+  resolveDirectory = resolveDirectory;
   async launch(options: SessionLaunchOptions) {
     if (options.resumeNativeId !== undefined && !this.isValidNativeId(options.resumeNativeId))
       throw new Error("Invalid resume identity");
@@ -73,13 +66,7 @@ export class ClaudeSessionManager implements SessionManager {
       );
     }
   }
-  exitSteps() {
-    return [
-      { keys: ["C-c"] as const, delayMs: 0 },
-      { keys: ["C-c"] as const, delayMs: 1000 },
-      { keys: ["C-c"] as const, delayMs: 1000 },
-    ];
-  }
+  exitSteps = exitSteps;
 }
 export const createClaudeSessionManager = (home: string, socket?: string): SessionManager =>
   new ClaudeSessionManager(home, new TmuxLauncher(socket));

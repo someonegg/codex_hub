@@ -14,7 +14,6 @@ export const baseSession: SessionDetail = {
     home: "default",
     agentName: "Codex",
     agentVersion: null,
-    formatVersion: null,
   },
   createdAt: "2026-07-28T10:00:00Z",
   updatedAt: "2026-07-28T11:00:00Z",

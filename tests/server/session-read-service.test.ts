@@ -235,7 +235,6 @@ const TEST_ORIGIN = {
   home: "test-source",
   agentName: "Test",
   agentVersion: null,
-  formatVersion: null,
 } as const;
 
 function normalizedSession(

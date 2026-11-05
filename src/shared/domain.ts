@@ -12,7 +12,6 @@ export interface SessionOrigin {
   home: string;
   agentName: string;
   agentVersion: string | null;
-  formatVersion: string | null;
 }
 
 export type SessionStatus = "normal" | "live" | "archived";

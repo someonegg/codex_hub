@@ -5,12 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { createClaudeSessionSource } from "../../src/server/adapters/claude/claude-session-source.js";
 import {
-  appendClaudeLines,
   appendClaudeRecords,
   createClaudeState,
 } from "../../src/server/adapters/claude/session-normalizer.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { opaqueIdForParts } from "../../src/server/security/opaque-id.js";
+import { appendClaudeLines } from "../helpers/claude-normalizer.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const id = "11111111-2222-4333-8444-555555555555";
@@ -26,7 +26,7 @@ async function createSessionHome(prefix: string) {
 
 describe("Claude JSONL adapter", () => {
   it("maps line evidence, preserves block order and hides native shell, API copies and subagents", async () => {
-    const state = appendClaudeLines(createClaudeState(id), await lines());
+    const state = await appendClaudeLines(createClaudeState(id), await lines());
     expect(
       state.timeline.map((item) =>
         item.kind === "message" ? item.markdown : `${item.stage}:${item.callId}`,
@@ -57,17 +57,15 @@ describe("Claude JSONL adapter", () => {
     expect(state.timeline[7]).toMatchObject({ itemType: "plan", phase: "response" });
     expect(state.timeline[9]).toMatchObject({ outcome: "aborted" });
     expect(state.timeline[11]).toMatchObject({ outcome: "unavailable" });
-    expect(state.bindings).toHaveLength(1);
-    expect(state.bindings[0]?.attempt).toMatchObject({ valid: true, paneId: "%9" });
   });
 
   it("produces identical immutable timelines for every incremental split", async () => {
     const input = await lines();
-    const full = appendClaudeLines(createClaudeState(id), input);
+    const full = await appendClaudeLines(createClaudeState(id), input);
     for (let split = 0; split <= input.length; split++) {
-      const before = appendClaudeLines(createClaudeState(id), input.slice(0, split));
+      const before = await appendClaudeLines(createClaudeState(id), input.slice(0, split));
       const serialized = JSON.stringify(before.timeline);
-      const after = appendClaudeLines(before, input.slice(split));
+      const after = await appendClaudeLines(before, input.slice(split));
       expect(after).toEqual(full);
       expect(JSON.stringify(before.timeline)).toBe(serialized);
       before.timeline.forEach((item, index) => expect(after.timeline[index]).toBe(item));
@@ -79,8 +77,8 @@ describe("Claude JSONL adapter", () => {
 
   it.each([undefined, null, "max_tokens", "pause_turn", "stop_sequence", "unknown"])(
     "never infers a final phase for %s",
-    (stop_reason) => {
-      const state = appendClaudeLines(createClaudeState(id), [
+    async (stop_reason) => {
+      const state = await appendClaudeLines(createClaudeState(id), [
         JSON.stringify({
           type: "assistant",
           message: { role: "assistant", stop_reason, content: [{ type: "text", text: "body" }] },
@@ -308,7 +306,7 @@ it("caps scan diagnostics but continues accepting valid candidates", async () =>
   expect(snapshot.sessions).toHaveLength(1);
 });
 
-it("retains physical ordering and bounded diagnostics across incremental record batches", () => {
+it("prioritizes decoder diagnostics without hiding identity conflicts across batches", () => {
   const records = [{ ordinal: 2, value: { type: "user", sessionId: "wrong" } }];
   const diagnostics = Array.from({ length: 50 }, (_, index) => ({
     code: "invalid_jsonl",
@@ -321,5 +319,10 @@ it("retains physical ordering and bounded diagnostics across incremental record 
   const incremental = appendClaudeRecords(first, [], diagnostics);
   expect(incremental).toEqual(full);
   expect(full.diagnostics).toHaveLength(50);
-  expect(full.diagnostics[0]).toMatchObject({ code: "conflicting_native_session_id", ordinal: 2 });
+  expect(full.diagnostics[0]).toMatchObject({ code: "invalid_jsonl", ordinal: 3 });
+  expect(full.identityConflict).toBe(true);
+  expect(full.normalizerDiagnostics[0]).toMatchObject({
+    code: "conflicting_native_session_id",
+    ordinal: 2,
+  });
 });

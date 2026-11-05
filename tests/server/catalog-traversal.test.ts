@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { expect, it } from "vitest";
 
 import { JsonlCatalogSource } from "../../src/server/adapters/codex/jsonl-catalog-source.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
+import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { opaqueIdForPath } from "../../src/server/security/opaque-id.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -32,7 +32,7 @@ it("follows root, directory and file links outside the home using logical paths"
   for (const { descriptor } of discovery.entries) {
     expect(descriptor.id).toBe(opaqueIdForPath(descriptor.path));
     expect(descriptor.path.startsWith(join(home, "sessions"))).toBe(true);
-    expect((await new CheckpointedRolloutDecoder().decode(descriptor)).records).toHaveLength(1);
+    expect((await new CheckpointedJsonlDecoder().decode(descriptor)).records).toHaveLength(1);
   }
 });
 

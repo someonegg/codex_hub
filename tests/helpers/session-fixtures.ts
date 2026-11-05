@@ -10,7 +10,6 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
       home: "test",
       agentName: "Test",
       agentVersion: null,
-      formatVersion: null,
     },
     title: "Session",
     workingDirectory: null,

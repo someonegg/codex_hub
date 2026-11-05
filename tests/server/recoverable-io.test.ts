@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 
 import { CodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
+import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const faults = vi.hoisted(() => new Map<string, Error>());
@@ -68,7 +68,7 @@ it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading
     faults.clear();
     expect((await source.refresh()).sessions).toHaveLength(2);
   }
-  const decoder = new CheckpointedRolloutDecoder();
+  const decoder = new CheckpointedJsonlDecoder();
   let failed = true;
   const loading = new CodexSessionSource(home, "load", {
     async decode(descriptor, checkpoint) {

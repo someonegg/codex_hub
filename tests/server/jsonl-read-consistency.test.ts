@@ -5,7 +5,6 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 
 import { createClaudeSessionSource } from "../../src/server/adapters/claude/claude-session-source.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { isExpectedIoError } from "../../src/server/adapters/shared/io-errors.js";
 import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -45,41 +44,38 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   };
 });
 
-it.each([CheckpointedJsonlDecoder, CheckpointedRolloutDecoder])(
-  "%s fixes EOF and uses the opened inode",
-  async (Decoder) => {
-    const home = await createTempDirectory("jsonl-eof-");
-    const path = join(home, "log.jsonl");
-    const first = '{"value":"first"}\n';
-    const second = '{"value":"second"}\n';
-    await writeFile(path, first);
-    const descriptor = {
-      path,
-      id: "test",
-      sourceRelativePath: "log.jsonl",
-      archived: false,
-      size: 0,
-      mtimeMs: 0,
-    };
-    const decoder = new Decoder();
-    hooks.afterStat = () => appendFile(path, second);
-    const before = await decoder.decode(descriptor);
-    expect(before.records.map((r) => r.value.value)).toEqual(["first"]);
-    expect(before.checkpoint.observedEof).toBe(Buffer.byteLength(first));
-    const after = await decoder.decode(descriptor, before.checkpoint);
-    expect(after.records.map((r) => r.value.value)).toEqual(["second"]);
-    hooks.afterStat = async () => {
-      await rename(path, path + ".old");
-      await writeFile(path, '{"value":"replacement with different length"}\n');
-    };
-    const replaced = await decoder.decode(descriptor);
-    expect(replaced.records.map((r) => r.value.value)).toEqual(["first", "second"]);
-    expect(replaced.checkpoint.observedEof).toBe(Buffer.byteLength(first + second));
-    expect((await decoder.decode(descriptor)).records[0]?.value.value).toBe(
-      "replacement with different length",
-    );
-  },
-);
+it.each([CheckpointedJsonlDecoder])("%s fixes EOF and uses the opened inode", async (Decoder) => {
+  const home = await createTempDirectory("jsonl-eof-");
+  const path = join(home, "log.jsonl");
+  const first = '{"value":"first"}\n';
+  const second = '{"value":"second"}\n';
+  await writeFile(path, first);
+  const descriptor = {
+    path,
+    id: "test",
+    sourceRelativePath: "log.jsonl",
+    archived: false,
+    size: 0,
+    mtimeMs: 0,
+  };
+  const decoder = new Decoder();
+  hooks.afterStat = () => appendFile(path, second);
+  const before = await decoder.decode(descriptor);
+  expect(before.records.map((r) => r.value.value)).toEqual(["first"]);
+  expect(before.checkpoint.observedEof).toBe(Buffer.byteLength(first));
+  const after = await decoder.decode(descriptor, before.checkpoint);
+  expect(after.records.map((r) => r.value.value)).toEqual(["second"]);
+  hooks.afterStat = async () => {
+    await rename(path, path + ".old");
+    await writeFile(path, '{"value":"replacement with different length"}\n');
+  };
+  const replaced = await decoder.decode(descriptor);
+  expect(replaced.records.map((r) => r.value.value)).toEqual(["first", "second"]);
+  expect(replaced.checkpoint.observedEof).toBe(Buffer.byteLength(first + second));
+  expect((await decoder.decode(descriptor)).records[0]?.value.value).toBe(
+    "replacement with different length",
+  );
+});
 
 it.each(["ESTALE", "EISDIR", "ELOOP", "EACCES"])(
   "bounds Claude file and directory diagnostics for %s",

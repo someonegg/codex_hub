@@ -1,4 +1,4 @@
-import { isObject } from "./rollout-decoder.js";
+import { isObject } from "../shared/jsonl-decoder.js";
 import { parseUserInputQuestions, type UserInputRequest } from "./user-input-normalizer.js";
 import { nonEmptyString } from "./value-readers.js";
 

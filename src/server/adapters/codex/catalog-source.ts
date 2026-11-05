@@ -9,7 +9,3 @@ export interface CatalogDiscovery {
   entries: CatalogEntry[];
   diagnostics: Diagnostic[];
 }
-
-export interface CodexCatalogSource {
-  discover(): Promise<CatalogDiscovery>;
-}

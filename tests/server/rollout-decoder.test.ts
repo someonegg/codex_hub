@@ -4,12 +4,11 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { MAX_JSONL_LINE_BYTES } from "../../src/server/adapters/codex/limits.js";
-import { CheckpointedRolloutDecoder } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { CheckpointedJsonlDecoder } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
-describe.each([CheckpointedRolloutDecoder, CheckpointedJsonlDecoder])("%s", (Decoder) => {
+describe.each([CheckpointedJsonlDecoder])("%s", (Decoder) => {
   it("keeps physical ordinals, continues after malformed records, and ignores a partial tail", async () => {
     const home = await createTempDirectory("codex-decode-");
     const directory = join(home, "sessions", "2026", "07", "28");
@@ -223,21 +222,12 @@ describe.each([CheckpointedRolloutDecoder, CheckpointedJsonlDecoder])("%s", (Dec
     },
   );
 
-  it("falls back on non-growth and an incompatible decoder version", async () => {
-    const { path, descriptor } = await rollout("checkpoint-compatibility", '{"type":"one"}\n');
+  it("falls back on non-growth", async () => {
+    const { descriptor } = await rollout("checkpoint-compatibility", '{"type":"one"}\n');
     const decoder = new Decoder();
     const first = await decoder.decode(descriptor);
 
     expect((await decoder.decode(descriptor, first.checkpoint)).mode).toBe("full");
-
-    await appendFile(path, '{"type":"two"}\n');
-    const incompatible = {
-      ...first.checkpoint,
-      decoderVersion: first.checkpoint.decoderVersion + 1,
-    };
-    const next = await decoder.decode(descriptor, incompatible);
-    expect(next.mode).toBe("full");
-    expect(next.records.map(({ value }) => value.type)).toEqual(["one", "two"]);
   });
 
   it("preserves UTF-8 spanning stream chunks and CRLF physical ordinals", async () => {

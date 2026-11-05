@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { IdentityResolver } from "../../src/server/adapters/codex/identity-resolver.js";
-import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
 import { MAX_SESSION_TITLE_CHARS } from "../../src/server/domain/session-text.js";
+import { normalizeDecoded, resolveIdentity } from "./session-normalizer.fixtures.js";
 import {
   decodedRollout,
   normalizeFixture,
@@ -56,10 +55,7 @@ describe("session identity and recovery", () => {
         },
       },
     ]);
-    const normalized = new DefaultSessionNormalizer().normalize(
-      decoded,
-      new IdentityResolver().resolve(decoded),
-    );
+    const normalized = normalizeDecoded(decoded, resolveIdentity(decoded));
 
     expect(normalized.session).toEqual(
       expect.objectContaining({
@@ -104,7 +100,7 @@ describe("session identity and recovery", () => {
       },
     ]);
 
-    expect(new IdentityResolver().resolve(decoded)).toMatchObject({
+    expect(resolveIdentity(decoded)).toMatchObject({
       parentThreadId: "parent-session",
       agent: { taskName: "nested-child" },
     });

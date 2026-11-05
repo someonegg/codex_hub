@@ -1,9 +1,9 @@
 import { basename } from "node:path";
 
 import type { DomainAgentIdentity as AgentIdentity } from "../../domain/session-domain.js";
+import type { DecodedRecord } from "../shared/jsonl-decoder.js";
+import { isObject } from "../shared/jsonl-decoder.js";
 import { nonEmptyAgentIdentity, taskNameFromAgentPath } from "./agent-identity.js";
-import type { DecodedRecord, DecodedRollout } from "./rollout-decoder.js";
-import { isObject } from "./rollout-decoder.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import { nonEmptyString } from "./value-readers.js";
 
@@ -107,10 +107,6 @@ export class IdentityResolver {
       archived: state.archived,
       agent: raw?.agent ?? null,
     };
-  }
-
-  resolve(decoded: DecodedRollout): SessionMetadata {
-    return this.metadata(this.append(this.create(decoded.descriptor), decoded.records));
   }
 }
 

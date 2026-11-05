@@ -26,12 +26,14 @@ Trusted homes allow symlinks outside them, through directory depth 8 (root = 0),
 without cycle detection/real-path deduplication. Descriptors, ordering, fallback IDs, and source-relative
 cache keys use logical paths.
 
-Unarchived rollouts cache by size and modification time; permission-only changes
-do not invalidate content. Growing files reuse decoded prefixes when
-decoder/normalizer versions and SHA-256 probes match. Probes cover the first
+Both adapters index content caches by logical source-relative path, size, and
+mtimeMs, without device, inode, ctime, or decoder/normalizer versions. Permission-only
+changes and replacements preserving all three fields do not trigger reads. Growing
+files reuse decoded prefixes when SHA-256 probes match. Probes cover the first
 4 KiB and up to 4 KiB before the previous EOF. One open handle reads to observed
 EOF, starting after the last committed newline. Restart, truncation, same-size
-changes, incompatible state, or probe mismatch require full decoding. A middle
+detected changes, or probe mismatch require full decoding. Checkpoints are generated
+and consumed only within the process; they are not a persisted compatibility protocol. A middle
 rewrite preserving both probes followed by an append can escape detection; see
 [ADR-0012](adr/0012-use-checkpointed-incremental-rollout-loading.md).
 
@@ -42,14 +44,20 @@ failed-load retries continue. Filesystem failures surface when operations run.
 ### Session identity
 
 Native IDs and parent relationships are home-scoped. Duplicates retain the accepted readable rollout, or select the first fully
-readable candidate in existing path order. Ignored duplicates have no publications/bindings/decode cache. Missing native IDs use path identity.
+readable candidate in existing path order. Codex caches only the fingerprint and native ID of confirmed duplicates, without
+timelines, checkpoints, or bindings. Unchanged duplicates skip decoding while the
+winner remains valid; changed candidates and replacements load fully. Missing paths
+leave both caches. Claude identifies duplicate candidates by filename before decoding. Missing native IDs use path identity.
 Shared services check native identity presence; adapters validate format (Codex
 requires UUIDs).
 
 ### Adapter publication and diagnostics
 
 Snapshots are immutable, including nested values; reused references mean unchanged
-content, but equivalent fresh values are valid. Registration requires
+content. An unchanged source signature returns the same snapshot object; each
+refresh still resets and records independent telemetry. Binding events are extracted
+from the current decoded batch, while only project/task metadata accumulates.
+Public origins expose `agentVersion` for display and omit `formatVersion`. Registration requires
 independently unique, nonempty `instanceKey` and `home`, using server domain types.
 
 HTTP path IDs are decoded once after segment splitting: nonempty, at most 1,024
@@ -87,10 +95,12 @@ aggregation; block order determines monotonically increasing item ordinals/IDs.
 Decoder ordinals count physical lines, and only newline-terminated records commit.
 
 Claude uses the shared [checkpointed JSONL reader](#discovery-and-caching).
-Unchanged fingerprints (device, inode, size, mtime, ctime) reuse cached entries;
+Unchanged fingerprints (logical source-relative path, size, mtimeMs) reuse cached entries;
 caches retain checkpoints and parsing state, not full log bytes or full-file digests.
 Both adapters cap lines at 8 MiB, messages at 1,000,000 UTF-16 code units without
-splitting surrogate pairs, and session diagnostics at 50. Claude also caps scan
+splitting surrogate pairs, and session diagnostics at 50. Decoder diagnostics take
+priority over separately retained normalizer diagnostics. Identity conflicts remain
+explicit state even when diagnostics are full. Both adapters cap final source
 diagnostics at 50 while continuing to process valid files. The shared
 [filesystem failure](#adapter-publication-and-diagnostics), duplicate-identity,
 and immutable-publication rules apply; invalid/unavailable duplicate paths allow
@@ -105,7 +115,7 @@ with question IDs `<callId>:<index>`. Structured answers take precedence; explic
 rejection is `aborted`, uninterpretable results are `unavailable`. No approval UI,
 permission-mode, annotations or multi-select domain fields are synthesized.
 
-Project association uses valid V2 shell binding metadata, otherwise the first
+Project association uses valid V1/V2 shell binding metadata, otherwise the first
 valid cwd; execution uses the latest valid cwd. Titles prefer the latest nonempty
 `custom-title`, then `ai-title`, first ordinary user text, then native ID.
 Explicit titles use the first nonempty trimmed line and an 80-character limit;
@@ -450,7 +460,8 @@ Names are trimmed, case-sensitive, and shared across homes/projects;
 `<`, `>`, NUL, CR and LF are rejected. Unassigned responses omit the field.
 
 Latest valid bind overrides the task; empty or invalid task fields preserve the
-earlier value and do not invalidate pane bindings.
+earlier value and do not invalidate pane bindings. Null and missing task fields
+also preserve the existing task; there is no clear operation.
 
 ### Activity observation
 
@@ -563,7 +574,8 @@ moves/deletes native history directly.
 | Delete    | Permanently remove session history through native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds. Running panes remain active. |
 
 Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
-`--worktree`/`--yolo` (off by default), and initial binding instruction. Resume uses
+`--worktree`/`--yolo` (off by default), and an initial native `! printf ...` shell binding command, whose recorded output
+provides the operation marker and project/task association. Resume uses
 `codex resume <UUID>`, trying Working then Project Directory: skip invalid paths,
 fall back only on missing/non-directory paths. Launch from chosen real path,
 retain original project association; reject home/projectDirectory/workingDirectory/worktree overrides.

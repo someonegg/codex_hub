@@ -1,10 +1,11 @@
 import type { TimelineItem, UserInputQuestion } from "../../../shared/domain.js";
 import { validProjectDirectory } from "../../domain/project-directory.js";
-import type { DomainDiagnostic, InteractionBindingAttempt } from "../../domain/session-domain.js";
+import type { DomainDiagnostic } from "../../domain/session-domain.js";
 import { normalizeSessionTitle, truncateText } from "../../domain/session-text.js";
+import { mergeBindingMetadata } from "../shared/binding-protocol.js";
 import type { DecodedRecord } from "../shared/jsonl-decoder.js";
 import { MAX_MESSAGE_CHARS, MAX_SESSION_DIAGNOSTICS } from "../shared/limits.js";
-import { claudeBindingAttempts } from "./interaction.js";
+import { claudeRecordBindings } from "./interaction.js";
 
 type ObjectValue = Record<string, unknown>;
 export const object = (value: unknown): value is ObjectValue =>
@@ -32,16 +33,15 @@ function normalizeQuestions(callId: string, values: readonly unknown[]): UserInp
   });
 }
 
-export interface ClaudeState {
+export interface ClaudeState extends ClaudeIdentityState {
   readonly timeline: readonly TimelineItem[];
   readonly diagnostics: readonly DomainDiagnostic[];
   readonly questions: ReadonlyMap<string, readonly UserInputQuestion[]>;
-  readonly bindings: readonly {
-    time: number;
-    ordinal: number;
-    position: number;
-    attempt: InteractionBindingAttempt;
-  }[];
+  readonly decoderDiagnostics: readonly DomainDiagnostic[];
+  readonly normalizerDiagnostics: readonly DomainDiagnostic[];
+}
+
+export interface ClaudeIdentityState {
   readonly line: number;
   readonly nativeId: string;
   readonly firstCwd: string | null;
@@ -61,7 +61,8 @@ export function createClaudeState(nativeId: string): ClaudeState {
     timeline: [],
     diagnostics: [],
     questions: new Map(),
-    bindings: [],
+    decoderDiagnostics: [],
+    normalizerDiagnostics: [],
     line: 0,
     nativeId,
     firstCwd: null,
@@ -78,40 +79,21 @@ export function createClaudeState(nativeId: string): ClaudeState {
   };
 }
 
-/** Each committed line is independent; published items are never backfilled. */
-export function appendClaudeLines(previous: ClaudeState, lines: readonly string[]): ClaudeState {
-  const records: DecodedRecord[] = [];
-  const diagnostics: DomainDiagnostic[] = [];
-  lines.forEach((line, index) => {
-    try {
-      const value: unknown = JSON.parse(line);
-      if (object(value)) records.push({ ordinal: previous.line + index + 1, value });
-    } catch {
-      if (line.trim() && diagnostics.length < MAX_SESSION_DIAGNOSTICS)
-        diagnostics.push({
-          code: "invalid_jsonl",
-          severity: "warning",
-          message: "Invalid Claude JSONL line",
-          ordinal: previous.line + index + 1,
-        });
-    }
-  });
-  return {
-    ...appendClaudeRecords(previous, records, diagnostics),
-    line: previous.line + lines.length,
-  };
-}
 export function appendClaudeRecords(
   previous: ClaudeState,
   records: readonly DecodedRecord[],
   diagnostics: readonly DomainDiagnostic[] = [],
 ): ClaudeState {
+  if (
+    records.length === 0 &&
+    JSON.stringify(previous.decoderDiagnostics) === JSON.stringify(diagnostics)
+  )
+    return previous;
   const state = {
     ...previous,
     timeline: [...previous.timeline],
-    diagnostics: [...previous.diagnostics],
+    diagnostics: [...previous.normalizerDiagnostics],
     questions: new Map(previous.questions),
-    bindings: [...previous.bindings],
   };
   type NewItem<T = TimelineItem> = T extends TimelineItem ? Omit<T, "id" | "ordinal"> : never;
   const emit = (item: NewItem) => {
@@ -128,34 +110,15 @@ export function appendClaudeRecords(
     else if (state.diagnostics.length < MAX_SESSION_DIAGNOSTICS) state.diagnostics.push(diagnostic);
     state.diagnostics.length = Math.min(state.diagnostics.length, MAX_SESSION_DIAGNOSTICS);
   };
-  for (const diagnostic of diagnostics) retainDiagnostic(diagnostic);
+
   for (const { ordinal, value: row } of records) {
     state.line = ordinal;
     if (!object(row) || row.isSidechain === true || row.parent_tool_use_id != null) continue;
     // API copies and progress/subagent notifications never supply conversation or bindings.
     if (!["user", "assistant", "custom-title", "ai-title", "system"].includes(String(row.type)))
       continue;
-    const identities = [string(row.sessionId), string(row.session_id)].filter(Boolean);
-    if (identities.some((identity) => identity !== state.nativeId)) {
-      state.identityConflict = true;
-      retainDiagnostic({
-        code: "conflicting_native_session_id",
-        severity: "warning",
-        message: "Claude record identity conflicts with its session file",
-        ordinal: state.line,
-      });
-      continue;
-    }
+    if (!appendClaudeIdentity(state, row, ordinal, retainDiagnostic)) continue;
     const timestamp = string(row.timestamp);
-    if (timestamp && Number.isFinite(Date.parse(timestamp))) {
-      state.createdAt ??= timestamp;
-      state.updatedAt = timestamp;
-    }
-    if (validProjectDirectory(row.cwd)) {
-      state.firstCwd ??= row.cwd;
-      state.cwd = row.cwd;
-    }
-    state.version = string(row.version) ?? state.version;
     if (row.type === "custom-title") {
       state.customTitle = normalizeSessionTitle(string(row.customTitle)) || state.customTitle;
       continue;
@@ -200,21 +163,6 @@ export function appendClaudeRecords(
           )
         ) {
           flush();
-          // A wrapper must start the block: quoted text and tool results cannot bind panes.
-          if (/^\s*<bash-(?:input|stdout|stderr)>/.test(content)) {
-            for (const attempt of claudeBindingAttempts(content, state.line)) {
-              state.bindings.push({
-                time: timestamp ? Date.parse(timestamp) || 0 : 0,
-                ordinal: state.line,
-                position: state.bindings.length,
-                attempt,
-              });
-              if (attempt.valid) {
-                state.project = attempt.projectDirectory ?? state.project;
-                if (attempt.taskName !== undefined) state.taskName = attempt.taskName;
-              }
-            }
-          }
           continue;
         }
         text.push(content);
@@ -298,5 +246,47 @@ export function appendClaudeRecords(
     }
     flush();
   }
-  return state;
+  const metadata = mergeBindingMetadata(
+    { projectDirectory: state.project, taskName: state.taskName },
+    records.flatMap(claudeRecordBindings).map((event) => event.attempt),
+  );
+  return {
+    ...state,
+    project: metadata.projectDirectory,
+    taskName: metadata.taskName,
+    decoderDiagnostics: diagnostics,
+    normalizerDiagnostics: state.diagnostics,
+    diagnostics: [...diagnostics, ...state.diagnostics].slice(0, MAX_SESSION_DIAGNOSTICS),
+  };
+}
+
+/** Native identity and directory/version/time evidence is accumulated separately from content. */
+function appendClaudeIdentity(
+  state: { -readonly [K in keyof ClaudeIdentityState]: ClaudeIdentityState[K] },
+  row: ObjectValue,
+  ordinal: number,
+  retainDiagnostic: (diagnostic: DomainDiagnostic) => void,
+): boolean {
+  const identities = [string(row.sessionId), string(row.session_id)].filter(Boolean);
+  if (identities.some((identity) => identity !== state.nativeId)) {
+    state.identityConflict = true;
+    retainDiagnostic({
+      code: "conflicting_native_session_id",
+      severity: "warning",
+      message: "Claude record identity conflicts with its session file",
+      ordinal: ordinal,
+    });
+    return false;
+  }
+  const timestamp = string(row.timestamp);
+  if (timestamp && Number.isFinite(Date.parse(timestamp))) {
+    state.createdAt ??= timestamp;
+    state.updatedAt = timestamp;
+  }
+  if (validProjectDirectory(row.cwd)) {
+    state.firstCwd ??= row.cwd;
+    state.cwd = row.cwd;
+  }
+  state.version = string(row.version) ?? state.version;
+  return true;
 }

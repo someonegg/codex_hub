@@ -19,16 +19,25 @@ import type {
   SessionSourceSnapshot,
   SourceSessionEntry,
 } from "../../source/session-source.js";
+import { mergeBindingMetadata } from "../shared/binding-protocol.js";
+import {
+  CheckpointedJsonlDecoder,
+  type JsonlCheckpoint,
+  type JsonlDecoder,
+} from "../shared/jsonl-decoder.js";
+import { MAX_SESSION_DIAGNOSTICS } from "../shared/limits.js";
+import {
+  acceptedPathOrder,
+  type FileFingerprint,
+  fingerprintOf,
+  mutableTelemetry,
+  type RefreshTelemetry,
+  sameFingerprint,
+} from "../shared/source-cache.js";
 import { type IdentityAccumulatorState, IdentityResolver } from "./identity-resolver.js";
 import { codexBindingAttemptsFrom, codexInteraction } from "./interaction-parser.js";
 import { isExpectedIoError } from "./io-errors.js";
 import { JsonlCatalogSource } from "./jsonl-catalog-source.js";
-import { DECODER_VERSION, NORMALIZER_VERSION } from "./limits.js";
-import {
-  CheckpointedRolloutDecoder,
-  type RolloutCheckpoint,
-  type RolloutDecoder,
-} from "./rollout-decoder.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
 import { SessionIndexReader } from "./session-index-reader.js";
 import {
@@ -37,14 +46,6 @@ import {
   type SessionNormalizerState,
 } from "./session-normalizer.js";
 
-interface FileFingerprint {
-  readonly sourceRelativePath: string;
-  readonly size: number;
-  readonly mtimeMs: number;
-  readonly decoderVersion: number;
-  readonly normalizerVersion: number;
-}
-
 interface CodexCacheEntry {
   readonly descriptor: RolloutDescriptor;
   readonly fingerprint: FileFingerprint;
@@ -52,40 +53,23 @@ interface CodexCacheEntry {
   readonly threadId: string | null;
   readonly parentThreadId: string | null;
   readonly origin: DomainSessionOrigin;
-  readonly checkpoint: RolloutCheckpoint;
+  readonly checkpoint: JsonlCheckpoint;
   readonly identityState: IdentityAccumulatorState;
   readonly normalizerState: SessionNormalizerState;
   readonly bindProjectDirectory: string | null;
 }
 
-export interface CodexRefreshTelemetry {
-  readonly fullFiles: number;
-  readonly appendFiles: number;
-  readonly probeBytes: number;
-  readonly decodeBytes: number;
-  readonly decodeMs: number;
-  readonly normalizeMs: number;
-}
-
-const EMPTY_TELEMETRY: CodexRefreshTelemetry = {
-  fullFiles: 0,
-  appendFiles: 0,
-  probeBytes: 0,
-  decodeBytes: 0,
-  decodeMs: 0,
-  normalizeMs: 0,
-};
-
 export class CodexSessionSource implements SessionSource {
   readonly descriptor: SessionSourceDescriptor;
   #cache = new Map<string, CodexCacheEntry>();
+  #duplicates = new Map<string, { fingerprint: FileFingerprint; threadId: string }>();
   #snapshot: SessionSourceSnapshot | null = null;
-  #lastRefreshTelemetry: CodexRefreshTelemetry = EMPTY_TELEMETRY;
+  #lastRefreshTelemetry: RefreshTelemetry = mutableTelemetry();
 
   constructor(
     private readonly codexHome: string,
     instanceKey: string,
-    private readonly decoder: RolloutDecoder = new CheckpointedRolloutDecoder(),
+    private readonly decoder: JsonlDecoder = new CheckpointedJsonlDecoder(),
     private readonly identity = new IdentityResolver(),
     private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
     private readonly sessionIndex = new SessionIndexReader(codexHome),
@@ -113,6 +97,7 @@ export class CodexSessionSource implements SessionSource {
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
     });
     const nextCache = new Map<string, CodexCacheEntry>();
+    const nextDuplicates = new Map<string, { fingerprint: FileFingerprint; threadId: string }>();
     const binds = new Map<string, PaneBindEvent[]>();
     const telemetry = mutableTelemetry();
     const unavailableRollouts: string[] = [];
@@ -120,13 +105,25 @@ export class CodexSessionSource implements SessionSource {
     const acceptedThreads = new Set<string>();
     const duplicateThreads = new Set<string>();
     // Previously accepted paths take precedence; discovery order breaks first-scan ties.
-    const candidates = [...discovery.entries].sort(
-      (left, right) =>
-        Number(this.#cache.has(right.descriptor.sourceRelativePath)) -
-        Number(this.#cache.has(left.descriptor.sourceRelativePath)),
+    const candidates = [...discovery.entries].sort((left, right) =>
+      acceptedPathOrder(
+        this.#cache,
+        left.descriptor.sourceRelativePath,
+        right.descriptor.sourceRelativePath,
+      ),
     );
     for (const { descriptor } of candidates) {
       const fingerprint = fingerprintOf(descriptor);
+      const duplicate = this.#duplicates.get(descriptor.sourceRelativePath);
+      if (
+        duplicate &&
+        sameFingerprint(duplicate.fingerprint, fingerprint) &&
+        acceptedThreads.has(duplicate.threadId)
+      ) {
+        nextDuplicates.set(descriptor.sourceRelativePath, duplicate);
+        duplicateThreads.add(duplicate.threadId);
+        continue;
+      }
       const cached = this.#cache.get(descriptor.sourceRelativePath);
       let loaded: CodexCacheEntry | null;
       if (cached !== undefined && sameFingerprint(cached.fingerprint, fingerprint)) {
@@ -141,6 +138,10 @@ export class CodexSessionSource implements SessionSource {
       }
       if (loaded.threadId !== null) {
         if (acceptedThreads.has(loaded.threadId)) {
+          nextDuplicates.set(descriptor.sourceRelativePath, {
+            fingerprint,
+            threadId: loaded.threadId,
+          });
           duplicateThreads.add(loaded.threadId);
           binds.delete(descriptor.id);
           continue;
@@ -162,7 +163,7 @@ export class CodexSessionSource implements SessionSource {
           ordinal: null,
         }),
       ),
-    ];
+    ].slice(0, MAX_SESSION_DIAGNOSTICS);
     for (const entry of sessions) {
       for (const event of binds.get(entry.normalized.session.id) ?? []) {
         this.bindings.submit({
@@ -182,13 +183,14 @@ export class CodexSessionSource implements SessionSource {
     });
     const snapshot = { signature, sessions, diagnostics };
     this.#cache = nextCache;
+    this.#duplicates = nextDuplicates;
     this.#lastRefreshTelemetry = telemetry;
     if (this.#snapshot?.signature === signature) return this.#snapshot;
     this.#snapshot = snapshot;
     return snapshot;
   }
 
-  lastRefreshTelemetry(): CodexRefreshTelemetry {
+  lastRefreshTelemetry(): RefreshTelemetry {
     return { ...this.#lastRefreshTelemetry };
   }
 
@@ -201,16 +203,12 @@ export class CodexSessionSource implements SessionSource {
     descriptor: RolloutDescriptor,
     fingerprint: FileFingerprint,
     cached: CodexCacheEntry | undefined,
-    telemetry: MutableCodexRefreshTelemetry,
+    telemetry: RefreshTelemetry,
     binds: Map<string, PaneBindEvent[]>,
   ): Promise<CodexCacheEntry | null> {
     try {
-      const appendCheckpoint =
-        cached?.fingerprint.normalizerVersion === NORMALIZER_VERSION
-          ? cached.checkpoint
-          : undefined;
       const decodeStartedAt = performance.now();
-      const decoded = await this.decoder.decode(descriptor, appendCheckpoint);
+      const decoded = await this.decoder.decode(descriptor, cached?.checkpoint);
       telemetry.decodeMs += performance.now() - decodeStartedAt;
       telemetry.probeBytes += decoded.telemetry.probeBytes;
       telemetry.decodeBytes += decoded.telemetry.decodeBytes;
@@ -253,20 +251,30 @@ export class CodexSessionSource implements SessionSource {
         sameOrigin(origin, cached.origin)
           ? cached.normalized
           : this.normalizer.materialize(normalizerState, metadata, origin);
-      let bindProjectDirectory =
-        decoded.mode === "append" ? (cached?.bindProjectDirectory ?? null) : null;
-      let taskName = decoded.mode === "append" ? cached?.normalized.session.taskName : undefined;
-      for (const { attempt } of bindingEvents) {
-        if (!attempt.valid) continue;
-        if (attempt.projectDirectory) bindProjectDirectory = attempt.projectDirectory;
-        if (attempt.taskName) taskName = attempt.taskName;
-      }
+      const { projectDirectory: bindProjectDirectory, taskName } = mergeBindingMetadata(
+        {
+          projectDirectory:
+            decoded.mode === "append" ? (cached?.bindProjectDirectory ?? null) : null,
+          taskName:
+            decoded.mode === "append" ? (cached?.normalized.session.taskName ?? null) : null,
+        },
+        bindingEvents.map((event) => event.attempt),
+      );
       const projectDirectory = bindProjectDirectory ?? baseNormalized.session.workingDirectory;
-      const normalized = {
-        ...baseNormalized,
-        session: { ...baseNormalized.session, projectDirectory, taskName },
-        interaction: codexInteraction(projectDirectory, taskName ?? null),
-      };
+      const normalized =
+        baseNormalized === cached?.normalized &&
+        projectDirectory === cached.normalized.session.projectDirectory &&
+        (taskName ?? undefined) === cached.normalized.session.taskName
+          ? cached.normalized
+          : {
+              ...baseNormalized,
+              session: {
+                ...baseNormalized.session,
+                projectDirectory,
+                taskName: taskName ?? undefined,
+              },
+              interaction: codexInteraction(projectDirectory, taskName ?? null),
+            };
       telemetry.normalizeMs += performance.now() - normalizeStartedAt;
       return {
         descriptor,
@@ -292,7 +300,6 @@ export class CodexSessionSource implements SessionSource {
       home: this.descriptor.home,
       agentName: this.descriptor.displayName,
       agentVersion,
-      formatVersion: null,
     };
   }
 }
@@ -344,45 +351,11 @@ function rolloutUnavailableDiagnostic(): DomainDiagnostic {
   };
 }
 
-function fingerprintOf(descriptor: RolloutDescriptor): FileFingerprint {
-  return {
-    sourceRelativePath: descriptor.sourceRelativePath,
-    size: descriptor.size,
-    mtimeMs: descriptor.mtimeMs,
-    decoderVersion: DECODER_VERSION,
-    normalizerVersion: NORMALIZER_VERSION,
-  };
-}
-
-function sameFingerprint(left: FileFingerprint, right: FileFingerprint): boolean {
-  return (
-    left.sourceRelativePath === right.sourceRelativePath &&
-    left.size === right.size &&
-    left.mtimeMs === right.mtimeMs &&
-    left.decoderVersion === right.decoderVersion &&
-    left.normalizerVersion === right.normalizerVersion
-  );
-}
-
-interface MutableCodexRefreshTelemetry {
-  fullFiles: number;
-  appendFiles: number;
-  probeBytes: number;
-  decodeBytes: number;
-  decodeMs: number;
-  normalizeMs: number;
-}
-
-function mutableTelemetry(): MutableCodexRefreshTelemetry {
-  return { ...EMPTY_TELEMETRY };
-}
-
 function sameOrigin(left: DomainSessionOrigin, right: DomainSessionOrigin): boolean {
   return (
     left.sourceType === right.sourceType &&
     left.home === right.home &&
     left.agentName === right.agentName &&
-    left.agentVersion === right.agentVersion &&
-    left.formatVersion === right.formatVersion
+    left.agentVersion === right.agentVersion
   );
 }

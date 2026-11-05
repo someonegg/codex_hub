@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { type FileHandle, open } from "node:fs/promises";
 
 import type { DomainDiagnostic as Diagnostic } from "../../domain/session-domain.js";
-import { DECODER_VERSION, MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
+import { MAX_JSONL_LINE_BYTES, MAX_SESSION_DIAGNOSTICS } from "./limits.js";
 
 const PROBE_BYTES = 4 * 1024;
 
@@ -22,7 +22,6 @@ export interface JsonlProbe {
 }
 
 export interface JsonlCheckpoint {
-  readonly decoderVersion: number;
   readonly observedEof: number;
   readonly committedOffset: number;
   readonly physicalLineCount: number;
@@ -46,7 +45,6 @@ export interface DecodedJsonl {
 }
 
 export interface IncrementalDecodedJsonl extends DecodedJsonl {
-  readonly fingerprint: string;
   /** Newly retained decoder diagnostics produced by this invocation. */
   readonly batchDiagnostics: Diagnostic[];
   readonly mode: "full" | "append";
@@ -93,7 +91,6 @@ export class CheckpointedJsonlDecoder implements JsonlDecoder {
       ]);
       const checkpointDiagnostics = decoded.diagnostics.map(cloneDiagnostic);
       const nextCheckpoint: JsonlCheckpoint = {
-        decoderVersion: DECODER_VERSION,
         observedEof,
         committedOffset: decoded.committedOffset,
         physicalLineCount: decoded.physicalLineCount,
@@ -103,7 +100,6 @@ export class CheckpointedJsonlDecoder implements JsonlDecoder {
       };
       return {
         descriptor,
-        fingerprint: JSON.stringify([info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs]),
         records: decoded.records,
         diagnostics: checkpointDiagnostics.map(cloneDiagnostic),
         batchDiagnostics: decoded.batchDiagnostics.map(cloneDiagnostic),
@@ -286,30 +282,7 @@ function isCompatibleCheckpoint(
   checkpoint: JsonlCheckpoint | undefined,
   observedEof: number,
 ): checkpoint is JsonlCheckpoint {
-  return (
-    checkpoint !== undefined &&
-    checkpoint.decoderVersion === DECODER_VERSION &&
-    Number.isSafeInteger(checkpoint.observedEof) &&
-    Number.isSafeInteger(checkpoint.committedOffset) &&
-    Number.isSafeInteger(checkpoint.physicalLineCount) &&
-    checkpoint.observedEof >= checkpoint.committedOffset &&
-    checkpoint.committedOffset >= 0 &&
-    checkpoint.physicalLineCount >= 0 &&
-    checkpoint.diagnostics.length <= MAX_SESSION_DIAGNOSTICS &&
-    validProbeGeometry(checkpoint) &&
-    observedEof > checkpoint.observedEof
-  );
-}
-
-function validProbeGeometry(checkpoint: JsonlCheckpoint): boolean {
-  const headLength = Math.min(PROBE_BYTES, checkpoint.observedEof);
-  const tailOffset = Math.max(0, checkpoint.observedEof - PROBE_BYTES);
-  return (
-    checkpoint.headProbe.offset === 0 &&
-    checkpoint.headProbe.length === headLength &&
-    checkpoint.tailProbe.offset === tailOffset &&
-    checkpoint.tailProbe.length === checkpoint.observedEof - tailOffset
-  );
+  return checkpoint !== undefined && observedEof > checkpoint.observedEof;
 }
 
 async function validateProbes(
@@ -366,13 +339,6 @@ async function readProbe(
   handle: FileHandle,
   expected: JsonlProbe,
 ): Promise<{ matches: boolean; bytesRead: number; contents: Buffer }> {
-  if (
-    !Number.isSafeInteger(expected.offset) ||
-    expected.offset < 0 ||
-    !Number.isSafeInteger(expected.length) ||
-    expected.length < 0
-  )
-    return { matches: false, bytesRead: 0, contents: Buffer.alloc(0) };
   const actual = await probeAt(handle, expected.offset, expected.length);
   const contents = actual.contents;
   return {

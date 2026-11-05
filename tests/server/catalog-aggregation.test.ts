@@ -146,7 +146,6 @@ function sourceEntry(
     home: "replaced-by-source",
     agentName: "Test",
     agentVersion: null,
-    formatVersion: null,
   };
   return {
     localId: nativeSessionId,

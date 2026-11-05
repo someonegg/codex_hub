@@ -11,7 +11,6 @@ const session = domainSession({
     home: "test-source",
     agentName: "Test Agent",
     agentVersion: "1.0.0",
-    formatVersion: null,
   },
   title: "Session one",
   workingDirectory: "/project",
@@ -52,6 +51,8 @@ describe("session API mapping", () => {
     expect(session.childIds).toEqual(["child"]);
     expect(session.diagnostics[0]!.message).toBe("Partial");
     expect(detail.origin).not.toBe(session.origin);
+    expect(detail.origin).not.toHaveProperty("formatVersion");
+    expect(detail.origin.agentVersion).toBe("1.0.0");
   });
 
   it("excludes child-only projects while retaining child sessions in the catalog", () => {

@@ -128,7 +128,6 @@ const TEST_ORIGIN = {
   home: "test",
   agentName: "Test",
   agentVersion: null,
-  formatVersion: null,
 } as const;
 
 function mutableSource(

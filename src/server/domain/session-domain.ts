@@ -23,7 +23,6 @@ export interface DomainSessionOrigin {
   readonly home: string;
   readonly agentName: string;
   readonly agentVersion: string | null;
-  readonly formatVersion: string | null;
 }
 
 export type InteractionBindingAttempt =

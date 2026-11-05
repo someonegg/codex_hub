@@ -1,44 +1,17 @@
-import { isAbsolute } from "node:path";
-
 import { TASK_NAME_ERROR, validTaskName } from "../../../shared/task-name.js";
 import { validProjectDirectory } from "../../domain/project-directory.js";
 import type {
   DomainAgentInteraction,
   InteractionBindingAttempt,
-  InteractionKeyBindings,
 } from "../../domain/session-domain.js";
-import type { DecodedRecord } from "./rollout-decoder.js";
-import { isObject } from "./rollout-decoder.js";
+import { bindingAttempts } from "../shared/binding-protocol.js";
+import type { DecodedRecord } from "../shared/jsonl-decoder.js";
+import { isObject } from "../shared/jsonl-decoder.js";
 
 const BINDING_MARKER = "AHUB_TMUX_BIND_V1";
 const TASK_BINDING_MARKER = "AHUB_TMUX_BIND_V2";
 
-export const CODEX_INTERACTION_KEY_BINDINGS = {
-  enter: "Enter",
-  up: "Up",
-  down: "Down",
-  left: "Left",
-  right: "Right",
-  BTab: "BTab",
-  "0": "0",
-  "1": "1",
-  "2": "2",
-  "3": "3",
-  "4": "4",
-  "5": "5",
-  "6": "6",
-  "7": "7",
-  "8": "8",
-  "9": "9",
-} as const satisfies InteractionKeyBindings;
-
-// Clear terminal input and the previous Esc state before interrupting.
-export function codexInterruptSteps() {
-  return [
-    { keys: ["C-u"], delayMs: 0 },
-    { keys: ["Escape"], delayMs: 100 },
-  ] as const;
-}
+import { DEFAULT_KEY_BINDINGS, interruptSteps } from "../shared/session-management.js";
 
 export function codexInteraction(
   projectDirectory?: string | null,
@@ -47,8 +20,8 @@ export function codexInteraction(
   return {
     transport: "tmux",
     bindingCommand: codexBindingCommand(undefined, projectDirectory, taskName),
-    keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
-    interruptSteps: codexInterruptSteps,
+    keyBindings: DEFAULT_KEY_BINDINGS,
+    interruptSteps,
   };
 }
 
@@ -61,40 +34,12 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     return [];
   }
   const text = contentText(payload.content);
-  if (text === null || !text.includes("<user_shell_command>")) return [];
+  if (text === null || !/^\s*<user_shell_command>/.test(text)) return [];
   const shellBlocks = [...text.matchAll(/<user_shell_command>([\s\S]*?)<\/user_shell_command>/g)];
   const found: InteractionBindingAttempt[] = [];
   for (const block of shellBlocks) {
     const lines = (block[1] ?? "").split("\n").map((line) => line.replace(/\r$/, ""));
-    for (let index = 0; index < lines.length; index += 1) {
-      if (lines[index] !== BINDING_MARKER && lines[index] !== TASK_BINDING_MARKER) continue;
-      let taskName: string | undefined;
-      if (lines[index] === TASK_BINDING_MARKER) {
-        try {
-          const value: unknown = JSON.parse(lines[index + 5] ?? "");
-          if (validTaskName(value)) taskName = value.trim() || undefined;
-        } catch {
-          // Invalid optional metadata does not invalidate the pane binding.
-        }
-      }
-      const project = lines[index + 4];
-      const tmux = lines[index + 1] ?? "";
-      const paneId = lines[index + 2] ?? "";
-      const operationId = lines[index + 3] ?? "";
-      found.push(
-        isAbsolute(tmux) && /^%\d+$/.test(paneId) && (!operationId || validOperationId(operationId))
-          ? {
-              ordinal: record.ordinal,
-              valid: true,
-              ...(taskName !== undefined ? { taskName } : {}),
-              socketPath: tmux,
-              paneId,
-              ...(operationId ? { operationId } : {}),
-              ...(validProjectDirectory(project) ? { projectDirectory: project } : {}),
-            }
-          : { ordinal: record.ordinal, valid: false },
-      );
-    }
+    found.push(...bindingAttempts(lines, record.ordinal, validOperationId));
   }
   const lastOpen = text.lastIndexOf("<user_shell_command>");
   const lastClose = text.lastIndexOf("</user_shell_command>");

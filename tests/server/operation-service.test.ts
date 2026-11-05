@@ -48,7 +48,6 @@ function session(id = "session", operationId?: string): DomainSession {
       home: "test",
       agentName: "Codex",
       agentVersion: null,
-      formatVersion: null,
     },
   };
 }

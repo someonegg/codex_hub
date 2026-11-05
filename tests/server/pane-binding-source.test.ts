@@ -215,8 +215,8 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(1);
   await sessions.refresh();
-  // The accepted file is cached, but ignored files have no decode checkpoint.
-  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 1, appendFiles: 0 });
+  // Unchanged duplicate candidates retain only their identity and fingerprint.
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(1);
@@ -225,18 +225,18 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   await sessions.refresh();
   expect((await sessions.managementSnapshot()).sessions).toMatchObject([{ id, title: "B" }]);
   expect(bindings.latest(id)).toMatchObject({ paneId: "%1" });
-  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 2, appendFiles: 0 });
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(1);
   await unlink(b);
   await sessions.refresh();
-  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 2, appendFiles: 0 });
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 1, appendFiles: 0 });
   expect((await sessions.managementSnapshot()).sessions).toMatchObject([{ id, title: "A" }]);
   expect(bindings.latest(id)).toMatchObject({ paneId: "%2" });
   await appendFile(a, message(3, shell(socket, "%5")));
   await sessions.refresh();
-  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 1, appendFiles: 1 });
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 1 });
   expect(bindings.latest(id)).toMatchObject({ paneId: "%5" });
   await unlink(c);
   await sessions.refresh();

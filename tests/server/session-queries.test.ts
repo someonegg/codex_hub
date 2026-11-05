@@ -21,7 +21,6 @@ const session: DomainSession = {
     home: "test",
     agentName: "Test",
     agentVersion: null,
-    formatVersion: null,
   },
   projectDirectory: null,
   workingDirectory: null,

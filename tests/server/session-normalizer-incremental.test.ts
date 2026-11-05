@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { IdentityResolver } from "../../src/server/adapters/codex/identity-resolver.js";
-import type { DecodedRecord } from "../../src/server/adapters/codex/rollout-decoder.js";
 import { DefaultSessionNormalizer } from "../../src/server/adapters/codex/session-normalizer.js";
+import type { DecodedRecord } from "../../src/server/adapters/shared/jsonl-decoder.js";
 import { sessionMetadata } from "./session-normalizer.fixtures.js";
 
 const descriptor = {
