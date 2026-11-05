@@ -47,7 +47,6 @@ export interface SessionMessagesQuery {
 
 export interface SessionMessagesResponse {
   session: SessionDetail;
-  live: boolean;
   stateRevision: UpdateRevision;
   interaction: InteractionResponse;
   items: TimelineItem[];

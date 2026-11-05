@@ -54,7 +54,6 @@ export function readContext(nextAfter = 0, hasMore = true) {
 
 export const firstPage: SessionMessagesResponse = {
   ...readContext(),
-  live: false,
   interaction: { supported: false, attachCommand: null },
   stateRevision: UPDATE_REVISION,
   items: [

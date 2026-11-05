@@ -27,7 +27,7 @@ it("serves messages from the reader snapshot, with validated pagination and miss
   expect(
     first.items.every((item: { kind: string }) => ["message", "user_input"].includes(item.kind)),
   ).toBe(true);
-  expect(first.live).toBe(false);
+  expect(first.session.status).toBe("normal");
   expect(first.interaction).toEqual({ supported: false, attachCommand: null });
   expect(first).not.toHaveProperty("interactionSession");
   expect(first.stateRevision).toMatch(/^[\w-]{43}$/);

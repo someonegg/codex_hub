@@ -45,7 +45,7 @@ ahub-cli session exit SESSION_ID --json
 
 - Prefer `--json`. Single inspection returns one object; follow emits NDJSON. Parse each line independently as a result or `error` object. Text follow emits separate blocks.
 - Without `--after`, inspect returns the latest 10 visible records; `--after 0` starts from the beginning. Continue with the returned `nextAfter`.
-- Follow drains available messages immediately, then long-polls for messages or state changes. `--count N` limits polling rounds, including rounds with no changes.
+- Follow drains available messages immediately, then long-polls for messages or state changes. Changes only to `session.updatedAt` do not wake a wait or produce output. `--count N` limits polling rounds, including rounds with no changes.
 - Use continuous follow when the execution tool supports background processes and incremental output; otherwise use finite rounds and continue from the last received `nextAfter`. Allow opportunities to report progress to the user.
 - Follow prints the first result, then only new messages or state changes. Unchanged rounds are silent; use inspect when you need to confirm the current state.
 - Read `role`, `phase`, `itemType`, and message body. `phase=update` usually indicates progress; `phase=response` signals a reply. Neither idle nor response ends follow; verify completion separately.

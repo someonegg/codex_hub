@@ -43,10 +43,10 @@ it("waits for live, connected, idle launch readiness", async () => {
   vi.useFakeTimers();
   const connected = { supported: true, state: "connected", activity: "idle" };
   const responses = [
-    { live: false, interaction: connected },
-    { live: true, interaction: { ...connected, state: "disconnected" } },
-    { live: true, interaction: { ...connected, activity: "working" } },
-    { live: true, interaction: connected },
+    { session: { status: "normal" }, interaction: connected },
+    { session: { status: "live" }, interaction: { ...connected, state: "disconnected" } },
+    { session: { status: "live" }, interaction: { ...connected, activity: "working" } },
+    { session: { status: "live" }, interaction: connected },
   ];
   const api = vi.fn(async (_path: string) => responses.shift());
   const request = async <T>(path: string): Promise<T> => (await api(path)) as T;
