@@ -188,18 +188,19 @@ ahub-cli diff delete <uuid>
 
 將選項傳給 `codex-hub`，修改後重啟。完整命令幫助見 `codex-hub --help`。
 
-| 選項                           | 預設值             | 用途                                               |
-| ------------------------------ | ------------------ | -------------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex` | 指定一個或多個 Codex Home                          |
-| `--host <host>`                | `127.0.0.1`        | 監聽位址                                           |
-| `--port <port>`                | `4173`             | 監聽連接埠，`0` 自動選擇閒置連接埠                 |
-| `--home-dir <path>`            | `~/.codex-hub`     | Hub 資料目錄，包含 `uploads/` 和 `hosting/`        |
-| `--hosting`                    | 關閉               | 啟用靜態網頁託管                                   |
-| `--tmux-socket <path>`         | tmux 預設值        | 自訂 tmux socket                                   |
-| `--ssl`                        | 關閉               | 啟用 HTTPS，需同時指定 `--ssl-cert` 和 `--ssl-key` |
-| `--ssl-cert <path>`            | 無                 | PEM 伺服器憑證或憑證鏈                             |
-| `--ssl-key <path>`             | 無                 | PEM 私鑰                                           |
-| `--ssl-ca <path>`              | 無                 | 要求用戶端提供由此 CA 簽發的憑證                   |
+| 選項                            | 預設值             | 用途                                               |
+| ------------------------------- | ------------------ | -------------------------------------------------- |
+| `--codex-home <nickname=path>`  | `default=~/.codex` | 指定一個或多個 Codex Home                          |
+| `--claude-home <nickname=path>` | 關閉               | 啟用一個或多個 Claude Code Home                    |
+| `--host <host>`                 | `127.0.0.1`        | 監聽位址                                           |
+| `--port <port>`                 | `4173`             | 監聽連接埠，`0` 自動選擇閒置連接埠                 |
+| `--home-dir <path>`             | `~/.codex-hub`     | Hub 資料目錄，包含 `uploads/` 和 `hosting/`        |
+| `--hosting`                     | 關閉               | 啟用靜態網頁託管                                   |
+| `--tmux-socket <path>`          | tmux 預設值        | 自訂 tmux socket                                   |
+| `--ssl`                         | 關閉               | 啟用 HTTPS，需同時指定 `--ssl-cert` 和 `--ssl-key` |
+| `--ssl-cert <path>`             | 無                 | PEM 伺服器憑證或憑證鏈                             |
+| `--ssl-key <path>`              | 無                 | PEM 私鑰                                           |
+| `--ssl-ca <path>`               | 無                 | 要求用戶端提供由此 CA 簽發的憑證                   |
 
 ## 安全
 
@@ -230,7 +231,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 
 ## 疑難排解
 
-- **沒有工作階段：**檢查 `--codex-home` 是否指向包含 `sessions/` 的目錄；檢視伺服器終端中的不可讀或跳過檔案提示。
+- **沒有工作階段：**Codex 的 `--codex-home` 應指向包含 `sessions/` 的目錄；Claude 需啟用 `--claude-home`，並指向包含 `projects/` 的目錄。檢視伺服器終端中的不可讀或跳過檔案提示。
 - **連接埠占用：**選擇其他連接埠，例如 `codex-hub --port 4180`。
 - **無法傳送輸入：**工作階段需要已連線、執行中的 tmux 窗格。先在 tmux 完成 CLI 提示，或在可用時點選**恢復**。
   已封存工作階段唯讀，僅有日誌檔案並不意味著終端已連線。

@@ -75,8 +75,9 @@ Use `npm run test:package -- --skip-build` to reuse a current build, or
 `node scripts/test-package.mjs /path/to/package.tgz` to test an existing tarball.
 
 CI runs the standard checks and package tests, including a Node.js 22.13.0 runtime
-smoke test. Native integration suites run separately; see
-[test.yml](../.github/workflows/test.yml) for the matrix.
+smoke test; see [test.yml](../.github/workflows/test.yml) for the matrix.
+CI does not run the native integration suites. Run the relevant commands above
+locally when changing native interaction or lifecycle behavior.
 
 ## Update documentation images
 

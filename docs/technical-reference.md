@@ -100,7 +100,9 @@ in [JSONL processing](session-jsonl-filtering.md#claude-code).
 
 Launch sets `CLAUDE_CONFIG_DIR` explicitly and uses interactive `claude`, optionally
 `--resume <UUID>`, `--worktree`, and `--dangerously-skip-permissions`.
-On Claude Code 2.1.318, a CLI prompt starting with `!` is ordinary model input.
+A CLI prompt starting with `!` is ordinary model input. This prompt behavior is
+versioned — verified against Claude Code 2.1.318 — and should be re-verified
+after CLI upgrades.
 The adapter instead waits up to 30 seconds for the native interactive prompt,
 then pastes the complete `! printf ...` binding command. It reads
 `"${TMUX%%,*}"` and `"$TMUX_PANE"` using native shell expansion; avoiding command

@@ -10,6 +10,14 @@ import {
 import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 
+/**
+ * Matches the Claude Code TUI ready prompt. If a CLI upgrade changes its glyph
+ * or spacing, startup continues but prompt detection times out after
+ * LAUNCH_ATTACH_DELAY_MS; the launch error includes a manual attach command.
+ * Recheck this pattern when launches consistently time out after an upgrade.
+ */
+const INTERACTIVE_PROMPT_PATTERN = /^❯[ \u00a0]*$/m;
+
 export class ClaudeSessionManager implements SessionManager {
   constructor(
     private readonly home: string,
@@ -32,7 +40,7 @@ export class ClaudeSessionManager implements SessionManager {
       const deadline = Date.now() + LAUNCH_ATTACH_DELAY_MS;
       while (Date.now() < deadline) {
         const { content } = await this.tmux.transport.captureTerminal(target);
-        if (/^❯[ \u00a0]*$/m.test(content)) {
+        if (INTERACTIVE_PROMPT_PATTERN.test(content)) {
           await this.tmux.transport.sendMessage(
             target,
             claudeBindingCommand(

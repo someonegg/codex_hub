@@ -20,7 +20,12 @@ import {
   sameFingerprint,
 } from "../shared/source-cache.js";
 import { claudeInteraction, claudeRecordBindings, validClaudeId } from "./interaction.js";
-import { appendClaudeRecords, type ClaudeState, createClaudeState } from "./session-normalizer.js";
+import {
+  appendClaudeRecords,
+  claudeDecoderDiagnostics,
+  type ClaudeState,
+  createClaudeState,
+} from "./session-normalizer.js";
 
 type RejectedCacheEntry = Omit<CacheEntry, "entry"> & { readonly entry?: never };
 
@@ -105,7 +110,7 @@ export class ClaudeSessionSource implements SessionSource {
         } catch (error) {
           if (!expectedIo(error)) throw error;
           warn({
-            code: "rollout_unavailable",
+            code: "session_unavailable",
             severity: "warning",
             message: "Claude session could not be read",
             ordinal: null,
@@ -119,9 +124,7 @@ export class ClaudeSessionSource implements SessionSource {
         const state = appendClaudeRecords(
           base,
           decoded.records,
-          decoded.diagnostics.map((d) =>
-            d.code === "malformed_json" ? { ...d, code: "invalid_jsonl" } : d,
-          ),
+          claudeDecoderDiagnostics(decoded.diagnostics),
           bindingEvents,
         );
         this.#telemetry.normalizeMs += performance.now() - started;
