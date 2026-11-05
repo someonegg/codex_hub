@@ -5,8 +5,6 @@ import {
   normalizeQuestions,
 } from "../../src/server/adapters/claude/user-input-normalizer.js";
 
-const answers = (callId: string, index: number) => `${callId}:${index}`;
-
 describe("normalizeQuestions", () => {
   it("maps question entries with stable ids and defaults", () => {
     expect(
@@ -90,22 +88,22 @@ describe("normalizeQuestionResponse", () => {
       ...base,
       outcome: "answered",
       answers: [
-        { questionId: answers("ask", 0), answers: ["Red"] },
-        { questionId: answers("ask", 1), answers: ["One", "Two"] },
+        { questionId: "ask:0", answers: ["Red"] },
+        { questionId: "ask:1", answers: ["One", "Two"] },
       ],
     });
     const byId = normalizeQuestionResponse(
       "ask",
       questions,
-      JSON.stringify({ answers: { [answers("ask", 0)]: "Red", [answers("ask", 1)]: "Two" } }),
+      JSON.stringify({ answers: { "ask:0": "Red", "ask:1": "Two" } }),
       null,
       "T",
     );
     expect(byId).toMatchObject({
       outcome: "answered",
       answers: [
-        { questionId: answers("ask", 0), answers: ["Red"] },
-        { questionId: answers("ask", 1), answers: ["Two"] },
+        { questionId: "ask:0", answers: ["Red"] },
+        { questionId: "ask:1", answers: ["Two"] },
       ],
     });
   });
@@ -121,8 +119,8 @@ describe("normalizeQuestionResponse", () => {
     expect(response).toMatchObject({
       outcome: "answered",
       answers: [
-        { questionId: answers("ask", 0), answers: ["Blue"] },
-        { questionId: answers("ask", 1), answers: ["Two"] },
+        { questionId: "ask:0", answers: ["Blue"] },
+        { questionId: "ask:1", answers: ["Two"] },
       ],
     });
   });

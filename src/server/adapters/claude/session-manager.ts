@@ -11,12 +11,10 @@ import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 
 /**
- * Fragile coupling to the Claude Code TUI: this matches the visual prompt the
- * CLI renders once its interactive REPL is ready. A Claude Code release that
- * changes the prompt glyph or spacing will keep launches working but degrade
- * them to the LAUNCH_ATTACH_DELAY_MS timeout with a manual attach command in
- * the launch error. Revisit this pattern when launches consistently time out
- * right after a CLI upgrade.
+ * Matches the Claude Code TUI ready prompt. If a CLI upgrade changes its glyph
+ * or spacing, startup continues but prompt detection times out after
+ * LAUNCH_ATTACH_DELAY_MS; the launch error includes a manual attach command.
+ * Recheck this pattern when launches consistently time out after an upgrade.
  */
 const INTERACTIVE_PROMPT_PATTERN = /^❯[ \u00a0]*$/m;
 
