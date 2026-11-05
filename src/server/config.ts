@@ -109,8 +109,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     try {
       statSync(resolve(homedir(), ".codex"));
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-      entries.reverse();
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") entries.reverse();
+      else if (code !== "EACCES" && code !== "EPERM") throw error;
     }
   }
   const homes = entries.map(({ option, value }) => ({
