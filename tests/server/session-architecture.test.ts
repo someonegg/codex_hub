@@ -24,6 +24,17 @@ describe("server architecture boundaries", () => {
     await assertIndependent(files, [codexDirectory, claudeDirectory]);
   });
 
+  it("keeps source adapters and repository independent from runtime binding storage", async () => {
+    await assertIndependent(
+      [
+        resolve(codexDirectory, "codex-session-source.ts"),
+        resolve(claudeDirectory, "claude-session-source.ts"),
+        ...(await typescriptFiles(resolve(serverDirectory, "repository"))),
+      ],
+      [resolve(serverDirectory, "interaction/pane-binding-manager.js")],
+    );
+  });
+
   it("keeps Claude and Codex adapter implementations independent", async () => {
     await assertIndependent(await typescriptFiles(claudeDirectory), [codexDirectory]);
     await assertIndependent(await typescriptFiles(codexDirectory), [claudeDirectory]);

@@ -1,12 +1,7 @@
 import type { InteractionBindingAttempt } from "../domain/session-domain.js";
 
-export interface PaneBindEvent {
-  readonly sessionId: string;
-  readonly time: number;
-  readonly ordinal: number;
-  readonly position: number;
-  readonly attempt: InteractionBindingAttempt;
-}
+export type { DomainBindingEvent as PaneBindEvent } from "../domain/session-domain.js";
+import type { DomainBindingEvent as PaneBindEvent } from "../domain/session-domain.js";
 
 /** Retains only the latest session event and latest claim on each pane. */
 export class PaneBindingManager {

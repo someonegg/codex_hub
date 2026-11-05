@@ -1,18 +1,13 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
-import type {
-  DomainDiagnostic,
-  DomainSession,
-  NormalizedSession,
-} from "../../domain/session-domain.js";
+import type { DomainDiagnostic, NormalizedSession } from "../../domain/session-domain.js";
 import { sessionTitleFromMarkdown } from "../../domain/session-text.js";
-import { type PaneBindingManager, paneBindings } from "../../interaction/pane-binding-manager.js";
-import { opaqueIdForParts } from "../../security/opaque-id.js";
 import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
+  SourceBindingEvent,
   SourceSessionEntry,
 } from "../../source/session-source.js";
 import { isExpectedIoError as expectedIo } from "../shared/io-errors.js";
@@ -45,16 +40,13 @@ export class ClaudeSessionSource implements SessionSource {
   constructor(
     private readonly directory: string,
     instanceKey: string,
-    private readonly bindings: PaneBindingManager = paneBindings,
-    home = "claude",
+    { home = "claude" }: { readonly home?: string } = {},
   ) {
     this.descriptor = { sourceType: "claude-jsonl", instanceKey, home, displayName: "Claude Code" };
   }
-  displayTitleFor(_session: DomainSession): string | null {
-    return null;
-  }
   async refresh(): Promise<SessionSourceSnapshot> {
     const diagnostics: DomainDiagnostic[] = [];
+    const bindings: SourceBindingEvent[] = [];
     this.#telemetry = mutableTelemetry();
     const warn = (...items: readonly DomainDiagnostic[]) => {
       diagnostics.push(
@@ -114,12 +106,14 @@ export class ClaudeSessionSource implements SessionSource {
         const append = decoded.mode === "append" && !!old;
         const base = append ? old.state : createClaudeState(nativeId);
         const started = performance.now();
+        const bindingEvents = decoded.records.flatMap(claudeRecordBindings);
         const state = appendClaudeRecords(
           base,
           decoded.records,
           decoded.diagnostics.map((d) =>
             d.code === "malformed_json" ? { ...d, code: "invalid_jsonl" } : d,
           ),
+          bindingEvents,
         );
         this.#telemetry.normalizeMs += performance.now() - started;
         if (state.identityConflict) {
@@ -138,11 +132,7 @@ export class ClaudeSessionSource implements SessionSource {
           entry,
         });
         seen.add(nativeId);
-        for (const event of decoded.records.flatMap(claudeRecordBindings))
-          this.bindings.submit({
-            ...event,
-            sessionId: opaqueIdForParts(this.descriptor.instanceKey, localId),
-          });
+        bindings.push(...bindingEvents.map((event) => ({ ...event, localId })));
       }
     } catch (error) {
       if (!expectedIo(error)) throw error;
@@ -157,6 +147,7 @@ export class ClaudeSessionSource implements SessionSource {
     this.#cache = next;
     const sessions = [...next.values()].map((cached) => cached.entry);
     const snapshot = {
+      bindings,
       sessions,
       diagnostics,
       signature: JSON.stringify([
@@ -171,11 +162,10 @@ export class ClaudeSessionSource implements SessionSource {
 }
 export async function createClaudeSessionSource(
   home: string,
-  bindings: PaneBindingManager = paneBindings,
-  nickname = "claude",
+  options: { readonly home?: string } = {},
 ) {
   const directory = resolve(home);
-  return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, bindings, nickname);
+  return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, options);
 }
 
 async function discoverClaudeFiles(

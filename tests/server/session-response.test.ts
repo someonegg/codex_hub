@@ -17,8 +17,11 @@ import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 async function setup() {
   const bindings = new PaneBindingManager();
-  const source = await createCodexSessionSource(resolve("tests/fixtures/codex-home"), bindings);
+  const source = await createCodexSessionSource(resolve("tests/fixtures/codex-home"));
   const bootstrapReader = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
     diagnosticLogger: { log: () => {} },
   });
   const session = (await bootstrapReader.list()).sessions.find(
@@ -43,6 +46,9 @@ async function setup() {
   );
   const runtime = new SessionRuntime(transport, managers, bindings);
   const store = new CatalogSnapshotStore([source], undefined, undefined, {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
     diagnosticLogger: { log: () => {} },
   });
   const interaction = closeAfterEach(

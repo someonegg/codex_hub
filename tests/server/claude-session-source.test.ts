@@ -90,8 +90,13 @@ describe("Claude JSONL adapter", () => {
 
   it("selects native metadata and only accepts main-shell binding stdout", async () => {
     const bindings = new PaneBindingManager();
-    const source = await createClaudeSessionSource(fixture, bindings, "glm");
+    const source = await createClaudeSessionSource(fixture, { home: "glm" });
     const snapshot = await source.refresh();
+    for (const event of snapshot.bindings ?? [])
+      bindings.submit({
+        ...event,
+        sessionId: opaqueIdForParts(source.descriptor.instanceKey, event.localId),
+      });
     const entry = snapshot.sessions[0]!;
     expect(entry.normalized.session).toMatchObject({
       title: "Custom title",
@@ -200,8 +205,13 @@ it("retains binding order when multiple native stdout blocks share one line", as
     }) + "\n",
   );
   const bindings = new PaneBindingManager();
-  const source = await createClaudeSessionSource(home, bindings);
+  const source = await createClaudeSessionSource(home);
   const snapshot = await source.refresh();
+  for (const event of snapshot.bindings ?? [])
+    bindings.submit({
+      ...event,
+      sessionId: opaqueIdForParts(source.descriptor.instanceKey, event.localId),
+    });
   expect(
     bindings.latest(opaqueIdForParts(source.descriptor.instanceKey, snapshot.sessions[0]!.localId)),
   ).toMatchObject({ valid: true, paneId: "%2" });

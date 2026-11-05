@@ -1,37 +1,17 @@
 import type { TimelineItem, UserInputQuestion } from "../../../shared/domain.js";
-import { validProjectDirectory } from "../../domain/project-directory.js";
 import type { DomainDiagnostic } from "../../domain/session-domain.js";
 import { normalizeSessionTitle, truncateText } from "../../domain/session-text.js";
 import { mergeBindingMetadata } from "../shared/binding-protocol.js";
 import type { DecodedRecord } from "../shared/jsonl-decoder.js";
 import { MAX_MESSAGE_CHARS, MAX_SESSION_DIAGNOSTICS } from "../shared/limits.js";
+import { appendClaudeIdentity, type ClaudeIdentityState } from "./identity.js";
 import { claudeRecordBindings } from "./interaction.js";
+import { normalizeQuestionResponse, normalizeQuestions } from "./user-input-normalizer.js";
 
 type ObjectValue = Record<string, unknown>;
 export const object = (value: unknown): value is ObjectValue =>
   value !== null && typeof value === "object" && !Array.isArray(value);
 const string = (value: unknown): string | null => (typeof value === "string" ? value : null);
-
-function normalizeQuestions(callId: string, values: readonly unknown[]): UserInputQuestion[] {
-  return values.flatMap((value, index): UserInputQuestion[] => {
-    if (!object(value) || typeof value.question !== "string") return [];
-    const options: Array<UserInputQuestion["options"][number]> = [];
-    if (Array.isArray(value.options)) {
-      for (const option of value.options) {
-        if (!object(option) || typeof option.label !== "string") continue;
-        options.push({ label: option.label, description: string(option.description) ?? "" });
-      }
-    }
-    return [
-      {
-        id: `${callId}:${index}`,
-        header: string(value.header) ?? "",
-        question: value.question,
-        options,
-      },
-    ];
-  });
-}
 
 export interface ClaudeState extends ClaudeIdentityState {
   readonly timeline: readonly TimelineItem[];
@@ -41,21 +21,7 @@ export interface ClaudeState extends ClaudeIdentityState {
   readonly normalizerDiagnostics: readonly DomainDiagnostic[];
 }
 
-export interface ClaudeIdentityState {
-  readonly line: number;
-  readonly nativeId: string;
-  readonly firstCwd: string | null;
-  readonly cwd: string | null;
-  readonly project: string | null;
-  readonly taskName: string | null;
-  readonly customTitle: string | null;
-  readonly aiTitle: string | null;
-  readonly firstUser: string | null;
-  readonly version: string | null;
-  readonly createdAt: string | null;
-  readonly updatedAt: string | null;
-  readonly identityConflict: boolean;
-}
+export type { ClaudeIdentityState } from "./identity.js";
 export function createClaudeState(nativeId: string): ClaudeState {
   return {
     timeline: [],
@@ -83,6 +49,7 @@ export function appendClaudeRecords(
   previous: ClaudeState,
   records: readonly DecodedRecord[],
   diagnostics: readonly DomainDiagnostic[] = [],
+  bindings = records.flatMap(claudeRecordBindings),
 ): ClaudeState {
   if (
     records.length === 0 &&
@@ -203,48 +170,9 @@ export function appendClaudeRecords(
         const callId = block.tool_use_id;
         const questions = pendingQuestions.get(callId);
         if (!questions) continue;
-        let result: unknown = block.content;
-        if (typeof result === "string") {
-          try {
-            result = JSON.parse(result);
-          } catch {
-            /* Unstructured results are unavailable unless explicitly rejected. */
-          }
-        }
-        let structured: ObjectValue | null = null;
-        if (object(row.toolUseResult)) structured = row.toolUseResult;
-        else if (object(result)) structured = result;
-        const values = structured && object(structured.answers) ? structured.answers : null;
-        const answers = questions.map((q) => {
-          const answer = values?.[q.question] ?? values?.[q.id];
-          let answerValues: string[] = [];
-          if (typeof answer === "string") answerValues = [answer];
-          else if (Array.isArray(answer) && answer.every((v) => typeof v === "string"))
-            answerValues = [...answer];
-          return { questionId: q.id, answers: answerValues };
-        });
-        const rejected =
-          structured?.denied === true ||
-          structured?.rejected === true ||
-          (typeof result === "string" &&
-            /^(?:The user (?:doesn't want to proceed|declined|rejected)|User (?:declined|rejected)|Request interrupted by user)/i.test(
-              result,
-            ));
-        const response = {
-          kind: "user_input",
-          stage: "response",
-          callId,
-          timestamp,
-        } as const;
-        if (rejected) emit({ ...response, outcome: "aborted" });
-        else if (answers.length > 0 && answers.every((a) => a.answers.length > 0))
-          emit({ ...response, outcome: "answered", answers });
-        else
-          emit({
-            ...response,
-            outcome: "unavailable",
-            summary: "Answer could not be reliably interpreted",
-          });
+        emit(
+          normalizeQuestionResponse(callId, questions, block.content, row.toolUseResult, timestamp),
+        );
         mutableQuestions().delete(callId);
       }
     }
@@ -252,7 +180,7 @@ export function appendClaudeRecords(
   }
   const metadata = mergeBindingMetadata(
     { projectDirectory: state.project, taskName: state.taskName },
-    records.flatMap(claudeRecordBindings).map((event) => event.attempt),
+    bindings.map((event) => event.attempt),
   );
   return {
     ...state,
@@ -264,35 +192,4 @@ export function appendClaudeRecords(
     normalizerDiagnostics: state.diagnostics,
     diagnostics: [...diagnostics, ...state.diagnostics].slice(0, MAX_SESSION_DIAGNOSTICS),
   };
-}
-
-/** Native identity and directory/version/time evidence is accumulated separately from content. */
-function appendClaudeIdentity(
-  state: { -readonly [K in keyof ClaudeIdentityState]: ClaudeIdentityState[K] },
-  row: ObjectValue,
-  ordinal: number,
-  retainDiagnostic: (diagnostic: DomainDiagnostic) => void,
-): boolean {
-  const identities = [string(row.sessionId), string(row.session_id)].filter(Boolean);
-  if (identities.some((identity) => identity !== state.nativeId)) {
-    state.identityConflict = true;
-    retainDiagnostic({
-      code: "conflicting_native_session_id",
-      severity: "warning",
-      message: "Claude record identity conflicts with its session file",
-      ordinal: ordinal,
-    });
-    return false;
-  }
-  const timestamp = string(row.timestamp);
-  if (timestamp && Number.isFinite(Date.parse(timestamp))) {
-    state.createdAt ??= timestamp;
-    state.updatedAt = timestamp;
-  }
-  if (validProjectDirectory(row.cwd)) {
-    state.firstCwd ??= row.cwd;
-    state.cwd = row.cwd;
-  }
-  state.version = string(row.version) ?? state.version;
-  return true;
 }
