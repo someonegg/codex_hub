@@ -91,7 +91,7 @@ Main records with sidechain/subagent provenance, API copies, thinking, ordinary
 tool calls/results, local commands, interruption notices and shell wrappers are
 excluded from conversation output. Ordinary assistant text is retained regardless
 of model. Each complete JSONL line is processed independently without message-ID
-aggregation; block order determines monotonically increasing item ordinals/IDs.
+aggregation; block order determines consecutive item ordinals/IDs starting at 1.
 Decoder ordinals count physical lines, and only newline-terminated records commit.
 
 Claude uses the shared [checkpointed JSONL reader](#discovery-and-caching).

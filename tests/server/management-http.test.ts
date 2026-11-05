@@ -19,7 +19,7 @@ import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
   const home = await createTempDirectory("management-http-");
-  const source = await createCodexSessionSource(home, paneBindings);
+  const source = await createCodexSessionSource(home);
   const store = new CatalogSnapshotStore([source]);
   const interaction = new SessionInteractionService(
     new CatalogInteractionSessionReader(store),
@@ -31,6 +31,9 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     },
   );
   const sessions = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) paneBindings.submit(event);
+    },
     store,
     interaction,
     resolveDisplayTitle: (session) => source.displayTitleFor(session),

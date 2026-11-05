@@ -51,9 +51,13 @@ it.each([false, true])(
     // Both claims occur in a single record; only the last is C's current binding.
     await writeFile(fileC, meta + message(2, shell(socket, "%1") + "\n" + shell(socket, "%2")));
     const sources = await Promise.all(
-      homes.map((home, index) => createCodexSessionSource(home, bindings, String(index))),
+      homes.map((home, index) => createCodexSessionSource(home, { home: String(index) })),
     );
-    const sessions = new SessionReadService(reverse ? [...sources].reverse() : sources);
+    const sessions = new SessionReadService(reverse ? [...sources].reverse() : sources, {
+      publishBindings: (events) => {
+        for (const event of events) bindings.submit(event);
+      },
+    });
     const transport = {
       connect: vi.fn(async (attempt) => attempt),
       resolveTarget: vi.fn(async (attempt) => attempt),
@@ -145,8 +149,12 @@ it("consumes late-arriving older binds for their pane without changing the sessi
     line({ type: "session_meta", payload: { id: "c", cwd: home } }) +
       message(3, shell(socket, "%2")),
   );
-  const source = await createCodexSessionSource(home, bindings);
-  const sessions = new SessionReadService([source]);
+  const source = await createCodexSessionSource(home);
+  const sessions = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
+  });
   const catalog = (await sessions.managementSnapshot()).sessions;
   const a = catalog.find((item) => item.sourceId === "a")!.id;
   const c = catalog.find((item) => item.sourceId === "c")!.id;
@@ -173,7 +181,11 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   expect(await service.describe(c)).toMatchObject({ state: "connected" });
   // A forced full decode must produce the same result as the append path.
   const rebuiltBindings = new PaneBindingManager();
-  const rebuilt = new SessionReadService([await createCodexSessionSource(home, rebuiltBindings)]);
+  const rebuilt = new SessionReadService([await createCodexSessionSource(home)], {
+    publishBindings: (events) => {
+      for (const event of events) rebuiltBindings.submit(event);
+    },
+  });
   const rebuiltService = closeAfterEach(
     new SessionInteractionService(rebuilt, transport, {
       enabled: true,
@@ -201,9 +213,12 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   const socket = join(home, "shared.sock");
   await writeFile(b, meta("B") + message(1, shell(socket, "%1")));
   await writeFile(c, meta("C") + message(9, shell(socket, "%3")));
-  const source = await createCodexSessionSource(home, bindings);
+  const source = await createCodexSessionSource(home);
   const log = vi.fn();
   const sessions = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
     diagnosticLogger: { log },
   });
   const initial = (await sessions.managementSnapshot()).sessions;
@@ -255,7 +270,7 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
     file,
     line({ type: "session_meta", payload: { id: "project", cwd: "/missing/working" } }),
   );
-  const source = await createCodexSessionSource(home, bindings);
+  const source = await createCodexSessionSource(home);
   const project = async () =>
     (await source.refresh()).sessions[0]!.normalized.session.projectDirectory;
   expect(await project()).toBe("/missing/working");
@@ -270,7 +285,7 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
   expect(await project()).toBe("/missing/project ' $()");
   await appendFile(file, message(3, shell("/tmp/socket", "%2")));
   expect(await project()).toBe("/missing/project ' $()");
-  const rebuilt = await createCodexSessionSource(home, new PaneBindingManager());
+  const rebuilt = await createCodexSessionSource(home);
   expect((await rebuilt.refresh()).sessions[0]!.normalized.session.projectDirectory).toBe(
     await project(),
   );
@@ -286,7 +301,7 @@ it("updates project and task from valid bindings while preserving omitted or inv
   const file = join(home, "sessions/rollout-metadata.jsonl");
   const meta = line({ type: "session_meta", payload: { id: "metadata", cwd: "/working" } });
   await writeFile(file, meta + message(1, shell("/tmp/socket", "%1")));
-  const source = await createCodexSessionSource(home, bindings);
+  const source = await createCodexSessionSource(home);
   const read = async () => (await source.refresh()).sessions[0]!.normalized.session;
   expect(await read()).toMatchObject({ projectDirectory: "/working", taskName: undefined });
   const bind = (project: string, task: string, socket = "/tmp/socket") =>
@@ -305,7 +320,7 @@ it("updates project and task from valid bindings while preserving omitted or inv
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
   await appendFile(file, message(6, bind("/ignored", JSON.stringify("ignored"), "relative")));
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
-  const rebuilt = await createCodexSessionSource(home, new PaneBindingManager());
+  const rebuilt = await createCodexSessionSource(home);
   expect((await rebuilt.refresh()).sessions[0]!.normalized.session).toMatchObject({
     projectDirectory: "/second",
     taskName: "second",

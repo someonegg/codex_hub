@@ -1,4 +1,5 @@
 import type {
+  DomainBindingEvent,
   DomainDiagnostic,
   DomainSessionId,
   NormalizedSession,
@@ -8,6 +9,7 @@ import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
+  SourceBindingEvent,
   SourceSessionEntry,
 } from "../source/session-source.js";
 import {
@@ -27,6 +29,8 @@ export interface CatalogSnapshot {
 }
 
 export interface CatalogSnapshotStoreDependencies {
+  /** Called only after every source succeeds and the catalog is published. */
+  readonly publishBindings?: (events: readonly DomainBindingEvent[]) => void;
   readonly diagnosticLogger?: DiagnosticLogger;
 }
 
@@ -35,6 +39,9 @@ export class CatalogSnapshotStore {
   readonly #diagnosticLogger: RefreshDiagnosticLogger;
   readonly #sources: readonly SessionSource[];
   #snapshot: CatalogSnapshot | null = null;
+  readonly #observedSources = new Map<SessionSource, SessionSourceSnapshot>();
+  readonly #pendingBindings = new Map<SessionSource, Set<SourceBindingEvent>>();
+  readonly #publishBindings: NonNullable<CatalogSnapshotStoreDependencies["publishBindings"]>;
   #aggregate: AggregateState | null = null;
   #aggregateDiagnostics: ReadonlyMap<string, readonly AggregateDiagnostic[]> = new Map();
   #lastDiscoveryAt = Number.NEGATIVE_INFINITY;
@@ -46,6 +53,7 @@ export class CatalogSnapshotStore {
     dependencies: CatalogSnapshotStoreDependencies = {},
   ) {
     assertUniqueSources(sources);
+    this.#publishBindings = dependencies.publishBindings ?? (() => {});
     this.#diagnosticLogger = new RefreshDiagnosticLogger(dependencies.diagnosticLogger);
     this.#sources = [...sources];
   }
@@ -64,17 +72,36 @@ export class CatalogSnapshotStore {
 
   async #discover(): Promise<CatalogSnapshot> {
     const snapshot = await this.#rebuild();
+    const bindings = [...this.#pendingBindings].flatMap(([source, events]) =>
+      [...events].map(({ localId, ...event }) => ({
+        ...event,
+        sessionId: opaqueIdForParts(source.descriptor.instanceKey, localId),
+      })),
+    );
+    this.#publishBindings(bindings);
+    this.#pendingBindings.clear();
     this.#lastDiscoveryAt = this.now();
     return snapshot;
   }
 
   async #rebuild(): Promise<CatalogSnapshot> {
-    const loadedSources = await Promise.all(
-      this.#sources.map(async (source) => ({
-        descriptor: source.descriptor,
-        snapshot: await source.refresh(),
-      })),
+    // Wait for every source even on failure, so retries cannot overlap an unfinished refresh.
+    const results = await Promise.allSettled(
+      this.#sources.map(async (source) => {
+        const snapshot = await source.refresh();
+        if (this.#observedSources.get(source) !== snapshot) {
+          const pending = this.#pendingBindings.get(source) ?? new Set<SourceBindingEvent>();
+          for (const event of snapshot.bindings ?? []) pending.add(event);
+          this.#pendingBindings.set(source, pending);
+          this.#observedSources.set(source, snapshot);
+        }
+        return { descriptor: source.descriptor, snapshot };
+      }),
     );
+    const loadedSources = results.map((result) => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
     const signature = aggregateSignature(loadedSources);
     const previous = this.#snapshot;
     if (previous?.signature === signature) {

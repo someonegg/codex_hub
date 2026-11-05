@@ -56,8 +56,12 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     stdio: ["pipe", "pipe", "pipe"],
   });
   const bindings = new PaneBindingManager();
-  const source = await createCodexSessionSource(home, bindings);
-  const reader = new SessionReadService([source]);
+  const source = await createCodexSessionSource(home);
+  const reader = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
+  });
   const homeNickname = source.descriptor.home;
   const interaction = new SessionInteractionService(reader, new TmuxInteractionService(), {
     enabled: true,
@@ -260,8 +264,12 @@ it("reports the native refusal for a running unbound session and archives it aft
     stdio: ["pipe", "pipe", "pipe"],
   });
   const bindings = new PaneBindingManager();
-  const source = await createCodexSessionSource(home, bindings);
-  const reader = new SessionReadService([source]);
+  const source = await createCodexSessionSource(home);
+  const reader = new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) bindings.submit(event);
+    },
+  });
   const homeNickname = source.descriptor.home;
   const transport = new TmuxInteractionService();
   const interaction = new SessionInteractionService(reader, transport, {

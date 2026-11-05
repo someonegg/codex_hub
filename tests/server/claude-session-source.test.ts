@@ -71,7 +71,7 @@ describe("Claude JSONL adapter", () => {
       before.timeline.forEach((item, index) => expect(after.timeline[index]).toBe(item));
     }
     expect(full.timeline.map((item) => item.ordinal)).toEqual(
-      full.timeline.map((_, index) => index),
+      full.timeline.map((_, index) => index + 1),
     );
   });
 
@@ -90,8 +90,13 @@ describe("Claude JSONL adapter", () => {
 
   it("selects native metadata and only accepts main-shell binding stdout", async () => {
     const bindings = new PaneBindingManager();
-    const source = await createClaudeSessionSource(fixture, bindings, "glm");
+    const source = await createClaudeSessionSource(fixture, { home: "glm" });
     const snapshot = await source.refresh();
+    for (const event of snapshot.bindings ?? [])
+      bindings.submit({
+        ...event,
+        sessionId: opaqueIdForParts(source.descriptor.instanceKey, event.localId),
+      });
     const entry = snapshot.sessions[0]!;
     expect(entry.normalized.session).toMatchObject({
       title: "Custom title",
@@ -200,8 +205,13 @@ it("retains binding order when multiple native stdout blocks share one line", as
     }) + "\n",
   );
   const bindings = new PaneBindingManager();
-  const source = await createClaudeSessionSource(home, bindings);
+  const source = await createClaudeSessionSource(home);
   const snapshot = await source.refresh();
+  for (const event of snapshot.bindings ?? [])
+    bindings.submit({
+      ...event,
+      sessionId: opaqueIdForParts(source.descriptor.instanceKey, event.localId),
+    });
   expect(
     bindings.latest(opaqueIdForParts(source.descriptor.instanceKey, snapshot.sessions[0]!.localId)),
   ).toMatchObject({ valid: true, paneId: "%2" });
@@ -327,4 +337,28 @@ it("prioritizes decoder diagnostics without hiding identity conflicts across bat
     code: "conflicting_native_session_id",
     ordinal: 2,
   });
+});
+
+it("caches rejected identities, incrementally checks appends and recovers after replacement", async () => {
+  const { home, path } = await createSessionHome("claude-rejected-cache-");
+  const valid = (await lines())[0]!;
+  await writeFile(path, valid.replace(id, "aaaaaaaa-2222-4333-8444-555555555555") + "\n");
+  const source = await createClaudeSessionSource(home);
+  const rejected = await source.refresh();
+  expect(rejected.sessions).toEqual([]);
+  expect(rejected.bindings).toEqual([]);
+  expect(rejected.diagnostics).toMatchObject([{ code: "conflicting_native_session_id" }]);
+  expect(source.lastRefreshTelemetry().fullFiles).toBe(1);
+  expect(await source.refresh()).toEqual(rejected);
+  expect(source.lastRefreshTelemetry()).toMatchObject({
+    fullFiles: 0,
+    appendFiles: 0,
+    decodeBytes: 0,
+  });
+  await appendFile(path, valid + "\n");
+  expect((await source.refresh()).sessions).toEqual([]);
+  expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 1 });
+  await writeFile(path, valid + "\n");
+  expect((await source.refresh()).sessions).toHaveLength(1);
+  expect(source.lastRefreshTelemetry().fullFiles).toBe(1);
 });

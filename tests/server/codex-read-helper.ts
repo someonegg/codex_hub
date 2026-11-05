@@ -5,8 +5,11 @@ import { paneBindings } from "../../src/server/interaction/pane-binding-manager.
 export async function createCodexSessionReadService(
   codexHome: string,
 ): Promise<SessionReadService> {
-  const source = await createCodexSessionSource(codexHome, paneBindings);
+  const source = await createCodexSessionSource(codexHome);
   return new SessionReadService([source], {
+    publishBindings: (events) => {
+      for (const event of events) paneBindings.submit(event);
+    },
     resolveDisplayTitle: (session) => source.displayTitleFor(session),
     homes: [{ nickname: "default" }],
   });

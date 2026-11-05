@@ -7,16 +7,11 @@ import type {
   DomainSessionOrigin,
   NormalizedSession,
 } from "../../domain/session-domain.js";
-import {
-  type PaneBindEvent,
-  type PaneBindingManager,
-  paneBindings,
-} from "../../interaction/pane-binding-manager.js";
-import { opaqueIdForParts } from "../../security/opaque-id.js";
 import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
+  SourceBindingEvent,
   SourceSessionEntry,
 } from "../../source/session-source.js";
 import { mergeBindingMetadata } from "../shared/binding-protocol.js";
@@ -66,22 +61,27 @@ export class CodexSessionSource implements SessionSource {
   #snapshot: SessionSourceSnapshot | null = null;
   #lastRefreshTelemetry: RefreshTelemetry = mutableTelemetry();
 
+  private readonly decoder: JsonlDecoder;
+  private readonly identity: IdentityResolver;
+  private readonly normalizer: SessionNormalizer;
+  private readonly sessionIndex: SessionIndexReader;
+
   constructor(
     private readonly codexHome: string,
     instanceKey: string,
-    private readonly decoder: JsonlDecoder = new CheckpointedJsonlDecoder(),
-    private readonly identity = new IdentityResolver(),
-    private readonly normalizer: SessionNormalizer = new DefaultSessionNormalizer(),
-    private readonly sessionIndex = new SessionIndexReader(codexHome),
-    private readonly bindings: PaneBindingManager = paneBindings,
-    home = "default",
+    {
+      decoder = new CheckpointedJsonlDecoder(),
+      identity = new IdentityResolver(),
+      normalizer = new DefaultSessionNormalizer(),
+      sessionIndex = new SessionIndexReader(codexHome),
+      home = "default",
+    }: CodexSourceOptions = {},
   ) {
-    this.descriptor = {
-      sourceType: "codex-jsonl",
-      instanceKey,
-      home,
-      displayName: "Codex",
-    };
+    this.decoder = decoder;
+    this.identity = identity;
+    this.normalizer = normalizer;
+    this.sessionIndex = sessionIndex;
+    this.descriptor = { sourceType: "codex-jsonl", instanceKey, home, displayName: "Codex" };
   }
 
   async refresh(): Promise<SessionSourceSnapshot> {
@@ -98,7 +98,7 @@ export class CodexSessionSource implements SessionSource {
     });
     const nextCache = new Map<string, CodexCacheEntry>();
     const nextDuplicates = new Map<string, { fingerprint: FileFingerprint; threadId: string }>();
-    const binds = new Map<string, PaneBindEvent[]>();
+    const binds = new Map<string, Omit<SourceBindingEvent, "localId">[]>();
     const telemetry = mutableTelemetry();
     const unavailableRollouts: string[] = [];
     const loadDiagnostics: DomainDiagnostic[] = [];
@@ -164,14 +164,12 @@ export class CodexSessionSource implements SessionSource {
         }),
       ),
     ].slice(0, MAX_SESSION_DIAGNOSTICS);
-    for (const entry of sessions) {
-      for (const event of binds.get(entry.normalized.session.id) ?? []) {
-        this.bindings.submit({
-          ...event,
-          sessionId: opaqueIdForParts(this.descriptor.instanceKey, entry.localId),
-        });
-      }
-    }
+    const bindings = sessions.flatMap((entry) =>
+      (binds.get(entry.normalized.session.id) ?? []).map((event) => ({
+        ...event,
+        localId: entry.localId,
+      })),
+    );
     const signature = JSON.stringify({
       discoverySignature,
       unavailableRollouts,
@@ -181,7 +179,7 @@ export class CodexSessionSource implements SessionSource {
         entry.normalized.session.taskName ?? null,
       ]),
     });
-    const snapshot = { signature, sessions, diagnostics };
+    const snapshot = { signature, sessions, diagnostics, bindings };
     this.#cache = nextCache;
     this.#duplicates = nextDuplicates;
     this.#lastRefreshTelemetry = telemetry;
@@ -204,7 +202,7 @@ export class CodexSessionSource implements SessionSource {
     fingerprint: FileFingerprint,
     cached: CodexCacheEntry | undefined,
     telemetry: RefreshTelemetry,
-    binds: Map<string, PaneBindEvent[]>,
+    binds: Map<string, Omit<SourceBindingEvent, "localId">[]>,
   ): Promise<CodexCacheEntry | null> {
     try {
       const decodeStartedAt = performance.now();
@@ -233,7 +231,6 @@ export class CodexSessionSource implements SessionSource {
         const timestamp =
           typeof record.value.timestamp === "string" ? Date.parse(record.value.timestamp) : NaN;
         return codexBindingAttemptsFrom(record).map((attempt, position) => ({
-          sessionId: descriptor.id,
           time: Number.isFinite(timestamp) ? timestamp : 0,
           ordinal: record.ordinal,
           position,
@@ -304,22 +301,20 @@ export class CodexSessionSource implements SessionSource {
   }
 }
 
+export interface CodexSourceOptions {
+  readonly decoder?: JsonlDecoder;
+  readonly identity?: IdentityResolver;
+  readonly normalizer?: SessionNormalizer;
+  readonly sessionIndex?: SessionIndexReader;
+  readonly home?: string;
+}
+
 export async function createCodexSessionSource(
   codexHome: string,
-  bindings: PaneBindingManager = paneBindings,
-  home = "default",
-): Promise<CodexSessionSource> {
+  options: CodexSourceOptions = {},
+) {
   const configured = resolve(codexHome);
-  return new CodexSessionSource(
-    configured,
-    `codex-jsonl\0${configured}`,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    bindings,
-    home,
-  );
+  return new CodexSessionSource(configured, `codex-jsonl\0${configured}`, options);
 }
 
 function sourceEntries(cache: ReadonlyMap<string, CodexCacheEntry>): SourceSessionEntry[] {

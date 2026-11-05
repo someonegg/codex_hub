@@ -1,18 +1,13 @@
 import { readdir, stat } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 
-import type {
-  DomainDiagnostic,
-  DomainSession,
-  NormalizedSession,
-} from "../../domain/session-domain.js";
+import type { DomainDiagnostic, NormalizedSession } from "../../domain/session-domain.js";
 import { sessionTitleFromMarkdown } from "../../domain/session-text.js";
-import { type PaneBindingManager, paneBindings } from "../../interaction/pane-binding-manager.js";
-import { opaqueIdForParts } from "../../security/opaque-id.js";
 import type {
   SessionSource,
   SessionSourceDescriptor,
   SessionSourceSnapshot,
+  SourceBindingEvent,
   SourceSessionEntry,
 } from "../../source/session-source.js";
 import { isExpectedIoError as expectedIo } from "../shared/io-errors.js";
@@ -26,6 +21,8 @@ import {
 } from "../shared/source-cache.js";
 import { claudeInteraction, claudeRecordBindings, validClaudeId } from "./interaction.js";
 import { appendClaudeRecords, type ClaudeState, createClaudeState } from "./session-normalizer.js";
+
+type RejectedCacheEntry = Omit<CacheEntry, "entry"> & { readonly entry?: never };
 
 interface CacheEntry {
   readonly fingerprint: FileFingerprint;
@@ -42,19 +39,17 @@ export class ClaudeSessionSource implements SessionSource {
     return { ...this.#telemetry };
   }
   #cache = new Map<string, CacheEntry>();
+  #rejected = new Map<string, RejectedCacheEntry>();
   constructor(
     private readonly directory: string,
     instanceKey: string,
-    private readonly bindings: PaneBindingManager = paneBindings,
-    home = "claude",
+    { home = "claude" }: { readonly home?: string } = {},
   ) {
     this.descriptor = { sourceType: "claude-jsonl", instanceKey, home, displayName: "Claude Code" };
   }
-  displayTitleFor(_session: DomainSession): string | null {
-    return null;
-  }
   async refresh(): Promise<SessionSourceSnapshot> {
     const diagnostics: DomainDiagnostic[] = [];
+    const bindings: SourceBindingEvent[] = [];
     this.#telemetry = mutableTelemetry();
     const warn = (...items: readonly DomainDiagnostic[]) => {
       diagnostics.push(
@@ -62,6 +57,7 @@ export class ClaudeSessionSource implements SessionSource {
       );
     };
     const next = new Map<string, CacheEntry>();
+    const rejected = new Map<string, RejectedCacheEntry>();
     const seen = new Set<string>();
     const projects = join(this.directory, "projects");
     try {
@@ -84,15 +80,20 @@ export class ClaudeSessionSource implements SessionSource {
           continue;
         }
         const key = relative(this.directory, path);
-        const old = this.#cache.get(key);
+        const old = this.#cache.get(key) ?? this.#rejected.get(key);
         let decoded;
         let fingerprint: FileFingerprint;
         try {
           const info = await stat(path);
           fingerprint = { sourceRelativePath: key, size: info.size, mtimeMs: info.mtimeMs };
           if (old && sameFingerprint(old.fingerprint, fingerprint)) {
-            next.set(key, old);
-            seen.add(nativeId);
+            if (old.entry !== undefined) {
+              next.set(key, old);
+              seen.add(nativeId);
+            } else {
+              rejected.set(key, old);
+              warn(...old.state.diagnostics);
+            }
             continue;
           }
           const started = performance.now();
@@ -114,20 +115,23 @@ export class ClaudeSessionSource implements SessionSource {
         const append = decoded.mode === "append" && !!old;
         const base = append ? old.state : createClaudeState(nativeId);
         const started = performance.now();
+        const bindingEvents = decoded.records.flatMap(claudeRecordBindings);
         const state = appendClaudeRecords(
           base,
           decoded.records,
           decoded.diagnostics.map((d) =>
             d.code === "malformed_json" ? { ...d, code: "invalid_jsonl" } : d,
           ),
+          bindingEvents,
         );
         this.#telemetry.normalizeMs += performance.now() - started;
         if (state.identityConflict) {
           warn(...state.diagnostics);
+          rejected.set(key, { fingerprint, checkpoint: decoded.checkpoint, state });
           continue;
         }
         const entry =
-          old?.state === state
+          old?.entry !== undefined && old.state === state
             ? old.entry
             : materializeClaudeSession(state, nativeId, this.descriptor);
         const localId = entry.localId;
@@ -138,11 +142,7 @@ export class ClaudeSessionSource implements SessionSource {
           entry,
         });
         seen.add(nativeId);
-        for (const event of decoded.records.flatMap(claudeRecordBindings))
-          this.bindings.submit({
-            ...event,
-            sessionId: opaqueIdForParts(this.descriptor.instanceKey, localId),
-          });
+        bindings.push(...bindingEvents.map((event) => ({ ...event, localId })));
       }
     } catch (error) {
       if (!expectedIo(error)) throw error;
@@ -155,8 +155,10 @@ export class ClaudeSessionSource implements SessionSource {
         });
     }
     this.#cache = next;
+    this.#rejected = rejected;
     const sessions = [...next.values()].map((cached) => cached.entry);
     const snapshot = {
+      bindings,
       sessions,
       diagnostics,
       signature: JSON.stringify([
@@ -171,11 +173,10 @@ export class ClaudeSessionSource implements SessionSource {
 }
 export async function createClaudeSessionSource(
   home: string,
-  bindings: PaneBindingManager = paneBindings,
-  nickname = "claude",
+  options: { readonly home?: string } = {},
 ) {
   const directory = resolve(home);
-  return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, bindings, nickname);
+  return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, options);
 }
 
 async function discoverClaudeFiles(

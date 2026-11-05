@@ -1,5 +1,9 @@
 import { expect, it, vi } from "vitest";
 
+import {
+  appendClaudeRecords,
+  createClaudeState,
+} from "../../src/server/adapters/claude/session-normalizer.js";
 import type {
   DomainSession,
   DomainTimelineRecord,
@@ -204,4 +208,25 @@ it("reuses exact byte sizes across immutable snapshots without retaining stale i
   } finally {
     stringify.mockRestore();
   }
+});
+
+it("returns the first Claude message after polling an empty session", () => {
+  const queries = new SessionQueries();
+  const empty = queries.messages(snapshot([]), session.id, { after: 0 })!;
+  expect(empty).toMatchObject({ items: [], nextAfter: 0, hasMore: false });
+  const state = appendClaudeRecords(createClaudeState("claude"), [
+    {
+      ordinal: 47,
+      value: { type: "user", message: { role: "user", content: "First message" } },
+    },
+  ]);
+  const populated = snapshot(state.timeline);
+  const first = queries.messages(populated, session.id, { after: empty.nextAfter })!;
+  expect(first.items).toHaveLength(1);
+  expect(first.items[0]).toMatchObject({ ordinal: 1, markdown: "First message" });
+  expect(
+    queries.messages(populated, session.id, {
+      after: first.nextAfter,
+    }),
+  ).toMatchObject({ items: [], nextAfter: 1, hasMore: false });
 });

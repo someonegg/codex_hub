@@ -56,7 +56,7 @@ describe("catalog discovery", () => {
     await writeFile(file, content("first"));
     const decoder = new CheckpointedJsonlDecoder();
     const decode = vi.fn(decoder.decode.bind(decoder));
-    const source = new CodexSessionSource(home, "archive-once", { decode });
+    const source = new CodexSessionSource(home, "archive-once", { decoder: { decode } });
     const first = await source.refresh();
 
     await writeFile(file, content("changed"));
@@ -111,9 +111,11 @@ describe("catalog discovery", () => {
     const decoder = new CheckpointedJsonlDecoder();
     const decodedPaths: string[] = [];
     const source = new CodexSessionSource(home, "codex-cache-identity", {
-      async decode(descriptor) {
-        decodedPaths.push(descriptor.path);
-        return decoder.decode(descriptor);
+      decoder: {
+        async decode(descriptor) {
+          decodedPaths.push(descriptor.path);
+          return decoder.decode(descriptor);
+        },
       },
     });
     const first = await source.refresh();
@@ -161,12 +163,14 @@ describe("catalog discovery", () => {
       const decoder = new CheckpointedJsonlDecoder();
       let attempts = 0;
       const recovering = new CodexSessionSource(home, "codex-errors", {
-        async decode(descriptor) {
-          attempts += 1;
-          if (attempts <= 2) {
-            throw Object.assign(new Error("gone"), { code: "ENOENT" });
-          }
-          return decoder.decode(descriptor);
+        decoder: {
+          async decode(descriptor) {
+            attempts += 1;
+            if (attempts <= 2) {
+              throw Object.assign(new Error("gone"), { code: "ENOENT" });
+            }
+            return decoder.decode(descriptor);
+          },
         },
       });
       const unavailable = await recovering.refresh();
@@ -204,8 +208,10 @@ describe("catalog discovery", () => {
       '{"type":"session_meta","payload":{"id":"error"}}\n',
     );
     const broken = new CodexSessionSource(home, "codex-broken", {
-      async decode() {
-        throw new Error("decoder invariant");
+      decoder: {
+        async decode() {
+          throw new Error("decoder invariant");
+        },
       },
     });
     await expect(broken.refresh()).rejects.toThrow("decoder invariant");
@@ -234,7 +240,7 @@ describe("catalog discovery", () => {
         },
       },
     );
-    const source = new CodexSessionSource(home, "codex-atomic", undefined, undefined, normalizer);
+    const source = new CodexSessionSource(home, "codex-atomic", { normalizer });
     const first = await source.refresh();
     failNextAppend = true;
     await appendFile(

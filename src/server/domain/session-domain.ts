@@ -40,6 +40,15 @@ export type InteractionBindingAttempt =
       readonly valid: false;
     };
 
+/** Ordered evidence for a session's claim on an interaction pane. */
+export interface DomainBindingEvent {
+  readonly sessionId: DomainSessionId;
+  readonly time: number;
+  readonly ordinal: number;
+  readonly position: number;
+  readonly attempt: InteractionBindingAttempt;
+}
+
 export type TmuxKey =
   | "0"
   | "1"

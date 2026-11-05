@@ -71,10 +71,12 @@ it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading
   const decoder = new CheckpointedJsonlDecoder();
   let failed = true;
   const loading = new CodexSessionSource(home, "load", {
-    async decode(descriptor, checkpoint) {
-      if (failed && descriptor.path === damaged)
-        throw Object.assign(new Error("injected load failure"), { code });
-      return decoder.decode(descriptor, checkpoint);
+    decoder: {
+      async decode(descriptor, checkpoint) {
+        if (failed && descriptor.path === damaged)
+          throw Object.assign(new Error("injected load failure"), { code });
+        return decoder.decode(descriptor, checkpoint);
+      },
     },
   });
   const partial = await loading.refresh();

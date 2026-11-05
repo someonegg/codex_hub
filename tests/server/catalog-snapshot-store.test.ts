@@ -208,3 +208,52 @@ function expectChanged(
     expect(snapshot.sessions.get(id)).not.toBe(before.get(id));
   }
 }
+
+it("waits for all failed-refresh sources to settle before allowing a retry", async () => {
+  let markStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    markStarted = resolve;
+  });
+  let releaseSource!: () => void;
+  const released = new Promise<void>((resolve) => {
+    releaseSource = resolve;
+  });
+  let active = 0;
+  let calls = 0;
+  let fail = true;
+  const slow: SessionSource = {
+    descriptor: { sourceType: "test", instanceKey: "slow", home: "slow", displayName: "Slow" },
+    async refresh() {
+      expect(active).toBe(0);
+      active++;
+      calls++;
+      markStarted();
+      await released;
+      active--;
+      return { signature: "empty", sessions: [], diagnostics: [] };
+    },
+  };
+  const broken: SessionSource = {
+    descriptor: {
+      sourceType: "test",
+      instanceKey: "broken",
+      home: "broken",
+      displayName: "Broken",
+    },
+    async refresh() {
+      if (fail) throw new Error("source failure");
+      return { signature: "empty", sessions: [], diagnostics: [] };
+    },
+  };
+  const store = new CatalogSnapshotStore([slow, broken]);
+  const first = store.refresh();
+  const rejected = expect(first).rejects.toThrow("source failure");
+  await started;
+  const concurrent = expect(store.refresh()).rejects.toThrow("source failure");
+  expect(calls).toBe(1);
+  releaseSource();
+  await Promise.all([rejected, concurrent]);
+  fail = false;
+  await store.refresh();
+  expect(calls).toBe(2);
+});

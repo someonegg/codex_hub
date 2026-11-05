@@ -6,6 +6,8 @@ import { expect, it } from "vitest";
 import { createClaudeSessionSource } from "../../src/server/adapters/claude/claude-session-source.js";
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import { CatalogSnapshotStore } from "../../src/server/repository/catalog-snapshot-store.js";
+import type { SessionSource } from "../../src/server/source/session-source.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 const id = "11111111-2222-4333-8444-555555555555";
@@ -37,7 +39,7 @@ it.each(adapters)(
     await writeFile(path, adapter.initial + adapter.title("first"));
     // Use an exactly representable timestamp for both original and replacement.
     await utimes(path, 1_700_000_000, 1_700_000_000);
-    const source = await adapter.create(home, new PaneBindingManager());
+    const source = await adapter.create(home);
     const before = await source.refresh();
     const serialized = JSON.stringify(before);
     expect(await source.refresh()).toBe(before);
@@ -75,5 +77,78 @@ it.each(adapters)(
     expect(tail.sessions[0]!.normalized).toBe(state);
     expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 1 });
     expect(JSON.stringify(before)).toBe(serialized);
+  },
+);
+
+it.each(adapters)(
+  "$name defers bindings across failed catalog refreshes without losing decoded batches",
+  async (adapter) => {
+    const home = await createTempDirectory("adapter-binding-publication-");
+    const path = join(home, adapter.file);
+    await mkdir(join(path, ".."), { recursive: true });
+    const bind = (pane: string) =>
+      adapter.name === "Codex"
+        ? line({
+            timestamp: "2026-11-04T00:00:00Z",
+            type: "response_item",
+            payload: {
+              type: "message",
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text: `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/contract.sock\n${pane}\n\n\n</user_shell_command>`,
+                },
+              ],
+            },
+          })
+        : line({
+            timestamp: "2026-11-04T00:00:00Z",
+            type: "user",
+            sessionId: id,
+            message: {
+              role: "user",
+              content: `<bash-stdout>AHUB_TMUX_BIND_V1\n/tmp/contract.sock\n${pane}\n\n\n</bash-stdout>`,
+            },
+          });
+    await writeFile(path, adapter.initial);
+    const source = await adapter.create(home);
+    let fail = false;
+    const other: SessionSource = {
+      descriptor: { sourceType: "test", instanceKey: "other", home: "other", displayName: "Other" },
+      async refresh() {
+        if (fail) throw new Error("injected source failure");
+        return { signature: "empty", sessions: [], diagnostics: [] };
+      },
+    };
+    const bindings = new PaneBindingManager();
+    let store!: CatalogSnapshotStore;
+    store = new CatalogSnapshotStore([source, other], undefined, undefined, {
+      publishBindings: (events) => {
+        for (const event of events) bindings.submit(event);
+      },
+    });
+    const initial = await store.refresh();
+    const sessionId = [...initial.sessions.keys()][0]!;
+    fail = true;
+    await appendFile(path, bind("%1"));
+    await expect(store.refresh()).rejects.toThrow("injected source failure");
+    expect(bindings.latest(sessionId)).toBeNull();
+    await appendFile(path, bind("%2"));
+    await expect(store.refresh()).rejects.toThrow("injected source failure");
+    expect(bindings.latest(sessionId)).toBeNull();
+    fail = false;
+    await store.refresh();
+    expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
+    expect(bindings.latest(sessionId)).toMatchObject({ valid: true, paneId: "%2" });
+    // The first batch still owns its earlier pane, even though the latest batch moved on.
+    bindings.submit({
+      sessionId: "earlier",
+      time: 0,
+      ordinal: 0,
+      position: 0,
+      attempt: { valid: true, ordinal: 0, socketPath: "/tmp/contract.sock", paneId: "%1" },
+    });
+    expect(bindings.replacement("earlier")).toBe(sessionId);
   },
 );
