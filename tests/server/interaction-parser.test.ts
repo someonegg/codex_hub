@@ -3,8 +3,9 @@ import { expect, it } from "vitest";
 import {
   codexBindingAttemptsFrom,
   codexBindingCommand,
+  codexInteraction,
 } from "../../src/server/adapters/codex/interaction-parser.js";
-import { interruptSteps as codexInterruptSteps } from "../../src/server/adapters/shared/session-management.js";
+import { interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 const operationId = "00000000-0000-4000-8000-000000000001";
 
 function response(ordinal: number, payload: Record<string, unknown>) {
@@ -182,11 +183,8 @@ it.each(["\n", "\r\n"])("normalizes V1 project line endings %j", (eol) => {
   ]);
 });
 
-it("interrupts with Ctrl+U then Escape after the configured delay", () => {
-  expect(codexInterruptSteps()).toEqual([
-    { keys: ["C-u"], delayMs: 0 },
-    { keys: ["Escape"], delayMs: 100 },
-  ]);
+it("provides the shared interrupt capability", () => {
+  expect(codexInteraction().interruptSteps).toBe(interruptSteps);
 });
 
 it("ignores quoted shell wrappers in ordinary user prose", () => {

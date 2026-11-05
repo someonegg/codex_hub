@@ -5,6 +5,11 @@ date: 2026-10-21
 
 # Share runtime observations within each reader response
 
+Current scope: request-scoped pane observations remain shared by session metadata
+and message responses. [ADR-0025](0025-unify-session-reading-on-ordinal-messages.md)
+replaces the historical item-page and update-probe paths below with `/messages`,
+including long polling. See the [current reader contract](../technical-reference.md#reader-and-automatic-updates).
+
 ## Context and Problem Statement
 
 Runtime evaluation and interaction descriptions queried pane liveness separately.

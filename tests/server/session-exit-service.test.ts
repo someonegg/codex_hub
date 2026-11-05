@@ -1,10 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { ClaudeSessionManager } from "../../src/server/adapters/claude/session-manager.js";
-import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 
-describe.each([CodexSessionManager, ClaudeSessionManager])("%s exit state machine", (Manager) => {
+describe("session exit state machine", () => {
   const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
   function setup() {
     let now = 0;
@@ -15,9 +13,20 @@ describe.each([CodexSessionManager, ClaudeSessionManager])("%s exit state machin
       killTarget: vi.fn(async (_target, _sessionId, check) => check()),
     };
     const service = new SessionExitService(interaction, () => now);
-    const task = service.start("session", target, new Manager("/unused"), () => {
-      if (!active) throw new Error("cancelled");
-    });
+    const task = service.start(
+      "session",
+      target,
+      {
+        exitSteps: () => [
+          { keys: ["Escape"], delayMs: 0 },
+          { keys: ["C-c"], delayMs: 1000 },
+          { keys: ["Enter"], delayMs: 1000 },
+        ],
+      },
+      () => {
+        if (!active) throw new Error("cancelled");
+      },
+    );
     return {
       interaction,
       task,
@@ -33,7 +42,7 @@ describe.each([CodexSessionManager, ClaudeSessionManager])("%s exit state machin
   it("uses adapter steps once, then EOF and one targeted kill, and requires exit confirmation", async () => {
     const { task, interaction, time } = setup();
     expect(await task.advance()).toBe(false);
-    expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([["C-c"]]);
+    expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([["Escape"]]);
     expect(task.phase).toBe("sending_exit");
     time(999);
     await task.advance();
@@ -53,9 +62,9 @@ describe.each([CodexSessionManager, ClaudeSessionManager])("%s exit state machin
     time(6_000);
     await task.advance();
     expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([
+      ["Escape"],
       ["C-c"],
-      ["C-c"],
-      ["C-c"],
+      ["Enter"],
       ["C-d"],
     ]);
     time(14_999);

@@ -1,6 +1,7 @@
 import { expect, it, vi } from "vitest";
 
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
+import { exitSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 
 it.each([
@@ -66,4 +67,8 @@ it("resumes an explicit UUID in the original CODEX_HOME with an operation bindin
     await expect(manager.delete(resumeNativeId)).rejects.toThrow(/UUID/);
   }
   expect(launch).toHaveBeenCalledOnce();
+});
+
+it("provides the shared exit capability", () => {
+  expect(new CodexSessionManager("/test/home").exitSteps).toBe(exitSteps);
 });

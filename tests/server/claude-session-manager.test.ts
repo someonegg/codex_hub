@@ -6,6 +6,7 @@ import {
   claudeInteraction,
 } from "../../src/server/adapters/claude/interaction.js";
 import { ClaudeSessionManager } from "../../src/server/adapters/claude/session-manager.js";
+import { exitSteps, interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { LAUNCH_ATTACH_DELAY_MS } from "../../src/server/management/session-manager.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -93,16 +94,9 @@ it.each([false, true])(
   },
 );
 
-it("uses the shared Codex interrupt and exit key timings", () => {
-  expect(claudeInteraction(null, null).interruptSteps()).toEqual([
-    { keys: ["C-u"], delayMs: 0 },
-    { keys: ["Escape"], delayMs: 100 },
-  ]);
-  expect(new ClaudeSessionManager("/test/home", new TmuxLauncher()).exitSteps()).toEqual([
-    { keys: ["C-c"], delayMs: 0 },
-    { keys: ["C-c"], delayMs: 1000 },
-    { keys: ["C-c"], delayMs: 1000 },
-  ]);
+it("provides the shared interrupt and exit capabilities", () => {
+  expect(claudeInteraction(null, null).interruptSteps).toBe(interruptSteps);
+  expect(new ClaudeSessionManager("/test/home").exitSteps).toBe(exitSteps);
 });
 
 it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?"])(
