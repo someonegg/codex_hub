@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { packageVersion } from "../version.js";
 import { CommandError } from "./command-error.js";
 import { outputFailure } from "./output.js";
 const help = `Usage: ahub-cli <command> [options]
@@ -6,6 +7,7 @@ const help = `Usage: ahub-cli <command> [options]
   diff      Publish, list, or delete local review diffs
   skill     Locate bundled skills
   session   Manage sessions through an existing Hub HTTP server
+  version   Show the current version (alias: --version)
 Run ahub-cli <command> --help for details.`;
 
 async function main(): Promise<void> {
@@ -14,7 +16,10 @@ async function main(): Promise<void> {
     console.log(help);
     return;
   }
-  if (command === "skill") {
+  if (command === "version" || command === "--version") {
+    if (args.length > 0) throw new CommandError("invalid_arguments", "Usage: ahub-cli version");
+    console.log(await packageVersion());
+  } else if (command === "skill") {
     const { runSkillCommand } = await import("./skill.js");
     await runSkillCommand(args);
   } else if (command === "session") {

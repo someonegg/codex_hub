@@ -12,6 +12,10 @@ function runnable(args: readonly string[]) {
 }
 
 describe("server command line", () => {
+  it("returns version without resolving server configuration", () => {
+    expect(loadConfig(["--version", "--ssl"])).toEqual({ kind: "version" });
+  });
+
   it("uses local, non-TLS defaults", () => {
     expect(runnable([])).toMatchObject({
       host: "127.0.0.1",

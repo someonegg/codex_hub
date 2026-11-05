@@ -7,11 +7,17 @@ import { startServer } from "./http/create-server.js";
 import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
 import { uploadDirectory } from "./http/upload-routes.js";
 import { UploadStore } from "./uploads/store.js";
+import { packageVersion } from "./version.js";
 
 async function main(): Promise<void> {
   const command = loadConfig();
   if (command.kind === "help") {
     console.log(commandLineHelp());
+    return;
+  }
+
+  if (command.kind === "version") {
+    console.log(await packageVersion());
     return;
   }
 
