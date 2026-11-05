@@ -19,7 +19,7 @@ export const CODEX_INTERACTION_KEY_BINDINGS = {
   down: "Down",
   left: "Left",
   right: "Right",
-  plan: "BTab",
+  BTab: "BTab",
   "0": "0",
   "1": "1",
   "2": "2",

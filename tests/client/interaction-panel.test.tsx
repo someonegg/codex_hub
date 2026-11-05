@@ -269,19 +269,23 @@ describe("interaction panel", () => {
     expect([...keypad.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
       "Enter",
       "↑",
-      "Plan",
+      "BTab",
       "←",
       "↓",
       "→",
     ]);
 
-    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+    screen.getByLabelText("Terminal Preview content").focus();
+    await user.tab();
+    expect(screen.getByRole("textbox", { name: "Message to agent" })).toHaveFocus();
+
+    for (const name of ["Enter", "Up", "BTab", "Left", "Down", "Right"]) {
       await user.click(screen.getByRole("button", { name }));
     }
     expect(handlers.onSendKeys.mock.calls).toEqual([
       [["enter"]],
       [["up"]],
-      [["plan"]],
+      [["BTab"]],
       [["left"]],
       [["down"]],
       [["right"]],
@@ -290,7 +294,7 @@ describe("interaction panel", () => {
     rerender(<InteractionPanel {...handlers} interactionBusy />);
     handlers.onSendKeys.mockClear();
     handlers.onExpandPreview.mockClear();
-    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "BTab", "Left", "Down", "Right"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeEnabled();
       expect(button).toHaveAttribute("aria-disabled", "true");
@@ -447,7 +451,7 @@ it("shows takeover beside the status, preserves drafts, and navigates to the rep
   fireEvent.click(link);
   expect(onNavigate).toHaveBeenCalledWith("replacement");
   expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
-  for (const name of ["Send", "Handoff", "Plan", "Terminal Preview"])
+  for (const name of ["Send", "Handoff", "BTab", "Terminal Preview"])
     expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
   view.rerender(<InteractionPanel {...props(interaction("connected"))} />);
   expect(screen.getByRole("textbox")).toHaveValue("draft");
@@ -674,7 +678,7 @@ describe("composer uploads", () => {
       expect(button).toHaveFocus();
     }
     fireEvent.click(screen.getByRole("button", { name: "Terminal Preview" }));
-    for (const name of ["Enter", "Up", "Plan", "Left", "Down", "Right"]) {
+    for (const name of ["Enter", "Up", "BTab", "Left", "Down", "Right"]) {
       const button = screen.getByRole("button", { name });
       expect(button).toBeEnabled();
       expect(button).toHaveAttribute("aria-disabled", "true");

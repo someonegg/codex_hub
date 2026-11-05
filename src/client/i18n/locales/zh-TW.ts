@@ -136,7 +136,7 @@ export const messages: Record<keyof typeof english, string> = {
   pages: "網頁",
   parentSession: "父工作階段",
   pendingAttachments: "待傳送附件",
-  plan: "計畫",
+  BTab: "BTab",
   planContentUnavailable: "計畫內容不可用。",
   previewUnavailable: "預覽不可用",
   previewUnavailableDownloadTheFileBelow: "預覽不可用，請在下方下載檔案。",

@@ -138,7 +138,7 @@ export const messages = {
   pages: "Pages",
   parentSession: "Parent session",
   pendingAttachments: "Pending attachments",
-  plan: "Plan",
+  BTab: "BTab",
   planContentUnavailable: "Plan content unavailable.",
   previewUnavailable: "Preview unavailable",
   previewUnavailableDownloadTheFileBelow: "Preview unavailable. Download the file below.",
