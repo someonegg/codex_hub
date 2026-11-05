@@ -26,21 +26,23 @@ export function bindingAttempts(
         /* Optional metadata cannot invalidate a binding. */
       }
     }
-    found.push(
-      isAbsolute(socketPath) &&
-        /^%\d+$/.test(paneId) &&
-        (!operationId || validOperationId(operationId))
-        ? {
-            ordinal,
-            valid: true,
-            socketPath,
-            paneId,
-            ...(operationId ? { operationId } : {}),
-            ...(validProjectDirectory(projectDirectory) ? { projectDirectory } : {}),
-            ...(taskName ? { taskName } : {}),
-          }
-        : { ordinal, valid: false },
-    );
+    if (
+      !isAbsolute(socketPath) ||
+      !/^%\d+$/.test(paneId) ||
+      (operationId && !validOperationId(operationId))
+    ) {
+      found.push({ ordinal, valid: false });
+      continue;
+    }
+    found.push({
+      ordinal,
+      valid: true,
+      socketPath,
+      paneId,
+      ...(operationId ? { operationId } : {}),
+      ...(validProjectDirectory(projectDirectory) ? { projectDirectory } : {}),
+      ...(taskName ? { taskName } : {}),
+    });
   }
   return found;
 }

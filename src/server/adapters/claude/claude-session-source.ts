@@ -248,12 +248,11 @@ function materializeClaudeSession(
     timeline: state.timeline,
     interaction: claudeInteraction(projectDirectory, state.taskName),
   };
-  const entry: SourceSessionEntry = {
+  return {
     localId,
     nativeSessionId: nativeId,
     parentNativeSessionId: null,
     origin,
     normalized,
   };
-  return entry;
 }
