@@ -116,6 +116,16 @@ export class SessionInteractionService {
     const target = await this.tmux.resolveTarget(attempt);
     return target && this.bindings.owns(sessionId, target) ? target : null;
   }
+  async interruptLaunch(target: TmuxBinding, sessionId: string, assertActive: () => void) {
+    const { binding, interruptSteps } = await this.#resolve(sessionId);
+    if (binding.socketPath !== target.socketPath || binding.paneId !== target.paneId)
+      throw new Error("Launch binding changed before interrupt");
+    await this.tmux.sendKeys(target, interruptSteps(), () => {
+      assertActive();
+      this.#assertOwner(sessionId, target);
+    });
+  }
+
   sendExitKeys(
     target: TmuxBinding,
     sessionId: string,

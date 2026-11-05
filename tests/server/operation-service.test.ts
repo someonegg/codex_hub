@@ -60,6 +60,7 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
   let now = 0;
   const reader = { managementSnapshot: vi.fn(async () => snapshot) };
   const interaction = {
+    interruptLaunch: vi.fn().mockResolvedValue(undefined),
     setBusy: vi.fn(),
     resolveTarget: vi.fn(async () => null as typeof target | null),
     killTarget: vi.fn(async () => undefined),
@@ -75,6 +76,7 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
     })),
   };
   const manager = {
+    interruptAfterBinding: false,
     isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async (directory: string) => ({ directory })),
     launch: vi.fn(async () => target),
@@ -1298,3 +1300,21 @@ it.each(["archive", "delete"] as const)(
     expect(interaction.killTarget).not.toHaveBeenCalled();
   },
 );
+
+it.each([false, true])("interrupts a confirmed launch only when enabled (%s)", async (enabled) => {
+  const { service, manager, interaction, set } = setup();
+  manager.interruptAfterBinding = enabled;
+  const op = service.create({
+    projectDirectory: "/project",
+    worktree: false,
+    requestId: "interrupt-launch",
+  });
+  await flush();
+  await service.poll();
+  expect(interaction.interruptLaunch).not.toHaveBeenCalled();
+  set({ sessions: [session("created", op.operationId)] });
+  await service.poll();
+  expect((await service.get(op.operationId))?.status).toBe("succeeded");
+  await service.poll();
+  expect(interaction.interruptLaunch).toHaveBeenCalledTimes(enabled ? 1 : 0);
+});

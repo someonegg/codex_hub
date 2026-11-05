@@ -5,10 +5,12 @@ import {
   claudeBindingCommand,
   claudeInteraction,
 } from "../../src/server/adapters/claude/interaction.js";
-import { ClaudeSessionManager } from "../../src/server/adapters/claude/session-manager.js";
+import {
+  BINDING_PROMPT_WAIT_MS,
+  ClaudeSessionManager,
+} from "../../src/server/adapters/claude/session-manager.js";
 import { exitSteps, interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
-import { LAUNCH_ATTACH_DELAY_MS } from "../../src/server/management/session-manager.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 it("validates identity and missing directories before starting Claude", async () => {
@@ -100,7 +102,7 @@ it("provides the shared interrupt and exit capabilities", () => {
 });
 
 it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?"])(
-  "binds only after the native prompt is ready (terminal=%s)",
+  "sends once on readiness or after the fallback delay (terminal=%s)",
   async (content) => {
     const ready = content === "❯ ";
     vi.useFakeTimers();
@@ -120,24 +122,48 @@ it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?
       });
       const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
       const launch = new ClaudeSessionManager("/home", tmux).launch(options);
-      if (ready) {
-        await expect(launch).resolves.toEqual(target);
-        expect(send).toHaveBeenCalledExactlyOnceWith(
-          target,
-          claudeBindingCommand(options.operationId),
-        );
-      } else {
-        const result = expect(launch).rejects.toMatchObject({
-          outcome: "unknown",
-          target,
-          attachCommand: expect.any(String),
-        });
-        await vi.advanceTimersByTimeAsync(LAUNCH_ATTACH_DELAY_MS);
-        await result;
+      if (!ready) {
+        await vi.advanceTimersByTimeAsync(BINDING_PROMPT_WAIT_MS - 100);
         expect(send).not.toHaveBeenCalled();
+        await vi.advanceTimersByTimeAsync(100);
       }
+      await expect(launch).resolves.toEqual(target);
+      expect(send).toHaveBeenCalledExactlyOnceWith(
+        target,
+        claudeBindingCommand(options.operationId),
+      );
+      const captures = vi.mocked(tmux.transport.captureTerminal).mock.calls.length;
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(tmux.transport.captureTerminal).toHaveBeenCalledTimes(captures);
+      expect(send).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }
   },
 );
+
+it.each(["capture", "send"])("preserves recovery information when %s fails", async (failure) => {
+  const tmux = new TmuxLauncher();
+  const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
+  vi.spyOn(tmux, "launch").mockResolvedValue(target);
+  const capture = vi
+    .spyOn(tmux.transport, "captureTerminal")
+    .mockResolvedValue({ content: "❯ ", truncated: false });
+  const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
+  if (failure === "capture") capture.mockRejectedValue(new Error("capture failed"));
+  else send.mockRejectedValue(new Error("send failed"));
+  await expect(
+    new ClaudeSessionManager("/home", tmux).launch({
+      operationId: "00000000-0000-4000-8000-000000000001",
+      workingDirectory: "/project",
+      worktree: false,
+      yolo: false,
+    }),
+  ).rejects.toMatchObject({
+    outcome: "unknown",
+    target,
+    attachCommand: expect.any(String),
+    message: `${failure} failed`,
+  });
+  expect(send).toHaveBeenCalledTimes(failure === "capture" ? 0 : 1);
+});

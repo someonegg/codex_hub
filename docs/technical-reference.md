@@ -109,11 +109,14 @@ Launch sets `CLAUDE_CONFIG_DIR` explicitly and uses interactive `claude`, option
 A CLI prompt starting with `!` is ordinary model input. This prompt behavior is
 versioned — verified against Claude Code 2.1.318 — and should be re-verified
 after CLI upgrades.
-The adapter instead waits up to 30 seconds for the native interactive prompt,
-then pastes the complete `! printf ...` binding command. It reads
+The adapter waits up to 15 seconds for the native interactive prompt, then pastes
+the complete `! printf ...` binding command once, even if no prompt was detected.
+It then waits for binding evidence without further prompt checks or retries. The command reads
 `"${TMUX%%,*}"` and `"$TMUX_PANE"` using native shell expansion; avoiding command
 substitution also permits binding under Claude's worktree isolation checks.
-Claude records the binding itself. Failure to reach the interactive prompt retains
+Claude records the binding itself. Create/resume interrupts once after binding
+confirmation, before reporting success; handoff does not interrupt.
+Terminal capture, command delivery, or interrupt failures retain
 the target and attach command as an unknown launch result. A running process alone
 never confirms launch: public management still verifies operation ID, pane ownership, project,
 and original identity on resume.

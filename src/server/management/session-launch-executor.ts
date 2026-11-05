@@ -14,7 +14,10 @@ import { type ManagementSnapshot, type SessionManagerRegistry } from "./session-
 export class SessionLaunchExecutor {
   constructor(
     private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
-    private readonly interaction: Pick<SessionInteractionService, "describe" | "matchesTarget">,
+    private readonly interaction: Pick<
+      SessionInteractionService,
+      "describe" | "matchesTarget" | "interruptLaunch"
+    >,
     private readonly managers: SessionManagerRegistry,
     private readonly bindings: PaneBindingManager,
     private readonly control: OperationControl,
@@ -154,6 +157,23 @@ export class SessionLaunchExecutor {
     if (!this.control.pending(entry)) return;
     if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
     entry.metadata.sessionId = match.id;
+    if (this.managers.get(entry.home).interruptAfterBinding) {
+      try {
+        await this.interaction.interruptLaunch(context.target, match.id, () => {
+          if (!this.control.pending(entry)) throw new Error("Launch operation is no longer active");
+          if (this.bindings.latest(match.id) !== attempt)
+            throw new Error("Launch binding changed before interrupt");
+        });
+      } catch (error) {
+        this.control.finish(
+          entry,
+          "unknown",
+          error instanceof Error ? error.message : String(error),
+        );
+        return;
+      }
+      if (!this.control.pending(entry)) return;
+    }
     this.control.finish(entry, "succeeded", null);
   }
 }
