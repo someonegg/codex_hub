@@ -206,7 +206,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   theTerminalPaneIsEmpty: "终端窗格为空。",
   thisSessionHasNoMessages: "此会话暂无消息",
-  messagePreview: "待确认",
+  messagePreview: "等待中",
   lastUpdatedTime: "更新于 {{time}}",
   timeUnavailable: "时间不可用",
 
