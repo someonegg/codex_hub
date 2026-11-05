@@ -13,20 +13,6 @@ to stop it. For installation and requirements, see the [README](../README.md#qui
 
 By default, the hub reads both `codex=~/.codex` and `claude=~/.claude` and listens only on this machine.
 
-## Claude Code
-
-To read only Claude Code (see [Multiple homes](#multiple-homes) for configuration rules):
-
-```sh
-codex-hub --claude-home claude=~/.claude
-```
-
-Configure and authenticate the local `claude` CLI for each home first. Claude supports main-session reading, tmux interaction,
-create/resume, worktree, YOLO and exit; archive, delete and subagent reading are
-unavailable. Shell commands and their output stay out of the conversation reader.
-
-See [adapter contracts](technical-reference.md#claude-code-adapter).
-
 ## Reading and managing sessions
 
 Choose a project and main session in the sidebar; open child sessions from their

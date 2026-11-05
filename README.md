@@ -6,7 +6,7 @@ A local web hub for Codex and Claude Code that pairs readable conversations with
 Browse sessions by project, follow responses in near real time, and keep working with
 either agent from desktop or mobile.
 
-Codex and Claude Code main sessions are supported; see [setup and supported operations](docs/usage.md#claude-code).
+Codex and Claude Code main sessions are supported; see [Home configuration](docs/usage.md#multiple-homes).
 
 ![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 

@@ -11,14 +11,6 @@ npx @someonegg/codex-hub@latest
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
 安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex` 和 `~/.claude`，且僅監聽本機。
 
-## Claude Code
-
-若僅讀取 Claude Code：`codex-hub --claude-home claude=~/.claude`。設定規則見[多個 Home](#多個-home)。
-先為各 Home 設定並登入本機 `claude`。
-支援主工作階段閱讀、tmux 互動、建立／恢復、worktree、YOLO 和結束；不支援封存、刪除及 subagent 閱讀。
-原生 shell 輸入、輸出不顯示在閱讀區。
-詳見[技術參考](technical-reference.md#claude-code-adapter)。
-
 ## 閱讀與管理工作階段
 
 在側邊欄選擇專案和主工作階段，子工作階段從父工作階段中開啟。訊息從頭開始隨捲動載入，載入至末尾後自動接收更新。

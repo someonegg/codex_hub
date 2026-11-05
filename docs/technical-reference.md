@@ -84,6 +84,12 @@ Creation defaults `home` to the first configured nickname. Unknown nicknames ret
 
 ### Claude Code adapter
 
+Configure and authenticate the local `claude` CLI for each Home before launching.
+Supported operations include main-session reading, tmux interaction, create/resume,
+worktree, YOLO, and exit. Archive, delete, and subagent reading are unavailable;
+native shell commands and output are excluded from the conversation reader.
+See [Home configuration](usage.md#multiple-homes) for shared configuration rules.
+
 The independent `claude-jsonl` source scans only `projects/<project>/<UUID>.jsonl`.
 It never imports Codex adapter internals or writes native history. Native UUID
 validation belongs to Claude.
