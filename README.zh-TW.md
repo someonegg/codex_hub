@@ -2,10 +2,10 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | 繁體中文
 
-面向 Codex 的本地網頁中心，將清晰易讀的工作階段記錄與即時 CLI 互動結合起來。
+面向 Codex 和 Claude Code 的本地網頁中心，將清晰易讀的工作階段記錄與即時 CLI 互動結合起來。
 按專案瀏覽工作階段、跟進最新回覆，並從電腦或手機繼續工作。
 
-也可透過選用的 `--claude-home` adapter 接入 Claude Code 主工作階段，詳見[設定與支援範圍](docs/usage.zh-TW.md#啟用-claude-code)。
+支援 Codex 和 Claude Code 主工作階段，詳見[多個 Home 設定](docs/usage.zh-TW.md#多個-home)。
 
 ![建立工作階段、傳送提示並檢視已回答的使用者輸入卡片](docs/images/zh-TW/ahub-intro.gif)
 

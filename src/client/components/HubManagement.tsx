@@ -136,8 +136,8 @@ export function CreateSession({
   const initialHome =
     selectedHome ||
     homes.find((home) => home.nickname === preferences.defaultHome)?.nickname ||
-    homes.find((home) => home.nickname === "default")?.nickname ||
-    (homes.length === 1 ? homes[0]!.nickname : "");
+    homes[0]?.nickname ||
+    "";
   const [home, setHome] = useState(initialHome);
   useEffect(() => {
     if (open) {

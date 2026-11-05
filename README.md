@@ -2,11 +2,11 @@
 
 English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
-A local web hub for Codex that pairs readable conversations with live CLI interaction.
+A local web hub for Codex and Claude Code that pairs readable conversations with live CLI interaction.
 Browse sessions by project, follow responses in near real time, and keep working with
-Codex from desktop or mobile.
+either agent from desktop or mobile.
 
-Claude Code main sessions are also available through the opt-in `--claude-home` adapter; see [setup and supported operations](docs/usage.md#enable-claude-code).
+Codex and Claude Code main sessions are supported; see [Home configuration](docs/usage.md#multiple-homes).
 
 ![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 

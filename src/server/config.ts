@@ -1,4 +1,4 @@
-import { realpathSync } from "node:fs";
+import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -67,7 +67,8 @@ function parsePort(value: string | undefined, option = "port"): number {
 }
 
 export function loadConfig(args: readonly string[] = process.argv.slice(2)): CommandLineResult {
-  const { values } = parseArgs({
+  const { values, tokens } = parseArgs({
+    tokens: true,
     args: [...args],
     allowPositionals: false,
     strict: true,
@@ -95,13 +96,27 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
   const names = new Set<string>();
   const paths = new Set<string>();
-  const homes = [
-    ...parseHomes(values["codex-home"] ?? ["default=~/.codex"], "codex-home", names, paths),
-    ...parseHomes(values["claude-home"] ?? [], "claude-home", names, paths).map((home) => ({
-      ...home,
-      adapter: "claude" as const,
-    })),
-  ];
+  let entries = tokens.flatMap((token) =>
+    token.kind === "option" && (token.name === "codex-home" || token.name === "claude-home")
+      ? [{ option: token.name, value: token.value! }]
+      : [],
+  );
+  if (entries.length === 0) {
+    entries = [
+      { option: "codex-home", value: "codex=~/.codex" },
+      { option: "claude-home", value: "claude=~/.claude" },
+    ];
+    try {
+      statSync(resolve(homedir(), ".codex"));
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      entries.reverse();
+    }
+  }
+  const homes = entries.map(({ option, value }) => ({
+    ...parseHome(value, option, names, paths),
+    ...(option === "claude-home" ? { adapter: "claude" as const } : {}),
+  }));
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
   const privateKeyPath = nonEmptyOption("ssl-key", values["ssl-key"]);
   const certificateAuthorityPath = nonEmptyOption("ssl-ca", values["ssl-ca"]);
@@ -156,9 +171,11 @@ Options:
   --hosting            Enable trusted same-origin static web hosting
   --home-dir <path>    Hub data root (default: ~/.codex-hub; uploads/ and hosting/)
   --codex-home <nickname=path>
-                       Codex home; repeat for multiple homes (default: default=~/.codex)
+                       Codex home; repeat for multiple homes
   --claude-home <nickname=path>
-                       Claude Code home; repeat to enable multiple homes
+                       Claude Code home; repeat for multiple homes
+  Default homes: codex=~/.codex, claude=~/.claude (Claude first if ~/.codex is absent).
+  Any explicit home replaces both defaults; argument order determines the default home.
   --host <host>        Listen host (default: 127.0.0.1)
   --port <port>        Listen port, or 0 for a free port (default: 4173)
   --local-port <port>  Additional HTTP listener on 127.0.0.1 (disabled by default)
@@ -177,42 +194,40 @@ mTLS example:
   codex-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
 }
 
-function parseHomes(
-  values: readonly string[],
+function parseHome(
+  value: string,
   option: string,
   names: Set<string>,
   paths: Set<string>,
-): SessionHomeConfig[] {
-  return values.map((value) => {
-    const separator = value.indexOf("=");
-    const nickname = value.slice(0, separator).trim();
-    const homePath = value.slice(separator + 1).trim();
-    if (separator < 0 || !nickname || !homePath) {
-      throw new Error(`--${option} requires nickname=path with a non-empty nickname and path`);
-    }
-    const path = resolve(
-      homePath.startsWith("~/") ? resolve(homedir(), homePath.slice(2)) : homePath,
-    );
-    let canonical = path;
-    try {
-      canonical = realpathSync(path);
-    } catch (error) {
-      if (
-        !(
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          ["ENOENT", "EACCES", "EPERM"].includes(String(error.code))
-        )
+): SessionHomeConfig {
+  const separator = value.indexOf("=");
+  const nickname = value.slice(0, separator).trim();
+  const homePath = value.slice(separator + 1).trim();
+  if (separator < 0 || !nickname || !homePath) {
+    throw new Error(`--${option} requires nickname=path with a non-empty nickname and path`);
+  }
+  const path = resolve(
+    homePath.startsWith("~/") ? resolve(homedir(), homePath.slice(2)) : homePath,
+  );
+  let canonical = path;
+  try {
+    canonical = realpathSync(path);
+  } catch (error) {
+    if (
+      !(
+        error &&
+        typeof error === "object" &&
+        "code" in error &&
+        ["ENOENT", "EACCES", "EPERM"].includes(String(error.code))
       )
-        throw error;
-    }
-    if (names.has(nickname)) throw new Error(`Duplicate home nickname: ${nickname}`);
-    if (paths.has(canonical)) throw new Error("Duplicate home path");
-    names.add(nickname);
-    paths.add(canonical);
-    return { nickname, path };
-  });
+    )
+      throw error;
+  }
+  if (names.has(nickname)) throw new Error(`Duplicate home nickname: ${nickname}`);
+  if (paths.has(canonical)) throw new Error("Duplicate home path");
+  names.add(nickname);
+  paths.add(canonical);
+  return { nickname, path };
 }
 
 function resolveDirectoryOption(name: string, value: string): string {

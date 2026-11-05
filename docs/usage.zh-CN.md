@@ -9,15 +9,7 @@ npx @someonegg/codex-hub@latest
 ```
 
 打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止。
-安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex`，且仅监听本机。
-
-## 启用 Claude Code
-
-使用 `codex-hub --claude-home claude=~/.claude` 显式启用 Claude；默认 Codex home 仍保留。
-参数可重复，所有来源的 nickname 必须唯一。先为各 home 配置并登录本机 `claude`，创建时选择 home，恢复沿用原 home。
-支持主会话阅读、tmux 交互、创建／恢复、worktree、YOLO 和退出；不支持归档、删除及 subagent 阅读。
-原生 shell 输入、输出不显示在阅读区。
-详见[技术参考](technical-reference.md#claude-code-adapter)。
+安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex` 和 `~/.claude`，且仅监听本机。
 
 ## 阅读与管理会话
 
@@ -127,17 +119,22 @@ HTTP 或 HTTPS 地址。使用私有 CA 时，在启动 CLI 前设置
 
 ## 多个 Home
 
-使用 `--codex-home 'nickname=path'` 指定 Codex Home。路径应指向包含 `sessions/` 的目录，
-而非 `sessions/` 本身。可重复传入：
+使用 `--codex-home 'nickname=path'` 或 `--claude-home 'nickname=path'` 指定 Home。
+Codex Home 应指向包含 `sessions/` 的目录，Claude Home 应指向包含 `projects/` 的目录。
+可重复或混合传入：
 
 ```sh
 codex-hub \
-  --codex-home 'personal=~/.codex' \
-  --codex-home 'work=/path/to/codex-work'
+  --claude-home 'claude=~/.claude' \
+  --codex-home 'codex=~/.codex'
 ```
 
-显式指定 Home 会替换默认的 `~/.codex`。每个 Home 需使用唯一昵称与目录。
+任何显式 Home 都会替换两个默认项，并按参数顺序排列，第一项为默认。
+未配置时 Codex 在前；仅当 `~/.codex` 不存在时将 Claude 排在前面，两项始终保留。
+每个 Home 需使用唯一昵称与目录；`default` 只是普通昵称。
+
 通过侧边栏 Home 筛选器缩小会话范围，创建时选择目标 Home。
+当前有效的 Home 筛选或默认 Home 偏好优先于第一项。
 
 ## 发布资源
 
@@ -190,8 +187,8 @@ ahub-cli diff delete <uuid>
 
 | 选项                            | 默认值             | 用途                                               |
 | ------------------------------- | ------------------ | -------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `default=~/.codex` | 指定一个或多个 Codex Home                          |
-| `--claude-home <nickname=path>` | 关闭               | 启用一个或多个 Claude Code Home                    |
+| `--codex-home <nickname=path>`  | `codex=~/.codex`   | 指定一个或多个 Codex Home                          |
+| `--claude-home <nickname=path>` | `claude=~/.claude` | 指定一个或多个 Claude Code Home                    |
 | `--host <host>`                 | `127.0.0.1`        | 监听地址                                           |
 | `--port <port>`                 | `4173`             | 监听端口，`0` 自动选择空闲端口                     |
 | `--home-dir <path>`             | `~/.codex-hub`     | Hub 数据目录，包含 `uploads/` 和 `hosting/`        |
@@ -231,7 +228,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 
 ## 故障排查
 
-- **没有会话：**Codex 的 `--codex-home` 应指向包含 `sessions/` 的目录；Claude 需启用 `--claude-home`，并指向包含 `projects/` 的目录。查看服务器终端中的不可读或跳过文件提示。
+- **没有会话：**Codex 的 `--codex-home` 应指向包含 `sessions/` 的目录；Claude 的 `--claude-home` 应指向包含 `projects/` 的目录。查看服务器终端中的不可读或跳过文件提示。
 - **端口占用：**选择其他端口，例如 `codex-hub --port 4180`。
 - **无法发送输入：**会话需要已连接、运行中的 tmux 窗格。先在 tmux 完成 CLI 提示，或在可用时点击**恢复**。
   已归档会话只读，仅有日志文件并不意味着终端已连接。

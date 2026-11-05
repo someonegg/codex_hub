@@ -2,10 +2,10 @@
 
 [English](README.md) | 简体中文 | [繁體中文](README.zh-TW.md)
 
-面向 Codex 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
+面向 Codex 和 Claude Code 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
 按项目浏览会话、跟进最新回复，并从电脑或手机继续工作。
 
-也可通过可选的 `--claude-home` adapter 接入 Claude Code 主会话，详见[配置与支持范围](docs/usage.zh-CN.md#启用-claude-code)。
+支持 Codex 和 Claude Code 主会话，详见[多个 Home 配置](docs/usage.zh-CN.md#多个-home)。
 
 ![创建会话、发送提示并查看已回答的用户输入卡片](docs/images/zh-CN/ahub-intro.gif)
 

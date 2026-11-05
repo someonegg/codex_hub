@@ -127,7 +127,7 @@ async function record(
       await new Promise((resolve) => setTimeout(resolve, 200));
       return json({
         revision: String(created),
-        homes: [{ nickname: "work" }, { nickname: "default" }],
+        homes: [{ nickname: "default" }, { nickname: "work" }],
         projects: [{ directory: "/projects/atlas-dashboard" }],
         sessions: created
           ? [

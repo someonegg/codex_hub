@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 
@@ -20,7 +21,10 @@ describe("server command line", () => {
     expect(runnable([])).toMatchObject({
       host: "127.0.0.1",
       port: 4173,
-      homes: [{ nickname: "default", path: resolve(homedir(), ".codex") }],
+      homes: (existsSync(resolve(homedir(), ".codex"))
+        ? ["codex", "claude"]
+        : ["claude", "codex"]
+      ).map((nickname) => ({ nickname, path: resolve(homedir(), `.${nickname}`) })),
       tls: { enabled: false },
       interactionEnabled: true,
       uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
