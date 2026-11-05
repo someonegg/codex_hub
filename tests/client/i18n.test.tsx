@@ -114,6 +114,9 @@ it.each([
     expect(zh[key].trim(), key).not.toBe("");
     expect(placeholders(zh[key]), key).toEqual(placeholders(en[key]));
   }
+});
+
+it("partitions every English message into exactly one namespace", () => {
   const namespaced = Object.values(partitionMessages(en)).flatMap((group) => Object.keys(group));
   expect(namespaced.sort()).toEqual(Object.keys(en).sort());
 });

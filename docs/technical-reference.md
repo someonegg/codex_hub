@@ -86,43 +86,17 @@ Creation defaults `home` to the first configured nickname. Unknown nicknames ret
 
 The independent `claude-jsonl` source scans only `projects/<project>/<UUID>.jsonl`.
 It never imports Codex adapter internals or writes native history. Native UUID
-validation belongs to Claude; `parentUuid` is a message link, never a parent session.
-Main records with sidechain/subagent provenance, API copies, thinking, ordinary
-tool calls/results, local commands, interruption notices and shell wrappers are
-excluded from conversation output. Ordinary assistant text is retained regardless
-of model. Each complete JSONL line is processed independently without message-ID
-aggregation; block order determines consecutive item ordinals/IDs starting at 1.
-Decoder ordinals count physical lines, and only newline-terminated records commit.
-
+validation belongs to Claude.
 Claude uses the shared [checkpointed JSONL reader](#discovery-and-caching).
-Unchanged fingerprints (logical source-relative path, size, mtimeMs) reuse cached entries;
-caches retain checkpoints and parsing state, not full log bytes or full-file digests.
-Both adapters cap lines at 8 MiB, messages at 1,000,000 UTF-16 code units without
-splitting surrogate pairs, and session diagnostics at 50. Decoder diagnostics take
-priority over separately retained normalizer diagnostics. Identity conflicts remain
-explicit state even when diagnostics are full. Both adapters cap final source
-diagnostics at 50 while continuing to process valid files. The shared
-[filesystem failure](#adapter-publication-and-diagnostics), duplicate-identity,
+Its caches retain checkpoints and parsing state, not full log bytes or full-file
+digests.
+The shared [filesystem failure](#adapter-publication-and-diagnostics), duplicate-identity,
 and immutable-publication rules apply; invalid/unavailable duplicate paths allow
 valid replacements. Internal telemetry reports full/append file counts,
 probe/decode bytes, and decode/normalization time, without an HTTP API.
 
-Assistant phase uses only that row's `message.stop_reason`: `tool_use` → `update`,
-`end_turn` → `response`, all other values → `null`. `ExitPlanMode.input.plan`
-produces an assistant plan response; external plan files are never read.
-`AskUserQuestion` emits independent request/result items keyed by tool call ID,
-with question IDs `<callId>:<index>`. Structured answers take precedence; explicit
-rejection is `aborted`, uninterpretable results are `unavailable`. No approval UI,
-permission-mode, annotations or multi-select domain fields are synthesized.
-
-Project association uses valid V1/V2 shell binding metadata, otherwise the first
-valid cwd; execution uses the latest valid cwd. Titles prefer the latest nonempty
-`custom-title`, then `ai-title`, then first ordinary user text; otherwise the title is
-`Untitled session`, matching Codex.
-Explicit titles use the first nonempty trimmed line and an 80-character limit;
-user titles share Markdown heading extraction.
-`agent-name` does not supply a task name. Only main native user `<bash-stdout>`
-wrappers can claim a pane; API copies, ordinary quoted prose and tool results cannot.
+Conversation filtering, normalization, metadata extraction, and limits are defined
+in [JSONL processing](session-jsonl-filtering.md#claude-code).
 
 Launch sets `CLAUDE_CONFIG_DIR` explicitly and uses interactive `claude`, optionally
 `--resume <UUID>`, `--worktree`, and `--dangerously-skip-permissions`.
@@ -140,7 +114,7 @@ Interrupt clears input with Ctrl-U, waits 100 ms, then sends Escape, matching
 Codex. Exit immediately sends Ctrl-C, then repeats at one-second intervals for
 three sends total, followed by the shared [exit sequence](#execution-and-confirmation).
 See the [native keyboard reference](https://code.claude.com/docs/en/interactive-mode)
-and [stop reasons](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons).
+for interaction behavior.
 
 ## Conversation model
 

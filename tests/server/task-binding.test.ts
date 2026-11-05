@@ -75,21 +75,33 @@ it.each(["null", '""', '"  "', "not-json", "42", JSON.stringify("a>b")])(
   "preserves Claude task/project metadata for invalid or empty updates: %s",
   (task) => {
     const initial = createClaudeState("session");
-    const row = (ordinal: number, project: string, task: string, marker = "V2") => ({
-      ordinal,
-      value: {
-        type: "user",
-        message: {
-          role: "user",
-          content: `<bash-stdout>AHUB_TMUX_BIND_${marker}\n/tmp/socket\n%7\n\n${project}\n${task}\n</bash-stdout>`,
-        },
-      },
-    });
-    const first = appendClaudeRecords(initial, [row(1, "/first", JSON.stringify("first"))]);
-    const second = appendClaudeRecords(first, [row(2, "relative", task)]);
+    const first = appendClaudeRecords(initial, [
+      claudeBindingRecord(1, "/first", JSON.stringify("first")),
+    ]);
+    const second = appendClaudeRecords(first, [claudeBindingRecord(2, "relative", task)]);
     expect(second).toMatchObject({ project: "/first", taskName: "first" });
-    const legacy = appendClaudeRecords(second, [row(3, "/legacy", "", "V1")]);
-    expect(legacy).toMatchObject({ project: "/legacy", taskName: "first" });
     expect(first).toMatchObject({ project: "/first", taskName: "first" });
   },
 );
+
+function claudeBindingRecord(ordinal: number, project: string, task: string, marker = "V2") {
+  return {
+    ordinal,
+    value: {
+      type: "user",
+      message: {
+        role: "user",
+        content: `<bash-stdout>AHUB_TMUX_BIND_${marker}\n/tmp/socket\n%7\n\n${project}\n${task}\n</bash-stdout>`,
+      },
+    },
+  };
+}
+
+it("updates a Claude project from V1 metadata while preserving its task and prior snapshot", () => {
+  const first = appendClaudeRecords(createClaudeState("session"), [
+    claudeBindingRecord(1, "/first", JSON.stringify("first")),
+  ]);
+  const legacy = appendClaudeRecords(first, [claudeBindingRecord(2, "/legacy", "", "V1")]);
+  expect(legacy).toMatchObject({ project: "/legacy", taskName: "first" });
+  expect(first).toMatchObject({ project: "/first", taskName: "first" });
+});

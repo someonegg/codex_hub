@@ -28,10 +28,7 @@ for each home first. Claude supports main-session reading, tmux interaction,
 create/resume, worktree, YOLO and exit; archive, delete and subagent reading are
 unavailable. Shell commands and their output stay out of the conversation reader.
 
-If Claude requests workspace trust, attach using the command in the startup
-result, approve the project directory, then execute the supplied `!` binding
-command. Refresh the list to find the session; do not create another copy merely
-because startup tracking stopped. See [adapter contracts](technical-reference.md#claude-code-adapter).
+See [adapter contracts](technical-reference.md#claude-code-adapter).
 
 ## Reading and managing sessions
 
@@ -51,9 +48,9 @@ You can bookmark a session URL or share it with another device that can access t
 - **Archive:** use the session's **…** menu to stop execution and mark the session as archived.
 - **Delete:** use the session's **…** menu to permanently remove session history. Deletion requires confirmation.
 
-Creating and resuming sessions use tmux. If startup needs login, permission, or
-trust confirmation, use **Tmux access** in the session's **…** menu or the attach
-command shown by the hub to finish in the terminal. Before resuming a session
+Creating and resuming sessions use tmux. If startup needs login or permission
+confirmation, use **Tmux access** in the session's **…** menu or the attach command
+shown by the hub to finish in the terminal. Before resuming a session
 started elsewhere, make sure its original process has exited.
 
 The latest loaded plan opens automatically and collapses earlier plans. Use

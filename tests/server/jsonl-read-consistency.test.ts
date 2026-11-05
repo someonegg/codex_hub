@@ -44,21 +44,14 @@ vi.mock("node:fs/promises", async (importOriginal) => {
   };
 });
 
-it.each([CheckpointedJsonlDecoder])("%s fixes EOF and uses the opened inode", async (Decoder) => {
+it("fixes EOF and uses the opened inode", async () => {
   const home = await createTempDirectory("jsonl-eof-");
   const path = join(home, "log.jsonl");
   const first = '{"value":"first"}\n';
   const second = '{"value":"second"}\n';
   await writeFile(path, first);
-  const descriptor = {
-    path,
-    id: "test",
-    sourceRelativePath: "log.jsonl",
-    archived: false,
-    size: 0,
-    mtimeMs: 0,
-  };
-  const decoder = new Decoder();
+  const descriptor = { path };
+  const decoder = new CheckpointedJsonlDecoder();
   hooks.afterStat = () => appendFile(path, second);
   const before = await decoder.decode(descriptor);
   expect(before.records.map((r) => r.value.value)).toEqual(["first"]);
