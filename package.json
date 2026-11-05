@@ -13,7 +13,7 @@
     "benchmark:scale": "tsx scripts/benchmark-scale.ts",
     "test": "vitest run",
     "test:integration:codex": "vitest run --config vitest.integration.config.ts tests/integration/codex-management.integration.ts",
-    "test:all": "npm test && npm run test:integration:tmux && npm run test:integration:codex",
+    "test:all": "npm test && npm run test:integration:tmux && npm run test:integration:codex && npm run test:integration:claude",
     "test:integration:tmux": "vitest run --config vitest.integration.config.ts tests/integration/tmux-service.integration.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.tests-server.json",
     "format": "prettier --write .",
@@ -21,7 +21,8 @@
     "lint": "lint-client",
     "prepack": "npm run build",
     "test:package": "node scripts/test-package.mjs",
-    "test:hosting": "npm run build && node --import tsx scripts/test-hosting.mjs"
+    "test:hosting": "npm run build && node --import tsx scripts/test-hosting.mjs",
+    "test:integration:claude": "vitest run --config vitest.integration.config.ts tests/integration/claude-management.integration.ts"
   },
   "keywords": [
     "codex",

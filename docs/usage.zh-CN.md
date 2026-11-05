@@ -11,6 +11,16 @@ npx @someonegg/codex-hub@latest
 打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止。
 安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex`，且仅监听本机。
 
+## 启用 Claude Code
+
+使用 `codex-hub --claude-home claude=~/.claude` 显式启用 Claude；默认 Codex home 仍保留。
+参数可重复，所有来源的 nickname 必须唯一。先为各 home 配置并登录本机 `claude`，创建时选择 home，恢复沿用原 home。
+支持主会话阅读、tmux 交互、创建／恢复、worktree、YOLO 和退出；不支持归档、删除及 subagent 阅读。
+原生 shell 输入、输出不显示在阅读区。
+若启动停在目录信任提示，使用启动结果中的命令连接 tmux，确认目录后执行结果提供的 `!` 绑定命令，再刷新列表。
+不要仅因启动跟踪停止就重复创建会话。
+详见[技术参考](technical-reference.md#claude-code-adapter)。
+
 ## 阅读与管理会话
 
 在侧边栏选择项目和主会话，子会话从父会话中打开。消息从头开始随滚动加载，加载至末尾后自动接收更新。
@@ -29,7 +39,7 @@ npx @someonegg/codex-hub@latest
 
 最新加载的计划自动展开，先前计划收起。使用**显示**或**隐藏**分别控制，可同时展开多个计划。
 
-## 与 Codex 交互
+## 与会话交互
 
 绿色**运行中**标记表示终端已连接。通过消息输入框发送提示，展开**终端预览**查看 CLI。
 点击**中断**，或在预览中按 **Ctrl+C** 中断执行；按 **Esc** 收起预览。**工作中**和**空闲**反映终端输出，不表示任务是否完成。

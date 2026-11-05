@@ -53,3 +53,23 @@ it("rejects symlink aliases without replacing the configured source path", async
     config: { homes: [{ nickname: "b", path: alias }] },
   });
 });
+
+it("enables Claude explicitly, retaining the default Codex home and global nickname uniqueness", () => {
+  expect(loadConfig(["--claude-home", "glm=~/.ccglm"])).toMatchObject({
+    config: {
+      homes: [
+        { nickname: "default" },
+        { nickname: "glm", adapter: "claude", path: join(homedir(), ".ccglm") },
+      ],
+    },
+  });
+  expect(() => loadConfig(["--claude-home", "default=~/.ccglm"])).toThrow(
+    "Duplicate home nickname",
+  );
+  expect(() =>
+    loadConfig(["--codex-home", "a=/tmp/shared-home", "--claude-home", "b=/tmp/shared-home"]),
+  ).toThrow("Duplicate home path");
+  expect(() => loadConfig(["--claude-home", "invalid"])).toThrow(
+    "--claude-home requires nickname=path",
+  );
+});

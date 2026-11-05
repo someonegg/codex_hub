@@ -11,6 +11,16 @@ npx @someonegg/codex-hub@latest
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
 安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex`，且僅監聽本機。
 
+## 啟用 Claude Code
+
+使用 `codex-hub --claude-home claude=~/.claude` 明確啟用 Claude；預設 Codex home 仍保留。
+參數可重複，所有來源的 nickname 必須唯一。先為各 home 設定並登入本機 `claude`，建立時選擇 home，恢復沿用原 home。
+支援主工作階段閱讀、tmux 互動、建立／恢復、worktree、YOLO 和結束；不支援封存、刪除及 subagent 閱讀。
+原生 shell 輸入、輸出不顯示在閱讀區。
+若啟動停在目錄信任提示，使用啟動結果中的命令連線 tmux，確認目錄後執行結果提供的 `!` 繫結命令，再重新整理清單。
+不要僅因啟動追蹤停止就重複建立工作階段。
+詳見[技術參考](technical-reference.md#claude-code-adapter)。
+
 ## 閱讀與管理工作階段
 
 在側邊欄選擇專案和主工作階段，子工作階段從父工作階段中開啟。訊息從頭開始隨捲動載入，載入至末尾後自動接收更新。
@@ -29,7 +39,7 @@ npx @someonegg/codex-hub@latest
 
 最新載入的計畫自動展開，先前計畫收起。使用**顯示**或**隱藏**分別控制，可同時展開多個計畫。
 
-## 與 Codex 互動
+## 與工作階段互動
 
 綠色**執行中**標記表示終端已連線。透過訊息輸入框傳送提示，展開**終端預覽**檢視 CLI。
 點選**中斷**，或在預覽中按 **Ctrl+C** 中斷執行；按 **Esc** 收起預覽。**工作中**和**閒置**反映終端輸出，不表示任務是否完成。

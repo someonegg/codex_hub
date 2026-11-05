@@ -404,7 +404,7 @@ it("preserves the collapsed preview and draft after handoff and disables Handoff
   expect(handlers.onHandoffPaneBinding).toHaveBeenCalledOnce();
   expect(handoff).toHaveAttribute(
     "title",
-    "Hand off this pane’s binding to the active Codex session.",
+    "Hand off this pane’s binding to the active agent session.",
   );
   expect(screen.getByRole("textbox")).toHaveValue("draft");
   expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(

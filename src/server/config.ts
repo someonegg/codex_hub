@@ -21,13 +21,17 @@ export type ServerTlsConfig =
       readonly certificateAuthorityPath?: string;
     };
 
-export interface CodexHomeConfig {
+export interface SessionHomeConfig {
   nickname: string;
   path: string;
+  adapter?: "codex" | "claude";
 }
 
+/** Backwards-compatible name for callers configuring Codex-only homes. */
+export type CodexHomeConfig = SessionHomeConfig;
+
 export interface ServerConfig {
-  homes: CodexHomeConfig[];
+  homes: SessionHomeConfig[];
   host: string;
   port: number;
   localPort?: number;
@@ -69,6 +73,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     strict: true,
     options: {
       "codex-home": { type: "string", multiple: true },
+      "claude-home": { type: "string", multiple: true },
       host: { type: "string" },
       port: { type: "string" },
       "local-port": { type: "string" },
@@ -88,7 +93,15 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
   if (values.version) return { kind: "version" };
 
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
-  const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
+  const names = new Set<string>();
+  const paths = new Set<string>();
+  const homes = [
+    ...parseHomes(values["codex-home"] ?? ["default=~/.codex"], "codex-home", names, paths),
+    ...parseHomes(values["claude-home"] ?? [], "claude-home", names, paths).map((home) => ({
+      ...home,
+      adapter: "claude" as const,
+    })),
+  ];
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
   const privateKeyPath = nonEmptyOption("ssl-key", values["ssl-key"]);
   const certificateAuthorityPath = nonEmptyOption("ssl-ca", values["ssl-ca"]);
@@ -144,6 +157,8 @@ Options:
   --home-dir <path>    Hub data root (default: ~/.codex-hub; uploads/ and hosting/)
   --codex-home <nickname=path>
                        Codex home; repeat for multiple homes (default: default=~/.codex)
+  --claude-home <nickname=path>
+                       Claude Code home; repeat to enable multiple homes
   --host <host>        Listen host (default: 127.0.0.1)
   --port <port>        Listen port, or 0 for a free port (default: 4173)
   --local-port <port>  Additional HTTP listener on 127.0.0.1 (disabled by default)
@@ -162,15 +177,18 @@ mTLS example:
   codex-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
 }
 
-function parseHomes(values: readonly string[]): CodexHomeConfig[] {
-  const names = new Set<string>();
-  const paths = new Set<string>();
+function parseHomes(
+  values: readonly string[],
+  option: string,
+  names: Set<string>,
+  paths: Set<string>,
+): SessionHomeConfig[] {
   return values.map((value) => {
     const separator = value.indexOf("=");
     const nickname = value.slice(0, separator).trim();
     const homePath = value.slice(separator + 1).trim();
     if (separator < 0 || !nickname || !homePath) {
-      throw new Error("--codex-home requires nickname=path with a non-empty nickname and path");
+      throw new Error(`--${option} requires nickname=path with a non-empty nickname and path`);
     }
     const path = resolve(
       homePath.startsWith("~/") ? resolve(homedir(), homePath.slice(2)) : homePath,

@@ -281,13 +281,13 @@ it("hides attach until the server supplies it and stops polling after a terminal
   render(<CreateSession project="/project" projects={[]} onCreated={vi.fn()} />);
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
-  expect(screen.getByText("Starting Codex")).toBeInTheDocument();
+  expect(screen.getByText("Starting agent")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Copy command" })).not.toBeInTheDocument();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(
-    screen.getByText("No Codex session detected yet. Attach to tmux to check startup progress."),
+    screen.getByText("No agent session detected yet. Attach to tmux to check startup progress."),
   ).toBeInTheDocument();
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
@@ -648,4 +648,29 @@ it("initializes creation options only when opening the dialog", () => {
   expect(screen.getByRole("checkbox", { name: "Enable worktree" })).not.toBeChecked();
   expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
   act(() => updatePreferences({ defaultHome: "" }));
+});
+
+it("hides unsupported Claude archive and delete while keeping exit", async () => {
+  const session = {
+    ...baseSession,
+    origin: { ...baseSession.origin, home: "glm", agentName: "Claude Code" },
+  };
+  render(
+    <ManageSession
+      session={session}
+      management={{ archive: false, delete: false }}
+      interaction={{
+        supported: true,
+        state: "connected",
+        activity: null,
+        supersededBySessionId: null,
+        attachCommand: "tmux attach-session -t claude-test",
+      }}
+      onChanged={vi.fn()}
+    />,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Session management" }));
+  expect(screen.queryByRole("button", { name: "Archive session" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Exit session" })).toBeInTheDocument();
 });

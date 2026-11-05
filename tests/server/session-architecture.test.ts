@@ -5,6 +5,7 @@ import { parse } from "@babel/parser";
 import { describe, expect, it } from "vitest";
 
 const serverDirectory = resolve("src/server");
+const claudeDirectory = resolve(serverDirectory, "adapters/claude");
 const codexDirectory = resolve(serverDirectory, "adapters/codex");
 const apiDirectory = resolve(serverDirectory, "api");
 const apiContract = resolve("src/shared/api-contract.js");
@@ -13,14 +14,19 @@ const tmuxImplementations = ["tmux-service", "tmux-launcher"].map((name) =>
 );
 
 describe("server architecture boundaries", () => {
-  it("keeps generic server modules independent from the Codex adapter", async () => {
+  it("keeps generic server modules independent from source adapters", async () => {
     const files = (await typescriptFiles(serverDirectory)).filter((file) => {
       const serverRelativePath = relative(serverDirectory, file);
       return (
         !serverRelativePath.startsWith(`adapters${sep}`) && serverRelativePath !== "create-hub.ts"
       );
     });
-    await assertIndependent(files, [codexDirectory]);
+    await assertIndependent(files, [codexDirectory, claudeDirectory]);
+  });
+
+  it("keeps Claude and Codex adapter implementations independent", async () => {
+    await assertIndependent(await typescriptFiles(claudeDirectory), [codexDirectory]);
+    await assertIndependent(await typescriptFiles(codexDirectory), [claudeDirectory]);
   });
 
   it("keeps repository queries independent from API contracts and mapping", async () => {

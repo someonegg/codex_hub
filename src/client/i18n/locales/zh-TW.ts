@@ -92,7 +92,7 @@ export const messages: Record<keyof typeof english, string> = {
   filterByHome: "按 Home 篩選",
   foldersAreNotSupported: "不支援資料夾",
   goToBoundSession: "前往已繫結工作階段",
-  handOffThisPaneSBindingToTheActiveCodexSession: "將此窗格的繫結移交給目前活動的 Codex 工作階段。",
+  handOffThisPaneSBindingToTheActiveCodexSession: "將此窗格的繫結移交給目前活動的 agent 工作階段。",
   handoff: "移交繫結",
   hide: "隱藏",
 
@@ -118,7 +118,7 @@ export const messages: Record<keyof typeof english, string> = {
   messageToAgent: "傳送給代理程式的訊息",
   newSession: "新增工作階段",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
-    "尚未檢測到 Codex 工作階段。請連線 tmux 檢視啟動進度。",
+    "尚未檢測到 agent 工作階段。請連線 tmux 檢視啟動進度。",
   noAnswerRecorded: "尚無回答記錄。",
 
   noMainSessionsYet: "暫無主工作階段",
@@ -190,7 +190,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分內容未能完整解析，請檢視下方原文。",
-  startingCodex: "正在啟動 Codex",
+  startingCodex: "正在啟動 agent",
   superseded: "已被替代",
   takePhoto: "拍照",
   terminalPreview: "終端預覽",

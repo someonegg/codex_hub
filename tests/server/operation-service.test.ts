@@ -1277,3 +1277,25 @@ describe("creation project and working directories", () => {
     });
   });
 });
+
+it.each(["archive", "delete"] as const)(
+  "rejects unsupported %s before resolving a target or sending keys",
+  async (type) => {
+    const { service, manager, interaction, set } = setup();
+    Reflect.deleteProperty(manager, type);
+    set({ sessions: [session()] });
+    await expect(service.assertSupported(type, "session")).rejects.toMatchObject({
+      status: 409,
+      code: "operation_not_supported",
+    });
+    const operation = service.manage(type, "session");
+    await flush();
+    expect(await service.get(operation.operationId)).toMatchObject({
+      status: "failed",
+      error: expect.stringContaining("operation_not_supported"),
+    });
+    expect(interaction.resolveTarget).not.toHaveBeenCalled();
+    expect(interaction.sendExitKeys).not.toHaveBeenCalled();
+    expect(interaction.killTarget).not.toHaveBeenCalled();
+  },
+);

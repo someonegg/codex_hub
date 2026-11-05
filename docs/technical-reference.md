@@ -71,8 +71,66 @@ Home nicknames route publicly; configured absolute paths namespace internally. R
 Projects merge by directory across homes; home paths remain private.
 
 Creation defaults `home` to the first configured nickname. Unknown nicknames return `400`; reusing a request ID across homes returns
-`409`. Operations use the selected/owning home's `CODEX_HOME` and the same local
-`codex` executable. See [Multiple homes](usage.md#multiple-homes).
+`409`. Operations use the selected/owning adapter's local CLI and home environment
+(`CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude). See [Multiple homes](usage.md#multiple-homes).
+
+### Claude Code adapter
+
+The independent `claude-jsonl` source scans only `projects/<project>/<UUID>.jsonl`.
+It never imports Codex adapter internals or writes native history. Native UUID
+validation belongs to Claude; `parentUuid` is a message link, never a parent session.
+Main records with sidechain/subagent provenance, API copies, thinking, ordinary
+tool calls/results, local commands, interruption notices and shell wrappers are
+excluded from conversation output. Ordinary assistant text is retained regardless
+of model. Each complete JSONL line is processed independently without message-ID
+aggregation; block order determines monotonically increasing item ordinals/IDs.
+Decoder ordinals count physical lines, and only newline-terminated records commit.
+
+Claude uses the shared [checkpointed JSONL reader](#discovery-and-caching).
+Unchanged fingerprints (device, inode, size, mtime, ctime) reuse cached entries;
+caches retain checkpoints and parsing state, not full log bytes or full-file digests.
+Both adapters cap lines at 8 MiB, messages at 1,000,000 UTF-16 code units without
+splitting surrogate pairs, and session diagnostics at 50. Claude also caps scan
+diagnostics at 50 while continuing to process valid files. The shared
+[filesystem failure](#adapter-publication-and-diagnostics), duplicate-identity,
+and immutable-publication rules apply; invalid/unavailable duplicate paths allow
+valid replacements. Internal telemetry reports full/append file counts,
+probe/decode bytes, and decode/normalization time, without an HTTP API.
+
+Assistant phase uses only that row's `message.stop_reason`: `tool_use` → `update`,
+`end_turn` → `response`, all other values → `null`. `ExitPlanMode.input.plan`
+produces an assistant plan response; external plan files are never read.
+`AskUserQuestion` emits independent request/result items keyed by tool call ID,
+with question IDs `<callId>:<index>`. Structured answers take precedence; explicit
+rejection is `aborted`, uninterpretable results are `unavailable`. No approval UI,
+permission-mode, annotations or multi-select domain fields are synthesized.
+
+Project association uses valid V2 shell binding metadata, otherwise the first
+valid cwd; execution uses the latest valid cwd. Titles prefer the latest nonempty
+`custom-title`, then `ai-title`, first ordinary user text, then native ID.
+Explicit titles use the first nonempty trimmed line and an 80-character limit;
+user titles share Markdown heading extraction.
+`agent-name` does not supply a task name. Only main native user `<bash-stdout>`
+wrappers can claim a pane; API copies, ordinary quoted prose and tool results cannot.
+
+Launch sets `CLAUDE_CONFIG_DIR` explicitly and uses interactive `claude`, optionally
+`--resume <UUID>`, `--worktree`, and `--dangerously-skip-permissions`.
+On Claude Code 2.1.318, a CLI prompt starting with `!` is ordinary model input.
+The adapter instead waits up to 30 seconds for the native interactive prompt,
+then pastes the complete `! printf ...` binding command. It reads
+`"${TMUX%%,*}"` and `"$TMUX_PANE"` using native shell expansion; avoiding command
+substitution also permits binding under Claude's worktree isolation checks.
+Claude records the binding itself. Trust/onboarding failures retain the target
+and attach command as an unknown launch result; workspace trust errors also
+include the command to run after approval. A running process alone never confirms
+launch: public management still verifies operation ID, pane ownership, project,
+and original identity on resume.
+
+Interrupt clears input with Ctrl-U, waits 100 ms, then sends Escape, matching
+Codex. Exit immediately sends Ctrl-C, then repeats at one-second intervals for
+three sends total, followed by the shared [exit sequence](#execution-and-confirmation).
+See the [native keyboard reference](https://code.claude.com/docs/en/interactive-mode)
+and [stop reasons](https://platform.claude.com/docs/en/build-with-claude/handling-stop-reasons).
 
 ## Conversation model
 
@@ -103,7 +161,7 @@ loaded input requests and responses by `callId` into cards. See
 
 | Collection | Fields                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `homes`    | `nickname`, including empty homes                                                                            |
+| `homes`    | `nickname` and `management: { archive, delete }`, including empty homes                                      |
 | `projects` | `directory`                                                                                                  |
 | `sessions` | `id`, `home`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
 
@@ -484,11 +542,17 @@ share session occupancy: identical lifecycle operations coalesce, conflicts retu
 
 ### Execution and confirmation
 
+Archive/delete are optional manager methods. Public home capabilities derive from
+method presence; Codex supports both and Claude supports neither. Unsupported
+HTTP requests return `409 operation_not_supported`; lifecycle execution repeats
+the check before resolving targets, exiting, or invoking native effects.
+
 Create/resume share launch; worktree/YOLO are options. Resume occupies the session,
 refreshes source once, records a binding baseline, and evaluates runtime once,
 reusing its directory. Prelaunch checks binding/operation validity without another
-external-change scan or filesystem/tmux atomicity. Native commands use owning
-`CODEX_HOME`; Hub never moves/deletes rollouts directly.
+external-change scan or filesystem/tmux atomicity. Native commands use the
+[owning adapter's home environment](#home-identity-and-routing); Hub never
+moves/deletes native history directly.
 
 | Operation | Validation and confirmation                                                                                                                                                                                                            |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -511,7 +575,11 @@ mean `failed`; launch timeout, malformed success, and post-launch errors mean
 `unknown`, without retry/teardown.
 
 Exit controls the whole pane, including manual binds, retaining session data;
-see [ADR-0022](adr/0022-separate-session-exit-from-archive.md). Occupancy blocks
+see [ADR-0022](adr/0022-separate-session-exit-from-archive.md). After the adapter's
+exit steps, the shared state machine waits 4 seconds before Ctrl-D and another
+9 seconds before one targeted `kill-pane`. Each step checks cancellation and
+target ownership/state; natural exit stops further sends, and forced close still
+requires exit confirmation. Occupancy blocks
 ordinary input/handoff with `409 session_busy`; archive holds it through confirmation.
 Successful snapshots can skip unreadable data and confirm absence; thrown reads cannot.
 

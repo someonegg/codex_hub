@@ -55,17 +55,18 @@ and one-time out-of-range recovery in existing tests. Protocol details live in t
 
 Run additional checks for the affected area:
 
-| Command                          | When to use                                              |
-| -------------------------------- | -------------------------------------------------------- |
-| `npm run test:package`           | Packaging or release validation                          |
-| `npm run test:integration:tmux`  | Native tmux interaction changes                          |
-| `npm run test:integration:codex` | Native Codex lifecycle changes                           |
-| `npm run test:hosting`           | Hosting/diff changes and desktop/mobile diff screenshots |
-| `npm run benchmark:scale`        | Scale or performance changes                             |
+| Command                           | When to use                                                       |
+| --------------------------------- | ----------------------------------------------------------------- |
+| `npm run test:package`            | Packaging or release validation                                   |
+| `npm run test:integration:tmux`   | Native tmux interaction changes                                   |
+| `npm run test:integration:codex`  | Native Codex lifecycle changes                                    |
+| `npm run test:integration:claude` | Native Claude lifecycle changes (requires `claude`, tmux and Git) |
+| `npm run test:hosting`            | Hosting/diff changes and desktop/mobile diff screenshots          |
+| `npm run benchmark:scale`         | Scale or performance changes                                      |
 
-With tmux and Codex CLI installed, `npm run test:all` runs unit tests and both
-native integration suites. Native lifecycle tests use temporary projects, an
-isolated Codex home, dummy credentials, and a separate tmux socket; they do not
+With tmux, Git, and both agent CLIs installed, `npm run test:all` runs unit tests
+and all three native integration suites. Lifecycle suites use isolated projects,
+homes, credentials, and tmux sockets; Claude uses a local API stub. They do not
 call a model or use existing user sessions. Hosting checks require `playwright-cli`
 and its browser.
 

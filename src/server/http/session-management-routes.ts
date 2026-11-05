@@ -116,6 +116,7 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
         if (Object.keys(body).length !== 0)
           throw new RequestBodyError(400, "invalid_json", "Expected an empty object");
         const { id: sessionId } = sessionPath(url.pathname);
+        await operations.assertSupported(exit ? "exit" : archive ? "archive" : "delete", sessionId);
         sendJson(
           response,
           202,
@@ -130,7 +131,7 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           response,
           error.status,
           {
-            error: { code: "management_error", message: error.message },
+            error: { code: error.code, message: error.message },
           },
           request.method === "HEAD",
         );
