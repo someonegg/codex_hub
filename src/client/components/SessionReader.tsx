@@ -6,6 +6,8 @@ import type { SessionMessagesResponse } from "../../shared/api-contract";
 import { t } from "../i18n";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
+import { EventMark } from "./EventMark";
+import { MessageItem } from "./MessageItem";
 import { PageJumpControls } from "./PageJumpControls";
 import { SessionHeader } from "./SessionHeader";
 import { SessionInteraction } from "./SessionInteraction";
@@ -45,6 +47,20 @@ export function SessionReader({
   useTranslation();
   const [interactionPanel, setInteractionPanel] = useState<HTMLElement | null>(null);
   const { hasMore, items, interaction } = context;
+  const [preview, setPreview] = useState<{
+    sessionId: string;
+    items: typeof items;
+    message: string;
+  } | null>(null);
+  // The reader preserves the items array when a poll contains no displayable messages.
+  const messagePreview =
+    preview?.sessionId === context.session.id && preview.items === items ? preview : null;
+  if (preview && !messagePreview) setPreview(null);
+  const showMessagePreview = (message: string) => {
+    const next = { sessionId: context.session.id, items, message };
+    setPreview(next);
+    return () => setPreview((current) => (current === next ? null : current));
+  };
   const latestMessage = items.at(-1) ?? null;
   const previewAutoExpandKey =
     !hasMore &&
@@ -64,7 +80,7 @@ export function SessionReader({
         session={context.session}
       />
       {related}
-      {items.length === 0 && !readerLoading ? (
+      {items.length === 0 && !readerLoading && !messagePreview ? (
         <EmptyState title={t("thisSessionHasNoMessages")}>
           {t("waitForTheSessionToUpdate")}
         </EmptyState>
@@ -79,6 +95,30 @@ export function SessionReader({
           onLoadMore={onLoadMore}
         />
       ) : null}
+      {messagePreview ? (
+        <ol
+          className="timeline message-preview"
+          aria-label={t("messagePreview")}
+          aria-live="polite"
+        >
+          <li className="trace-event human">
+            <EventMark item={{ kind: "message" }} />
+            <MessageItem
+              preview
+              item={{
+                kind: "message",
+                id: "preview",
+                ordinal: 0,
+                timestamp: null,
+                role: "user",
+                phase: null,
+                itemType: null,
+                markdown: messagePreview.message,
+              }}
+            />
+          </li>
+        </ol>
+      ) : null}
       {context.session.status !== "archived" ? (
         <SessionInteraction
           key={context.session.id}
@@ -89,6 +129,8 @@ export function SessionReader({
           interaction={interaction}
           onNavigate={onNavigate}
           sessionId={context.session.id}
+          updatedAt={context.session.updatedAt}
+          onMessagePreview={showMessagePreview}
           previewAutoExpandKey={previewAutoExpandKey}
         />
       ) : null}

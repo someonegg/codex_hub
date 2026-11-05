@@ -47,6 +47,10 @@ message input and expand **Terminal Preview** to inspect the CLI. Use
 collapse the preview. **Working** and **Idle** reflect terminal output, not whether
 a task is complete.
 
+Ordinary prompts appear immediately with a **Pending** label until conversation
+messages update. Pure slash commands skip this preview. If sending fails, the
+preview disappears and your draft remains.
+
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's connected page.
 When it shows **Superseded**, follow **Go to bound session**. Your unsent draft

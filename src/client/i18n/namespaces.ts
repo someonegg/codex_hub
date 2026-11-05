@@ -97,6 +97,8 @@ export const namespaceKeys = {
     "sessionTimeline",
     "show",
     "thisSessionHasNoMessages",
+    "messagePreview",
+    "lastUpdatedTime",
     "timeUnavailable",
     "unavailable",
     "user",
