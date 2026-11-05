@@ -1,7 +1,7 @@
 #!/usr/bin/env node
+import { packageVersion } from "../version.js";
 import { CommandError } from "./command-error.js";
 import { outputFailure } from "./output.js";
-import { packageVersion } from "../version.js";
 const help = `Usage: ahub-cli <command> [options]
   page      Publish, list, or delete local hosted pages
   diff      Publish, list, or delete local review diffs
