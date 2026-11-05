@@ -41,6 +41,7 @@ export interface ServerConfig {
 
 export type CommandLineResult =
   | { readonly kind: "help" }
+  | { readonly kind: "version" }
   | { readonly kind: "run"; readonly config: ServerConfig };
 
 function nonEmptyOption(name: string, value: string | undefined): string | undefined {
@@ -76,6 +77,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       "ssl-key": { type: "string" },
       "ssl-ca": { type: "string" },
       help: { type: "boolean" },
+      version: { type: "boolean" },
       "tmux-socket": { type: "string" },
       "home-dir": { type: "string" },
       hosting: { type: "boolean" },
@@ -83,6 +85,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
   });
 
   if (values.help) return { kind: "help" };
+  if (values.version) return { kind: "version" };
 
   const host = nonEmptyOption("host", values.host) ?? LOOPBACK_HOST;
   const homes = parseHomes(values["codex-home"] ?? ["default=~/.codex"]);
@@ -150,6 +153,7 @@ Options:
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
   --tmux-socket <path> tmux socket (default: tmux default selection)
   --help               Show this help
+  --version            Show the current version
 
 TLS example:
   codex-hub --ssl --ssl-cert server.crt --ssl-key server.key

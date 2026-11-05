@@ -51,6 +51,21 @@ try {
   const help = await exec(serverBinary, ["--help"], { cwd: temporary });
   assert.match(help.stdout, /Usage: codex-hub/);
   const cli = join(temporary, "node_modules", ".bin", "ahub-cli");
+  const installedManifest = JSON.parse(
+    await readFile(
+      join(temporary, "node_modules", "@someonegg", "codex-hub", "package.json"),
+      "utf8",
+    ),
+  );
+  for (const [binary, args] of [
+    [serverBinary, ["--version"]],
+    [cli, ["version"]],
+    [cli, ["--version"]],
+  ]) {
+    const result = await exec(binary, args, { cwd: temporary });
+    assert.equal(result.stdout.trim(), installedManifest.version);
+    assert.equal(result.stderr, "");
+  }
   await assert.rejects(exec(serverBinary, ["session", "--help"]));
   assert.match((await exec(cli, ["--help"])).stdout, /Usage: ahub-cli/);
   await assert.rejects(exec(cli, ["unknown"]));
