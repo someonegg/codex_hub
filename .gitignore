@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.claude/
 .playwright-cli/
 _features/
 .DS_Store

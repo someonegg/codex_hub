@@ -69,7 +69,7 @@ describe("Claude incremental allocation", () => {
     expect(after.timeline).not.toBe(before.timeline);
     expect(after.timeline[0]).toBe(before.timeline[0]);
     expect(before.timeline).toHaveLength(1);
-    expect(after.timeline[1]).toMatchObject({ id: `${id}:1`, ordinal: 1, markdown: "World" });
+    expect(after.timeline[1]).toMatchObject({ id: `${id}:2`, ordinal: 2, markdown: "World" });
     expect(after.questions).toBe(before.questions);
   });
 
@@ -98,7 +98,7 @@ describe("Claude incremental allocation", () => {
       answers: [{ questionId: "ask:0", answers: ["Yes"] }],
     });
     expect(full.timeline.map(({ id: itemId, ordinal }) => [itemId, ordinal])).toEqual(
-      full.timeline.map((_, index) => [`${id}:${index}`, index]),
+      full.timeline.map((_, index) => [`${id}:${index + 1}`, index + 1]),
     );
     for (let split = 0; split <= rows.length; split++) {
       const partial = append(before, ...rows.slice(0, split));

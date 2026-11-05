@@ -68,7 +68,7 @@ export function appendClaudeRecords(
   };
   type NewItem<T = TimelineItem> = T extends TimelineItem ? Omit<T, "id" | "ordinal"> : never;
   const emit = (item: NewItem) => {
-    const ordinal = previous.timeline.length + newItems.length;
+    const ordinal = previous.timeline.length + newItems.length + 1;
     if (item.kind === "message")
       item = { ...item, markdown: truncateText(item.markdown, MAX_MESSAGE_CHARS).text };
     newItems.push({ ...item, id: `${state.nativeId}:${ordinal}`, ordinal } as TimelineItem);

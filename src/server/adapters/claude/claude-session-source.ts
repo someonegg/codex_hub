@@ -22,6 +22,8 @@ import {
 import { claudeInteraction, claudeRecordBindings, validClaudeId } from "./interaction.js";
 import { appendClaudeRecords, type ClaudeState, createClaudeState } from "./session-normalizer.js";
 
+type RejectedCacheEntry = Omit<CacheEntry, "entry"> & { readonly entry?: never };
+
 interface CacheEntry {
   readonly fingerprint: FileFingerprint;
   readonly checkpoint: JsonlCheckpoint;
@@ -37,6 +39,7 @@ export class ClaudeSessionSource implements SessionSource {
     return { ...this.#telemetry };
   }
   #cache = new Map<string, CacheEntry>();
+  #rejected = new Map<string, RejectedCacheEntry>();
   constructor(
     private readonly directory: string,
     instanceKey: string,
@@ -54,6 +57,7 @@ export class ClaudeSessionSource implements SessionSource {
       );
     };
     const next = new Map<string, CacheEntry>();
+    const rejected = new Map<string, RejectedCacheEntry>();
     const seen = new Set<string>();
     const projects = join(this.directory, "projects");
     try {
@@ -76,15 +80,20 @@ export class ClaudeSessionSource implements SessionSource {
           continue;
         }
         const key = relative(this.directory, path);
-        const old = this.#cache.get(key);
+        const old = this.#cache.get(key) ?? this.#rejected.get(key);
         let decoded;
         let fingerprint: FileFingerprint;
         try {
           const info = await stat(path);
           fingerprint = { sourceRelativePath: key, size: info.size, mtimeMs: info.mtimeMs };
           if (old && sameFingerprint(old.fingerprint, fingerprint)) {
-            next.set(key, old);
-            seen.add(nativeId);
+            if (old.entry !== undefined) {
+              next.set(key, old);
+              seen.add(nativeId);
+            } else {
+              rejected.set(key, old);
+              warn(...old.state.diagnostics);
+            }
             continue;
           }
           const started = performance.now();
@@ -118,10 +127,11 @@ export class ClaudeSessionSource implements SessionSource {
         this.#telemetry.normalizeMs += performance.now() - started;
         if (state.identityConflict) {
           warn(...state.diagnostics);
+          rejected.set(key, { fingerprint, checkpoint: decoded.checkpoint, state });
           continue;
         }
         const entry =
-          old?.state === state
+          old?.entry !== undefined && old.state === state
             ? old.entry
             : materializeClaudeSession(state, nativeId, this.descriptor);
         const localId = entry.localId;
@@ -145,6 +155,7 @@ export class ClaudeSessionSource implements SessionSource {
         });
     }
     this.#cache = next;
+    this.#rejected = rejected;
     const sessions = [...next.values()].map((cached) => cached.entry);
     const snapshot = {
       bindings,
