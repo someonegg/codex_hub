@@ -237,18 +237,19 @@ See the [diff reference](technical-reference.md#temporary-diffs) and
 Pass options to `codex-hub`; restart after changing them. Run `codex-hub --help`
 for the full command-line help.
 
-| Option                         | Default            | Purpose                                             |
-| ------------------------------ | ------------------ | --------------------------------------------------- |
-| `--codex-home <nickname=path>` | `default=~/.codex` | Choose one or more Codex homes                      |
-| `--host <host>`                | `127.0.0.1`        | Listen address                                      |
-| `--port <port>`                | `4173`             | Listen port; `0` selects a free port                |
-| `--home-dir <path>`            | `~/.codex-hub`     | Hub data root (`uploads/` and `hosting/`)           |
-| `--hosting`                    | Disabled           | Enable static web hosting                           |
-| `--tmux-socket <path>`         | tmux default       | Use a custom tmux socket                            |
-| `--ssl`                        | Disabled           | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
-| `--ssl-cert <path>`            | None               | PEM server certificate or chain                     |
-| `--ssl-key <path>`             | None               | PEM private key                                     |
-| `--ssl-ca <path>`              | None               | Require client certificates signed by this CA       |
+| Option                          | Default            | Purpose                                             |
+| ------------------------------- | ------------------ | --------------------------------------------------- |
+| `--codex-home <nickname=path>`  | `default=~/.codex` | Choose one or more Codex homes                      |
+| `--claude-home <nickname=path>` | Disabled           | Enable one or more Claude Code homes                |
+| `--host <host>`                 | `127.0.0.1`        | Listen address                                      |
+| `--port <port>`                 | `4173`             | Listen port; `0` selects a free port                |
+| `--home-dir <path>`             | `~/.codex-hub`     | Hub data root (`uploads/` and `hosting/`)           |
+| `--hosting`                     | Disabled           | Enable static web hosting                           |
+| `--tmux-socket <path>`          | tmux default       | Use a custom tmux socket                            |
+| `--ssl`                         | Disabled           | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
+| `--ssl-cert <path>`             | None               | PEM server certificate or chain                     |
+| `--ssl-key <path>`              | None               | PEM private key                                     |
+| `--ssl-ca <path>`               | None               | Require client certificates signed by this CA       |
 
 ## Security
 
@@ -284,8 +285,9 @@ external proxy traffic to it.
 
 ## Troubleshooting
 
-- **No sessions:** check that `--codex-home` points to the directory containing
-  `sessions/`. Check the server's terminal output for unreadable or skipped files.
+- **No sessions:** for Codex, point `--codex-home` to the directory containing
+  `sessions/`; for Claude, enable `--claude-home` and point it to the directory
+  containing `projects/`. Check the server's terminal output for unreadable or skipped files.
 - **Port in use:** choose another port, such as `codex-hub --port 4180`.
 - **Cannot send input:** the session needs a live, connected tmux pane. Complete
   any CLI prompts in tmux, or use **Resume** if available. Archived sessions are
