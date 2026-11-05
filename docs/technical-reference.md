@@ -136,7 +136,7 @@ concurrent observations and bound socket concurrency; errors revoke Live and res
 `GET /api/v1/sessions/:id/messages` is the single conversation read endpoint.
 Queries: `after` (nonnegative ordinal), `limit` (1–300, default 10), `wait`
 (boolean, default false), and optional `stateRevision` (43-character base64url).
-It returns `session`, `interaction`, `live`, `items`, `nextAfter`, `hasMore`, and
+It returns `session`, `interaction`, `items`, `nextAfter`, `hasMore`, and
 `stateRevision`. `GET /api/v1/sessions/:id` returns
 `{ session, interaction, stateRevision }` and accepts no query parameters.
 
@@ -160,9 +160,10 @@ read internal facts through `InteractionSessionReader` over the same catalog,
 without calling the public response assembler. The interaction describer is
 injected at construction.
 
-`stateRevision` covers the complete `session` and `interaction` values, including
-`session.updatedAt`. It does not validate message history. An ordinal beyond the
-current range returns `400 after_out_of_range`; clients retry once from `after=0`.
+`stateRevision` covers `session` except `updatedAt`, and the complete
+`interaction` value. `session.updatedAt` remains in responses but does not wake
+waiting requests. The revision does not validate message history. An ordinal
+beyond the current range returns `400 after_out_of_range`; clients retry once from `after=0`.
 Other history rewrites may go undetected; reload the browser page to reread history.
 Terminal Preview uses its own snapshot/delta protocol.
 
@@ -212,7 +213,7 @@ Lifecycle commands run without a CLI confirmation prompt; [execution rules](#exe
 
 ### Public session CLI results
 
-Text/JSON whitelists are independent of HTTP types; extra fields never pass through. Readiness uses API `live` and interaction before
+Text/JSON whitelists are independent of HTTP types; extra fields never pass through. Readiness uses API `session.status` and interaction before
 mapping. Operation/request IDs and attach commands are excluded. Tmux diagnostics
 include socketPath, paneId, and sessionName (null when unknown).
 
@@ -263,7 +264,7 @@ Task completion is judged by the caller against requirements and deliverables.
 Follow has no overall deadline; `--timeout` limits each HTTP request (default 30 seconds, above the server’s 25-second wait).
 
 The first result always prints. Later results print only for visible new items
-or changes to session/interaction fields. JSON output is NDJSON with the same
+or changes to session/interaction fields other than `session.updatedAt`. JSON output is NDJSON with the same
 complete shape as single inspection and only that page's incremental items.
 Text output uses fixed separators and marks state changes without new messages.
 Position-only advances remain silent. Numeric `after / nextAfter` positions do

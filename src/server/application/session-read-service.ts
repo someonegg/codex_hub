@@ -116,7 +116,6 @@ export class SessionReadService implements SessionReader {
           items: result.items,
           nextAfter: result.nextAfter,
           hasMore: result.hasMore,
-          live: state.session.status === "live",
         };
       },
     };

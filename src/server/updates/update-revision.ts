@@ -17,7 +17,7 @@ export type UpdateRevisionSession = SessionDetail;
 export function createProcessUpdateRevisionFactory(
   secret: Uint8Array = randomBytes(32),
 ): UpdateRevisionFactory {
-  return (session, interaction) =>
+  return ({ updatedAt, ...session }, interaction) =>
     createHmac("sha256", secret)
       .update(canonicalJson({ session, interaction }))
       .digest("base64url") as UpdateRevision;

@@ -323,8 +323,7 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
     else {
       inspections++;
       reply(res, {
-        session: { id: "session" },
-        live: true,
+        session: { id: "session", status: "live" },
         interaction: {
           supported: true,
           state: "connected",
@@ -447,15 +446,14 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
           parentId: "parent",
           childIds: [],
           title: "Child",
-          status: "normal",
+          status: "live",
           origin: { sourceType: "codex", agentName: "Codex", home: "work" },
-          resume: { allowed: true, reason: null },
+          resume: { allowed: false, reason: "Session is already live" },
           workingDirectory: null,
           projectDirectory: null,
           createdAt: null,
           updatedAt: null,
         },
-        live: true,
         interaction: {
           supported: true,
           state: "connected",
@@ -576,7 +574,7 @@ it("keeps launch diagnostics when readiness never reaches idle", async () => {
       });
     } else
       reply(res, {
-        live: true,
+        session: { id: "id", status: "live" },
         interaction: { supported: true, state: "connected", activity: "working" },
       });
   });

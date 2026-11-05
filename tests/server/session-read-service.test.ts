@@ -290,6 +290,7 @@ describe("catalog structure and updatedAt isolation", () => {
       },
     ]);
     const first = await repository.list();
+    const baseline = (await repository.messages(first.sessions[0]!.id, { after: 0 }))!;
     entries = entries.reverse().map((entry) => ({
       ...entry,
       normalized: {
@@ -313,6 +314,19 @@ describe("catalog structure and updatedAt isolation", () => {
     expect(updated.sessions.every((session) => session.updatedAt === "2030-01-01T00:00:00Z")).toBe(
       true,
     );
+    const page = (await repository.messages(baseline.session.id, { after: 0 }))!;
+    expect(page.session.updatedAt).toBe("2030-01-01T00:00:00Z");
+    expect(page.stateRevision).toBe(baseline.stateRevision);
+    const updates = closeAfterEach(
+      new SessionUpdatesService(repository, { waitTimeoutMs: 30, probeIntervalMs: 5 }),
+    );
+    await expect(
+      updates.wait(baseline.session.id, {
+        after: baseline.nextAfter,
+        stateRevision: baseline.stateRevision,
+        wait: true,
+      }),
+    ).resolves.toBeNull();
     entries = entries.map((entry) => ({
       ...entry,
       normalized: { ...entry.normalized, session: { ...entry.normalized.session, archived: true } },
@@ -320,6 +334,9 @@ describe("catalog structure and updatedAt isolation", () => {
     generation++;
     await repository.refresh();
     expect((await repository.list()).revision).not.toBe(first.revision);
+    expect((await repository.getSession(baseline.session.id))!.stateRevision).not.toBe(
+      baseline.stateRevision,
+    );
   });
 });
 

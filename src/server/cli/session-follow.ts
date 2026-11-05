@@ -44,7 +44,8 @@ export async function followInspect(options: {
       if (!observed) break;
       query.set("stateRevision", observed.stateRevision);
       const result = mapInspect(observed);
-      const state = JSON.stringify([result.session, result.interaction]);
+      const { updatedAt, ...sessionState } = result.session;
+      const state = JSON.stringify([sessionState, result.interaction]);
       if (!emitted || result.items.length > 0 || previousState !== state) {
         const text = formatResult("inspect", result, { emptyItemsText: "No new messages." });
         output(result, json, (emitted ? "========================================\n" : "") + text);

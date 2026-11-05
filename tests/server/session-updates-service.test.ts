@@ -29,7 +29,6 @@ function fixture() {
             items: items.filter((item) => item.ordinal > (query.after ?? 0)),
             nextAfter: items.at(-1)?.ordinal ?? 0,
             hasMore: false,
-            live: false,
           }),
         };
       },

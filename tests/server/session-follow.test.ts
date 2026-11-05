@@ -15,7 +15,7 @@ vi.mock("../../src/server/cli/session-client.js", async (importOriginal) => ({
 import { followInspect } from "../../src/server/cli/session-follow.js";
 
 const page = (nextAfter: number, extra = {}) => ({
-  session: { id: "id", status: "live", origin: {}, resume: {} },
+  session: { id: "id", status: "live", origin: {}, resume: {}, updatedAt: null },
   interaction: { supported: true, state: "connected", activity: "idle" },
   stateRevision: "a".repeat(43),
   items: [],
@@ -39,8 +39,7 @@ afterEach(() => {
   request.mockReset();
 });
 
-it("continues after final replies and retains incremental metadata", async () => {
-  vi.useFakeTimers();
+it("continues after final replies without printing timestamp-only changes", async () => {
   const log = vi.spyOn(console, "log").mockImplementation(() => {});
   const item = {
     kind: "message",
@@ -52,10 +51,12 @@ it("continues after final replies and retains incremental metadata", async () =>
     itemType: "answer",
     markdown: "Done",
   };
-  request.mockResolvedValueOnce(page(1, { items: [item] })).mockResolvedValueOnce(page(1));
-  const observing = followInspect(options({ intervalMs: 20 }));
-  await vi.advanceTimersByTimeAsync(20);
-  await observing;
+  request.mockResolvedValueOnce(page(1, { items: [item] })).mockResolvedValueOnce(
+    page(1, {
+      session: { ...page(1).session, updatedAt: "2030-01-01T00:00:00Z" },
+    }),
+  );
+  await followInspect(options());
   expect(request).toHaveBeenCalledTimes(2);
   expect(JSON.parse(log.mock.calls[0]![0]).items).toEqual([item]);
   expect(log).toHaveBeenCalledTimes(1);

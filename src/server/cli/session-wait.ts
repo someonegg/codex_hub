@@ -59,7 +59,7 @@ export async function waitForLaunch(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/messages?limit=1`,
     );
     if (
-      observed.live &&
+      observed.session.status === "live" &&
       observed.interaction.supported &&
       observed.interaction.state === "connected" &&
       observed.interaction.activity === "idle"

@@ -32,7 +32,6 @@ const base = {
     childIds: ["secret"],
     sourceId: "secret",
   },
-  live: true,
   nextAfter: 44,
   hasMore: true,
   interaction: {
