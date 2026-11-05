@@ -86,7 +86,7 @@ Creation defaults `home` to the first configured nickname. Unknown nicknames ret
 
 Configure and authenticate the local `claude` CLI for each Home before launching.
 Supported operations include main-session reading, tmux interaction, create/resume,
-worktree, YOLO, and exit. Archive, delete, and subagent reading are unavailable;
+worktree, YOLO, exit, and delete. Archive and subagent reading are unavailable;
 native shell commands and output are excluded from the conversation reader.
 See [Home configuration](usage.md#multiple-homes) for shared configuration rules.
 
@@ -156,7 +156,7 @@ loaded input requests and responses by `callId` into cards. See
 
 | Collection | Fields                                                                                                       |
 | ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `homes`    | `nickname` and `management: { archive, delete }`, including empty homes                                      |
+| `homes`    | `nickname` and `management: { archive }`, including empty homes                                              |
 | `projects` | `directory`                                                                                                  |
 | `sessions` | `id`, `home`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
 
@@ -526,7 +526,7 @@ nullable `sessionId`, `error`, `phase`, `attachCommand`, optional
 `target: { socketPath, paneId, sessionName }`, and launch `mode: new | resume`.
 Types: `create`, `exit`, `archive`, `delete`; statuses: `pending`, `succeeded`,
 `failed`, `unknown`. Exit phases are `sending_exit`, `waiting_exit`; archive adds
-`archiving`, `confirming_archive`.
+`archiving`, `confirming_archive`; delete adds `deleting`, `confirming_delete`.
 
 ### Idempotency and conflicts
 
@@ -538,8 +538,8 @@ share session occupancy: identical lifecycle operations coalesce, conflicts retu
 
 ### Execution and confirmation
 
-Archive/delete are optional manager methods. Public home capabilities derive from
-method presence; Codex supports both and Claude supports neither. Unsupported
+Delete is required; archive is optional. Public home archive capability derives from
+method presence; Codex supports archive and Claude does not. Unsupported archive
 HTTP requests return `409 operation_not_supported`; lifecycle execution repeats
 the check before resolving targets, exiting, or invoking native effects.
 
@@ -547,16 +547,16 @@ Create/resume share launch; worktree/YOLO are options. Resume occupies the sessi
 refreshes source once, records a binding baseline, and evaluates runtime once,
 reusing its directory. Prelaunch checks binding/operation validity without another
 external-change scan or filesystem/tmux atomicity. Native commands use the
-[owning adapter's home environment](#home-identity-and-routing); Hub never
-moves/deletes native history directly.
+[owning adapter's home environment](#home-identity-and-routing). Shared services
+delegate native history changes to the owning adapter.
 
-| Operation | Validation and confirmation                                                                                                                                                                                                            |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Create    | Project and effective working directories independently resolve to existing real paths; equal inputs share resolution. Confirm operation marker, target, project, valid bind within 300 seconds after launch.                          |
-| Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.                   |
-| Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks.         |
-| Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                        |
-| Delete    | Permanently remove session history through native delete (`codex delete <UUID> --force`), confirm same-source native identity absent within 30 seconds. Initially absent in successful snapshot succeeds. Running panes remain active. |
+| Operation | Validation and confirmation                                                                                                                                                                                                                                                                                                                                         |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Create    | Project and effective working directories independently resolve to existing real paths; equal inputs share resolution. Confirm operation marker, target, project, valid bind within 300 seconds after launch.                                                                                                                                                       |
+| Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.                                                                                                                                                |
+| Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks.                                                                                                                                      |
+| Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                                                                                                                                                     |
+| Delete    | Run Exit validation and sequence first, then permanently remove history through the owning adapter (Codex: `codex delete <UUID> --force`; Claude: remove session JSONL and associated subagents directory). Exit, deletion, and same-source absence confirmation have separate 30-, 25-, and 30-second budgets. Initially absent in a successful snapshot succeeds. |
 
 Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
 `--worktree`/`--yolo` (off by default), and an initial native `! printf ...` shell binding command, whose recorded output
@@ -577,7 +577,7 @@ exit steps, the shared state machine waits 4 seconds before Ctrl-D and another
 9 seconds before one targeted `kill-pane`. Each step checks cancellation and
 target ownership/state; natural exit stops further sends, and forced close still
 requires exit confirmation. Occupancy blocks
-ordinary input/handoff with `409 session_busy`; archive holds it through confirmation.
+ordinary input/handoff with `409 session_busy`; archive and delete hold it through confirmation.
 Successful snapshots can skip unreadable data and confirm absence; thrown reads cannot.
 
 ### Tracking and recovery

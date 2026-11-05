@@ -7,6 +7,7 @@ import { expect, it, vi } from "vitest";
 
 import { createCodexHub } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
+import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -170,30 +171,25 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     const nativeId = (await hub.sessions.managementSnapshot()).byId.get(sessionId)!.sourceId;
     expect(nativeId).toMatch(/^[a-f0-9-]+$/);
     expect((await hub.sessions.list()).homes).toEqual([
-      { nickname: "claude", management: { archive: false, delete: false } },
+      { nickname: "claude", management: { archive: false } },
     ]);
     // Unsupported HTTP and internal operations must leave the live pane untouched.
-    for (const type of ["archive", "delete"] as const) {
-      const response = await fetch(
-        `${base}/api/v1/sessions/${sessionId}${type === "archive" ? "/archive" : ""}`,
-        {
-          method: type === "archive" ? "POST" : "DELETE",
-          headers: { "content-type": "application/json" },
-          body: "{}",
-        },
-      );
-      expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ error: { code: "operation_not_supported" } });
-      const rejected = hub.operations.manage(type, sessionId);
-      await until(
-        async () => (await hub.operations.get(rejected.operationId))?.status === "failed",
-        "unsupported operation",
-      );
-      expect(await hub.interaction.describe(sessionId)).toMatchObject({
-        supported: true,
-        state: "connected",
-      });
-    }
+    const response = await fetch(`${base}/api/v1/sessions/${sessionId}/archive`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "operation_not_supported" } });
+    const rejected = hub.operations.manage("archive", sessionId);
+    await until(
+      async () => (await hub.operations.get(rejected.operationId))?.status === "failed",
+      "unsupported operation",
+    );
+    expect(await hub.interaction.describe(sessionId)).toMatchObject({
+      supported: true,
+      state: "connected",
+    });
     await hub.interaction.sendMessage(sessionId, "Say hello");
     await until(
       async () =>
@@ -232,7 +228,6 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     );
     expect(resumed.sessionId).toBe(sessionId);
     expect((await hub.sessions.managementSnapshot()).byId.get(sessionId)?.sourceId).toBe(nativeId);
-    await succeeded(hub.operations.manage("exit", sessionId).operationId);
     const worktree = await succeeded(
       hub.operations.create({
         projectDirectory: directory,
@@ -244,6 +239,11 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     expect(session.projectDirectory).toBe(directory);
     expect(session.workingDirectory).not.toBe(directory);
     await succeeded(hub.operations.manage("exit", session.id).operationId);
+    const deleteTarget = await hub.interaction.resolveTarget(sessionId);
+    expect(deleteTarget).not.toBeNull();
+    await succeeded(hub.operations.manage("delete", sessionId).operationId);
+    expect((await hub.sessions.managementSnapshot()).byId.has(sessionId)).toBe(false);
+    expect(await new TmuxInteractionService().inspect(deleteTarget!)).toBe("exited");
     // Ctrl-C is adapter-compatible; native versions may require the shared fallback.
     const killedTargets = kill.mock.calls.map(([target]) => JSON.stringify(target));
     expect(new Set(killedTargets).size).toBe(killedTargets.length);

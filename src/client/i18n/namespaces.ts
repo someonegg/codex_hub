@@ -18,6 +18,8 @@ export const namespaceKeys = {
     "closeResumeSession",
     "confirmDelete",
     "confirmingArchive",
+    "deletingHistory",
+    "confirmingDelete",
     "couldNotUpdateSessionList",
     "createSession",
     "creating",

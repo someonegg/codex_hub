@@ -196,6 +196,15 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
         expect(afterExit?.archived).toBe(false);
         expect(await interaction.resolveTarget(record.id)).toBeNull();
       }
+      if (index === 1) {
+        const deletion = operations.manage("delete", record.id);
+        await until(
+          async () => (await operations.get(deletion.operationId))?.status === "succeeded",
+        );
+        expect(await new TmuxInteractionService().inspect(attempt)).toBe("exited");
+        expect((await reader.managementSnapshot()).byId.has(record.id)).toBe(false);
+        continue;
+      }
       const archive = operations.manage("archive", record.id);
       await until(async () => {
         const value = await operations.get(archive.operationId);

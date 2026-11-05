@@ -187,8 +187,8 @@ it("keeps Codex and Claude homes independently routed while merging project asso
     expect(hub.managers.get("glm").archive).toBeUndefined();
     expect(hub.managers.get("codex").archive).toBeTypeOf("function");
     expect((await hub.sessions.list()).homes).toEqual([
-      { nickname: "codex", management: { archive: true, delete: true } },
-      { nickname: "glm", management: { archive: false, delete: false } },
+      { nickname: "codex", management: { archive: true } },
+      { nickname: "glm", management: { archive: false } },
     ]);
   } finally {
     hub.close();

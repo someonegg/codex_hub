@@ -22,7 +22,7 @@ export interface SessionProject {
 }
 
 export interface SessionHome {
-  management?: { archive: boolean; delete: boolean };
+  management?: { archive: boolean };
   nickname: string;
 }
 
@@ -112,7 +112,14 @@ export type TerminalPreviewMessage = TerminalPreviewFrame | TerminalPreviewError
 export interface HubOperation {
   mode?: "new" | "resume";
   target?: { socketPath: string; paneId: string; sessionName?: string | null };
-  phase: "sending_exit" | "waiting_exit" | "archiving" | "confirming_archive" | null;
+  phase:
+    | "sending_exit"
+    | "waiting_exit"
+    | "archiving"
+    | "confirming_archive"
+    | "deleting"
+    | "confirming_delete"
+    | null;
   attachCommand: string | null;
   operationId: string;
   type: "create" | "exit" | "archive" | "delete";

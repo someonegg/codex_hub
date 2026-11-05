@@ -39,7 +39,7 @@ export interface SessionManager extends SessionExitCapability {
   resolveDirectory(directory: string): Promise<{ directory: string }>;
   launch(options: SessionLaunchOptions): Promise<TmuxBinding>;
   archive?(nativeId: string): Promise<void>;
-  delete?(nativeId: string): Promise<void>;
+  delete(nativeId: string): Promise<void>;
 }
 
 /** A launch failure records whether a process may already be running. */
@@ -100,6 +100,5 @@ export async function resolveResumeDirectory(
 export function managementCapabilities(manager: SessionManager) {
   return {
     archive: typeof manager.archive === "function",
-    delete: typeof manager.delete === "function",
   };
 }
