@@ -5,6 +5,13 @@ export interface TmuxBinding {
   readonly sessionName: string;
 }
 
+/** Coordinates refer to the captured visible pane, with a zero-based origin. */
+export interface TerminalCursorSnapshot {
+  readonly content: string;
+  readonly cursorX: number;
+  readonly cursorY: number;
+}
+
 export interface InteractionTransport {
   connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding>;
   resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;

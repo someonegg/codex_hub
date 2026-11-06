@@ -10,10 +10,10 @@ import {
 } from "../../management/session-manager.js";
 import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
+import { claudePromptPosition } from "./prompt-readiness.js";
 
-/** Prompt detection is an optimization; send once after this delay regardless. */
+/** Never deliver bootstrap input unless the native prompt is confirmed ready. */
 export const BINDING_PROMPT_WAIT_MS = 15_000;
-const INTERACTIVE_PROMPT_PATTERN = /^❯[ \u00a0]*$/m;
 
 export class ClaudeSessionManager implements SessionManager {
   constructor(
@@ -36,11 +36,23 @@ export class ClaudeSessionManager implements SessionManager {
     ]);
     try {
       const deadline = Date.now() + BINDING_PROMPT_WAIT_MS;
+      let previousPrompt: number | null = null;
+      let ready = false;
       while (Date.now() < deadline) {
-        const { content } = await this.tmux.transport.captureTerminal(target);
-        if (INTERACTIVE_PROMPT_PATTERN.test(content)) break;
+        const snapshot = await this.tmux.transport.captureTerminalWithCursor(target);
+        if (Date.now() >= deadline) break;
+        const prompt = claudePromptPosition(snapshot);
+        if (prompt !== null && prompt === previousPrompt) {
+          ready = true;
+          break;
+        }
+        previousPrompt = prompt;
         await delay(100);
       }
+      if (!ready)
+        throw new Error(
+          "Claude Code prompt readiness was not confirmed before timeout. Attach to tmux to check the session.",
+        );
       await this.tmux.transport.sendMessage(
         target,
         claudeBindingCommand(
