@@ -76,6 +76,11 @@ not native session IDs. Message reads also validate ordinal bounds. See
 Home nicknames route publicly; configured absolute paths namespace internally. Renaming/reordering homes preserves session IDs; moving a home changes them.
 Projects merge by directory across homes; home paths remain private.
 
+Without explicit home options, both `codex=~/.codex` and `claude=~/.claude`
+remain configured. Codex comes first unless `~/.codex` is absent, when Claude
+comes first. Explicit homes replace both defaults and retain argument order;
+`default` has no special meaning as a nickname.
+
 Creation defaults `home` to the first configured nickname. Unknown nicknames return `400`; reusing a request ID across homes returns
 `409`. Operations use the selected/owning adapter's local CLI and home environment
 (`CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude). See [Multiple homes](usage.md#multiple-homes).
@@ -578,8 +583,11 @@ Avoid manual storage changes while publishing.
 `DELETE /api/v1/artifacts/:id` removes all snapshots. Invalid metadata is diagnosed
 and skipped; resources do not depend on homes/sessions.
 
+Without `--name`, the page name is the source directory basename after resolving
+symlinks. Updates retain the title unless `--title` is supplied.
+
 Canonical project `realpath` plus name determines identity. Republishing retains
-history/title unless overridden; moving projects changes association. Random
+history; moving projects changes association. Random
 32-character lowercase hex IDs identify artifacts/snapshots. Storage:
 `<hosting>/artifacts/<id>/artifact.json` and `snapshots/<snapshot-id>/`. Metadata
 contains identity, title, project/source, current snapshot, timestamps, relative

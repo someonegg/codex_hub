@@ -12,7 +12,7 @@ npm start
 ```
 
 Open <http://127.0.0.1:4173>. Rebuild and restart after changing application code.
-See [Usage](usage.md#server-options) for server options and the
+See [Usage](usage.md#configure-the-server) for server options and the
 [README](../README.md#quick-start) for tmux and Codex CLI requirements.
 
 For frontend hot reload, run `npm run dev`. It starts Vite without the session
