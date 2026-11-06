@@ -73,11 +73,6 @@ not native session IDs. Message reads also validate ordinal bounds. See
 
 ### Home identity and routing
 
-Server path options share path resolution: a leading `~/` expands to the user
-home directory, and relative paths resolve against the startup working directory.
-This applies to session homes, the Hub data root, tmux socket, readiness script,
-and TLS certificate/key/CA files.
-
 Home nicknames route publicly; configured absolute paths namespace internally. Renaming/reordering homes preserves session IDs; moving a home changes them.
 Projects merge by directory across homes; home paths remain private.
 
