@@ -135,11 +135,11 @@ export function InteractionPanel({
   const previewToggle = useRef<HTMLButtonElement | null>(null);
   const previewContent = useRef<HTMLPreElement | null>(null);
   const scrollOnExpand = useRef(true);
-  const paths = attachments.map(({ path }) =>
-    /[\s"'\\]/.test(path) ? JSON.stringify(path) : path,
+  const attachmentLines = attachments.map(
+    ({ path }) => `- ${/[\s"'\\]/.test(path) ? JSON.stringify(path) : path}`,
   );
-  const outgoingMessage = paths.length
-    ? paths.join("\n") + (message.length ? "\n\n" + message : "")
+  const outgoingMessage = attachmentLines.length
+    ? attachmentLines.join("\n") + (message.length ? "\n\n" + message : "")
     : message;
   const messageBytes = new TextEncoder().encode(outgoingMessage.replace(/\r\n?/g, "\n")).byteLength;
   const messageTooLarge = messageBytes > MAX_INTERACTION_MESSAGE_BYTES;
