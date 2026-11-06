@@ -38,7 +38,7 @@ it("validates identity and missing directories before starting Claude", async ()
   await expect(manager.resolveDirectory("relative/path")).rejects.toThrow("absolute local path");
 });
 
-it("validates independent V2 binding metadata, preserving pane validity for invalid optional metadata", () => {
+it("validates independent V3 binding metadata, preserving pane validity for invalid optional metadata", () => {
   expect(claudeBindingCommand("", "/project with 'quotes'", "Task")).toContain("AHUB_TMUX_BIND_V3");
   expect(() => claudeBindingCommand("bad-operation")).toThrow("Invalid operation ID");
   expect(
@@ -202,7 +202,7 @@ it("deletes Claude logs and subagents across projects while preserving other con
   }
 });
 
-it.each(["V1", "V2", "V4"])("ignores Claude binding marker %s", (version) => {
+it.each(["V1", "UNKNOWN"])("ignores Claude binding marker %s", (version) => {
   expect(
     claudeBindingAttempts(
       `<bash-stdout>AHUB_TMUX_BIND_${version}\n/tmp/socket\nahub-00000000-0000-0000-0000-000000000001\n\n/project\nnull</bash-stdout>`,

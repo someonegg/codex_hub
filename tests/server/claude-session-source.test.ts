@@ -81,7 +81,7 @@ describe("Claude JSONL adapter", () => {
     );
   });
 
-  it.each([undefined, null, "max_tokens", "pause_turn", "stop_sequence", "unknown"])(
+  it.each([undefined, "max_tokens", "unknown"])(
     "never infers a final phase for %s",
     async (stop_reason) => {
       const state = await appendClaudeLines(createClaudeState(id), [

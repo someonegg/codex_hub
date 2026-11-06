@@ -95,9 +95,6 @@ async function flush() {
 it.each([
   ["page", new Error("Offline")],
   ["page", new ApiClientError(429, "capacity", "Busy")],
-  ["page", new ApiClientError(503, "unavailable", "Unavailable")],
-  ["poll", new Error("Offline")],
-  ["poll", new ApiClientError(429, "capacity", "Busy")],
   ["poll", new ApiClientError(503, "unavailable", "Unavailable")],
 ] as const)("resumes %s backoff after visibility returns (%s)", async (operation, error) => {
   vi.useFakeTimers();

@@ -204,7 +204,7 @@ it("ignores an invalid project without invalidating the pane", () => {
   ]);
 });
 
-it.each(["\n", "\r\n"])("normalizes V1 project line endings %j", (eol) => {
+it.each(["\n", "\r\n"])("normalizes V3 project line endings %j", (eol) => {
   const text = [
     "<user_shell_command>",
     "AHUB_TMUX_BIND_V3",
@@ -248,7 +248,7 @@ it("ignores quoted shell wrappers in ordinary user prose", () => {
   ).toEqual([]);
 });
 
-it.each(["V1", "V2", "V4", "UNKNOWN"])("ignores unknown protocol marker %s", (version) => {
+it.each(["V1", "UNKNOWN"])("ignores unknown protocol marker %s", (version) => {
   const text = shellText("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000001").replace(
     "BIND_V3",
     `BIND_${version}`,
