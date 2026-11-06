@@ -108,8 +108,7 @@ A running process alone cannot confirm launch: management verifies the operation
 marker, ownership, project, and original identity on resume. Capture, delivery, or
 interrupt failures retain the target/attach command with an unknown result.
 
-Interrupt sends Ctrl-U, waits 100 ms, then Escape. Exit sends Ctrl-C at 0, 200,
-2000, and 2200 ms, then follows the [shared exit sequence](#execution-and-confirmation).
+Interrupt sends Ctrl-U, waits 100 ms, then Escape. Exit uses the [shared exit sequence](#execution-and-confirmation).
 See [adapter implementation](../src/server/adapters/claude/session-manager.ts).
 
 ## Conversation model
@@ -541,9 +540,9 @@ mean `failed`; launch timeout, malformed success, and post-launch errors mean
 `unknown`, without retry/teardown.
 
 Exit controls the whole tmux session, including manual binds, retaining session data;
-see [ADR-0022](adr/0022-separate-session-exit-from-archive.md). After the adapter's
-exit steps, the shared state machine waits 4 seconds before Ctrl-D and another
-9 seconds before one targeted `kill-session`. Each step checks cancellation and
+see [ADR-0022](adr/0022-separate-session-exit-from-archive.md). Codex and Claude send Ctrl-C at
+0, 200, 2600, and 2800 ms, Ctrl-D at 6 seconds, and one targeted `kill-session`
+at 15 seconds if still running. Each step checks cancellation and
 target ownership/state; natural exit stops further sends, and forced close still
 requires exit confirmation. Occupancy blocks
 ordinary input/handoff with `409 session_busy`; archive and delete hold it through confirmation.

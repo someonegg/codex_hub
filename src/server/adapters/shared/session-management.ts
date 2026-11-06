@@ -37,7 +37,8 @@ export function interruptSteps() {
 export function exitSteps() {
   return [
     { keys: ["C-c"] as const, delayMs: 0 },
-    { keys: ["C-c"] as const, delayMs: 1000 },
-    { keys: ["C-c"] as const, delayMs: 1000 },
+    { keys: ["C-c"] as const, delayMs: 200 },
+    { keys: ["C-c"] as const, delayMs: 2400 },
+    { keys: ["C-c"] as const, delayMs: 200 },
   ];
 }

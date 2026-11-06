@@ -111,8 +111,8 @@ it("provides shared interrupt steps and two pairs of exit interrupts", () => {
   ).toEqual([
     { keys: ["C-c"], atMs: 0 },
     { keys: ["C-c"], atMs: 200 },
-    { keys: ["C-c"], atMs: 2000 },
-    { keys: ["C-c"], atMs: 2200 },
+    { keys: ["C-c"], atMs: 2600 },
+    { keys: ["C-c"], atMs: 2800 },
   ]);
 });
 
