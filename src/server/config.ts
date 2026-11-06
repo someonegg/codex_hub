@@ -7,7 +7,7 @@ import { parseArgs } from "node:util";
 export function resolveHomeDirectory(value?: string): string {
   return value === undefined
     ? resolve(homedir(), ".codex-hub")
-    : resolveDirectoryOption("home-dir", value);
+    : resolvePathOption("home-dir", value);
 }
 
 export const LOOPBACK_HOST = "127.0.0.1" as const;
@@ -39,6 +39,7 @@ export interface ServerConfig {
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
   tmuxSocket?: string;
+  claudeReadyScript?: string;
   uploadDirectory?: string;
   hostingDirectory?: string;
 }
@@ -85,6 +86,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       help: { type: "boolean" },
       version: { type: "boolean" },
       "tmux-socket": { type: "string" },
+      "claude-ready-script": { type: "string" },
       "home-dir": { type: "string" },
       hosting: { type: "boolean" },
     },
@@ -129,10 +131,10 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     }
     tls = {
       enabled: true,
-      certificatePath: resolve(certificatePath),
-      privateKeyPath: resolve(privateKeyPath),
+      certificatePath: resolvePathOption("ssl-cert", certificatePath),
+      privateKeyPath: resolvePathOption("ssl-key", privateKeyPath),
       ...(certificateAuthorityPath
-        ? { certificateAuthorityPath: resolve(certificateAuthorityPath) }
+        ? { certificateAuthorityPath: resolvePathOption("ssl-ca", certificateAuthorityPath) }
         : {}),
     };
   } else {
@@ -146,6 +148,14 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     kind: "run",
     config: {
       host,
+      ...(values["claude-ready-script"] !== undefined
+        ? {
+            claudeReadyScript: resolvePathOption(
+              "claude-ready-script",
+              values["claude-ready-script"],
+            ),
+          }
+        : {}),
       port: parsePort(values.port),
       ...(values["local-port"] !== undefined
         ? { localPort: parsePort(values["local-port"], "local-port") }
@@ -159,7 +169,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
         ? { hostingDirectory: resolve(resolveHomeDirectory(values["home-dir"]), "hosting") }
         : {}),
       ...(values["tmux-socket"] !== undefined
-        ? { tmuxSocket: resolve(nonEmptyOption("tmux-socket", values["tmux-socket"])!) }
+        ? { tmuxSocket: resolvePathOption("tmux-socket", values["tmux-socket"]) }
         : {}),
     },
   };
@@ -184,6 +194,8 @@ Options:
   --ssl-cert <path>    PEM server certificate or certificate chain
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
+  --claude-ready-script <path>
+                       Executable Claude readiness checker (all homes)
   --tmux-socket <path> tmux socket (default: tmux default selection)
   --help               Show this help
   --version            Show the current version
@@ -207,9 +219,7 @@ function parseHome(
   if (separator < 0 || !nickname || !homePath) {
     throw new Error(`--${option} requires nickname=path with a non-empty nickname and path`);
   }
-  const path = resolve(
-    homePath.startsWith("~/") ? resolve(homedir(), homePath.slice(2)) : homePath,
-  );
+  const path = resolvePathOption(option, homePath);
   let canonical = path;
   try {
     canonical = realpathSync(path);
@@ -231,7 +241,7 @@ function parseHome(
   return { nickname, path };
 }
 
-function resolveDirectoryOption(name: string, value: string): string {
+function resolvePathOption(name: string, value: string): string {
   const path = nonEmptyOption(name, value)!;
   return resolve(path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : path);
 }

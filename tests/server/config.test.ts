@@ -97,3 +97,52 @@ it.each(["65536", "1.5"])("names --local-port in invalid port errors (%s)", (val
     "--local-port must be an integer between 0 and 65535",
   );
 });
+
+it("resolves the global Claude readiness script and rejects empty paths", () => {
+  expect(runnable(["--claude-ready-script", "./ready"]).claudeReadyScript).toBe(resolve("ready"));
+  expect(runnable([]).claudeReadyScript).toBeUndefined();
+  expect(() => runnable(["--claude-ready-script", " "])).toThrow("must not be empty");
+});
+
+it.each(["~/config with spaces", "./config with spaces", "/tmp/config with spaces"])(
+  "resolves all server path options consistently: %s",
+  (path) => {
+    const expected = path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : resolve(path);
+    const config = runnable([
+      "--codex-home",
+      `codex=${path}/codex`,
+      "--claude-home",
+      `claude=${path}/claude`,
+      "--home-dir",
+      path,
+      "--hosting",
+      "--tmux-socket",
+      path,
+      "--claude-ready-script",
+      path,
+      "--ssl",
+      "--ssl-cert",
+      path,
+      "--ssl-key",
+      path,
+      "--ssl-ca",
+      path,
+    ]);
+    expect(config).toMatchObject({
+      homes: [
+        { nickname: "codex", path: resolve(expected, "codex") },
+        { nickname: "claude", path: resolve(expected, "claude") },
+      ],
+      uploadDirectory: resolve(expected, "uploads"),
+      hostingDirectory: resolve(expected, "hosting"),
+      tmuxSocket: expected,
+      claudeReadyScript: expected,
+      tls: {
+        enabled: true,
+        certificatePath: expected,
+        privateKeyPath: expected,
+        certificateAuthorityPath: expected,
+      },
+    });
+  },
+);

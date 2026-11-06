@@ -9,6 +9,7 @@ import {
   claudeBindingCommand,
   claudeInteraction,
 } from "../../src/server/adapters/claude/interaction.js";
+import * as readyScript from "../../src/server/adapters/claude/ready-script.js";
 import {
   BINDING_PROMPT_WAIT_MS,
   ClaudeSessionManager,
@@ -16,6 +17,11 @@ import {
 import { interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+
+// Route promise-based sleeps through the clock controlled by vi.useFakeTimers().
+vi.mock("node:timers/promises", () => ({
+  setTimeout: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+}));
 
 it("validates identity and missing directories before starting Claude", async () => {
   const tmux = new TmuxLauncher();
@@ -135,26 +141,30 @@ function mockClaudeLaunch() {
     .spyOn(tmux.transport, "captureTerminalWithCursor")
     .mockResolvedValue(readyScreen);
   const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
-  return { manager: new ClaudeSessionManager("/home", tmux), capture, send };
+  return { manager: new ClaudeSessionManager("/home", tmux), tmux, capture, send };
 }
 
-it("requires two consecutive ready samples and sends the binding only once", async () => {
-  vi.useFakeTimers();
+it("accepts a single ready sample and sends the binding once", async () => {
   const { manager, capture, send } = mockClaudeLaunch();
-  capture.mockResolvedValueOnce(readyScreen).mockResolvedValueOnce(null);
-  const launch = manager.launch(launchOptions);
-  await vi.advanceTimersByTimeAsync(299);
-  expect(send).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(launch).resolves.toEqual(target);
-  expect(capture).toHaveBeenCalledTimes(4);
+  await expect(manager.launch(launchOptions)).resolves.toEqual(target);
+  expect(capture).toHaveBeenCalledTimes(1);
   expect(send).toHaveBeenCalledExactlyOnceWith(
     target,
     claudeBindingCommand(launchOptions.operationId),
   );
-  await vi.advanceTimersByTimeAsync(30_000);
-  expect(capture).toHaveBeenCalledTimes(4);
-  expect(send).toHaveBeenCalledTimes(1);
+});
+
+it("waits one second between samples", async () => {
+  vi.useFakeTimers();
+  const { manager, capture, send } = mockClaudeLaunch();
+  capture.mockResolvedValueOnce(null);
+  const launch = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(send).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(launch).resolves.toEqual(target);
+  expect(capture).toHaveBeenCalledTimes(2);
 });
 
 it.each([
@@ -189,7 +199,7 @@ it.each([
 it("does not count a capture that finishes after the readiness deadline", async () => {
   vi.useFakeTimers();
   const { manager, capture, send } = mockClaudeLaunch();
-  capture.mockResolvedValueOnce(readyScreen).mockImplementation(async () => {
+  capture.mockImplementation(async () => {
     await new Promise((resolve) => setTimeout(resolve, BINDING_PROMPT_WAIT_MS));
     return readyScreen;
   });
@@ -282,4 +292,36 @@ it("emits V3 using launcher metadata without executing commands in Claude's shel
       taskName: "Task",
     },
   ]);
+});
+
+it("skips missing snapshots, preserves context, and resets it for each launch", async () => {
+  vi.useFakeTimers();
+  const check = vi
+    .spyOn(readyScript, "checkClaudeReadyScript")
+    .mockResolvedValueOnce({ ready: false, context: "next" })
+    .mockResolvedValueOnce({ ready: true, context: "done" })
+    .mockResolvedValueOnce({ ready: false, context: "next" })
+    .mockResolvedValueOnce({ ready: true, context: "done" });
+  const { tmux, capture, send } = mockClaudeLaunch();
+  const screen = { content: "Starting…", cursorX: 0, cursorY: 0 };
+  capture
+    .mockResolvedValue(screen)
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(screen)
+    .mockResolvedValueOnce(null);
+  const manager = new ClaudeSessionManager("/home", tmux, "/ready");
+  const first = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(3_000);
+  await expect(first).resolves.toEqual(target);
+  const second = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(1_000);
+  await expect(second).resolves.toEqual(target);
+  expect(check.mock.calls.map(([, current, context]) => ({ current, context }))).toEqual([
+    { current: screen, context: "" },
+    { current: screen, context: "next" },
+    { current: screen, context: "" },
+    { current: screen, context: "next" },
+  ]);
+  expect(capture).toHaveBeenCalledTimes(6);
+  expect(send).toHaveBeenCalledTimes(2);
 });

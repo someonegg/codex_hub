@@ -97,8 +97,23 @@ Before launching, configure and authenticate the local `claude` CLI for the home
 Launch sets `CLAUDE_CONFIG_DIR` and runs interactive `claude`, with
 `--resume <UUID>`, `--worktree`, or `--dangerously-skip-permissions` as applicable.
 The adapter waits up to 15 seconds for a confirmed native prompt before sending
-the binding command once. If readiness is not confirmed, it sends no input and
-reports an unknown result with the target/attach command. Binding uses shell
+the binding command once. A single matching empty prompt with the cursor in its
+allowed rectangle is sufficient; unsuccessful checks wait one second before
+capturing again.
+
+Optional global `--claude-ready-script <path>` replaces the built-in predicate
+for all Claude homes. The executable runs directly (no shell) once per captured
+snapshot. stdin is JSON `{ "current": { "content": "...", "cursorX": 2,
+"cursorY": 1 }, "context": "" }`; coordinates are zero-based. Missing snapshots
+skip script execution, preserve context, and retry after one second. stdout must
+contain JSON `{ "ready": false, "context": "opaque text" }`.
+Context starts empty for each create/resume attempt and is passed back unchanged
+on the next check. Use stderr for diagnostics.
+The script must have executable permission and a valid shebang. Relative paths
+resolve against the Hub startup directory. Nonzero exit, invalid output, or
+exceeding the remaining 15-second launch deadline sends no input and reports an
+unknown result with the target/attach command, as does unconfirmed readiness.
+Output is limited to 1 MiB. Binding uses shell
 expansion without tmux queries to accommodate worktree isolation checks.
 
 A CLI prompt starting with `!` is ordinary model input; this behavior was verified
