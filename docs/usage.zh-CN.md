@@ -8,203 +8,195 @@
 npx @someonegg/codex-hub@latest
 ```
 
-打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止。
-安装与运行要求见 [README](../README.zh-CN.md#快速开始)。默认读取 `~/.codex` 和 `~/.claude`，且仅监听本机。
+打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止服务器。
+安装与运行要求见 [README](../README.zh-CN.md#快速开始)。
 
-## 阅读与管理会话
+默认从 `~/.codex` 读取 Codex 会话、从 `~/.claude` 读取 Claude Code 会话，且仅监听本机。
+其他设备访问前，请先配置[远程访问](#从其他设备访问)。
 
-在侧边栏选择项目和主会话，子会话从父会话中打开。消息从头开始随滚动加载，加载至末尾后自动接收更新。
-勾选**已归档**可浏览只读的归档会话。
+## 阅读会话
 
-可收藏会话地址，或分享给能够访问此 Hub 的设备。
+在侧边栏选择项目和主会话，子会话从父会话中打开。消息从头开始随滚动加载，到达末尾后自动更新。
+勾选**已归档**可浏览只读的归档会话。可收藏会话地址。
 
-- **创建：**点击项目旁的 **+**，或全局 **+** 后选择项目、输入本机绝对目录。可选启用 worktree 或 YOLO。
-- **恢复：**打开已退出会话，在可用时点击**恢复**。使用原 Home 与可用的原工作目录或项目目录继续同一会话。
-- **退出：**使用会话的 **…** 菜单停止已连接终端窗格，保留会话历史。
-- **归档：**使用会话的 **…** 菜单停止运行并将会话标记为已归档。
-- **删除：**使用会话的 **…** 菜单永久删除会话历史。删除需要确认。
+最新加载的计划自动展开。使用**显示**或**隐藏**控制单个计划，也可同时展开多个计划。
 
-创建与恢复使用 tmux。如果启动需要登录或权限确认，使用 **… → 连接 tmux**，
-或执行 Hub 显示的连接命令，在终端完成操作。恢复从其他位置启动的会话前，请确认原进程已经退出。
+## 创建与管理会话
 
-最新加载的计划自动展开，先前计划收起。使用**显示**或**隐藏**分别控制，可同时展开多个计划。
+点击项目旁的 **+**，或全局 **+** 后选择项目、输入本机绝对目录。
+选择 [Home](#多个-home) 和可选的启动设置：
 
-## 与会话交互
+- **Worktree：**在独立 Git worktree 中启动，隔离代码改动。
+- **YOLO：**跳过智能体的审批提示；Codex 还会禁用其沙盒。
 
-绿色**运行中**标记表示终端已连接。通过消息输入框发送提示，展开**终端预览**查看 CLI。
-点击**中断**，或在预览中按 **Ctrl+C** 中断执行；按 **Esc** 收起预览。**工作中**和**空闲**反映终端输出，不表示任务是否完成。
+打开已退出的会话，在可用时点击**恢复**继续。恢复保留原 Home 和项目归属，使用可用的原工作目录或项目目录。
+恢复从其他位置启动的会话前，请确认原进程已经退出。
 
-普通提示会立即显示，并标记为**等待中**，直到会话消息更新。纯 slash command 不显示此预览。
-发送失败时，预览消失，草稿保留。
+通过会话的 **…** 菜单执行：
 
-如果 Codex 通过 `/clear`、`/resume` 或执行计划在同一终端切换会话，在旧会话的已连接页面
-点击**移交绑定**。显示**已被替代**后点击**前往已绑定会话**；未发送的草稿保留在旧页面。
+- **退出：**停止已连接终端，保留历史。
+- **归档：**停止运行，将会话移到归档列表。
+- **删除：**确认后永久删除会话历史。
+
+创建与恢复使用 tmux。启动若被登录或权限确认阻塞，通过 **… → 连接 tmux** 或显示的连接命令在终端完成操作。
+不要重命名 Hub 的 tmux 会话或修改其窗口、窗格结构。详见 [tmux 要求（英文）](technical-reference.md#tmux-interaction)。
+
+## 发送提示与文件
+
+绿色**运行中**标记表示终端已连接。通过输入框发送提示，默认 **Shift+Enter** 发送、**Enter** 换行；
+在[设置](#浏览器设置)中开启 **Enter 发送**可反转。
+
+展开**终端预览**查看 CLI。点击**中断**或在预览中按 **Ctrl+C** 中断，按 **Esc** 收起预览。
+**工作中**和**空闲**反映终端输出，不表示任务是否完成。
+
+已发送提示先显示为**等待中**，随后随会话消息更新；纯 slash command 不显示此预览。
+发送失败时保留草稿。草稿文字和附件选择在切换会话时保留，刷新页面后重置。
+
+如果 Codex 通过 `/clear`、`/resume` 或执行计划在同一终端切换会话，在旧会话的已连接页面点击**移交绑定**。
+显示**已被替代**后点击**前往已绑定会话**。未发送草稿留在旧页面。
 
 ### 文件上传
 
 使用附件按钮**拍照**、**选择图片**或**选择文件**，也可粘贴图片或拖放文件。
-发送前可预览图片、移除附件；支持单独发送附件和一次发送多个文件，不支持文件夹。
+发送前可预览或移除附件，支持单独发送附件和多个文件，不支持文件夹。**每个文件最大 20 MiB**。
 
-草稿文字与附件选择在会话导航时保留，刷新页面后重置。
+图片保留原始内容，包括 EXIF 元数据。相机行为取决于浏览器；HEIC/HEIF 支持取决于智能体。
 
-相机行为取决于浏览器，可能退回文件选择器。图片按原样上传，包括 EXIF 元数据，单个文件上限
-20 MiB；HEIC/HEIF 支持取决于智能体。拍照时会话若断开或正忙，请重新连接或稍后重试。
+从会话标题区域打开**上传记录**，预览、下载或删除文件，包括未发送的上传文件。
+从草稿移除附件不会删除已上传文件；从上传记录删除文件也会将其从草稿移除。
 
-点击会话标题区域的**上传记录**，预览、下载或删除上传文件，包括未发送文件和从草稿移除的文件。
-删除文件也会将其从当前草稿移除。[查看上传记录截图](images/zh-CN/ahub-uploads.png)。
-
-删除会话会请求后台清理上传文件，归档与退出保留附件。清理失败时，可从 Hub 数据目录删除残留文件。
-
-上传文件保存在 [Hub 数据目录](#服务器选项)的 `uploads/` 下，智能体必须能访问此目录。
-API 与存储保证见[技术参考（英文）](technical-reference.md#file-uploads)。
+文件保存在 [Hub 数据目录](#配置服务器)的 `uploads/` 下，智能体必须能访问此目录。
+删除会话触发后台清理，归档与退出保留文件。存储和清理细节见[上传参考（英文）](technical-reference.md#file-uploads)，
+也可[查看上传记录截图](images/zh-CN/ahub-uploads.png)。
 
 ## 浏览器设置
 
-在侧边栏底部打开**设置**，选择语言、主题、新会话默认 Home，以及默认 worktree 和 YOLO 选项。
+在侧边栏底部打开**设置**，选择语言、主题、新会话默认 Home，以及 Worktree、YOLO 默认值。
 修改自动保存在当前浏览器。YOLO 默认值也用于恢复会话，启动对话框可覆盖默认值。
 
-默认使用 **Shift+Enter** 发送、**Enter** 换行。在设置中开启 **Enter 发送** 后，改为 **Enter** 发送、**Shift+Enter** 换行。
+界面初始为英文，切换语言立即生效，不翻译会话或终端原文。
 
-界面默认英文；选择 **Language → 简体中文 / 繁體中文** 后立即生效，不需要刷新，其他已打开的 Hub 标签页同步更新。
-语言仅影响 Hub 界面及日期、数字显示，不翻译会话原文、终端输出、文件名、路径或命令。
+## 使用 CLI
 
-## 管理 CLI
-
-`codex-hub` 启动服务器；`ahub-cli` 提供 `page`、`diff` 和 `session` 命令。
-无需全局安装即可运行：
+`codex-hub` 启动服务器，`ahub-cli` 管理会话和发布资源。下文示例假定已全局安装：
 
 ```sh
-npx --package=@someonegg/codex-hub@latest ahub-cli --help
+npm install -g @someonegg/codex-hub
+ahub-cli --help
 ```
 
-`ahub-cli` 默认输出便于阅读的文本，添加 `--json` 可获取结构化结果和错误。输出通道与错误码见 [CLI 输出约定](technical-reference.md#cli-output-contract)。
+无需全局安装时，将示例中的 `ahub-cli` 替换为
+`npx --package=@someonegg/codex-hub@latest ahub-cli`。添加 `--json` 可获取结构化命令结果。
 
-### 会话
+### 会话命令
 
-先启动 Hub，再从另一终端运行会话命令：
+先启动 Hub，再从另一终端执行：
 
 ```sh
 ahub-cli session list --project /path/to/project
+ahub-cli session create --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --count 5 --json
+ahub-cli session inspect <id> --follow
 ```
 
-使用 `list` 返回的 ID 发送输入或查看会话。`list` 默认列出未归档的主会话（`--all` 包含已归档会话），`inspect` 也接受子会话 ID。
-将返回的 `Next after` 值传给 `--after <value>` 继续读取下一页。
-使用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端。
-终端切换会话后，用 `handoff <id>` 移交绑定。
+使用 `list` 或 `create` 返回的 Hub ID。`list` 默认不含归档会话，传入 `--all` 可包含；
+`inspect` 也接受子会话 ID。将返回的 `Next after` 值传给 `--after <value>` 读取下一页。
+`--follow` 持续观察直到按 `Ctrl+C` 停止，不会因任务完成自动结束。
 
-可用 `create --task <name>` 在创建时指定可选任务，用 `list --task <name>` 跨项目筛选，网页在会话信息中展示任务。
+创建默认使用项目目录和第一个已配置 Home。用 `--cwd` 修改工作目录而保留项目归属，
+用 `--home <nickname>` 选择 Home；可选 `--worktree` 和 `--yolo` 控制启动行为。
+`resume <id>` 保留原 Home，支持 `--yolo`。
+用 `create --task <name>` 和 `list --task <name>` 跨项目分组会话。
 
-创建、恢复、退出、归档等命令见 `ahub-cli session --help`。创建要求 `--project`，支持 `--cwd`、`--home`、`--worktree`
-和 `--yolo`；恢复保留原 Home，支持 `--yolo`。省略 `--home` 时选择第一个已配置 Home。
-省略 `--cwd` 时从项目目录启动；显式指定其他工作目录时仍保留 `--project` 的项目归属。
-两个目录均可使用相对路径，CLI 会将其转为绝对路径。
+输入默认要求终端已连接且空闲。用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端，
+`interrupt <id>` 中断执行。`send` 或 `keys` 的 `--force` 允许在工作中发送输入，
+也允许 `send` 发送以 `/` 开头的消息。终端切换会话后，用 `handoff <id>` 移交绑定。
 
-会话命令默认连接 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
-HTTP 或 HTTPS 地址。使用私有 CA 时，在启动 CLI 前设置
-`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。用 `--timeout <seconds>` 修改默认的 15 秒超时
-（follow 为 30 秒；创建、恢复、退出、归档和删除为 45 秒）。使用 `inspect --follow` 时，它限制每次 HTTP
-请求；观察持续到按 Ctrl+C 停止或达到指定轮数。
+默认连接 `http://127.0.0.1:4173`。用 `CODEX_HUB_URL` 或 `--url` 修改地址，
+用 `--timeout <seconds>` 调整超时。私有 CA 场景下，启动 CLI 前设置
+`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。
 
-创建和恢复等待终端已连接且空闲；发送输入和普通按键默认要求空闲。使用
-`send <id> --message <text> --force`（或 `--stdin --force`）或
-`keys <id> <key...> --force` 可在工作中发送输入。CLI 还会拒绝首字符为 `/`
-的 `send` 消息；`--force` 也可跳过此检查。
-连接、绑定所有权和管理操作占用检查仍然有效。输入或 `handoff` 成功仅表示
-已发送，不代表任务完成。超时或退出码为 `2`（写入结果不明）时，先用 `list`、`inspect`
-或 `terminal` 核查，再决定是否重试。停止客户端不会取消已提交操作。
-输出字段、退出码与失败语义见 [CLI 参考（英文）](technical-reference.md#session-cli-and-observation)。
+发送成功不表示任务完成。超时或退出码为 `2`（写入结果不明）时，先用 `list`、`inspect` 或 `terminal` 核查再重试。
+停止客户端不会取消已提交操作。生命周期命令（包括删除）不会在 CLI 中再次要求确认。
+全部命令见 `ahub-cli session --help`，结果与超时契约见 [CLI 参考（英文）](technical-reference.md#session-cli-and-observation)。
 
-## 多个 Home
+## 发布网页与差异
 
-使用 `--codex-home 'nickname=path'` 或 `--claude-home 'nickname=path'` 指定 Home。
-Codex Home 应指向包含 `sessions/` 的目录，Claude Home 应指向包含 `projects/` 的目录。
-可重复或混合传入：
+用 `--hosting` 启动 Hub 以查看发布资源。发布命令读取 Hub 所在机器的本地文件，服务器停止时也可执行。
+命令输出相对 URL 和 Markdown 链接，请在 Hub 服务器地址下打开。
 
-```sh
-codex-hub \
-  --claude-home 'claude=~/.claude' \
-  --codex-home 'codex=~/.codex'
-```
-
-任何显式 Home 都会替换两个默认项，并按参数顺序排列，第一项为默认。
-未配置时 Codex 在前；仅当 `~/.codex` 不存在时将 Claude 排在前面，两项始终保留。
-每个 Home 需使用唯一昵称与目录；`default` 只是普通昵称。
-
-通过侧边栏 Home 筛选器缩小会话范围，创建时选择目标 Home。
-当前有效的 Home 筛选或默认 Home 偏好优先于第一项。
-
-## 发布资源
-
-用 `codex-hub --hosting` 启用已发布网页与差异查看。资源命令可在服务器停止时执行，
-发布后打印相对 URL 和 Markdown 链接。默认存储在 `~/.codex-hub/hosting`；如需自定义位置，
-命令与服务器需使用相同的 `--home-dir /path`。加 `--json` 获取结构化输出。
-
-如需智能体协助发布，可安装 [`ahub-publish` skill](../skills/ahub-publish)，
-并明确按名称请求使用，将静态网页或审阅差异发布到已有 Hub。
-
-npm 包附带此技能；运行 `ahub-cli skill path ahub-publish` 查看目录。`npx` 返回缓存路径，长期使用请复制该目录。
+默认存储在 `~/.codex-hub/hosting`。自定义数据目录时，命令与服务器必须使用相同的 `--home-dir /path`。
 
 ### 发布网页
 
-托管网页与 Hub 同源，以可信代码运行，请仅发布可信内容。在 `/artifacts` 的**网页**页面管理发布资源。
-
-发布 Hub 所在机器上已构建、包含 `index.html` 的目录：
+发布已构建、包含 `index.html` 的目录：
 
 ```sh
-ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /path/to/project --name demo --title "Design comparison"
 ```
 
 两个目录都必须存在。资源使用相对路径；Hub 不构建网站，也不接受远程上传发布包。
+托管网页与 Hub 同源，以可信代码执行，因此只应发布可信内容。
 
-以相同项目和名称再次发布可更新网页。名称默认为解析符号链接后的源目录名；用 `--name` 可在源目录
-变化时保持名称。更新保留 URL，除非指定 `--title`，否则保留标题。worktree 请将原项目传给 `--project`。
+以相同项目和名称再次发布即可更新并保留 URL。省略 `--name` 时使用来源目录名。
+worktree 请将原项目传给 `--project`。
 
-**已发布网页**链接在新标签页打开管理界面。可打开网页、复制绝对链接、刷新列表，或确认删除网页及其全部快照。
-移除源目录或 worktree 不会删除已发布网页。CLI 还支持 `page list` 和 `page delete <id>`。
-加载限制、项目身份与快照保证见[托管参考（英文）](technical-reference.md#optional-hosting)。
+打开**已发布网页**（`/artifacts`）浏览、复制链接或删除网页及其快照。
+CLI 也支持 `page list` 和 `page delete <id>`。移除来源目录或 worktree 不会删除已发布网页。
+详见[托管参考（英文）](technical-reference.md#optional-hosting)。
 
-### 分享临时差异
+### 分享差异
 
-生成所需比较的差异文件后发布：
+生成所需比较后发布：
 
 ```sh
 git diff HEAD > /tmp/review.diff
 ahub-cli diff publish /tmp/review.diff --title "Review changes"
-ahub-cli diff list
-ahub-cli diff delete <uuid>
 ```
 
-打开返回的 `/diffs/<uuid>` 链接审阅差异。智能体负责选择比较范围并在完成后删除发布内容，没有自动清理。
-源文件不变。参阅[差异参考（英文）](technical-reference.md#temporary-diffs)及
+打开返回的 `/diffs/<uuid>` 地址。发布内容不会过期，用 `ahub-cli diff list` 查找，
+审阅结束后用 `ahub-cli diff delete <uuid>` 删除；原始文件保持不变。
+参阅[差异参考（英文）](technical-reference.md#temporary-diffs)及
 [桌面](images/zh-CN/ahub-diff.png) / [手机](images/zh-CN/ahub-diff-mobile.png)预览。
 
-## 服务器选项
+### 通过智能体发布
 
-将选项传给 `codex-hub`，修改后重启。完整命令帮助见 `codex-hub --help`。
+安装附带的 [`ahub-publish` skill](../skills/ahub-publish)，并按名称请求使用。
+执行 `ahub-cli skill path ahub-publish` 定位目录；使用 `npx` 时，请将返回的缓存目录复制到长期使用的技能位置。
 
-| 选项                            | 默认值             | 用途                                               |
-| ------------------------------- | ------------------ | -------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `codex=~/.codex`   | 指定一个或多个 Codex Home                          |
-| `--claude-home <nickname=path>` | `claude=~/.claude` | 指定一个或多个 Claude Code Home                    |
-| `--host <host>`                 | `127.0.0.1`        | 监听地址                                           |
-| `--port <port>`                 | `4173`             | 监听端口，`0` 自动选择空闲端口                     |
-| `--home-dir <path>`             | `~/.codex-hub`     | Hub 数据目录，包含 `uploads/` 和 `hosting/`        |
-| `--hosting`                     | 关闭               | 启用静态网页托管                                   |
-| `--tmux-socket <path>`          | tmux 默认值        | 自定义 tmux socket                                 |
-| `--ssl`                         | 关闭               | 启用 HTTPS，需同时指定 `--ssl-cert` 和 `--ssl-key` |
-| `--ssl-cert <path>`             | 无                 | PEM 服务器证书或证书链                             |
-| `--ssl-key <path>`              | 无                 | PEM 私钥                                           |
-| `--ssl-ca <path>`               | 无                 | 要求客户端提供由此 CA 签发的证书                   |
+## 配置服务器
 
-## 安全
+启动时传入选项，修改后重启。完整列表见 `codex-hub --help`。
 
-Hub 没有应用层登录。任何能访问它的人都能阅读会话、发送输入和管理会话。
-未配置身份认证并限制网络访问时，请保持默认本地监听地址。
+| 选项                   | 默认值         | 用途                                        |
+| ---------------------- | -------------- | ------------------------------------------- |
+| `--port <port>`        | `4173`         | 监听端口，`0` 自动选择空闲端口              |
+| `--home-dir <path>`    | `~/.codex-hub` | Hub 数据目录，包含 `uploads/` 和 `hosting/` |
+| `--hosting`            | 关闭           | 提供已发布网页与差异访问                    |
+| `--tmux-socket <path>` | tmux 默认值    | 使用自定义 tmux socket                      |
 
-跨设备访问时，使用带认证的反向代理或内置双向 TLS（mTLS），例如：
+### 多个 Home
+
+Home 是智能体的会话与配置目录：Codex 包含 `sessions/`，Claude Code 包含 `projects/`。
+每个 Home 需使用唯一昵称和目录：
+
+```sh
+codex-hub \
+  --codex-home 'work=~/.codex-work' \
+  --claude-home 'claude=~/.claude'
+```
+
+可重复或混合传入这些选项。显式配置会替换**两个默认 Home**，创建默认使用第一项。
+通过侧边栏 Home 筛选器缩小范围。网页创建时，有效的 Home 筛选或默认 Home 偏好优先于第一项。
+完整规则见 [Home 路由（英文）](technical-reference.md#home-identity-and-routing)。
+
+## 从其他设备访问
+
+Hub 没有应用层登录，任何能访问它的人都能阅读会话、发送输入和管理会话。
+请保持默认 `127.0.0.1` 监听，除非通过反向代理或双向 TLS（mTLS）配置了身份认证并限制访问。
+
+使用内置 mTLS：
 
 ```sh
 codex-hub \
@@ -215,26 +207,26 @@ codex-hub \
   --ssl-ca /path/to/client-ca.pem
 ```
 
-每台设备都需安装客户端证书及私钥，并信任服务器证书。未指定 `--ssl-ca` 时，HTTPS 仅加密流量，
-不认证客户端。更换证书或私钥后需重启。
+每台设备需安装客户端证书及私钥，并信任服务器证书。不指定 `--ssl-ca` 时，HTTPS 仅加密流量，不认证客户端。
+更换证书或私钥后需重启。
 
-使用 `--local-port 4174` 可额外在 `127.0.0.1:4174` 提供无需客户端证书的 HTTP 入口，默认关闭。主入口的 TLS/mTLS 配置独立生效。本机 CLI 可使用：
+如需本机 CLI 无客户端证书访问，启动服务器时另加 `--local-port 4174`，然后执行：
 
 ```sh
 ahub-cli session list --url http://127.0.0.1:4174
 ```
 
-本机其他用户和进程也能访问此入口，请勿将外部代理流量转发到此端口。
+此额外 HTTP 入口默认关闭，绑定 `127.0.0.1`。本机其他用户和进程也能访问，请勿将外部代理流量转发到此入口。
 
 ## 故障排查
 
-- **没有会话：**Codex 的 `--codex-home` 应指向包含 `sessions/` 的目录；Claude 的 `--claude-home` 应指向包含 `projects/` 的目录。查看服务器终端中的不可读或跳过文件提示。
-- **端口占用：**选择其他端口，例如 `codex-hub --port 4180`。
-- **无法发送输入：**会话需要已连接、运行中的 tmux 窗格。先在 tmux 完成 CLI 提示，或在可用时点击**恢复**。
-  已归档会话只读，仅有日志文件并不意味着终端已连接。
-- **创建或恢复状态不明：**重试前检查 tmux 并刷新会话列表，避免启动重复会话。关闭网页不会停止操作，重启服务器会丢失进度跟踪。
+- **没有会话：**检查各 Home 是否包含 `sessions/`（Codex）或 `projects/`（Claude）。查看服务器输出中的不可读或跳过文件提示。
+- **端口占用：**换用其他端口，例如 `codex-hub --port 4180`。
+- **无法发送输入：**通过**连接 tmux**完成 CLI 提示，正忙时等待，或在可用时使用**恢复**。归档会话只读，仅有日志不代表终端已连接。
+- **创建或恢复状态不明：**重试前检查 tmux 并刷新会话列表，避免重复启动。关闭页面不会停止操作，重启服务器会丢失进度追踪。
+- **相机不可用或上传中断：**使用文件选择器，检查会话已连接且空闲后重试。
 
-连接及管理细节见[技术参考（英文）](technical-reference.md)。
+运行与恢复细节见[技术参考（英文）](technical-reference.md)。
 
 ## 卸载
 
@@ -244,4 +236,4 @@ ahub-cli session list --url http://127.0.0.1:4174
 npm uninstall -g @someonegg/codex-hub
 ```
 
-使用 `npx` 无需全局卸载。卸载保留会话、worktree、运行中的 tmux 会话、上传文件和托管快照，请按需另行清理。
+`npx` 无需全局卸载。会话、worktree、运行中的 tmux 会话、上传文件和托管快照仍会保留，请按需另行清理。

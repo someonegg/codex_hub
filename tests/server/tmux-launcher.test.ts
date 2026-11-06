@@ -52,22 +52,27 @@ function fails(error: Error) {
 
 beforeEach(() => {
   execute.mockReset();
-  execute.mockImplementation(succeeds("/actual/tmux.sock|%7"));
+  execute.mockImplementation(succeeds("/actual/tmux.sock"));
   vi.spyOn(TmuxInteractionService.prototype, "connect").mockImplementation(async (attempt) => {
     if (!attempt.valid) throw new Error("invalid");
-    return { socketPath: attempt.socketPath, paneId: attempt.paneId };
+    return { socketPath: attempt.socketPath, sessionName: attempt.sessionName };
   });
 });
 it.each([undefined, "/configured/socket path"])(
   "launches with configured socket %s and records the actual socket",
   async (socket) => {
-    const binding = await new TmuxLauncher(socket).launch("id", "/project", [
-      "codex",
-      "--no-daemon",
-    ]);
+    const binding = await new TmuxLauncher(socket).launch(
+      "00000000-0000-0000-0000-000000000007",
+      "/project",
+      ["codex", "--no-daemon"],
+    );
     const args = execute.mock.calls[0]![1] as string[];
     expect(args.slice(0, socket ? 2 : 1)).toEqual(socket ? ["-S", socket] : ["new-session"]);
-    expect(args.slice(args.indexOf("-s"), args.indexOf("-s") + 2)).toEqual(["-s", "ahub-id"]);
+    expect(args.slice(args.indexOf("-s"), args.indexOf("-s") + 2)).toEqual([
+      "-s",
+      "ahub-00000000-0000-0000-0000-000000000007",
+    ]);
+    expect(args).toContain("AHUB_TMUX_SESSION_NAME=ahub-00000000-0000-0000-0000-000000000007");
     expect(args).not.toContain("-L");
     if (!socket) expect(args).not.toContain("-S");
     expect(binding.socketPath).toBe("/actual/tmux.sock");
@@ -77,7 +82,7 @@ it.each([undefined, "/configured/socket path"])(
       "set-option",
       "-p",
       "-t",
-      "%7",
+      "=ahub-00000000-0000-0000-0000-000000000007:",
       "remain-on-exit",
       "off",
     ]);
@@ -87,12 +92,14 @@ it("quotes shell values for attach", () => {
   expect(shellQuote("/tmp/a'b ; $HOME")).toBe(
     "'/tmp/a'" + String.fromCharCode(92) + "''b ; $HOME'",
   );
-  expect(attachCommand(undefined, "ahub-123")).toBe("tmux attach-session -t 'ahub-123'");
+  expect(attachCommand(undefined, "ahub-123")).toBe("tmux attach-session -t '=ahub-123:'");
 });
 
 it("classifies a refused launch as definitely not started", async () => {
   execute.mockImplementationOnce(fails(new Error("refused")));
-  await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
+  await expect(
+    new TmuxLauncher().launch("00000000-0000-0000-0000-000000000007", "/project", ["codex"]),
+  ).rejects.toMatchObject({
     outcome: "not_started",
     attachCommand: null,
   });
@@ -102,44 +109,63 @@ it("classifies a refused launch as definitely not started", async () => {
 it("preserves a fallback attach command when launch times out", async () => {
   execute.mockImplementationOnce(fails(Object.assign(new Error("timeout"), { killed: true })));
   await expect(
-    new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
+    new TmuxLauncher("/configured/socket").launch(
+      "00000000-0000-0000-0000-000000000007",
+      "/project",
+      ["codex"],
+    ),
   ).rejects.toMatchObject({
     outcome: "unknown",
-    attachCommand: attachCommand("/configured/socket", "ahub-id"),
+    attachCommand: attachCommand("/configured/socket", "ahub-00000000-0000-0000-0000-000000000007"),
   });
   expect(execute).toHaveBeenCalledOnce();
 });
 
-it("preserves fallback attach for an invalid pane in launch output", async () => {
-  execute.mockImplementationOnce(succeeds("/actual/socket|bad"));
+it("preserves fallback attach for an invalid socket in launch output", async () => {
+  execute.mockImplementationOnce(succeeds("relative"));
   await expect(
-    new TmuxLauncher("/configured/socket").launch("id", "/project", ["codex"]),
+    new TmuxLauncher("/configured/socket").launch(
+      "00000000-0000-0000-0000-000000000007",
+      "/project",
+      ["codex"],
+    ),
   ).rejects.toMatchObject({
     outcome: "unknown",
-    attachCommand: attachCommand("/configured/socket", "ahub-id"),
+    attachCommand: attachCommand("/configured/socket", "ahub-00000000-0000-0000-0000-000000000007"),
   });
   expect(execute).toHaveBeenCalledOnce();
 });
 
 it("keeps the known target when post-launch setup fails", async () => {
   execute
-    .mockImplementationOnce(succeeds("/actual/socket|%7"))
+    .mockImplementationOnce(succeeds("/actual/socket"))
     .mockImplementationOnce(fails(new Error("set-option failed")));
-  await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
+  await expect(
+    new TmuxLauncher().launch("00000000-0000-0000-0000-000000000007", "/project", ["codex"]),
+  ).rejects.toMatchObject({
     outcome: "unknown",
-    target: { socketPath: "/actual/socket", paneId: "%7", sessionName: "ahub-id" },
-    attachCommand: attachCommand("/actual/socket", "ahub-id"),
+    target: {
+      socketPath: "/actual/socket",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+    },
+    attachCommand: attachCommand("/actual/socket", "ahub-00000000-0000-0000-0000-000000000007"),
   });
   expect(execute).toHaveBeenCalledTimes(2);
 });
 
-it("keeps the known target when post-launch connection validation fails", async () => {
-  vi.spyOn(TmuxInteractionService.prototype, "connect").mockRejectedValueOnce(
-    new Error("invalid connection"),
-  );
-  await expect(new TmuxLauncher().launch("id", "/project", ["codex"])).rejects.toMatchObject({
-    outcome: "unknown",
-    target: { socketPath: "/actual/tmux.sock", paneId: "%7", sessionName: "ahub-id" },
+it("rejects an invalid session name before starting tmux", async () => {
+  await expect(new TmuxLauncher().launch("invalid", "/project", ["codex"])).rejects.toMatchObject({
+    outcome: "not_started",
   });
-  expect(execute).toHaveBeenCalledTimes(2);
+  expect(execute).not.toHaveBeenCalled();
+});
+
+it("preserves trailing spaces in the actual socket path", async () => {
+  execute.mockImplementationOnce(succeeds("/actual/socket \n"));
+  expect(
+    await new TmuxLauncher().launch("00000000-0000-0000-0000-000000000007", "/project", ["codex"]),
+  ).toEqual({
+    socketPath: "/actual/socket ",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+  });
 });

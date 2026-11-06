@@ -3,10 +3,10 @@ import type { InteractionBindingAttempt } from "../domain/session-domain.js";
 export type { DomainBindingEvent as PaneBindEvent } from "../domain/session-domain.js";
 import type { DomainBindingEvent as PaneBindEvent } from "../domain/session-domain.js";
 
-/** Retains only the latest session event and latest claim on each pane. */
+/** Retains only the latest session event and latest claim on each tmux target. */
 export class PaneBindingManager {
   readonly #sessions = new Map<string, PaneBindEvent>();
-  readonly #panes = new Map<string, PaneBindEvent>();
+  readonly #targets = new Map<string, PaneBindEvent>();
 
   readonly #listeners = new Set<() => void>();
   subscribe(listener: () => void): () => void {
@@ -27,10 +27,10 @@ export class PaneBindingManager {
       if (changed) for (const listener of this.#listeners) listener();
       return;
     }
-    const key = paneKey(event.attempt);
-    const owner = this.#panes.get(key);
+    const key = targetKey(event.attempt);
+    const owner = this.#targets.get(key);
     if (!owner || compare(event, owner) > 0) {
-      this.#panes.set(key, event);
+      this.#targets.set(key, event);
       changed = true;
     }
     if (changed) for (const listener of this.#listeners) listener();
@@ -43,20 +43,22 @@ export class PaneBindingManager {
   replacement(sessionId: string): string | null {
     const event = this.#sessions.get(sessionId);
     if (!event?.attempt.valid) return null;
-    const owner = this.#panes.get(paneKey(event.attempt));
+    const owner = this.#targets.get(targetKey(event.attempt));
     return owner && compare(owner, event) !== 0 ? owner.sessionId : null;
   }
 
-  owns(sessionId: string, pane: { socketPath: string; paneId: string }): boolean {
+  owns(sessionId: string, target: { socketPath: string; sessionName: string }): boolean {
     const attempt = this.latest(sessionId);
     return (
-      !!attempt?.valid && paneKey(attempt) === paneKey(pane) && this.replacement(sessionId) === null
+      !!attempt?.valid &&
+      targetKey(attempt) === targetKey(target) &&
+      this.replacement(sessionId) === null
     );
   }
 }
 
-function paneKey(pane: { socketPath: string; paneId: string }): string {
-  return JSON.stringify([pane.socketPath, pane.paneId]);
+function targetKey(target: { socketPath: string; sessionName: string }): string {
+  return JSON.stringify([target.socketPath, target.sessionName]);
 }
 
 function compare(left: PaneBindEvent, right: PaneBindEvent): number {

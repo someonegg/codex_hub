@@ -19,7 +19,8 @@ export function claudeBindingCommand(
 ): string {
   if (operationId && !validClaudeId(operationId)) throw new Error("Invalid operation ID");
   if (taskName !== null && !validTaskName(taskName)) throw new Error("Invalid task name");
-  return `! printf 'AHUB_TMUX_BIND_V2\\n%s\\n%s\\n%s\\n%s\\n%s\\n' "\${TMUX%%,*}" "$TMUX_PANE" ${shellQuote(operationId)} ${shellQuote(validProjectDirectory(projectDirectory) ? projectDirectory : "")} ${shellQuote(JSON.stringify(taskName))}`;
+  // Claude worktree isolation rejects tmux commands; the launcher supplies its known name.
+  return `! printf 'AHUB_TMUX_BIND_V3\\n%s\\n%s\\n%s\\n%s\\n%s\\n' "\${TMUX%%,*}" "$AHUB_TMUX_SESSION_NAME" ${shellQuote(operationId)} ${shellQuote(validProjectDirectory(projectDirectory) ? projectDirectory : "")} ${shellQuote(JSON.stringify(taskName))}`;
 }
 
 /** Only call with the main user record's native bash stdout wrapper. */

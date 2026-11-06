@@ -15,7 +15,10 @@ import {
 } from "../../src/server/management/session-manager.js";
 import type { UploadCleanup } from "../../src/server/uploads/store.js";
 
-const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
+const target = {
+  socketPath: "/tmp/test.sock",
+  sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+};
 const services: OperationService[] = [];
 let bindings = new PaneBindingManager();
 afterEach(() => services.splice(0).forEach((service) => service.close()));
@@ -203,7 +206,7 @@ describe("observed management operations", () => {
             ordinal: 2,
             valid: true,
             ...target,
-            paneId: "%999",
+            sessionName: "ahub-00000000-0000-0000-0000-000000000999",
             operationId: op.operationId,
           },
         });
@@ -569,7 +572,7 @@ it.each(["not_started", "unknown"] as const)(
   "preserves explicit launch outcome %s and deduplicates",
   async (outcome) => {
     const { service, manager } = setup();
-    const attach = outcome === "unknown" ? "tmux attach-session -t 'ahub-test'" : null;
+    const attach = outcome === "unknown" ? "tmux attach-session -t '=ahub-test:'" : null;
     manager.launch.mockRejectedValueOnce(
       new SessionLaunchError(outcome, "launch error", attach, target),
     );
@@ -1011,7 +1014,10 @@ describe("safe resume operations", () => {
   it("retains unknown target/attach information and deduplicates only the same requestId", async () => {
     const f = resumable();
     f.manager.launch.mockRejectedValueOnce(
-      new SessionLaunchError("unknown", "timeout", "tmux attach", { ...target, paneId: "%99" }),
+      new SessionLaunchError("unknown", "timeout", "tmux attach", {
+        ...target,
+        sessionName: "ahub-00000000-0000-0000-0000-000000000099",
+      }),
     );
     f.probe.mockImplementation(async () => null);
     const op = f.service.create(request);
@@ -1019,11 +1025,13 @@ describe("safe resume operations", () => {
     expect(await f.service.get(op.operationId)).toMatchObject({
       status: "unknown",
       attachCommand: "tmux attach",
-      target: { paneId: "%99" },
+      target: { sessionName: "ahub-00000000-0000-0000-0000-000000000099" },
     });
     // The original pane is dead; the previous unknown launch is not an extra gate.
     f.probe.mockImplementation(async (attempt) =>
-      attempt.valid && attempt.paneId === "%99" ? { ...target, paneId: "%99" } : null,
+      attempt.valid && attempt.sessionName === "ahub-00000000-0000-0000-0000-000000000099"
+        ? { ...target, sessionName: "ahub-00000000-0000-0000-0000-000000000099" }
+        : null,
     );
     expect(f.service.create(request).operationId).toBe(op.operationId);
     const retry = f.service.create({ ...request, requestId: "resume-request-new" });

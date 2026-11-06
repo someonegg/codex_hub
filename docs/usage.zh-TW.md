@@ -8,203 +8,195 @@
 npx @someonegg/codex-hub@latest
 ```
 
-開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止。
-安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。預設讀取 `~/.codex` 和 `~/.claude`，且僅監聽本機。
+開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止伺服器。
+安裝與執行要求見 [README](../README.zh-TW.md#快速開始)。
 
-## 閱讀與管理工作階段
+預設從 `~/.codex` 讀取 Codex 工作階段、從 `~/.claude` 讀取 Claude Code 工作階段，且僅監聽本機。
+其他裝置存取前，請先設定[遠端存取](#從其他裝置存取)。
 
-在側邊欄選擇專案和主工作階段，子工作階段從父工作階段中開啟。訊息從頭開始隨捲動載入，載入至末尾後自動接收更新。
-勾選**已封存**可瀏覽唯讀的封存工作階段。
+## 閱讀工作階段
 
-可收藏工作階段位址，或分享給能夠存取此 Hub 的裝置。
+在側邊欄選擇專案和主工作階段，子工作階段從父工作階段中開啟。訊息從頭開始隨捲動載入，到達末尾後自動更新。
+勾選**已封存**可瀏覽唯讀的封存工作階段。可收藏工作階段位址。
 
-- **建立：**點選專案旁的 **+**，或全域 **+** 後選擇專案、輸入本機絕對目錄。可選啟用 worktree 或 YOLO。
-- **恢復：**開啟已退出工作階段，在可用時點選**恢復**。使用原 Home 與可用的原工作目錄或專案目錄繼續同一工作階段。
-- **退出：**使用工作階段的 **…** 選單停止已連線終端窗格，保留工作階段歷史。
-- **封存：**使用工作階段的 **…** 選單停止執行並將工作階段標記為已封存。
-- **刪除：**使用工作階段的 **…** 選單永久刪除工作階段歷史。刪除需要確認。
+最新載入的計畫自動展開。使用**顯示**或**隱藏**控制個別計畫，也可同時展開多個計畫。
 
-建立與恢復使用 tmux。如果啟動需要登入或權限確認，使用 **… → 連線 tmux**，
-或執行 Hub 顯示的連線命令，在終端完成操作。恢復從其他位置啟動的工作階段前，請確認原處理程序已經退出。
+## 建立與管理工作階段
 
-最新載入的計畫自動展開，先前計畫收起。使用**顯示**或**隱藏**分別控制，可同時展開多個計畫。
+點選專案旁的 **+**，或全域 **+** 後選擇專案、輸入本機絕對目錄。
+選擇 [Home](#多個-home) 和可選的啟動設定：
 
-## 與工作階段互動
+- **Worktree：**在獨立 Git worktree 中啟動，隔離程式碼變更。
+- **YOLO：**略過代理程式的核准提示；Codex 也會停用其沙盒。
 
-綠色**執行中**標記表示終端已連線。透過訊息輸入框傳送提示，展開**終端預覽**檢視 CLI。
-點選**中斷**，或在預覽中按 **Ctrl+C** 中斷執行；按 **Esc** 收起預覽。**工作中**和**閒置**反映終端輸出，不表示任務是否完成。
+開啟已退出的工作階段，在可用時點選**恢復**繼續。恢復保留原 Home 和專案歸屬，使用可用的原工作目錄或專案目錄。
+恢復從其他位置啟動的工作階段前，請確認原處理程序已經退出。
 
-一般提示會立即顯示，並標記為**等待中**，直到工作階段訊息更新。純 slash command 不顯示此預覽。
-傳送失敗時，預覽消失，草稿保留。
+透過工作階段的 **…** 選單執行：
 
-如果 Codex 透過 `/clear`、`/resume` 或執行計畫在同一終端切換工作階段，在舊工作階段的已連線頁面
-點選**移交繫結**。顯示**已被替代**後點選**前往已繫結工作階段**；未傳送的草稿保留在舊頁面。
+- **退出：**停止已連線終端，保留歷史。
+- **封存：**停止執行，將工作階段移到封存列表。
+- **刪除：**確認後永久刪除工作階段歷史。
+
+建立與恢復使用 tmux。啟動若被登入或權限確認阻擋，透過 **… → 連線 tmux** 或顯示的連線命令在終端完成操作。
+不要重新命名 Hub 的 tmux 工作階段或修改其視窗、窗格結構。詳見 [tmux 要求（英文）](technical-reference.md#tmux-interaction)。
+
+## 傳送提示與檔案
+
+綠色**執行中**標記表示終端已連線。透過輸入框傳送提示，預設 **Shift+Enter** 傳送、**Enter** 換行；
+在[設定](#瀏覽器設定)中開啟 **Enter 傳送**可反轉。
+
+展開**終端預覽**檢視 CLI。點選**中斷**或在預覽中按 **Ctrl+C** 中斷，按 **Esc** 收起預覽。
+**工作中**和**閒置**反映終端輸出，不表示任務是否完成。
+
+已傳送提示先顯示為**等待中**，隨後隨工作階段訊息更新；純 slash command 不顯示此預覽。
+傳送失敗時保留草稿。草稿文字和附件選擇在切換工作階段時保留，重新整理頁面後重設。
+
+如果 Codex 透過 `/clear`、`/resume` 或執行計畫在同一終端切換工作階段，在舊工作階段的已連線頁面點選**移交繫結**。
+顯示**已被替代**後點選**前往已繫結工作階段**。未傳送草稿留在舊頁面。
 
 ### 檔案上傳
 
 使用附件按鈕**拍照**、**選擇圖片**或**選擇檔案**，也可貼上圖片或拖放檔案。
-傳送前可預覽圖片、移除附件；支援單獨傳送附件和一次傳送多個檔案，不支援資料夾。
+傳送前可預覽或移除附件，支援單獨傳送附件和多個檔案，不支援資料夾。**每個檔案最大 20 MiB**。
 
-草稿文字與附件選擇在工作階段導覽時保留，重新整理頁面後重置。
+圖片保留原始內容，包括 EXIF 中繼資料。相機行為取決於瀏覽器；HEIC/HEIF 支援取決於代理程式。
 
-相機行為取決於瀏覽器，可能退回檔案選擇器。圖片按原樣上傳，包括 EXIF 中繼資料，單一檔案上限
-20 MiB；HEIC/HEIF 支援取決於代理程式。拍照時工作階段若斷開或正忙，請重新連線或稍後重試。
+從工作階段標題區域開啟**上傳記錄**，預覽、下載或刪除檔案，包括未傳送的上傳檔案。
+從草稿移除附件不會刪除已上傳檔案；從上傳記錄刪除檔案也會將其從草稿移除。
 
-點選工作階段標題區域的**上傳記錄**，預覽、下載或刪除上傳檔案，包括未傳送檔案和從草稿移除的檔案。
-刪除檔案也會將其從目前草稿移除。[檢視上傳記錄截圖](images/zh-TW/ahub-uploads.png)。
-
-刪除工作階段會請求背景清理上傳檔案，封存與退出保留附件。清理失敗時，可從 Hub 資料目錄刪除殘留檔案。
-
-上傳檔案儲存在 [Hub 資料目錄](#伺服器選項)的 `uploads/` 下，代理程式必須能存取此目錄。
-API 與儲存保證見[技術參考（英文）](technical-reference.md#file-uploads)。
+檔案儲存在 [Hub 資料目錄](#設定伺服器)的 `uploads/` 下，代理程式必須能存取此目錄。
+刪除工作階段觸發背景清理，封存與退出保留檔案。儲存和清理細節見[上傳參考（英文）](technical-reference.md#file-uploads)，
+也可[檢視上傳記錄截圖](images/zh-TW/ahub-uploads.png)。
 
 ## 瀏覽器設定
 
-在側邊欄底部開啟**設定**，選擇語言、主題、新工作階段預設 Home，以及預設 worktree 和 YOLO 選項。
+在側邊欄底部開啟**設定**，選擇語言、主題、新工作階段預設 Home，以及 Worktree、YOLO 預設值。
 修改自動儲存在目前瀏覽器。YOLO 預設值也用於恢復工作階段，啟動對話方塊可覆寫預設值。
 
-預設使用 **Shift+Enter** 傳送、**Enter** 換行。在設定中開啟 **Enter 傳送** 後，改為 **Enter** 傳送、**Shift+Enter** 換行。
+介面初始為英文，切換語言立即生效，不翻譯工作階段或終端原文。
 
-介面預設英文；選擇 **Language → 简体中文 / 繁體中文** 後立即生效，不需要重新整理，其他已開啟的 Hub 分頁同步更新。
-語言僅影響 Hub 介面及日期、數字顯示，不翻譯工作階段原文、終端輸出、檔名、路徑或命令。
+## 使用 CLI
 
-## 管理 CLI
-
-`codex-hub` 啟動伺服器；`ahub-cli` 提供 `page`、`diff` 和 `session` 命令。
-不需全域安裝即可執行：
+`codex-hub` 啟動伺服器，`ahub-cli` 管理工作階段和發布資源。下文範例假定已全域安裝：
 
 ```sh
-npx --package=@someonegg/codex-hub@latest ahub-cli --help
+npm install -g @someonegg/codex-hub
+ahub-cli --help
 ```
 
-`ahub-cli` 預設輸出便於閱讀的文字，加入 `--json` 可取得結構化結果和錯誤。輸出通道與錯誤碼見 [CLI 輸出約定](technical-reference.md#cli-output-contract)。
+不需全域安裝時，將範例中的 `ahub-cli` 替換為
+`npx --package=@someonegg/codex-hub@latest ahub-cli`。加入 `--json` 可取得結構化命令結果。
 
-### 工作階段
+### 工作階段命令
 
-先啟動 Hub，再從另一終端執行工作階段命令：
+先啟動 Hub，再從另一終端執行：
 
 ```sh
 ahub-cli session list --project /path/to/project
+ahub-cli session create --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --count 5 --json
+ahub-cli session inspect <id> --follow
 ```
 
-使用 `list` 傳回的 ID 傳送輸入或檢視工作階段。`list` 預設列出未封存的主工作階段（`--all` 包含已封存工作階段），`inspect` 也接受子工作階段 ID。
-將傳回的 `Next after` 值傳給 `--after <value>` 繼續讀取下一頁。
-使用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端。
-終端切換工作階段後，用 `handoff <id>` 移交繫結。
+使用 `list` 或 `create` 傳回的 Hub ID。`list` 預設不含封存工作階段，傳入 `--all` 可包含；
+`inspect` 也接受子工作階段 ID。將傳回的 `Next after` 值傳給 `--after <value>` 讀取下一頁。
+`--follow` 持續觀察直到按 `Ctrl+C` 停止，不會因任務完成自動結束。
 
-可用 `create --task <name>` 在建立時指定可選任務，用 `list --task <name>` 跨專案篩選，網頁在工作階段資訊中顯示任務。
+建立預設使用專案目錄和第一個已設定 Home。用 `--cwd` 修改工作目錄而保留專案歸屬，
+用 `--home <nickname>` 選擇 Home；可選 `--worktree` 和 `--yolo` 控制啟動行為。
+`resume <id>` 保留原 Home，支援 `--yolo`。
+用 `create --task <name>` 和 `list --task <name>` 跨專案分組工作階段。
 
-建立、恢復、退出、封存等命令見 `ahub-cli session --help`。建立需要 `--project`，支援 `--cwd`、`--home`、`--worktree`
-和 `--yolo`；恢復保留原 Home，支援 `--yolo`。省略 `--home` 時選擇第一個已設定 Home。
-省略 `--cwd` 時從專案目錄啟動；明確指定其他工作目錄時仍保留 `--project` 的專案歸屬。
-兩個目錄均可使用相對路徑，CLI 會將其轉為絕對路徑。
+輸入預設要求終端已連線且閒置。用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端，
+`interrupt <id>` 中斷執行。`send` 或 `keys` 的 `--force` 允許在工作中傳送輸入，
+也允許 `send` 傳送以 `/` 開頭的訊息。終端切換工作階段後，用 `handoff <id>` 移交繫結。
 
-工作階段命令預設連線至 `http://127.0.0.1:4173`。可用 `CODEX_HUB_URL` 或 `--url` 指定其他
-HTTP 或 HTTPS 位址。使用私有 CA 時，在啟動 CLI 前設定
-`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。用 `--timeout <seconds>` 修改預設的 15 秒逾時
-（follow 為 30 秒；建立、恢復、退出、封存和刪除為 45 秒）。使用 `inspect --follow` 時，它限制每次 HTTP
-請求；觀察持續到按 Ctrl+C 停止或達到指定輪數。
+預設連線至 `http://127.0.0.1:4173`。用 `CODEX_HUB_URL` 或 `--url` 修改位址，
+用 `--timeout <seconds>` 調整逾時。使用私有 CA 時，啟動 CLI 前設定
+`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。
 
-建立和恢復等待終端已連線且閒置；傳送輸入和一般按鍵預設要求閒置。使用
-`send <id> --message <text> --force`（或 `--stdin --force`）或
-`keys <id> <key...> --force` 可在工作中傳送輸入。CLI 也會拒絕首字元為 `/`
-的 `send` 訊息；`--force` 也可略過此檢查。
-連線、繫結所有權和管理操作占用檢查仍然有效。輸入或 `handoff` 成功僅表示
-已傳送，不代表任務完成。逾時或結束代碼為 `2`（寫入結果不明）時，先用 `list`、`inspect`
-或 `terminal` 核查，再決定是否重試。停止用戶端不會取消已提交操作。
-輸出欄位、結束代碼與失敗語意見 [CLI 參考（英文）](technical-reference.md#session-cli-and-observation)。
+傳送成功不表示任務完成。逾時或結束代碼為 `2`（寫入結果不明）時，先用 `list`、`inspect` 或 `terminal` 核查再重試。
+停止用戶端不會取消已提交操作。生命週期命令（包括刪除）不會在 CLI 中再次要求確認。
+全部命令見 `ahub-cli session --help`，結果與逾時契約見 [CLI 參考（英文）](technical-reference.md#session-cli-and-observation)。
 
-## 多個 Home
+## 發布網頁與差異
 
-使用 `--codex-home 'nickname=path'` 或 `--claude-home 'nickname=path'` 指定 Home。
-Codex Home 應指向包含 `sessions/` 的目錄，Claude Home 應指向包含 `projects/` 的目錄。
-可重複或混合傳入：
+用 `--hosting` 啟動 Hub 以檢視發布資源。發布命令讀取 Hub 所在機器的本機檔案，伺服器停止時也可執行。
+命令輸出相對 URL 和 Markdown 連結，請在 Hub 伺服器位址下開啟。
 
-```sh
-codex-hub \
-  --claude-home 'claude=~/.claude' \
-  --codex-home 'codex=~/.codex'
-```
-
-任何明確指定的 Home 都會替換兩個預設項，並按參數順序排列，第一項為預設。
-未設定時 Codex 在前；僅當 `~/.codex` 不存在時將 Claude 排在前面，兩項始終保留。
-每個 Home 需使用唯一暱稱與目錄；`default` 只是普通暱稱。
-
-透過側邊欄 Home 篩選器縮小工作階段範圍，建立時選擇目標 Home。
-目前有效的 Home 篩選或預設 Home 偏好優先於第一項。
-
-## 發布資源
-
-用 `codex-hub --hosting` 啟用已發布網頁與差異檢視。資源命令可在伺服器停止時執行，
-發布後輸出相對 URL 和 Markdown 連結。預設儲存在 `~/.codex-hub/hosting`；如需自訂位置，
-命令與伺服器需使用相同的 `--home-dir /path`。加 `--json` 取得結構化輸出。
-
-如需代理程式協助發布，可安裝 [`ahub-publish` skill](../skills/ahub-publish)，
-並明確按名稱請求使用，將靜態網頁或審閱差異發布到已有 Hub。
-
-npm 套件附帶此技能；執行 `ahub-cli skill path ahub-publish` 查看目錄。`npx` 回傳快取路徑，長期使用請複製該目錄。
+預設儲存在 `~/.codex-hub/hosting`。自訂資料目錄時，命令與伺服器必須使用相同的 `--home-dir /path`。
 
 ### 發布網頁
 
-託管網頁與 Hub 同源，以可信程式碼執行，請僅發布可信內容。在 `/artifacts` 的**網頁**頁面管理發布資源。
-
-發布 Hub 所在機器上已建置、包含 `index.html` 的目錄：
+發布已建置、包含 `index.html` 的目錄：
 
 ```sh
-ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /path/to/project --name demo --title "Design comparison"
 ```
 
-兩個目錄都必須存在。資源使用相對路徑；Hub 不建置網站，也不接受遠端上傳發布包。
+兩個目錄都必須存在。資源使用相對路徑；Hub 不建置網站，也不接受遠端上傳發布套件。
+託管網頁與 Hub 同源，以可信程式碼執行，因此只應發布可信內容。
 
-以相同專案和名稱再次發布可更新網頁。名稱預設為解析符號連結後的來源目錄名；用 `--name` 可在來源目錄
-變化時保持名稱。更新保留 URL，除非指定 `--title`，否則保留標題。worktree 請將原專案傳給 `--project`。
+以相同專案和名稱再次發布即可更新並保留 URL。省略 `--name` 時使用來源目錄名。
+worktree 請將原專案傳給 `--project`。
 
-**已發布網頁**連結在新分頁開啟管理介面。可開啟網頁、複製絕對連結、重新整理列表，或確認刪除網頁及其全部快照。
-移除來源目錄或 worktree 不會刪除已發布網頁。CLI 還支援 `page list` 和 `page delete <id>`。
-載入限制、專案身分與快照保證見[託管參考（英文）](technical-reference.md#optional-hosting)。
+開啟**已發布網頁**（`/artifacts`）瀏覽、複製連結或刪除網頁及其快照。
+CLI 也支援 `page list` 和 `page delete <id>`。移除來源目錄或 worktree 不會刪除已發布網頁。
+詳見[託管參考（英文）](technical-reference.md#optional-hosting)。
 
-### 分享臨時差異
+### 分享差異
 
-產生所需比較的差異檔案後發布：
+產生所需比較後發布：
 
 ```sh
 git diff HEAD > /tmp/review.diff
 ahub-cli diff publish /tmp/review.diff --title "Review changes"
-ahub-cli diff list
-ahub-cli diff delete <uuid>
 ```
 
-開啟傳回的 `/diffs/<uuid>` 連結審閱差異。代理程式負責選擇比較範圍並在完成後刪除發布內容，沒有自動清理。
-原始檔不變。參閱[差異參考（英文）](technical-reference.md#temporary-diffs)及
+開啟傳回的 `/diffs/<uuid>` 位址。發布內容不會過期，用 `ahub-cli diff list` 尋找，
+審閱結束後用 `ahub-cli diff delete <uuid>` 刪除；原始檔保持不變。
+參閱[差異參考（英文）](technical-reference.md#temporary-diffs)及
 [桌面](images/zh-TW/ahub-diff.png) / [手機](images/zh-TW/ahub-diff-mobile.png)預覽。
 
-## 伺服器選項
+### 透過代理程式發布
 
-將選項傳給 `codex-hub`，修改後重啟。完整命令幫助見 `codex-hub --help`。
+安裝附帶的 [`ahub-publish` skill](../skills/ahub-publish)，並按名稱請求使用。
+執行 `ahub-cli skill path ahub-publish` 定位目錄；使用 `npx` 時，請將傳回的快取目錄複製到長期使用的技能位置。
 
-| 選項                            | 預設值             | 用途                                               |
-| ------------------------------- | ------------------ | -------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `codex=~/.codex`   | 指定一個或多個 Codex Home                          |
-| `--claude-home <nickname=path>` | `claude=~/.claude` | 指定一個或多個 Claude Code Home                    |
-| `--host <host>`                 | `127.0.0.1`        | 監聽位址                                           |
-| `--port <port>`                 | `4173`             | 監聽連接埠，`0` 自動選擇閒置連接埠                 |
-| `--home-dir <path>`             | `~/.codex-hub`     | Hub 資料目錄，包含 `uploads/` 和 `hosting/`        |
-| `--hosting`                     | 關閉               | 啟用靜態網頁託管                                   |
-| `--tmux-socket <path>`          | tmux 預設值        | 自訂 tmux socket                                   |
-| `--ssl`                         | 關閉               | 啟用 HTTPS，需同時指定 `--ssl-cert` 和 `--ssl-key` |
-| `--ssl-cert <path>`             | 無                 | PEM 伺服器憑證或憑證鏈                             |
-| `--ssl-key <path>`              | 無                 | PEM 私鑰                                           |
-| `--ssl-ca <path>`               | 無                 | 要求用戶端提供由此 CA 簽發的憑證                   |
+## 設定伺服器
 
-## 安全
+啟動時傳入選項，修改後重新啟動。完整列表見 `codex-hub --help`。
 
-Hub 沒有應用層登入。任何能存取它的人都能閱讀工作階段、傳送輸入和管理工作階段。
-未設定身分認證並限制網路存取時，請保持預設本地監聽位址。
+| 選項                   | 預設值         | 用途                                        |
+| ---------------------- | -------------- | ------------------------------------------- |
+| `--port <port>`        | `4173`         | 監聽連接埠，`0` 自動選擇閒置連接埠          |
+| `--home-dir <path>`    | `~/.codex-hub` | Hub 資料目錄，包含 `uploads/` 和 `hosting/` |
+| `--hosting`            | 關閉           | 提供已發布網頁與差異存取                    |
+| `--tmux-socket <path>` | tmux 預設值    | 使用自訂 tmux socket                        |
 
-跨裝置存取時，使用帶認證的反向代理或內建雙向 TLS（mTLS），例如：
+### 多個 Home
+
+Home 是代理程式的工作階段與設定目錄：Codex 包含 `sessions/`，Claude Code 包含 `projects/`。
+每個 Home 需使用唯一暱稱和目錄：
+
+```sh
+codex-hub \
+  --codex-home 'work=~/.codex-work' \
+  --claude-home 'claude=~/.claude'
+```
+
+可重複或混合傳入這些選項。明確設定會替換**兩個預設 Home**，建立預設使用第一項。
+透過側邊欄 Home 篩選器縮小範圍。網頁建立時，有效的 Home 篩選或預設 Home 偏好優先於第一項。
+完整規則見 [Home 路由（英文）](technical-reference.md#home-identity-and-routing)。
+
+## 從其他裝置存取
+
+Hub 沒有應用層登入，任何能存取它的人都能閱讀工作階段、傳送輸入和管理工作階段。
+請保持預設 `127.0.0.1` 監聽，除非透過反向代理或雙向 TLS（mTLS）設定了身分認證並限制存取。
+
+使用內建 mTLS：
 
 ```sh
 codex-hub \
@@ -215,26 +207,26 @@ codex-hub \
   --ssl-ca /path/to/client-ca.pem
 ```
 
-每臺裝置都需安裝用戶端憑證及私鑰，並信任伺服器憑證。未指定 `--ssl-ca` 時，HTTPS 僅加密流量，
-不認證用戶端。更換憑證或私鑰後需重啟。
+每臺裝置需安裝用戶端憑證及私鑰，並信任伺服器憑證。不指定 `--ssl-ca` 時，HTTPS 僅加密流量，不認證用戶端。
+更換憑證或私鑰後需重新啟動。
 
-使用 `--local-port 4174` 可額外在 `127.0.0.1:4174` 提供無需用戶端憑證的 HTTP 入口，預設關閉。主要入口的 TLS/mTLS 設定獨立生效。本機 CLI 可使用：
+如需本機 CLI 無用戶端憑證存取，啟動伺服器時另加 `--local-port 4174`，然後執行：
 
 ```sh
 ahub-cli session list --url http://127.0.0.1:4174
 ```
 
-本機其他使用者和程序也能存取此入口，請勿將外部代理流量轉送至此連接埠。
+此額外 HTTP 入口預設關閉，繫結 `127.0.0.1`。本機其他使用者和程序也能存取，請勿將外部代理流量轉送到此入口。
 
 ## 疑難排解
 
-- **沒有工作階段：**Codex 的 `--codex-home` 應指向包含 `sessions/` 的目錄；Claude 的 `--claude-home` 應指向包含 `projects/` 的目錄。檢視伺服器終端中的不可讀或跳過檔案提示。
-- **連接埠占用：**選擇其他連接埠，例如 `codex-hub --port 4180`。
-- **無法傳送輸入：**工作階段需要已連線、執行中的 tmux 窗格。先在 tmux 完成 CLI 提示，或在可用時點選**恢復**。
-  已封存工作階段唯讀，僅有日誌檔案並不意味著終端已連線。
-- **建立或恢復狀態不明：**重試前檢查 tmux 並重新整理工作階段列表，避免啟動重複工作階段。關閉網頁不會停止操作，重啟伺服器會遺失進度追蹤。
+- **沒有工作階段：**檢查各 Home 是否包含 `sessions/`（Codex）或 `projects/`（Claude）。檢視伺服器輸出中的不可讀或跳過檔案提示。
+- **連接埠占用：**改用其他連接埠，例如 `codex-hub --port 4180`。
+- **無法傳送輸入：**透過**連線 tmux**完成 CLI 提示，忙碌時等待，或在可用時使用**恢復**。封存工作階段唯讀，僅有日誌不代表終端已連線。
+- **建立或恢復狀態不明：**重試前檢查 tmux 並重新整理工作階段列表，避免重複啟動。關閉頁面不會停止操作，重新啟動伺服器會遺失進度追蹤。
+- **相機不可用或上傳中斷：**使用檔案選擇器，檢查工作階段已連線且閒置後重試。
 
-連線及管理細節見[技術參考（英文）](technical-reference.md)。
+執行與恢復細節見[技術參考（英文）](technical-reference.md)。
 
 ## 移除安裝
 
@@ -244,4 +236,4 @@ ahub-cli session list --url http://127.0.0.1:4174
 npm uninstall -g @someonegg/codex-hub
 ```
 
-使用 `npx` 無需全域移除安裝。移除安裝保留工作階段、worktree、執行中的 tmux 工作階段、上傳檔案和託管快照，請按需另行清理。
+`npx` 不需全域移除安裝。工作階段、worktree、執行中的 tmux 工作階段、上傳檔案和託管快照仍會保留，請按需另行清理。

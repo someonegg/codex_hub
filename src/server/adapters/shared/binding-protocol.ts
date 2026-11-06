@@ -3,6 +3,7 @@ import { isAbsolute } from "node:path";
 import { validTaskName } from "../../../shared/task-name.js";
 import { validProjectDirectory } from "../../domain/project-directory.js";
 import type { InteractionBindingAttempt } from "../../domain/session-domain.js";
+import { validTmuxSessionName } from "../../interaction/tmux-target.js";
 
 /** Parse protocol fields only after the adapter has established native provenance. */
 export function bindingAttempts(
@@ -12,23 +13,21 @@ export function bindingAttempts(
 ): InteractionBindingAttempt[] {
   const found: InteractionBindingAttempt[] = [];
   for (let index = 0; index < lines.length; index++) {
-    if (lines[index] !== "AHUB_TMUX_BIND_V1" && lines[index] !== "AHUB_TMUX_BIND_V2") continue;
+    if (lines[index] !== "AHUB_TMUX_BIND_V3") continue;
     const socketPath = lines[index + 1] ?? "";
-    const paneId = lines[index + 2] ?? "";
+    const sessionName = lines[index + 2] ?? "";
     const operationId = lines[index + 3] ?? "";
     const projectDirectory = lines[index + 4];
     let taskName: string | undefined;
-    if (lines[index] === "AHUB_TMUX_BIND_V2") {
-      try {
-        const value: unknown = JSON.parse(lines[index + 5] ?? "");
-        if (validTaskName(value)) taskName = value.trim() || undefined;
-      } catch {
-        /* Optional metadata cannot invalidate a binding. */
-      }
+    try {
+      const value: unknown = JSON.parse(lines[index + 5] ?? "");
+      if (validTaskName(value)) taskName = value.trim() || undefined;
+    } catch {
+      /* Optional metadata cannot invalidate a binding. */
     }
     if (
       !isAbsolute(socketPath) ||
-      !/^%\d+$/.test(paneId) ||
+      !validTmuxSessionName(sessionName) ||
       (operationId && !validOperationId(operationId))
     ) {
       found.push({ ordinal, valid: false });
@@ -38,7 +37,7 @@ export function bindingAttempts(
       ordinal,
       valid: true,
       socketPath,
-      paneId,
+      sessionName,
       ...(operationId ? { operationId } : {}),
       ...(validProjectDirectory(projectDirectory) ? { projectDirectory } : {}),
       ...(taskName ? { taskName } : {}),

@@ -97,7 +97,7 @@ it.each(adapters)(
               content: [
                 {
                   type: "input_text",
-                  text: `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/contract.sock\n${pane}\n\n\n</user_shell_command>`,
+                  text: `<user_shell_command>\nAHUB_TMUX_BIND_V3\n/tmp/contract.sock\n${pane}\n\n\n</user_shell_command>`,
                 },
               ],
             },
@@ -108,7 +108,7 @@ it.each(adapters)(
             sessionId: id,
             message: {
               role: "user",
-              content: `<bash-stdout>AHUB_TMUX_BIND_V1\n/tmp/contract.sock\n${pane}\n\n\n</bash-stdout>`,
+              content: `<bash-stdout>AHUB_TMUX_BIND_V3\n/tmp/contract.sock\n${pane}\n\n\n</bash-stdout>`,
             },
           });
     await writeFile(path, adapter.initial);
@@ -131,23 +131,31 @@ it.each(adapters)(
     const initial = await store.refresh();
     const sessionId = [...initial.sessions.keys()][0]!;
     fail = true;
-    await appendFile(path, bind("%1"));
+    await appendFile(path, bind("ahub-00000000-0000-0000-0000-000000000001"));
     await expect(store.refresh()).rejects.toThrow("injected source failure");
     expect(bindings.latest(sessionId)).toBeNull();
-    await appendFile(path, bind("%2"));
+    await appendFile(path, bind("ahub-00000000-0000-0000-0000-000000000002"));
     await expect(store.refresh()).rejects.toThrow("injected source failure");
     expect(bindings.latest(sessionId)).toBeNull();
     fail = false;
     await store.refresh();
     expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
-    expect(bindings.latest(sessionId)).toMatchObject({ valid: true, paneId: "%2" });
+    expect(bindings.latest(sessionId)).toMatchObject({
+      valid: true,
+      sessionName: "ahub-00000000-0000-0000-0000-000000000002",
+    });
     // The first batch still owns its earlier pane, even though the latest batch moved on.
     bindings.submit({
       sessionId: "earlier",
       time: 0,
       ordinal: 0,
       position: 0,
-      attempt: { valid: true, ordinal: 0, socketPath: "/tmp/contract.sock", paneId: "%1" },
+      attempt: {
+        valid: true,
+        ordinal: 0,
+        socketPath: "/tmp/contract.sock",
+        sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+      },
     });
     expect(bindings.replacement("earlier")).toBe(sessionId);
   },

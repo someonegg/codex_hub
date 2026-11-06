@@ -48,23 +48,19 @@ describe("tmux interaction integration", () => {
     `,
     );
     const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
+    const sessionName = "ahub-00000000-0000-0000-0000-000000000001";
     execFileSync("tmux", [
       "-S",
       socketPath,
       "new-session",
       "-d",
       "-s",
-      "interrupt-test",
+      sessionName,
       [process.execPath, script, output].map(quote).join(" "),
     ]);
     try {
-      const paneId = execFileSync(
-        "tmux",
-        ["-S", socketPath, "display-message", "-p", "-t", "interrupt-test", "#{pane_id}"],
-        { encoding: "utf8" },
-      ).trim();
       const service = new TmuxInteractionService();
-      const binding = await service.connect({ ordinal: 1, valid: true, socketPath, paneId });
+      const binding = await service.connect({ ordinal: 1, valid: true, socketPath, sessionName });
       await waitForPreview(service, binding, "READER-READY");
       await service.sendKeys(binding, codexInterruptSteps());
       let events: { bytes: number[]; at: number }[] = [];
@@ -84,6 +80,7 @@ describe("tmux interaction integration", () => {
   it("validates and captures only the current real tmux pane as bounded plain text", async () => {
     const directory = await createTempDirectory("codex-real-tmux-");
     const socketPath = join(directory, "server.sock");
+    const sessionName = "ahub-00000000-0000-0000-0000-000000000002";
     execFileSync("tmux", [
       "-S",
       socketPath,
@@ -94,23 +91,18 @@ describe("tmux interaction integration", () => {
       "-y",
       "20",
       "-s",
-      "ahub-test",
+      sessionName,
       "i=0; while [ \"$i\" -lt 80 ]; do printf 'HISTORY-%03d\\n' \"$i\"; i=$((i + 1)); done; printf '\\033[31mTAIL-世界\\033[0m\\n'; sleep 30",
     ]);
     try {
-      const paneId = execFileSync(
-        "tmux",
-        ["-S", socketPath, "display-message", "-p", "-t", "ahub-test", "#{pane_id}"],
-        { encoding: "utf8" },
-      ).trim();
       const service = new TmuxInteractionService();
       const binding = await service.connect({
         ordinal: 1,
         valid: true,
         socketPath,
-        paneId,
+        sessionName,
       });
-      expect(binding.paneId).toBe(paneId);
+      expect(binding.sessionName).toBe(sessionName);
       await service.sendKeys(binding, [
         { keys: ["Up", "Down", "Left", "Right", "BTab"], delayMs: 0 },
       ]);
@@ -124,8 +116,16 @@ describe("tmux interaction integration", () => {
       expect(preview.content).not.toContain("\u001b[");
       expect(preview.content).not.toContain("�");
       // Keep the server alive while the original target disappears.
-      execFileSync("tmux", ["-S", socketPath, "new-session", "-d", "-s", "other", "sleep 30"]);
-      execFileSync("tmux", ["-S", socketPath, "kill-pane", "-t", paneId]);
+      execFileSync("tmux", [
+        "-S",
+        socketPath,
+        "new-session",
+        "-d",
+        "-s",
+        "ahub-00000000-0000-0000-0000-000000000010",
+        "sleep 30",
+      ]);
+      execFileSync("tmux", ["-S", socketPath, "kill-pane", "-t", sessionName]);
       await expect(service.captureTerminal(binding)).rejects.toMatchObject({
         code: "disconnected",
       });
@@ -154,41 +154,43 @@ async function waitForPreview(
   throw new Error(`Timed out waiting for terminal marker: ${marker}`);
 }
 
-it("forces only the transferred pane closed when its outer shell ignores interrupts and EOF", async () => {
+it("forces only the bound session closed when its outer shell ignores interrupts and EOF", async () => {
   const directory = await createTempDirectory("tmux-exit-");
   const socketPath = join(directory, "server.sock");
-  const output = execFileSync(
-    "tmux",
-    [
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000003";
+  execFileSync("tmux", [
+    "-S",
+    socketPath,
+    "new-session",
+    "-d",
+    "-s",
+    sessionName,
+    "bash --noprofile --norc -i",
+  ]);
+  const target = { socketPath, sessionName };
+  const transport = new TmuxInteractionService();
+  try {
+    execFileSync("tmux", [
       "-S",
       socketPath,
       "new-session",
       "-d",
-      "-P",
-      "-F",
-      "#{pane_id}",
       "-s",
-      "transferred",
-      "bash --noprofile --norc -i",
-    ],
-    { encoding: "utf8" },
-  );
-  const target = { socketPath, paneId: output.trim() };
-  const transport = new TmuxInteractionService();
-  try {
-    execFileSync("tmux", ["-S", socketPath, "new-session", "-d", "-s", "untouched", "sleep 30"]);
+      "ahub-00000000-0000-0000-0000-000000000009",
+      "sleep 30",
+    ]);
     execFileSync("tmux", [
       "-S",
       socketPath,
       "send-keys",
       "-t",
-      target.paneId,
+      target.sessionName,
       "set -o ignoreeof; trap '' INT; printf '%s%s\\n' EXIT- READY",
       "Enter",
     ]);
     await waitForPreview(transport, target, "EXIT-READY");
     const killTarget = vi.fn(async (pane: TmuxBinding, _id: string, check: () => void) =>
-      transport.killPane(pane, check),
+      transport.killSession(pane, check),
     );
     let now = 0;
     const exit = new SessionExitService(
@@ -214,7 +216,7 @@ it("forces only the transferred pane closed when its outer shell ignores interru
       execFileSync("tmux", ["-S", socketPath, "list-sessions", "-F", "#{session_name}"], {
         encoding: "utf8",
       }).trim(),
-    ).toBe("untouched");
+    ).toBe("ahub-00000000-0000-0000-0000-000000000009");
   } finally {
     spawnSync("tmux", ["-S", socketPath, "kill-server"]);
   }
@@ -225,21 +227,17 @@ it("shares WebSocket preview captures without changing sizes and rebuilds after 
   const socketPath = join(directory, "server.sock");
   const run = (...args: string[]) =>
     execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
-  run("new-session", "-d", "-x", "101", "-y", "31", "-s", "preview", "sleep 60");
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000004";
+  run("new-session", "-d", "-x", "101", "-y", "31", "-s", sessionName, "sleep 60");
   const transport = new TmuxInteractionService();
-  let binding = await transport.connect({
-    valid: true,
-    ordinal: 0,
-    socketPath,
-    paneId: run("display-message", "-p", "-t", "preview", "#{pane_id}"),
-  });
+  let binding = await transport.connect({ valid: true, ordinal: 0, socketPath, sessionName });
   const capture = vi.fn((target: TmuxBinding, guard: () => void) =>
     transport.captureTerminal(target, guard),
   );
   const service = new TerminalPreviewService(capture);
   const server = await startPreviewServer({
-    subscribePreview: async (session, frame, fail, signal) =>
-      service.subscribe(session, binding, () => {}, frame, fail, signal),
+    subscribePreview: async (_session, frame, fail, signal) =>
+      service.subscribe(binding, () => {}, frame, fail, signal),
   });
   try {
     const a = server.connect(),
@@ -251,23 +249,23 @@ it("shares WebSocket preview captures without changing sizes and rebuilds after 
     expect(a.messages).toEqual(b.messages);
     expect(capture).toHaveBeenCalledOnce();
     expect(
-      run("display-message", "-p", "-t", binding.paneId, "#{window_width}x#{window_height}"),
+      run("display-message", "-p", "-t", binding.sessionName, "#{window_width}x#{window_height}"),
     ).toBe("101x31");
-    run("respawn-pane", "-k", "-t", binding.paneId, "printf 'CONTROL-OUTPUT'; sleep 60");
+    run("respawn-pane", "-k", "-t", binding.sessionName, "printf 'CONTROL-OUTPUT'; sleep 60");
     await vi.waitFor(() => expect(reconstruct(a.messages)?.content).toContain("CONTROL-OUTPUT"), {
       timeout: 5000,
     });
-    run("kill-session", "-t", "preview");
+    run("kill-session", "-t", binding.sessionName);
     await vi.waitFor(
       () => expect(a.messages.at(-1)).toMatchObject({ type: "error", retryable: true }),
       { timeout: 5000 },
     );
-    run("new-session", "-d", "-s", "rebuilt", "sleep 60");
+    run("new-session", "-d", "-s", "ahub-00000000-0000-0000-0000-000000000005", "sleep 60");
     binding = await transport.connect({
       valid: true,
       ordinal: 1,
       socketPath,
-      paneId: run("display-message", "-p", "-t", "rebuilt", "#{pane_id}"),
+      sessionName: "ahub-00000000-0000-0000-0000-000000000005",
     });
     const rebuilt = server.connect();
     await vi.waitFor(() => expect(rebuilt.messages[0]).toMatchObject({ type: "snapshot" }));
@@ -278,86 +276,25 @@ it("shares WebSocket preview captures without changing sizes and rebuilds after 
   }
 }, 15000);
 
-it.each(["move-window", "join-pane"])(
-  "rebuilds WebSocket preview after cross-session %s",
-  async (operation) => {
-    const directory = await createTempDirectory("codex-moved-preview-");
-    const socketPath = join(directory, "server.sock");
-    const run = (...args: string[]) =>
-      execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
-    const transport = new TmuxInteractionService();
-    const service = new TerminalPreviewService(
-      (binding, guard) => transport.captureTerminal(binding, guard),
-      undefined,
-      (binding) => transport.resolveTarget({ valid: true, ordinal: 0, ...binding }),
-    );
-    run("new-session", "-d", "-s", "source", "sleep 60");
-    run("new-window", "-d", "-t", "source", "-n", "keep", "sleep 60");
-    run("new-session", "-d", "-s", "destination", "sleep 60");
-    const paneId = run("display-message", "-p", "-t", "source:0", "#{pane_id}");
-    const attempt = { valid: true as const, ordinal: 0, socketPath, paneId };
-    const server = await startPreviewServer({
-      subscribePreview: async (session, frame, fail, signal) =>
-        service.subscribe(session, await transport.connect(attempt), () => {}, frame, fail, signal),
-    });
-    try {
-      const first = server.connect();
-      await vi.waitFor(() => expect(first.messages).toHaveLength(1));
-      if (operation === "move-window") run(operation, "-s", "source:0", "-t", "destination:1");
-      else run(operation, "-s", paneId, "-t", "destination:0");
-      await vi.waitFor(
-        () =>
-          expect(first.messages.at(-1)).toMatchObject({
-            type: "error",
-            code: "interaction_not_connected",
-            retryable: false,
-          }),
-        { timeout: 5000 },
-      );
-      const moved = await transport.connect(attempt);
-      expect(moved.paneId).toBe(paneId);
-      expect(moved.sessionName).toBe("destination");
-      const next = server.connect();
-      await vi.waitFor(() => expect(next.messages[0]).toMatchObject({ type: "snapshot" }));
-      run("respawn-pane", "-k", "-t", paneId, "printf 'MOVED-OUTPUT'; sleep 60");
-      await vi.waitFor(
-        () => expect(reconstruct(next.messages)?.content).toContain("MOVED-OUTPUT"),
-        { timeout: 5000 },
-      );
-    } finally {
-      await server.close();
-      service.close();
-      spawnSync("tmux", ["-S", socketPath, "kill-server"]);
-    }
-  },
-  15000,
-);
-
 it("sends chat messages while WebSocket preview is subscribed", async () => {
   const directory = await createTempDirectory("codex-send-preview-");
   const socketPath = join(directory, "server.sock");
   const run = (...args: string[]) =>
     execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
   const transport = new TmuxInteractionService();
-  const service = new TerminalPreviewService(
-    (target, guard) => transport.captureTerminal(target, guard),
-    undefined,
-    (target) => transport.resolveTarget({ valid: true, ordinal: 0, ...target }),
+  const service = new TerminalPreviewService((target, guard) =>
+    transport.captureTerminal(target, guard),
   );
-  run("new-session", "-d", "-s", "chat", "bash --noprofile --norc -i");
-  const binding = await transport.connect({
-    valid: true,
-    ordinal: 0,
-    socketPath,
-    paneId: run("display-message", "-p", "-t", "chat", "#{pane_id}"),
-  });
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000006";
+  run("new-session", "-d", "-s", sessionName, "bash --noprofile --norc -i");
+  const binding = await transport.connect({ valid: true, ordinal: 0, socketPath, sessionName });
   const server = await startPreviewServer({
-    subscribePreview: async (session, frame, fail, signal) =>
-      service.subscribe(session, binding, () => {}, frame, fail, signal),
+    subscribePreview: async (_session, frame, fail, signal) =>
+      service.subscribe(binding, () => {}, frame, fail, signal),
   });
   try {
     await vi.waitFor(() =>
-      expect(run("capture-pane", "-p", "-t", binding.paneId)).toContain("bash"),
+      expect(run("capture-pane", "-p", "-t", binding.sessionName)).toContain("bash"),
     );
     const client = server.connect();
     await vi.waitFor(() => expect(client.messages).toHaveLength(1));
@@ -379,24 +316,32 @@ it("transports real tmux output over WebSocket as a shared line delta", async ()
     execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
   const lines =
     'i=0; while [ "$i" -lt 20 ]; do printf \'stable terminal line %03d with padding for delta transport\\n\' "$i"; i=$((i + 1)); done; ';
-  run("new-session", "-d", "-x", "100", "-y", "30", "-s", "delta", `${lines}read line; sleep 60`);
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000007";
+  run(
+    "new-session",
+    "-d",
+    "-x",
+    "100",
+    "-y",
+    "30",
+    "-s",
+    sessionName,
+    `${lines}read line; sleep 60`,
+  );
   const transport = new TmuxInteractionService();
-  const binding = await transport.connect({
-    valid: true,
-    ordinal: 0,
-    socketPath,
-    paneId: run("display-message", "-p", "-t", "delta", "#{pane_id}"),
-  });
+  const binding = await transport.connect({ valid: true, ordinal: 0, socketPath, sessionName });
   const service = new TerminalPreviewService((target, guard) =>
     transport.captureTerminal(target, guard),
   );
   const server = await startPreviewServer({
-    subscribePreview: async (session, frame, fail, signal) =>
-      service.subscribe(session, binding, () => {}, frame, fail, signal),
+    subscribePreview: async (_session, frame, fail, signal) =>
+      service.subscribe(binding, () => {}, frame, fail, signal),
   });
   try {
     await vi.waitFor(() =>
-      expect(run("capture-pane", "-p", "-t", binding.paneId)).toContain("stable terminal line 019"),
+      expect(run("capture-pane", "-p", "-t", binding.sessionName)).toContain(
+        "stable terminal line 019",
+      ),
     );
     const a = server.connect(),
       b = server.connect();
@@ -404,7 +349,13 @@ it("transports real tmux output over WebSocket as a shared line delta", async ()
       expect(a.messages).toHaveLength(1);
       expect(b.messages).toHaveLength(1);
     });
-    run("respawn-pane", "-k", "-t", binding.paneId, `${lines}printf 'DELTA-世界😀\\n'; sleep 60`);
+    run(
+      "respawn-pane",
+      "-k",
+      "-t",
+      binding.sessionName,
+      `${lines}printf 'DELTA-世界😀\\n'; sleep 60`,
+    );
     await vi.waitFor(() => expect(reconstruct(a.messages)?.content).toContain("DELTA-世界😀"), {
       timeout: 5000,
     });
@@ -441,7 +392,8 @@ it("keeps output activity alive without preview and preserves pane dimensions", 
   const socketPath = join(directory, "server.sock");
   const tmux = (...args: string[]) =>
     execFileSync("tmux", ["-S", socketPath, ...args], { encoding: "utf8" }).trim();
-  tmux("new-session", "-d", "-s", "activity", "-x", "100", "-y", "30");
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000008";
+  tmux("new-session", "-d", "-s", sessionName, "-x", "100", "-y", "30");
   let now = 0;
   const listen = createTmuxPreviewListener();
   const subscriptions: { ready: Promise<void>; disconnected: Promise<void> }[] = [];
@@ -459,15 +411,15 @@ it("keeps output activity alive without preview and preserves pane dimensions", 
   };
   const activity = new TerminalActivityService(observe, () => now);
   try {
-    const paneId = tmux("display-message", "-p", "-t", "activity", "#{pane_id}");
-    const binding = { socketPath, paneId, sessionName: "activity" };
-    const size = () => tmux("display-message", "-p", "-t", paneId, "#{pane_width}x#{pane_height}");
+    const binding = { socketPath, sessionName };
+    const size = () =>
+      tmux("display-message", "-p", "-t", sessionName, "#{pane_width}x#{pane_height}");
     const before = size();
     expect(activity.read("test", binding)).toBe("unknown");
     await subscriptions[0]!.ready;
     now = 5000;
     expect(activity.read("test", binding)).toBe("idle");
-    tmux("send-keys", "-t", paneId, "printf 'activity-test\\n'", "Enter");
+    tmux("send-keys", "-t", sessionName, "printf 'activity-test\\n'", "Enter");
     await vi.waitFor(() => expect(activity.read("test", binding)).toBe("working"));
     expect(size()).toBe(before);
     tmux("list-clients", "-F", "#{client_name}")

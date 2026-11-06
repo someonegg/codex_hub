@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 
 import { SessionLaunchError } from "../management/session-manager.js";
 import { TmuxInteractionService } from "./tmux-service.js";
+import { tmuxTarget, validTmuxSessionName } from "./tmux-target.js";
 import type { TmuxBinding } from "./transport.js";
 
 const execute = promisify(execFile);
@@ -17,7 +18,7 @@ export function attachCommand(socket: string | undefined, session: string): stri
     ...(socket ? ["-S", shellQuote(socket)] : []),
     "attach-session",
     "-t",
-    shellQuote(session),
+    shellQuote(tmuxTarget(session)),
   ].join(" ");
 }
 
@@ -28,7 +29,10 @@ export class TmuxLauncher {
   constructor(readonly socketPath?: string) {}
 
   async launch(id: string, directory: string, command: readonly string[]): Promise<TmuxBinding> {
-    const fallbackAttach = attachCommand(this.socketPath, `ahub-${id}`);
+    const sessionName = `ahub-${id}`;
+    if (!validTmuxSessionName(sessionName))
+      throw new SessionLaunchError("not_started", "Invalid tmux session name", null);
+    const fallbackAttach = attachCommand(this.socketPath, sessionName);
     let stdout: string;
     try {
       ({ stdout } = await execute(
@@ -39,9 +43,11 @@ export class TmuxLauncher {
           "-d",
           "-P",
           "-F",
-          "#{socket_path}|#{pane_id}",
+          "#{socket_path}",
           "-s",
-          `ahub-${id}`,
+          sessionName,
+          "-e",
+          `AHUB_TMUX_SESSION_NAME=${sessionName}`,
           "-x",
           "120",
           "-y",
@@ -65,31 +71,32 @@ export class TmuxLauncher {
         uncertain ? fallbackAttach : null,
       );
     }
-    const output = stdout.trimEnd();
-    const separator = output.lastIndexOf("|");
-    const socketPath = output.slice(0, separator);
-    const paneId = output.slice(separator + 1);
-    if (
-      separator < 1 ||
-      !socketPath.startsWith("/") ||
-      socketPath.includes("\n") ||
-      !/^%\d+$/.test(paneId)
-    ) {
+    const socketPath = stdout.replace(/\n$/, "");
+    if (!socketPath.startsWith("/") || socketPath.includes("\n")) {
       throw new SessionLaunchError("unknown", "Invalid launched tmux target", fallbackAttach);
     }
-    const target = { socketPath, paneId, sessionName: `ahub-${id}` };
+    const target = { socketPath, sessionName };
     try {
       await execute(
         "tmux",
-        ["-S", socketPath, "set-option", "-p", "-t", paneId, "remain-on-exit", "off"],
+        [
+          "-S",
+          socketPath,
+          "set-option",
+          "-p",
+          "-t",
+          tmuxTarget(sessionName),
+          "remain-on-exit",
+          "off",
+        ],
         { timeout: 5_000 },
       );
-      return await this.transport.connect({ valid: true, ordinal: 0, ...target });
+      return target;
     } catch (error) {
       throw new SessionLaunchError(
         "unknown",
         error instanceof Error ? error.message : String(error),
-        attachCommand(socketPath, `ahub-${id}`),
+        attachCommand(socketPath, sessionName),
         target,
       );
     }

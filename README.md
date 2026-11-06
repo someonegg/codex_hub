@@ -60,7 +60,7 @@ For running from source, see [Development](docs/development.md).
 
 Send prompts and control the live terminal from the session page. Take photos,
 paste images, or drop files, then preview and send.
-See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and API limits.
+See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and file limits.
 
 <details>
 <summary>Show session interaction screenshot</summary>
@@ -81,14 +81,14 @@ Press **Ctrl+C** or click **Interrupt** to interrupt; **Esc** collapses the prev
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
 running a plan, click **Handoff** on the previous session's page. Once it shows
 **Superseded**, follow **Go to bound session**. Your draft stays on the old page.
-See [tmux interaction](docs/usage.md#interacting-with-sessions) for details.
+See [tmux interaction](docs/usage.md#send-prompts-and-files) for details.
 
 ## Management CLI sessions
 
 Use `ahub-cli session` to list, create, resume, inspect, and manage sessions from
 another terminal, or send input to a live session. Add `--json` for structured
 output in scripts and agent workflows.
-See [session CLI usage](docs/usage.md#sessions) for commands and examples.
+See [session CLI usage](docs/usage.md#session-commands) for commands and examples.
 
 For agent-assisted session workflows, use the bundled
 [`ahub-control` skill](skills/ahub-control). Run
@@ -104,7 +104,7 @@ stays with Codex; the hub does not read or manage tokens, API keys, or credentia
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add
 authentication, such as the built-in mTLS option, and restrict access. See the
-[security guidance](docs/usage.md#security).
+[security guidance](docs/usage.md#access-from-other-devices).
 
 ## Documentation
 

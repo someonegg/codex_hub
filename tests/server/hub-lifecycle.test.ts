@@ -117,7 +117,7 @@ it("isolates pane bindings between hubs and after closing and recreating a hub",
         content: [
           {
             type: "input_text",
-            text: "<user_shell_command>\nAHUB_TMUX_BIND_V1\ninvalid\n%1\n\n</user_shell_command>",
+            text: "<user_shell_command>\nAHUB_TMUX_BIND_V3\ninvalid\nahub-00000000-0000-0000-0000-000000000001\n\n</user_shell_command>",
           },
         ],
       },

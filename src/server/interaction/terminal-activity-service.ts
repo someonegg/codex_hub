@@ -36,7 +36,6 @@ export class TerminalActivityService {
       (observation.failed ||
         observation.expiresAt <= this.now() ||
         observation.binding.socketPath !== binding.socketPath ||
-        observation.binding.paneId !== binding.paneId ||
         observation.binding.sessionName !== binding.sessionName)
     ) {
       this.remove(sessionId);
@@ -65,8 +64,8 @@ export class TerminalActivityService {
     try {
       observation.subscription = this.listen(
         binding,
-        (pane) => {
-          if (!observation.failed && pane === binding.paneId) observation.outputAt = this.now();
+        (output) => {
+          if (!observation.failed && output) observation.outputAt = this.now();
         },
         fail,
       );

@@ -7,11 +7,9 @@ import type {
 import { bindingAttempts } from "../shared/binding-protocol.js";
 import type { DecodedRecord } from "../shared/jsonl-decoder.js";
 import { isObject } from "../shared/jsonl-decoder.js";
-
-const BINDING_MARKER = "AHUB_TMUX_BIND_V1";
-const TASK_BINDING_MARKER = "AHUB_TMUX_BIND_V2";
-
 import { DEFAULT_KEY_BINDINGS, interruptSteps } from "../shared/session-management.js";
+
+const BINDING_MARKER = "AHUB_TMUX_BIND_V3";
 
 export function codexInteraction(
   projectDirectory?: string | null,
@@ -47,8 +45,7 @@ export function codexBindingAttemptsFrom(record: DecodedRecord): InteractionBind
     const incomplete = text.slice(lastOpen + "<user_shell_command>".length);
     const incompleteLines = incomplete.replace(/\r\n?/g, "\n").split("\n");
     for (const line of incompleteLines) {
-      if (line === BINDING_MARKER || line === TASK_BINDING_MARKER)
-        found.push({ ordinal: record.ordinal, valid: false });
+      if (line === BINDING_MARKER) found.push({ ordinal: record.ordinal, valid: false });
     }
   }
   return found;
@@ -76,10 +73,7 @@ export function codexBindingCommand(
   const quote = (value: string) => "'" + value.replaceAll("'", "'\"'\"'") + "'";
   const project = validProjectDirectory(projectDirectory) ? projectDirectory : "";
 
-  const marker = taskName === undefined ? BINDING_MARKER : TASK_BINDING_MARKER;
-  const taskFormat = taskName === undefined ? "" : "%s\\n";
-  const taskArgument = taskName === undefined ? "" : " " + quote(JSON.stringify(taskName));
-  return `! printf '${marker}\\n%s\\n%s\\n%s\\n%s\\n${taskFormat}' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE" ${quote(operationId ?? "")} ${quote(project)}${taskArgument}`;
+  return `! printf '${BINDING_MARKER}\\n%s\\n%s\\n%s\\n%s\\n%s\\n' "\${TMUX%%,*}" "$AHUB_TMUX_SESSION_NAME" ${quote(operationId ?? "")} ${quote(project)} ${quote(JSON.stringify(taskName ?? null))}`;
 }
 
 function validOperationId(id: string): boolean {

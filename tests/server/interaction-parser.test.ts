@@ -20,7 +20,7 @@ function response(ordinal: number, payload: Record<string, unknown>) {
 }
 
 function shellText(tmux: string, pane: string) {
-  return `<user_shell_command>\nChunk ID: bind\nProcess exited with code 0\nFinal output:\nAHUB_TMUX_BIND_V1\n${tmux}\n${pane}\n${operationId}\n\n</user_shell_command>`;
+  return `<user_shell_command>\nChunk ID: bind\nProcess exited with code 0\nFinal output:\nAHUB_TMUX_BIND_V3\n${tmux}\n${pane}\n${operationId}\n\n</user_shell_command>`;
 }
 
 it("ignores inherited bindings, including invalid attempts", () => {
@@ -28,7 +28,12 @@ it("ignores inherited bindings, including invalid attempts", () => {
     const record = response(1, {
       type: "message",
       role: "user",
-      content: [{ type: "input_text", text: shellText(socket, "%7") }],
+      content: [
+        {
+          type: "input_text",
+          text: shellText(socket, "ahub-00000000-0000-0000-0000-000000000007"),
+        },
+      ],
     });
     expect(
       codexBindingAttemptsFrom({
@@ -40,7 +45,7 @@ it("ignores inherited bindings, including invalid attempts", () => {
 });
 
 it("parses bindings only from user shell output", () => {
-  const text = shellText("/tmp/tmux.sock", "%7");
+  const text = shellText("/tmp/tmux.sock", "ahub-00000000-0000-0000-0000-000000000007");
   expect(
     codexBindingAttemptsFrom(
       response(1, { type: "message", role: "assistant", content: [{ type: "text", text }] }),
@@ -59,7 +64,15 @@ it("parses bindings only from user shell output", () => {
       ...userRecord,
       value: { ...userRecord.value, metadata: { inherited_user_message: false } },
     }),
-  ).toEqual([{ ordinal: 3, valid: true, socketPath: "/tmp/tmux.sock", paneId: "%7", operationId }]);
+  ).toEqual([
+    {
+      ordinal: 3,
+      valid: true,
+      socketPath: "/tmp/tmux.sock",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+      operationId,
+    },
+  ]);
 });
 
 it("rejects a UUID-length operation ID without hexadecimal digits", () => {
@@ -69,26 +82,43 @@ it("rejects a UUID-length operation ID without hexadecimal digits", () => {
       response(1, {
         type: "message",
         role: "user",
-        content: [{ type: "input_text", text: shellText("/tmp/a", "%1").replace(operationId, id) }],
+        content: [
+          {
+            type: "input_text",
+            text: shellText("/tmp/a", "ahub-00000000-0000-0000-0000-000000000001").replace(
+              operationId,
+              id,
+            ),
+          },
+        ],
       }),
     ),
   ).toEqual([{ ordinal: 1, valid: false }]);
 });
 
 it("accepts manual bindings with spaces and commas in the socket path", () => {
-  const text = `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/a space,comma.sock\n%42\n\n\n</user_shell_command>`;
+  const text = `<user_shell_command>\nAHUB_TMUX_BIND_V3\n/tmp/a space,comma.sock\nahub-00000000-0000-0000-0000-000000000042\n\n\n</user_shell_command>`;
   expect(
     codexBindingAttemptsFrom(
       response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
     ),
-  ).toEqual([{ ordinal: 1, valid: true, socketPath: "/tmp/a space,comma.sock", paneId: "%42" }]);
+  ).toEqual([
+    {
+      ordinal: 1,
+      valid: true,
+      socketPath: "/tmp/a space,comma.sock",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000042",
+    },
+  ]);
 });
 
 it.each([
-  ["relative/socket", "%1"],
-  ["", "%1"],
+  ["relative/socket", "ahub-00000000-0000-0000-0000-000000000001"],
+  ["", "ahub-00000000-0000-0000-0000-000000000001"],
   ["/tmp/a", "1"],
   ["/tmp/a", "%a"],
+  ["/tmp/a", "arbitrary-session"],
+  ["/tmp/a", "AHUB-00000000-0000-0000-0000-000000000001"],
 ])("rejects invalid target %s %s", (socket, pane) => {
   expect(
     codexBindingAttemptsFrom(
@@ -110,7 +140,7 @@ it("reports a damaged shell wrapper as an invalid attempt", () => {
         content: [
           {
             type: "input_text",
-            text: "<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/new.sock\n%2",
+            text: "<user_shell_command>\nAHUB_TMUX_BIND_V3\n/tmp/new.sock\nahub-00000000-0000-0000-0000-000000000002",
           },
         ],
       }),
@@ -120,9 +150,10 @@ it("reports a damaged shell wrapper as an invalid attempt", () => {
 
 it("generates a basic binding command while retaining creation operation IDs", () => {
   const basic = codexBindingCommand();
-  expect(basic).toContain("AHUB_TMUX_BIND_V1");
-  expect(basic).toContain("#{socket_path}");
-  expect(basic).toContain("$TMUX_PANE");
+  expect(basic).toContain("AHUB_TMUX_BIND_V3");
+  expect(basic).toContain("${TMUX%%,*}");
+  expect(basic).toContain("$AHUB_TMUX_SESSION_NAME");
+  expect(basic).not.toContain("$(");
   expect(codexBindingCommand(operationId)).toContain(operationId);
   expect(basic).not.toContain(operationId);
   expect(() => codexBindingCommand("invalid")).toThrow("Invalid operation ID");
@@ -130,36 +161,55 @@ it("generates a basic binding command while retaining creation operation IDs", (
 
 it("returns every bind including multiple binds within one record and shell block", () => {
   const text =
-    shellText("/tmp/shared.sock", "%1").replace(
+    shellText("/tmp/shared.sock", "ahub-00000000-0000-0000-0000-000000000001").replace(
       "</user_shell_command>",
-      `AHUB_TMUX_BIND_V1\n/tmp/shared.sock\n%2\n${operationId}\n\n</user_shell_command>`,
-    ) + shellText("bad", "%3");
+      `AHUB_TMUX_BIND_V3\n/tmp/shared.sock\nahub-00000000-0000-0000-0000-000000000002\n${operationId}\n\n</user_shell_command>`,
+    ) + shellText("bad", "ahub-00000000-0000-0000-0000-000000000003");
   expect(
     codexBindingAttemptsFrom(
       response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
     ),
   ).toEqual([
-    { valid: true, ordinal: 1, socketPath: "/tmp/shared.sock", paneId: "%1", operationId },
-    { valid: true, ordinal: 1, socketPath: "/tmp/shared.sock", paneId: "%2", operationId },
+    {
+      valid: true,
+      ordinal: 1,
+      socketPath: "/tmp/shared.sock",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+      operationId,
+    },
+    {
+      valid: true,
+      ordinal: 1,
+      socketPath: "/tmp/shared.sock",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000002",
+      operationId,
+    },
     { valid: false, ordinal: 1 },
   ]);
 });
 
 it("ignores an invalid project without invalidating the pane", () => {
-  const text = `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/socket\n%1\n\nrelative\n</user_shell_command>`;
+  const text = `<user_shell_command>\nAHUB_TMUX_BIND_V3\n/tmp/socket\nahub-00000000-0000-0000-0000-000000000001\n\nrelative\n</user_shell_command>`;
   expect(
     codexBindingAttemptsFrom(
       response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
     ),
-  ).toEqual([{ ordinal: 1, valid: true, socketPath: "/tmp/socket", paneId: "%1" }]);
+  ).toEqual([
+    {
+      ordinal: 1,
+      valid: true,
+      socketPath: "/tmp/socket",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+    },
+  ]);
 });
 
-it.each(["\n", "\r\n"])("normalizes V1 project line endings %j", (eol) => {
+it.each(["\n", "\r\n"])("normalizes V3 project line endings %j", (eol) => {
   const text = [
     "<user_shell_command>",
-    "AHUB_TMUX_BIND_V1",
+    "AHUB_TMUX_BIND_V3",
     "/tmp/socket",
-    "%1",
+    "ahub-00000000-0000-0000-0000-000000000001",
     "",
     "/project",
     "</user_shell_command>",
@@ -177,7 +227,7 @@ it.each(["\n", "\r\n"])("normalizes V1 project line endings %j", (eol) => {
       ordinal: 1,
       valid: true,
       socketPath: "/tmp/socket",
-      paneId: "%1",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000001",
       projectDirectory: "/project",
     },
   ]);
@@ -188,10 +238,33 @@ it("provides the shared interrupt capability", () => {
 });
 
 it("ignores quoted shell wrappers in ordinary user prose", () => {
-  const text = "Please explain this example:\n" + shellText("/tmp/socket", "%7");
+  const text =
+    "Please explain this example:\n" +
+    shellText("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000007");
   expect(
     codexBindingAttemptsFrom(
       response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+    ),
+  ).toEqual([]);
+});
+
+it.each(["V1", "UNKNOWN"])("ignores unknown protocol marker %s", (version) => {
+  const text = shellText("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000001").replace(
+    "BIND_V3",
+    `BIND_${version}`,
+  );
+  expect(
+    codexBindingAttemptsFrom(
+      response(1, { type: "message", role: "user", content: [{ type: "input_text", text }] }),
+    ),
+  ).toEqual([]);
+  expect(
+    codexBindingAttemptsFrom(
+      response(2, {
+        type: "message",
+        role: "user",
+        content: [{ type: "input_text", text: text.replace("</user_shell_command>", "") }],
+      }),
     ),
   ).toEqual([]);
 });

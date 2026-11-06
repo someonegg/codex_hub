@@ -312,7 +312,10 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
         res,
         {
           operationId: "secret-operation",
-          target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+          target: {
+            socketPath: "/tmp/socket",
+            sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+          },
           status: "pending",
         },
         202,
@@ -354,7 +357,7 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
   expect(JSON.parse(result.stdout)).toEqual({
     sessionId: "session",
     status: "succeeded",
-    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+    tmux: { socketPath: "/tmp/socket", sessionName: "ahub-00000000-0000-0000-0000-000000000007" },
   });
   expect(result.stdout + result.stderr).not.toContain("secret");
   expect(submits).toBe(1);
@@ -543,7 +546,10 @@ it("retains launch target on timeout without retry or cancellation", async () =>
     reply(res, {
       operationId: "private",
       status: "pending",
-      target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+      target: {
+        socketPath: "/tmp/socket",
+        sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+      },
     });
   });
   const result = await cli([
@@ -559,7 +565,7 @@ it("retains launch target on timeout without retry or cancellation", async () =>
   expect(result.code).toBe(2);
   expect(JSON.parse(result.stdout).error).toMatchObject({
     sessionId: null,
-    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+    tmux: { socketPath: "/tmp/socket", sessionName: "ahub-00000000-0000-0000-0000-000000000007" },
   });
   expect(result.stdout).not.toContain("private");
   expect(writes).toBe(1);
@@ -573,7 +579,10 @@ it("keeps launch diagnostics when readiness never reaches idle", async () => {
       reply(res, {
         status: "succeeded",
         sessionId: "id",
-        target: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+        target: {
+          socketPath: "/tmp/socket",
+          sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+        },
         operationId: "private",
       });
     } else
@@ -586,7 +595,7 @@ it("keeps launch diagnostics when readiness never reaches idle", async () => {
   expect(result.code).toBe(2);
   expect(JSON.parse(result.stdout).error).toMatchObject({
     sessionId: "id",
-    tmux: { socketPath: "/tmp/socket", paneId: "%7", sessionName: "ahub-test" },
+    tmux: { socketPath: "/tmp/socket", sessionName: "ahub-00000000-0000-0000-0000-000000000007" },
   });
   expect(writes).toBe(1);
 });

@@ -14,6 +14,8 @@ import { TmuxInteractionService } from "../../src/server/interaction/tmux-servic
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
 
 let bindings: PaneBindingManager;
+const SESSION_NAME = "ahub-00000000-0000-0000-0000-000000000007";
+const BINDING = { socketPath: "/tmp/ahub.sock", sessionName: SESSION_NAME };
 const services: SessionInteractionService[] = [];
 afterEach(() => services.splice(0).forEach((service) => service.close()));
 beforeEach(() => {
@@ -60,17 +62,9 @@ function boundSession(): InteractionSessionSnapshot {
     time: 0,
     ordinal: 4,
     position: 0,
-    attempt: { ordinal: 4, valid: true, socketPath: "/tmp/ahub.sock", paneId: "%7" },
+    attempt: { ordinal: 4, valid: true, ...BINDING },
   });
-  return {
-    archived: false,
-    interaction: {
-      transport: "tmux",
-      bindingCommand: "! bind",
-      keyBindings: CODEX_INTERACTION_KEY_BINDINGS,
-      interruptSteps: codexInterruptSteps,
-    },
-  };
+  return session();
 }
 
 describe("session interaction policy", () => {
@@ -117,11 +111,7 @@ describe("session interaction policy", () => {
   });
 
   it("allows all actions whenever the pane is connected", async () => {
-    const binding = {
-      socketPath: "/tmp/ahub.sock",
-      paneId: "%7",
-      sessionName: "work",
-    };
+    const binding = BINDING;
     const tmux = {
       connect: vi.fn().mockResolvedValue(binding),
       resolveTarget: vi.fn().mockResolvedValue(binding),
@@ -139,7 +129,7 @@ describe("session interaction policy", () => {
       tmux: binding,
       activity: "unknown",
       supersededBySessionId: null,
-      attachCommand: "tmux -S '/tmp/ahub.sock' attach-session -t 'work'",
+      attachCommand: `tmux -S '/tmp/ahub.sock' attach-session -t '=${SESSION_NAME}:'`,
       state: "connected",
     });
     await service.sendMessage("session", "hello");
@@ -200,8 +190,8 @@ it("uses the adapter interrupt capability and preserves repeated interrupt order
   const snapshot = boundSession();
   const interruptSteps = vi.fn(codexInterruptSteps);
   const tmux = {
-    connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
-    resolveTarget: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
+    connect: vi.fn().mockResolvedValue(BINDING),
+    resolveTarget: vi.fn().mockResolvedValue(BINDING),
     sendKeys: vi.fn().mockResolvedValue(undefined),
   } as unknown as TmuxInteractionService;
   const service = new TestSessionInteractionService(
@@ -228,7 +218,7 @@ it("refreshes connection status after each completed query", async () => {
     connect: vi
       .fn()
       .mockRejectedValueOnce(new InteractionTransportError("disconnected", "gone"))
-      .mockResolvedValue({ paneId: "%7" }),
+      .mockResolvedValue(BINDING),
   } as unknown as TmuxInteractionService;
   const service = new TestSessionInteractionService(repository(boundSession()), true, tmux);
   expect(await service.describe("session")).toMatchObject({ state: "disconnected", tmux: null });
@@ -238,11 +228,7 @@ it("refreshes connection status after each completed query", async () => {
 
 it("freshly resolves management targets and rejects input while busy", async () => {
   const reader = repository(boundSession());
-  const binding = {
-    socketPath: "/tmp/ahub.sock",
-    paneId: "%7",
-    sessionName: "ahub-test",
-  };
+  const binding = BINDING;
   const tmux = {
     connect: vi.fn().mockResolvedValue(binding),
     resolveTarget: vi.fn().mockResolvedValue(null),
@@ -252,7 +238,7 @@ it("freshly resolves management targets and rejects input while busy", async () 
   const service = new TestSessionInteractionService(reader, true, tmux);
   expect(await service.describe("session")).toMatchObject({
     state: "connected",
-    attachCommand: "tmux -S '/tmp/ahub.sock' attach-session -t 'ahub-test'",
+    attachCommand: `tmux -S '/tmp/ahub.sock' attach-session -t '=${SESSION_NAME}:'`,
   });
   expect(await service.resolveTarget("session")).toBeNull();
   expect(tmux.resolveTarget).toHaveBeenCalledOnce();
@@ -280,7 +266,7 @@ it.each([
   "translates handoffPaneBinding transport failure %s without retry",
   async (transportCode, code) => {
     const tmux = {
-      connect: vi.fn().mockResolvedValue({ socketPath: "/tmp/ahub.sock", paneId: "%7" }),
+      connect: vi.fn().mockResolvedValue(BINDING),
       sendMessage: vi
         .fn()
         .mockRejectedValue(new InteractionTransportError(transportCode, "failed")),
@@ -307,7 +293,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
   "rechecks ownership immediately before queued %s executes",
   async (action) => {
     const reader = repository(boundSession());
-    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+    const target = BINDING;
     let execute!: () => void;
     const queue = (check?: () => void) =>
       new Promise<void>((resolve, reject) => {
@@ -325,7 +311,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
       resolveTarget: vi.fn().mockResolvedValue(target),
       sendMessage: vi.fn((_target, _message, check) => queue(check)),
       sendKeys: vi.fn((_target, _keys, check) => queue(check)),
-      killPane: vi.fn((_target, check) => queue(check)),
+      killSession: vi.fn((_target, check) => queue(check)),
       captureTerminal: vi.fn((_target, check) =>
         queue(check).then(() => ({ content: "pane", truncated: false })),
       ),
@@ -368,7 +354,7 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
 
 it("rechecks management target ownership after validation", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+  const target = BINDING;
   const tmux = {
     resolveTarget: vi.fn(async () => {
       bindings.submit({
@@ -397,10 +383,18 @@ it.each([false, true])(
           time: 1,
           ordinal: 5,
           position: 0,
-          attempt: { ordinal: 5, valid: true, socketPath: "/tmp/new.sock", paneId: "%8" },
+          attempt: {
+            ordinal: 5,
+            valid: true,
+            socketPath: "/tmp/new.sock",
+            sessionName: "ahub-00000000-0000-0000-0000-000000000008",
+          },
         });
         if (failure) throw new Error("query failed");
-        return { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+        return {
+          socketPath: "/tmp/ahub.sock",
+          sessionName: SESSION_NAME,
+        };
       }),
     } as unknown as TmuxInteractionService;
     expect(
@@ -412,7 +406,7 @@ it.each([false, true])(
 
 it("does not recurse when a replacement changes during lookup", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+  const target = BINDING;
   bindings.submit({
     sessionId: "replacement",
     time: 1,
@@ -443,7 +437,7 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
   "validates superseded pane: %s",
   async (scenario) => {
     const reader = repository(boundSession());
-    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+    const target = BINDING;
     bindings.submit({
       sessionId: "replacement",
       time: 1,
@@ -491,7 +485,7 @@ it.each(["present", "missing", "error", "replacement missing", "binding changed"
 
 it("rejects an exit observation when ownership changes while querying pane liveness", async () => {
   const reader = repository(boundSession());
-  const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+  const target = BINDING;
   let resolve!: (state: "exited") => void;
   const tmux = {
     inspect: vi.fn(
@@ -516,17 +510,32 @@ it("rejects an exit observation when ownership changes while querying pane liven
 });
 
 it.each([
-  { change: "takeover", sessionId: "other", paneId: "%7", valid: true },
-  { change: "different pane", sessionId: "session", paneId: "%8", valid: true },
-  { change: "invalid", sessionId: "session", paneId: "%7", valid: false },
+  {
+    change: "takeover",
+    sessionId: "other",
+    sessionName: SESSION_NAME,
+    valid: true,
+  },
+  {
+    change: "different pane",
+    sessionId: "session",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000008",
+    valid: true,
+  },
+  {
+    change: "invalid",
+    sessionId: "session",
+    sessionName: SESSION_NAME,
+    valid: false,
+  },
 ])(
   "keeps duplicate bindings streaming and permanently closes the old preview on $change",
   async ({ change, ...target }) => {
     vi.useFakeTimers();
     const snapshot = boundSession();
-    const binding = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
+    const binding = BINDING;
     let content = "first";
-    let notify = () => {};
+    let notify: (output: boolean) => void = () => {};
     const stop = vi.fn();
     const listen = vi.fn((_binding, changed) => {
       notify = changed;
@@ -548,14 +557,23 @@ it.each([
     await service.subscribePreview("session", frame, fail, new AbortController().signal);
     await vi.advanceTimersByTimeAsync(0);
     expect(frame).toHaveBeenCalledOnce();
-    const submit = (time: number, { sessionId = "session", paneId = "%7", valid = true } = {}) =>
+    const submit = (
+      time: number,
+      { sessionId = "session", sessionName = SESSION_NAME, valid = true } = {},
+    ) =>
       bindings.submit({
         sessionId,
         time,
         ordinal: time,
         position: 0,
         attempt: valid
-          ? { valid: true, ordinal: time, ...binding, paneId, projectDirectory: "/new-project" }
+          ? {
+              valid: true,
+              ordinal: time,
+              ...binding,
+              sessionName,
+              projectDirectory: "/new-project",
+            }
           : { valid: false, ordinal: time },
       });
     submit(1);
@@ -566,7 +584,7 @@ it.each([
     expect(secondFrame).toHaveBeenCalledOnce();
     expect(listen).toHaveBeenCalledOnce();
     content = "after duplicate";
-    notify();
+    notify(false);
     await vi.advanceTimersByTimeAsync(350);
     expect(frame).toHaveBeenCalledTimes(2);
     expect(secondFrame).toHaveBeenCalledTimes(2);
@@ -578,7 +596,7 @@ it.each([
       expect(await service.describe("session")).toMatchObject({ state: "superseded" });
     submit(4);
     content = "returned";
-    notify();
+    notify(false);
     await vi.advanceTimersByTimeAsync(400);
     expect(frame).toHaveBeenCalledTimes(2);
     expect(secondFrame).toHaveBeenCalledTimes(2);
@@ -596,8 +614,8 @@ it("checks idle both before transport and at actual input, while allowing interr
   vi.useFakeTimers();
   try {
     const snapshot = boundSession();
-    const target = { socketPath: "/tmp/ahub.sock", paneId: "%7", sessionName: "test" };
-    let output!: (pane: string) => void;
+    const target = BINDING;
+    let output!: (hasOutput: boolean) => void;
     const tmux = {
       connect: vi.fn(async () => target),
       sendMessage: vi.fn(async (_target, _message, check) => check()),
@@ -623,7 +641,7 @@ it("checks idle both before transport and at actual input, while allowing interr
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5001);
     await service.sendMessage("session", "hello", true);
-    output("%7");
+    output(true);
     await expect(service.sendKeys("session", ["enter"], true)).rejects.toMatchObject({
       code: "session_busy",
     });
@@ -641,11 +659,15 @@ it("checks idle both before transport and at actual input, while allowing interr
       code: "session_busy",
     });
     service.setBusy("session", false);
-    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (tmux.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new InteractionTransportError("disconnected", "exited"),
+    );
     await expect(service.sendMessage("session", "forced", false)).rejects.toMatchObject({
       code: "interaction_not_connected",
     });
-    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (tmux.sendKeys as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new InteractionTransportError("disconnected", "exited"),
+    );
     await expect(service.sendKeys("session", ["enter"], false)).rejects.toMatchObject({
       code: "interaction_not_connected",
     });
@@ -654,7 +676,7 @@ it("checks idle both before transport and at actual input, while allowing interr
     await vi.advanceTimersByTimeAsync(5001);
     (tmux.sendMessage as ReturnType<typeof vi.fn>).mockImplementationOnce(
       async (_target, _message, check) => {
-        output("%7");
+        output(true);
         check();
       },
     );
@@ -665,7 +687,7 @@ it("checks idle both before transport and at actual input, while allowing interr
     (tmux.sendMessage as ReturnType<typeof vi.fn>).mockImplementationOnce(
       async (_target, _message, check) => {
         check();
-        output("%7");
+        output(true);
         check(); // Echo after paste must not block the Enter step.
       },
     );

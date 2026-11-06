@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
+import { ownedSocket, tmuxTarget, validTmuxSessionName } from "./tmux-target.js";
 import {
   type InteractionTransport,
   InteractionTransportError,
@@ -39,7 +40,7 @@ export class TmuxInteractionService implements InteractionTransport {
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
-  readonly #queries = new Map<string, Promise<ReadonlyMap<string, TmuxBinding | null>>>();
+  readonly #queries = new Map<string, Promise<ReadonlySet<string>>>();
 
   async connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding> {
     const binding = await this.resolveTarget(attempt);
@@ -48,9 +49,13 @@ export class TmuxInteractionService implements InteractionTransport {
   }
 
   resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null> {
-    if (!attempt.valid || !attempt.socketPath.startsWith("/") || !/^%\d+$/.test(attempt.paneId))
+    if (
+      !attempt.valid ||
+      !attempt.socketPath.startsWith("/") ||
+      !validTmuxSessionName(attempt.sessionName)
+    )
       return Promise.resolve(null);
-    const { socketPath, paneId } = attempt;
+    const { socketPath, sessionName } = attempt;
     let query = this.#queries.get(socketPath);
     if (!query) {
       query = this.#query(socketPath);
@@ -61,22 +66,38 @@ export class TmuxInteractionService implements InteractionTransport {
         () => this.#queries.delete(socketPath),
       );
     }
-    return query.then((panes) => panes.get(paneId) ?? null);
+    return query.then((sessions) =>
+      sessions.has(sessionName) ? { socketPath, sessionName } : null,
+    );
   }
 
-  async #query(socketPath: string): Promise<ReadonlyMap<string, TmuxBinding | null>> {
+  readonly #waiting: (() => void)[] = [];
+  #active = 0;
+
+  async #query(socketPath: string): Promise<ReadonlySet<string>> {
+    while (this.#active >= 8) await new Promise<void>((resolve) => this.#waiting.push(resolve));
+    this.#active++;
+    try {
+      return await this.#querySessions(socketPath);
+    } finally {
+      this.#active--;
+      this.#waiting.shift()?.();
+    }
+  }
+
+  async #querySessions(socketPath: string): Promise<ReadonlySet<string>> {
     try {
       await validateSocket(socketPath);
     } catch (error) {
       if (error instanceof InteractionTransportError && error.code === "disconnected")
-        return new Map();
+        return new Set();
       throw error;
     }
     let result: { stdout: string };
     try {
       result = await this.runner.run(
         socketPath,
-        ["list-panes", "-a", "-F", "#{pane_id}|#{pane_dead}|#{session_name}"],
+        ["list-sessions", "-F", "#{session_name}"],
         undefined,
         this.timeoutMs,
       );
@@ -86,43 +107,17 @@ export class TmuxInteractionService implements InteractionTransport {
         error.code === "command_failed" &&
         !(await socketListening(socketPath, this.timeoutMs))
       )
-        return new Map();
+        return new Set();
       throw error;
     }
-    const rows = result.stdout
-      .replace(/\n$/, "")
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => line.split("|"));
-    if (
-      rows.some(
-        (row) =>
-          row.length < 3 ||
-          !/^%\d+$/.test(row[0]!) ||
-          !/^[01]$/.test(row[1]!) ||
-          !row.slice(2).join("|"),
-      )
-    ) {
-      throw new InteractionTransportError("command_failed", "Invalid tmux pane observation");
-    }
-    const panes = new Map<string, TmuxBinding | null>();
-    for (const row of rows) {
-      const paneId = row[0]!;
-      // Linked windows can report a pane more than once; preserve the first session name.
-      if (!panes.has(paneId))
-        panes.set(
-          paneId,
-          row[1] === "1" ? null : { socketPath, paneId, sessionName: row.slice(2).join("|") },
-        );
-    }
-    return panes;
+    return new Set(result.stdout.split("\n").filter(Boolean));
   }
 
-  killPane(binding: TmuxBinding, assertAvailable: () => void = () => {}): Promise<void> {
+  killSession(binding: TmuxBinding, assertAvailable: () => void = () => {}): Promise<void> {
     return this.#serialize(binding, async () => {
       await this.#revalidate(binding);
       assertAvailable();
-      await this.#run(binding, ["kill-pane", "-t", binding.paneId]);
+      await this.#run(binding, ["kill-session", "-t", tmuxTarget(binding.sessionName)]);
     });
   }
 
@@ -147,11 +142,11 @@ export class TmuxInteractionService implements InteractionTransport {
           "-b",
           bufferName,
           "-t",
-          binding.paneId,
+          tmuxTarget(binding.sessionName),
         ]);
         bufferMayExist = false;
         assertAvailable();
-        await this.#run(binding, ["send-keys", "-t", binding.paneId, "Enter"]);
+        await this.#run(binding, ["send-keys", "-t", tmuxTarget(binding.sessionName), "Enter"]);
       } finally {
         if (bufferMayExist) {
           try {
@@ -174,7 +169,12 @@ export class TmuxInteractionService implements InteractionTransport {
         if (step.delayMs > 0) await delay(step.delayMs);
         await this.#revalidate(binding);
         assertAvailable();
-        await this.#run(binding, ["send-keys", "-t", binding.paneId, ...step.keys]);
+        await this.#run(binding, [
+          "send-keys",
+          "-t",
+          tmuxTarget(binding.sessionName),
+          ...step.keys,
+        ]);
       }
     });
   }
@@ -187,20 +187,31 @@ export class TmuxInteractionService implements InteractionTransport {
     readonly truncated: boolean;
   }> {
     return this.#serialize(binding, async () => {
-      await this.#revalidate(binding);
+      if (!binding.socketPath.startsWith("/") || !validTmuxSessionName(binding.sessionName))
+        throw disconnected();
+      await validateSocket(binding.socketPath);
       assertAvailable();
-      const result = await this.runner.run(
-        binding.socketPath,
-        ["capture-pane", "-p", "-t", binding.paneId],
-        undefined,
-        this.timeoutMs,
-        { maxOutputBytes: MAX_TERMINAL_PREVIEW_BYTES, truncateStart: true },
-      );
-      return { content: result.stdout, truncated: result.truncated === true };
+      try {
+        const result = await this.runner.run(
+          binding.socketPath,
+          ["capture-pane", "-p", "-t", tmuxTarget(binding.sessionName)],
+          undefined,
+          this.timeoutMs,
+          { maxOutputBytes: MAX_TERMINAL_PREVIEW_BYTES, truncateStart: true },
+        );
+        return { content: result.stdout, truncated: result.truncated === true };
+      } catch (error) {
+        // Only confirmed absence replaces the capture error; failed probes prove nothing.
+        const target = await this.resolveTarget({ valid: true, ordinal: 0, ...binding }).catch(
+          () => undefined,
+        );
+        if (target === null) throw disconnected();
+        throw error;
+      }
     });
   }
 
-  /** Query errors never establish that the selected pane exited. */
+  /** Query errors never establish that the selected session exited. */
   async inspect(binding: TmuxBinding): Promise<"alive" | "exited"> {
     return (await this.resolveTarget({ valid: true, ordinal: 0, ...binding })) ? "alive" : "exited";
   }
@@ -214,7 +225,7 @@ export class TmuxInteractionService implements InteractionTransport {
   }
 
   #serialize<T>(binding: TmuxBinding, operation: () => Promise<T>): Promise<T> {
-    const key = `${binding.socketPath}\0${binding.paneId}`;
+    const key = `${binding.socketPath}\0${binding.sessionName}`;
     const previous = this.#queues.get(key) ?? Promise.resolve();
     const current = previous.catch(() => undefined).then(operation);
     const settled = current.then(
@@ -231,9 +242,7 @@ export class TmuxInteractionService implements InteractionTransport {
 
 async function validateSocket(socketPath: string): Promise<void> {
   try {
-    const info = await lstat(socketPath);
-    const currentUid = typeof process.getuid === "function" ? process.getuid() : null;
-    if (!info.isSocket() || currentUid === null || info.uid !== currentUid)
+    if (!ownedSocket(await lstat(socketPath)))
       throw new InteractionTransportError("command_failed", "Unsafe tmux socket");
   } catch (error) {
     if (error instanceof InteractionTransportError) throw error;

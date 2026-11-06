@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-session-source.js";
+import { codexBindingCommand } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
 import { createCodexHub } from "../../src/server/create-hub.js";
@@ -106,18 +107,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     });
     const manualId = (await operations.get(third.operationId))!.sessionId!;
     const manualTarget = (await interaction.resolveTarget(manualId))!;
-    execFileSync("tmux", [
-      "-S",
-      socket,
-      "rename-session",
-      "-t",
-      manualTarget.sessionName!,
-      "manual arbitrary|session",
-    ]);
-    await interaction.sendMessage(
-      manualId,
-      `! printf 'AHUB_TMUX_BIND_V1\\n%s\\n%s\\n\\n\\n' "$(tmux display-message -p '#{socket_path}')" "$TMUX_PANE"`,
-    );
+    await interaction.sendMessage(manualId, codexBindingCommand());
     await until(async () => {
       await reader.managementSnapshot();
       const attempt = bindings.latest(manualId);
@@ -126,7 +116,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     await interaction.sendKeys(manualId, ["left"]);
     expect(await interaction.describe(manualId)).toMatchObject({
       state: "connected",
-      attachCommand: expect.stringContaining("manual arbitrary|session"),
+      attachCommand: expect.stringContaining(manualTarget.sessionName),
     });
     const a = (await operations.get(first.operationId))!;
     const b = (await operations.get(second.operationId))!;
@@ -159,12 +149,20 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
           "-b",
           "archive-draft",
           "-t",
-          attempt.paneId,
+          attempt.sessionName,
         ]);
         if (index === 1)
-          execFileSync("tmux", ["-S", socket, "send-keys", "-t", attempt.paneId, "Up", "Home"]);
+          execFileSync("tmux", [
+            "-S",
+            socket,
+            "send-keys",
+            "-t",
+            attempt.sessionName,
+            "Up",
+            "Home",
+          ]);
         await until(async () =>
-          execFileSync("tmux", ["-S", socket, "capture-pane", "-p", "-t", attempt.paneId], {
+          execFileSync("tmux", ["-S", socket, "capture-pane", "-p", "-t", attempt.sessionName], {
             encoding: "utf8",
           }).includes("UNSUBMITTED-ARCHIVE-DRAFT"),
         );
@@ -216,7 +214,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
         try {
           terminal = execFileSync(
             "tmux",
-            ["-S", socket, "capture-pane", "-p", "-t", attempt.valid ? attempt.paneId : ""],
+            ["-S", socket, "capture-pane", "-p", "-t", attempt.valid ? attempt.sessionName : ""],
             { encoding: "utf8" },
           );
         } catch {

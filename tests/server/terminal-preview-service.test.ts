@@ -5,9 +5,12 @@ import { TerminalPreviewService } from "../../src/server/interaction/terminal-pr
 import type { PreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
 import type { TerminalPreviewFrame } from "../../src/shared/api-contract.js";
 
-const binding = { socketPath: "/tmp/test.sock", paneId: "%1", sessionName: "test" };
+const binding = {
+  socketPath: "/tmp/test.sock",
+  sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+};
 let service: TerminalPreviewService;
-let change: (pane?: string) => void;
+let change: (output: boolean) => void;
 let fail: (error: Error) => void;
 let content: string;
 let capture: ReturnType<typeof vi.fn<() => Promise<{ content: string; truncated: boolean }>>>;
@@ -31,12 +34,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-function subscribe(session = "session", target = binding, guard = () => {}) {
+function subscribe(target = binding, guard = () => {}) {
   const frames: TerminalPreviewFrame[] = [];
   const failed = vi.fn();
   const abort = new AbortController();
   const stop = service.subscribe(
-    session,
     target,
     guard,
     (frame) => frames.push(frame),
@@ -47,7 +49,7 @@ function subscribe(session = "session", target = binding, guard = () => {}) {
 }
 const flush = () => vi.advanceTimersByTimeAsync(0);
 
-it("shares first capture, sends new viewers full frames, and merges only matching pane events", async () => {
+it("shares first capture, sends new viewers full frames, and coalesces bound session events", async () => {
   content = "padding\n".repeat(100);
   const a = subscribe(),
     b = subscribe();
@@ -56,13 +58,10 @@ it("shares first capture, sends new viewers full frames, and merges only matchin
   expect(a.frames[0]?.type).toBe("snapshot");
   expect(capture).toHaveBeenCalledOnce();
   expect(listen).toHaveBeenCalledOnce();
-  change("%2");
-  await vi.advanceTimersByTimeAsync(350);
-  expect(capture).toHaveBeenCalledOnce();
   content += "tail";
-  change("%1");
+  change(true);
   await vi.advanceTimersByTimeAsync(175);
-  change("%1");
+  change(true);
   await vi.advanceTimersByTimeAsync(174);
   expect(a.frames).toHaveLength(1);
   await vi.advanceTimersByTimeAsync(1);
@@ -77,7 +76,7 @@ it("shares first capture, sends new viewers full frames, and merges only matchin
 it("does not publish unchanged content or wake periodically", async () => {
   const viewer = subscribe();
   await flush();
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(60_000);
   expect(viewer.frames).toHaveLength(1);
   expect(capture).toHaveBeenCalledTimes(2);
@@ -92,7 +91,7 @@ it("releases the listener immediately after the last viewer, with idempotent can
   a.stop();
   expect(close).not.toHaveBeenCalled();
   content = "second";
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
   expect(a.frames).toHaveLength(1);
   expect(b.frames).toHaveLength(2);
@@ -145,7 +144,7 @@ it("suppresses late capture results and scheduling after final cancellation", as
   );
   const viewer = subscribe();
   await flush();
-  change();
+  change(false);
   viewer.abort.abort();
   complete({ content: "late", truncated: false });
   await vi.advanceTimersByTimeAsync(2000);
@@ -164,9 +163,9 @@ it("does not overlap captures and preserves a second merge window for output dur
         complete = resolve;
       }),
   );
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(5000);
   expect(capture).toHaveBeenCalledTimes(2);
   complete({ content: "intermediate", truncated: false });
@@ -181,7 +180,7 @@ it("does not overlap captures and preserves a second merge window for output dur
 
 it("invalidates ownership immediately, including unchanged output", async () => {
   let valid = true;
-  const viewer = subscribe("session", binding, () => {
+  const viewer = subscribe(binding, () => {
     if (!valid) throw new Error("replaced");
   });
   await flush();
@@ -205,42 +204,17 @@ it("fails all viewers on listener failure and rebuilds a new subscription", asyn
   expect(next.frames[0]?.type).toBe("snapshot");
 });
 
-it("replaces subscriptions when the resolved tmux session changes", async () => {
-  const viewer = subscribe();
-  await flush();
-  const next = subscribe("session", { ...binding, sessionName: "destination" });
-  await flush();
-  expect(viewer.failed).toHaveBeenCalledWith(
-    expect.objectContaining({ message: "The pane's tmux session changed" }),
-  );
-  expect(close).toHaveBeenCalledOnce();
-  expect(next.frames).toHaveLength(1);
-});
-
-it("detects pane movement before capturing, including topology-only notifications", async () => {
-  service.close();
-  let current = binding;
-  service = new TerminalPreviewService(capture, listen, async () => current);
-  const viewer = subscribe();
-  await flush();
-  current = { ...binding, sessionName: "destination" };
-  change();
-  await vi.advanceTimersByTimeAsync(350);
-  expect(viewer.failed).toHaveBeenCalledWith(expect.objectContaining({ code: "disconnected" }));
-  expect(capture).toHaveBeenCalledOnce();
-});
-
-it("publishes truncation-only updates and isolates binding revisions", async () => {
+it("publishes truncation-only updates and starts new viewers at the current revision", async () => {
   content = "stable\n".repeat(100);
   const viewer = subscribe();
   await flush();
   capture.mockResolvedValueOnce({ content, truncated: true });
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
   expect(viewer.frames.at(-1)).toMatchObject({ type: "delta", operations: [], truncated: true });
-  const replacement = subscribe("replacement");
+  const replacement = subscribe();
   await flush();
-  expect(replacement.frames[0]?.revision).not.toBe(viewer.frames[0]?.revision);
+  expect(replacement.frames[0]?.revision).toBe(viewer.frames.at(-1)?.revision);
 });
 
 it("falls back to full text for edit budget and resumes deltas from that frame", async () => {
@@ -248,12 +222,12 @@ it("falls back to full text for edit budget and resumes deltas from that frame",
   const viewer = subscribe();
   await flush();
   content = content.replaceAll("a\n", "b\n");
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
   const baseline = viewer.frames.at(-1)!;
   expect(baseline).toMatchObject({ type: "snapshot", content });
   content = content.replace("start", "next");
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
   const delta = viewer.frames.at(-1)!;
   expect(delta).toMatchObject({ type: "delta", baseRevision: baseline.revision });
@@ -276,7 +250,7 @@ it.each([8192, 8193])("enforces serialized UTF-8 delta byte boundary %i", async 
     }),
   );
   content = `${"x".repeat(size - overhead)}\n${"padding".repeat(4000)}`;
-  change();
+  change(false);
   await vi.advanceTimersByTimeAsync(350);
   const next = viewer.frames.at(-1)!;
   if (size === 8192) {

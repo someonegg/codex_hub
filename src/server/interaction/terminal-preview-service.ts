@@ -7,7 +7,7 @@ import {
   type PreviewListener,
   type PreviewSubscription,
 } from "./tmux-preview-listener.js";
-import { InteractionTransportError, type TmuxBinding } from "./transport.js";
+import type { TmuxBinding } from "./transport.js";
 
 interface Viewer {
   assertOwner(): void;
@@ -40,18 +40,9 @@ export class TerminalPreviewService {
       assertOwner: () => void,
     ) => Promise<{ content: string; truncated: boolean }>,
     private readonly listen: PreviewListener = createTmuxPreviewListener(),
-    private readonly resolveTarget?: (binding: TmuxBinding) => Promise<TmuxBinding | null>,
   ) {}
 
   async captureFresh(binding: TmuxBinding, assertOwner: () => void) {
-    if (this.resolveTarget) {
-      const current = await this.resolveTarget(binding);
-      if (!current || current.sessionName !== binding.sessionName)
-        throw new InteractionTransportError(
-          "disconnected",
-          "The pane no longer exists in its tmux session",
-        );
-    }
     assertOwner();
     const result = await this.capture(binding, assertOwner);
     assertOwner();
@@ -59,7 +50,6 @@ export class TerminalPreviewService {
   }
 
   subscribe(
-    session: string,
     binding: TmuxBinding,
     assertOwner: () => void,
     frame: (value: TerminalPreviewFrame) => void,
@@ -67,15 +57,8 @@ export class TerminalPreviewService {
     signal: AbortSignal,
   ): () => void {
     if (this.#closed || signal.aborted) throw new DOMException("Aborted", "AbortError");
-    const key = JSON.stringify([session, binding.socketPath, binding.paneId]);
+    const key = JSON.stringify([binding.socketPath, binding.sessionName]);
     let state = this.#states.get(key);
-    if (state && state.binding.sessionName !== binding.sessionName) {
-      this.#fail(
-        state,
-        new InteractionTransportError("disconnected", "The pane's tmux session changed"),
-      );
-      state = undefined;
-    }
     const fresh = !state;
     if (!state) {
       state = { key, binding, viewers: new Set(), dirty: true, listening: false, disposed: false };
@@ -95,11 +78,9 @@ export class TerminalPreviewService {
       if (fresh) {
         current.subscription = this.listen(
           binding,
-          (pane) => {
-            if (!pane || pane === binding.paneId) {
-              current.dirty = true;
-              this.#schedule(current);
-            }
+          () => {
+            current.dirty = true;
+            this.#schedule(current);
           },
           (error) => this.#fail(current, error),
         );

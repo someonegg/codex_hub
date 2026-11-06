@@ -5,6 +5,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 const { spawn } = vi.hoisted(() => ({ spawn: vi.fn() }));
 vi.mock("node:child_process", () => ({ spawn }));
+vi.mock("node:fs", () => ({ lstatSync: () => ({ isSocket: () => true, uid: process.getuid!() }) }));
 import { createTmuxPreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
 
 beforeEach(() => spawn.mockReset());
@@ -17,7 +18,10 @@ function child() {
     kill: vi.fn(),
   });
 }
-const binding = { socketPath: "/tmp/control.sock", paneId: "%1", sessionName: "name with spaces" };
+const binding = {
+  socketPath: "/tmp/control.sock",
+  sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+};
 it("shares socket/session clients, parses fragmented notifications, and closes the final subscription", async () => {
   const process = child();
   spawn.mockReturnValue(process);
@@ -25,7 +29,7 @@ it("shares socket/session clients, parses fragmented notifications, and closes t
   const first = vi.fn();
   const second = vi.fn();
   const a = listen(binding, first, vi.fn());
-  const b = listen({ ...binding, paneId: "%2" }, second, vi.fn());
+  const b = listen(binding, second, vi.fn());
   expect(spawn).toHaveBeenCalledTimes(1);
   expect(spawn.mock.calls[0]![1]).toEqual([
     "-S",
@@ -36,13 +40,13 @@ it("shares socket/session clients, parses fragmented notifications, and closes t
     "ignore-size",
     "-E",
     "-t",
-    "=name with spaces",
+    `=${binding.sessionName}:`,
   ]);
   process.stdout.write("%begin 1 1 0\n%en");
   process.stdout.write("d 1 1 0\n%out");
   await a.ready;
   process.stdout.write("put %1 hello\\012world\n%layout-change @1 layout\n");
-  expect(first.mock.calls).toEqual([["%1"], []]);
+  expect(first.mock.calls).toEqual([[true], [false]]);
   expect(second.mock.calls).toEqual(first.mock.calls);
   a.close();
   expect(process.kill).not.toHaveBeenCalled();

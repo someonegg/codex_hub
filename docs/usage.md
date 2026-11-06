@@ -8,245 +8,234 @@ English | [简体中文](usage.zh-CN.md) | [繁體中文](usage.zh-TW.md)
 npx @someonegg/codex-hub@latest
 ```
 
-Open <http://127.0.0.1:4173>, or the URL printed by the server. Press `Ctrl-C`
-to stop it. For installation and requirements, see the [README](../README.md#quick-start).
+Open <http://127.0.0.1:4173> or the URL printed by the server. Press `Ctrl-C`
+to stop the server. Installation and requirements are in the [README](../README.md#quick-start).
 
-By default, the hub reads both `codex=~/.codex` and `claude=~/.claude` and listens only on this machine.
+By default, Hub reads Codex sessions from `~/.codex` and Claude Code sessions from
+`~/.claude`, and listens only on this machine. For another device, configure
+[remote access](#access-from-other-devices) first.
 
-## Reading and managing sessions
+## Read conversations
 
-Choose a project and main session in the sidebar; open child sessions from their
-parent conversation. Messages load from the beginning as you scroll, then receive
-automatic updates. Use **Archived** to browse read-only archived sessions.
+Choose a project and main session in the sidebar; open child sessions from the
+parent conversation. Messages load from the beginning as you scroll, then update
+automatically at the end. Use **Archived** to browse read-only archived sessions.
+You can bookmark a session URL.
 
-You can bookmark a session URL or share it with another device that can access the hub.
+The latest loaded plan opens automatically. Use **Show** and **Hide** to control
+individual plans, including opening several at once.
 
-- **Create:** click a project's **+**, or the global **+** to choose a project or
-  enter an absolute local directory. Optionally enable a worktree or YOLO mode.
-- **Resume:** open an exited session and click **Resume** when available. It
-  continues the same session using its original home and an available original
-  working or project directory.
-- **Exit session:** use the session's **…** menu to stop the connected terminal
-  pane and retain conversation history.
-- **Archive:** use the session's **…** menu to stop execution and mark the session as archived.
-- **Delete:** use the session's **…** menu to permanently remove session history. Deletion requires confirmation.
+## Create and manage sessions
 
-Creating and resuming sessions use tmux. If startup needs login or permission
-confirmation, use **Tmux access** in the session's **…** menu or the attach command
-shown by the hub to finish in the terminal. Before resuming a session
-started elsewhere, make sure its original process has exited.
+Click a project's **+**, or the global **+** to select a project or enter an
+absolute local directory. Choose a [Home](#multiple-homes) and optional launch settings:
 
-The latest loaded plan opens automatically and collapses earlier plans. Use
-**Show** or **Hide** to review plans individually; you can open several at once.
+- **Worktree:** start in a separate Git worktree for isolated changes.
+- **YOLO:** skip the agent's approval prompts; Codex also disables its sandbox.
 
-## Interacting with sessions
+Open an exited session and click **Resume** when available to continue it. Resume
+keeps the original Home and project association, using an available original
+working or project directory. Before resuming a session started elsewhere, make
+sure its original process has exited.
+
+Use the session's **…** menu to:
+
+- **Exit session:** stop its connected terminal and retain history.
+- **Archive:** stop execution and move the session to the archived list.
+- **Delete:** permanently remove session history after confirmation.
+
+Creating and resuming use tmux. If login or permission confirmation blocks startup,
+use **… → Tmux access** or the displayed attach command to finish in a terminal.
+Do not rename Hub's tmux sessions or change their window/pane structure.
+See [tmux requirements](technical-reference.md#tmux-interaction) for details.
+
+## Send prompts and files
 
 A green **Live** badge indicates a connected terminal. Send prompts from the
-message input and expand **Terminal Preview** to inspect the CLI. Use
-**Interrupt**, or press **Ctrl+C** in the preview, to interrupt. Press **Esc** to
-collapse the preview. **Working** and **Idle** reflect terminal output, not whether
-a task is complete.
+message input. By default, **Shift+Enter** sends and **Enter** inserts a newline.
+Enable **Enter to send** in [Settings](#browser-settings) to reverse this.
 
-Ordinary prompts appear immediately with a **Pending** label until conversation
-messages update. Pure slash commands skip this preview. If sending fails, the
-preview disappears and your draft remains.
+Expand **Terminal Preview** to inspect the CLI. Use **Interrupt** or press
+**Ctrl+C** in the preview to interrupt; **Esc** collapses it. **Working** and
+**Idle** reflect terminal output, not task completion.
+
+Sent prompts appear as **Pending** until conversation messages update; pure slash
+commands skip this preview. Failed sends retain your draft. Draft text and
+attachment selections survive session navigation but reset on page refresh.
 
 If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
-running a plan, click **Handoff** on the previous session's connected page.
-When it shows **Superseded**, follow **Go to bound session**. Your unsent draft
-stays on the old page.
+running a plan, click **Handoff** on the old session's connected page. When it
+shows **Superseded**, follow **Go to bound session**. Unsent drafts stay on the old page.
 
 ### File uploads
 
 Use the attachment button to **Take photo**, **Choose images**, or **Choose files**;
-you can also paste images or drop files. Preview images or remove attachments
-before sending, with or without text. Multiple files are supported; folders are not.
+you can also paste images or drop files. Preview or remove attachments before
+sending, with or without text. Multiple files are supported; folders are not.
+Each file can be up to **20 MiB**.
 
-Draft text and attachment selections survive session navigation but reset on refresh.
-
-Camera behavior depends on the browser and may fall back to a file picker. Images
-are uploaded unchanged, including EXIF metadata, up to 20 MiB each; HEIC/HEIF
-support depends on the agent. If the session becomes disconnected or busy while
-taking a photo, reconnect or retry later.
+Images retain their original content, including EXIF metadata. Camera behavior
+depends on the browser; HEIC/HEIF support depends on the agent.
 
 Open **Upload history** from the session header to preview, download, or delete
-uploads, including unsent files and files removed from drafts. Deleting a file
-also removes it from the current draft. [Preview upload history](images/ahub-uploads.png).
+files, including unsent uploads. Removing an attachment from a draft does not
+delete its uploaded file; deleting it from history also removes it from the draft.
 
-Deleting a session requests background upload cleanup; archive and exit retain
-uploads. If cleanup fails, remove the remaining files from the Hub data root.
-
-Uploads persist under `uploads/` in the [Hub data root](#server-options), which
-must be accessible to the agent. See the [technical reference](technical-reference.md#file-uploads)
-for API and storage guarantees.
+Files persist under `uploads/` in the [Hub data root](#configure-the-server), which
+must be accessible to the agent. Session deletion triggers background cleanup;
+archive and exit retain uploads. See the [upload reference](technical-reference.md#file-uploads)
+for storage and cleanup details, or [preview upload history](images/ahub-uploads.png).
 
 ## Browser settings
 
-Open **Settings** at the bottom of the sidebar to choose language, the default Home for new sessions, theme, and default Worktree and YOLO options. Changes save automatically in this browser. YOLO defaults also apply when resuming; launch dialogs allow overrides.
+Open **Settings** at the bottom of the sidebar to choose language, theme, the
+default Home for new sessions, and Worktree/YOLO defaults. Changes save automatically
+in this browser. YOLO defaults also apply to resume; launch dialogs allow overrides.
 
-By default, **Shift+Enter** sends and **Enter** inserts a newline. Enable **Enter to send** in Settings to send with **Enter** and insert a newline with **Shift+Enter**.
+The interface starts in English. Language changes take effect immediately
+and do not translate conversation or terminal content.
 
-The interface defaults to English. Choose **Language → 简体中文 / 繁體中文** to switch immediately without reloading; other open Hub tabs also update. Language affects Hub controls, dates, and numbers; conversation text, terminal output, filenames, paths, and commands retain their original content.
+## Use the CLI
 
-## Management CLI
-
-`codex-hub` starts the server; `ahub-cli` provides `page`, `diff`, and `session` commands.
-To run without installing globally:
+`codex-hub` starts the server; `ahub-cli` manages sessions and published resources.
+The examples below assume a global installation:
 
 ```sh
-npx --package=@someonegg/codex-hub@latest ahub-cli --help
+npm install -g @someonegg/codex-hub
+ahub-cli --help
 ```
 
-Commands default to human-readable text. Add `--json` for structured results and errors. See the [CLI output contract](technical-reference.md#cli-output-contract) for output channels and error codes.
+Without installing globally, replace `ahub-cli` in any example with
+`npx --package=@someonegg/codex-hub@latest ahub-cli`.
+Add `--json` for structured command results.
 
-### Sessions
+### Session commands
 
-Start the hub, then run session commands from another terminal:
+Start Hub first, then run commands in another terminal:
 
 ```sh
 ahub-cli session list --project /path/to/project
+ahub-cli session create --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"
 ahub-cli session inspect <id>
-ahub-cli session inspect <id> --follow --count 5 --json
+ahub-cli session inspect <id> --follow
 ```
 
-Use an ID from `list` to send input or inspect a conversation. `list` shows
-unarchived main sessions (`--all` includes archived); `inspect` also accepts child session IDs. To read the next page,
-pass the returned `Next after` value as `--after <value>`. Use `send <id> --stdin`
-for piped input and `terminal <id>` to check the terminal. After a terminal switches
+Use a Hub ID returned by `list` or `create`. `list` excludes archived sessions
+unless `--all` is supplied; `inspect` also accepts child session IDs. Pass the
+returned `Next after` value as `--after <value>` to read the next page.
+`--follow` keeps observing until `Ctrl+C`; it does not stop when a task finishes.
+
+Create defaults to the project directory and first configured Home. Use `--cwd`
+to change the working directory while retaining the project association, or
+`--home <nickname>` to select a Home. Optional `--worktree` and `--yolo` control
+launch behavior; `resume <id>` retains the original Home and accepts `--yolo`.
+Use `create --task <name>` and `list --task <name>` to group sessions across projects.
+
+Input requires a connected, idle terminal by default. Use `send <id> --stdin`
+for piped input, `terminal <id>` to inspect the terminal, or `interrupt <id>` to
+interrupt execution. `--force` on `send` or `keys` allows input while working;
+it also permits `send` messages starting with `/`. After a terminal switches
 sessions, use `handoff <id>` to transfer its binding.
 
-Use `create --task <name>` to assign an optional task at creation and `list --task <name>` to filter across projects; the web interface displays it in session information.
+Commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL` or
+pass `--url` to change it; use `--timeout <seconds>` to adjust the timeout.
+For a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 
-For lifecycle commands, run `ahub-cli session --help`. Create requires `--project`
-and accepts `--cwd`, `--home`, `--worktree`, and `--yolo`. Omitting `--cwd` starts
-in the project directory; specifying it starts elsewhere while retaining the
-`--project` association. Omitting `--home` selects the first configured home.
-Both directories accept relative paths, which the CLI converts to absolute paths.
-Resume keeps the original home and accepts `--yolo`.
+Successful sending does not mean task completion. After a timeout or exit code `2`
+(unknown write result), check `list`, `inspect`, or `terminal` before retrying.
+Stopping the client does not cancel a submitted operation. Lifecycle commands,
+including delete, run without a CLI confirmation prompt.
+See `ahub-cli session --help` for all commands and the
+[CLI reference](technical-reference.md#session-cli-and-observation) for result and timeout contracts.
 
-Session commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL`
-or pass `--url` to use another HTTP or HTTPS address. For a private CA, set
-`NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
-Use `--timeout <seconds>` to change the default 15-second timeout (30 seconds for follow; 45 seconds for
-create, resume, exit, archive, and delete). With `inspect --follow`, it limits each
-HTTP request; observation continues until Ctrl+C or the requested round count.
+## Publish pages and diffs
 
-Create and resume wait for a live, connected, idle terminal. Sending input and ordinary keys
-requires idle by default. Use `send <id> --message <text> --force` (or `--stdin --force`)
-or `keys <id> <key...> --force` to send while working. The CLI also rejects `send` messages
-whose first character is `/`; `--force` skips this check too. Connection, binding
-ownership, and management occupancy checks still apply.
-Successful input or `handoff` confirms sending, not task completion.
-After a timeout or exit code `2` (unknown write result), check with `list`, `inspect`,
-or `terminal` before retrying. Stopping the client does not cancel a submitted operation.
-See the [CLI reference](technical-reference.md#session-cli-and-observation) for
-output fields, exit codes, and failure semantics.
+Start Hub with `--hosting` to view published resources. Publishing commands read
+local files on the Hub machine and work even while the server is stopped.
+They print a relative URL and Markdown link; open the URL on your Hub server.
 
-## Multiple homes
+Storage defaults to `~/.codex-hub/hosting`. If using a custom data root, pass the
+same `--home-dir /path` to both the commands and server.
 
-Use `--codex-home 'nickname=path'` or `--claude-home 'nickname=path'` to choose
-homes. Point Codex homes to the directory containing `sessions/` and Claude homes
-to the directory containing `projects/`. Repeat or combine the options:
+### Publish a page
+
+Publish a built directory containing `index.html`:
 
 ```sh
-codex-hub \
-  --claude-home 'claude=~/.claude' \
-  --codex-home 'codex=~/.codex'
-```
-
-Any explicit home replaces both defaults. Homes follow argument order; the first
-is the default. Without options, Codex comes first unless `~/.codex` is absent,
-in which case Claude comes first; both homes remain listed. Give each home a
-unique nickname and directory. `default` is an ordinary nickname.
-
-Use the sidebar home filter to narrow the session list and choose the destination
-when creating a session. An active home filter or valid default Home preference
-takes priority over the first home.
-
-## Publish resources
-
-Start `codex-hub --hosting` to view published pages and diffs. Resource commands
-work while the server is stopped and print a relative URL and Markdown link on
-publication. Storage defaults to `~/.codex-hub/hosting`; for a custom location,
-pass the same `--home-dir /path` to the commands and server. Add `--json`
-for structured output.
-
-For agent-assisted publishing, install the
-[`ahub-publish` skill](../skills/ahub-publish)
-and request it by name to publish static pages or review diffs to an existing Hub.
-
-The npm package includes the skill. Run `ahub-cli skill path ahub-publish` to locate it. With `npx`, the path is in a temporary cache; copy the directory for lasting use.
-
-### Publish web pages
-
-Hosted pages run as trusted code on the same origin as Hub; publish only
-content you trust. Open **Pages** at `/artifacts` to manage them.
-
-Publish an already built directory containing `index.html` on the Hub machine:
-
-```sh
-ahub-cli page publish ./demo --project /absolute/path/to/project --title "Design comparison"
+ahub-cli page publish ./demo --project /path/to/project --name demo --title "Design comparison"
 ```
 
 Both directories must exist. Use relative asset paths; Hub does not build sites
-or accept remote uploads.
+or accept remote publication uploads. Hosted pages run as trusted code on the
+same origin as Hub, so publish only content you trust.
 
-To update a page, publish with the same project and name. The name defaults to
-the source directory name after resolving symlinks. Use `--name` to keep a name
-across different source directories. Updates retain the URL; the title is kept
-unless `--title` is supplied. For worktrees, pass the original project to `--project`.
+Publish again with the same project and name to update the page while retaining
+its URL. Without `--name`, the source directory name is used. For worktrees,
+pass the original project to `--project`.
 
-The **Pages** link opens management in a new tab. Open pages, copy absolute
-links, refresh the list, or confirm deletion of a page and all its snapshots. Removing the source or worktree does
-not remove published pages. The CLI also supports `page list` and `page delete <id>`.
-See the [hosting reference](technical-reference.md#optional-hosting)
-for resource loading limits, project identity, and snapshot guarantees.
+Open **Pages** (`/artifacts`) to browse, copy links, or delete pages and their
+snapshots. The CLI also supports `page list` and `page delete <id>`.
+Published pages survive removal of the source directory or worktree.
+See the [hosting reference](technical-reference.md#optional-hosting) for details.
 
-### Share a temporary diff
+### Share a diff
 
-Generate a diff file for the intended comparison, then publish it:
+Generate the comparison you want, then publish it:
 
 ```sh
 git diff HEAD > /tmp/review.diff
 ahub-cli diff publish /tmp/review.diff --title "Review changes"
-ahub-cli diff list
-ahub-cli diff delete <uuid>
 ```
 
-Open the returned `/diffs/<uuid>` link to review the diff. The agent chooses the
-comparison and deletes the publication when finished; there is no automatic
-cleanup. The source file is unchanged.
+Open the returned `/diffs/<uuid>` URL. Publications do not expire: use
+`ahub-cli diff list` to find them and `ahub-cli diff delete <uuid>` after review.
+Deleting a publication leaves the source file unchanged.
 See the [diff reference](technical-reference.md#temporary-diffs) and
 [desktop](images/ahub-diff.png) / [mobile](images/ahub-diff-mobile.png) previews.
 
-## Server options
+### Publish with an agent
 
-Pass options to `codex-hub`; restart after changing them. Run `codex-hub --help`
-for the full command-line help.
+Install the bundled [`ahub-publish` skill](../skills/ahub-publish) and request it
+by name. Run `ahub-cli skill path ahub-publish` to locate it; if using `npx`, copy
+the returned cache directory to a lasting skill location.
 
-| Option                          | Default            | Purpose                                             |
-| ------------------------------- | ------------------ | --------------------------------------------------- |
-| `--codex-home <nickname=path>`  | `codex=~/.codex`   | Choose one or more Codex homes                      |
-| `--claude-home <nickname=path>` | `claude=~/.claude` | Choose one or more Claude Code homes                |
-| `--host <host>`                 | `127.0.0.1`        | Listen address                                      |
-| `--port <port>`                 | `4173`             | Listen port; `0` selects a free port                |
-| `--home-dir <path>`             | `~/.codex-hub`     | Hub data root (`uploads/` and `hosting/`)           |
-| `--hosting`                     | Disabled           | Enable static web hosting                           |
-| `--tmux-socket <path>`          | tmux default       | Use a custom tmux socket                            |
-| `--ssl`                         | Disabled           | Enable HTTPS; requires `--ssl-cert` and `--ssl-key` |
-| `--ssl-cert <path>`             | None               | PEM server certificate or chain                     |
-| `--ssl-key <path>`              | None               | PEM private key                                     |
-| `--ssl-ca <path>`               | None               | Require client certificates signed by this CA       |
+## Configure the server
 
-## Security
+Pass options at startup and restart after changing them. Use `codex-hub --help`
+for the full list.
 
-The hub has no application login. Anyone who can access it can read conversations,
-send input, and manage sessions. Keep the default local address unless you have
-configured authentication and restricted network access.
+| Option                 | Default        | Purpose                                            |
+| ---------------------- | -------------- | -------------------------------------------------- |
+| `--port <port>`        | `4173`         | Listen port; `0` selects a free port               |
+| `--home-dir <path>`    | `~/.codex-hub` | Hub data root containing `uploads/` and `hosting/` |
+| `--hosting`            | Disabled       | Serve published pages and diffs                    |
+| `--tmux-socket <path>` | tmux default   | Use a custom tmux socket                           |
 
-For access from other devices, use an authenticated reverse proxy or built-in
-mutual TLS (mTLS). For example:
+### Multiple homes
+
+A Home is an agent's session/configuration directory: it contains `sessions/`
+for Codex or `projects/` for Claude Code. Give each Home a unique nickname and directory:
+
+```sh
+codex-hub \
+  --codex-home 'work=~/.codex-work' \
+  --claude-home 'claude=~/.claude'
+```
+
+Repeat or combine these options as needed. Explicit homes replace **both**
+defaults; the first is the default for creation.
+Use the sidebar Home filter to narrow sessions. For web creation, an active Home
+filter or valid default Home preference takes priority over the first Home.
+See [Home routing](technical-reference.md#home-identity-and-routing) for exact rules.
+
+## Access from other devices
+
+Hub has no application login. Anyone who can access it can read conversations,
+send input, and manage sessions. Keep the default `127.0.0.1` listener unless you
+configure authenticated, restricted access through a reverse proxy or mutual TLS (mTLS).
+
+For built-in mTLS:
 
 ```sh
 codex-hub \
@@ -257,42 +246,43 @@ codex-hub \
   --ssl-ca /path/to/client-ca.pem
 ```
 
-Install a client certificate and its private key on each device, and ensure the
-device trusts the server certificate. Without `--ssl-ca`, HTTPS encrypts traffic
-but does not authenticate clients. Restart after replacing certificates or keys.
+Install a client certificate and private key on each device, and ensure it trusts
+the server certificate. Without `--ssl-ca`, HTTPS encrypts traffic but does not
+authenticate clients. Restart after replacing certificates or keys.
 
-Use `--local-port 4174` to additionally serve HTTP on `127.0.0.1:4174` without
-client certificates (disabled by default). TLS/mTLS settings apply independently to the main listener. For local CLI access:
+To let the local CLI connect without a client certificate, also start the server
+with `--local-port 4174`, then use:
 
 ```sh
 ahub-cli session list --url http://127.0.0.1:4174
 ```
 
-Other local users and processes can also access this endpoint; do not forward
-external proxy traffic to it.
+This additional HTTP listener is disabled by default and binds to `127.0.0.1`.
+Other local users and processes can access it; do not forward external proxy traffic to it.
 
 ## Troubleshooting
 
-- **No sessions:** for Codex, point `--codex-home` to the directory containing
-  `sessions/`; for Claude, point `--claude-home` to the directory
-  containing `projects/`. Check the server's terminal output for unreadable or skipped files.
+- **No sessions:** check that each configured Home contains `sessions/` (Codex)
+  or `projects/` (Claude). Check the server output for unreadable or skipped files.
 - **Port in use:** choose another port, such as `codex-hub --port 4180`.
-- **Cannot send input:** the session needs a live, connected tmux pane. Complete
-  any CLI prompts in tmux, or use **Resume** if available. Archived sessions are
-  read-only. Existing log files alone do not provide a terminal connection.
-- **Creation or resume status is unclear:** inspect tmux and refresh the session
-  list before retrying, to avoid starting another session. Closing the page does
-  not stop an operation; restarting the server loses its progress tracking.
+- **Cannot send input:** complete CLI prompts via **Tmux access**, wait if busy,
+  or use **Resume** if available. Archived sessions are read-only; session logs
+  alone do not provide a live terminal connection.
+- **Create/resume status unclear:** inspect tmux and refresh the session list before
+  retrying to avoid duplicates. Closing the page does not stop an operation;
+  restarting the server loses its progress tracking.
+- **Camera unavailable or upload interrupted:** use the file picker, check that
+  the session is connected and idle, and retry.
 
-For connection and management details, see the [technical reference](technical-reference.md).
+For runtime and recovery details, see the [technical reference](technical-reference.md).
 
 ## Uninstall
 
-Stop the server. If installed globally:
+Stop the server. For a global installation, run:
 
 ```sh
 npm uninstall -g @someonegg/codex-hub
 ```
 
-An `npx` run needs no global uninstall. Uninstalling retains sessions, worktrees,
-running tmux sessions, uploads, and hosted snapshots; clean them up separately as needed.
+An `npx` run needs no global uninstall. Sessions, worktrees, running tmux sessions,
+uploads, and hosted snapshots remain; clean them up separately as needed.

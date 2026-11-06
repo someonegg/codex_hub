@@ -33,7 +33,7 @@ export type InteractionBindingAttempt =
       readonly projectDirectory?: string;
       readonly taskName?: string | null;
       readonly socketPath: string;
-      readonly paneId: string;
+      readonly sessionName: string;
     }
   | {
       readonly ordinal: number;

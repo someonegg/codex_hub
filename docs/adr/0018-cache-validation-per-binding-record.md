@@ -3,37 +3,27 @@ status: accepted
 date: 2026-10-16
 ---
 
-# Use ahub V1 bindings and current pane validation
+# Use session bindings and current tmux validation
 
-Commands emit `AHUB_TMUX_BIND_V2` with socket, pane, operation UUID, project,
-and task. See the [current binding format](../technical-reference.md#binding-format-and-ownership).
-
-The exit sequence and no-forced-kill policy below are historical; see
-[ADR-0022](0022-separate-session-exit-from-archive.md) for their replacement.
-[ADR-0023](0023-separate-runtime-status-from-resume-permission.md) adds shared bounded
-runtime observations and explicit resume permission. See the
-[interaction reference](../technical-reference.md#tmux-interaction) for current behavior.
-
-[ADR-0024](0024-share-request-scoped-runtime-observations.md) refines reader
-responses to share one request-scoped pane observation; effects still validate
-current ownership independently.
+See the [binding contract](../technical-reference.md#binding-format-and-ownership)
+and [runtime observations](0024-share-request-scoped-runtime-observations.md).
 
 ## Context and Problem Statement
 
 Connection status, input, previews, and archive need consistent current availability.
-Permanent caching prevents recovery; process identity checks reject deliberate pane reuse.
+Permanent caching prevents recovery; process identity checks reject deliberate session reuse.
 
 ## Decision Outcome
 
-Use one process-wide binding authority and fresh pane validation. A later claim
+Use one process-wide binding authority and fresh session validation. A later claim
 revokes the former owner's control; retain claims for the process lifetime so
 archive, deletion, or rereads cannot restore stale authority. Explicit later
-bindings can reclaim a pane. Missing replacement sessions affect navigation,
+bindings can reclaim a session. Missing replacement sessions affect navigation,
 not ownership.
 
 Share concurrent checks without caching completed results. Validate socket
-ownership and pane liveness, without process-identity inference; deliberate
-socket/pane reuse is allowed. Binding changes during observation fail closed,
+ownership and session liveness, without process-identity inference; deliberate
+socket/session reuse is allowed. Binding changes during observation fail closed,
 and queued effects revalidate ownership before execution.
 
 Adapters own native binding syntax and semantic key mappings; generic transport
@@ -45,9 +35,9 @@ rules live in the [interaction reference](../technical-reference.md#tmux-interac
 
 Creation correlates the binding operation UUID with its launch target and project.
 
-Archive originally sent `Ctrl+C`, then `Ctrl+D`, without forced pane closure.
-ADR-0022 replaces only this shutdown strategy with the independent exit service;
-query errors still do not prove pane death, and uncertain effects are not retried.
+Exit uses the independent exit service described in
+[ADR-0022](0022-separate-session-exit-from-archive.md). Query errors do not prove
+session exit, and uncertain effects are not retried.
 
 ## Consequences
 

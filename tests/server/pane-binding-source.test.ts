@@ -24,7 +24,7 @@ function line(value: object): string {
   return `${JSON.stringify(value)}\n`;
 }
 function shell(socket: string, pane: string): string {
-  return `<user_shell_command>\nAHUB_TMUX_BIND_V1\n${socket}\n${pane}\n\n\n</user_shell_command>`;
+  return `<user_shell_command>\nAHUB_TMUX_BIND_V3\n${socket}\n${pane}\n\n\n</user_shell_command>`;
 }
 function message(time: number, text: string): string {
   return line({
@@ -47,9 +47,21 @@ it.each([false, true])(
     const fileA = join(homes[0]!, "sessions", "rollout-a.jsonl");
     const fileC = join(homes[1]!, "sessions", "rollout-c.jsonl");
     const meta = line({ type: "session_meta", payload: { id: "same-native-id", cwd: root } });
-    await writeFile(fileA, meta + message(1, shell(socket, "%1")));
+    await writeFile(
+      fileA,
+      meta + message(1, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")),
+    );
     // Both claims occur in a single record; only the last is C's current binding.
-    await writeFile(fileC, meta + message(2, shell(socket, "%1") + "\n" + shell(socket, "%2")));
+    await writeFile(
+      fileC,
+      meta +
+        message(
+          2,
+          shell(socket, "ahub-00000000-0000-0000-0000-000000000001") +
+            "\n" +
+            shell(socket, "ahub-00000000-0000-0000-0000-000000000002"),
+        ),
+    );
     const sources = await Promise.all(
       homes.map((home, index) => createCodexSessionSource(home, { home: String(index) })),
     );
@@ -65,7 +77,7 @@ it.each([false, true])(
       sendKeys: vi.fn(),
       captureTerminal: vi.fn(),
       inspect: vi.fn(),
-      killPane: vi.fn(),
+      killSession: vi.fn(),
     } satisfies InteractionTransport;
     const service = closeAfterEach(
       new SessionInteractionService(sessions, transport, {
@@ -80,12 +92,12 @@ it.each([false, true])(
     const idFor = async (pane: string) => {
       for (const item of catalog) {
         const attempt = bindings.latest(item.id);
-        if (attempt?.valid && attempt.paneId === pane) return item.id;
+        if (attempt?.valid && attempt.sessionName === pane) return item.id;
       }
       throw new Error("Missing session");
     };
-    const a = await idFor("%1");
-    const c = await idFor("%2");
+    const a = await idFor("ahub-00000000-0000-0000-0000-000000000001");
+    const c = await idFor("ahub-00000000-0000-0000-0000-000000000002");
     expect(a).not.toBe(c);
     expect(await service.describe(a)).toMatchObject({
       state: "superseded",
@@ -124,10 +136,13 @@ it.each([false, true])(
       state: "superseded",
       supersededBySessionId: null,
     });
-    await appendFile(fileA, message(3, shell(socket, "%1")));
+    await appendFile(fileA, message(3, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")));
     await sessions.refresh();
     expect(await service.describe(a)).toMatchObject({ state: "connected" });
-    await appendFile(fileA, message(4, shell("invalid", "%1")));
+    await appendFile(
+      fileA,
+      message(4, shell("invalid", "ahub-00000000-0000-0000-0000-000000000001")),
+    );
     await sessions.refresh();
     expect(await service.describe(a)).toMatchObject({ state: "disconnected" });
   },
@@ -142,12 +157,12 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   await writeFile(
     aFile,
     line({ type: "session_meta", payload: { id: "a", cwd: home } }) +
-      message(1, shell(socket, "%1")),
+      message(1, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")),
   );
   await writeFile(
     cFile,
     line({ type: "session_meta", payload: { id: "c", cwd: home } }) +
-      message(3, shell(socket, "%2")),
+      message(3, shell(socket, "ahub-00000000-0000-0000-0000-000000000002")),
   );
   const source = await createCodexSessionSource(home);
   const sessions = new SessionReadService([source], {
@@ -169,14 +184,14 @@ it("consumes late-arriving older binds for their pane without changing the sessi
     }),
   );
   expect(await service.describe(a)).toMatchObject({ state: "connected" });
-  await appendFile(cFile, message(2, shell(socket, "%1")));
+  await appendFile(cFile, message(2, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")));
   await sessions.refresh();
   expect(await service.describe(a)).toMatchObject({
     state: "superseded",
     supersededBySessionId: c,
   });
   expect(bindings.latest(c)).toMatchObject({
-    paneId: "%2",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000002",
   });
   expect(await service.describe(c)).toMatchObject({ state: "connected" });
   // A forced full decode must produce the same result as the append path.
@@ -211,8 +226,14 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   const meta = (title: string) =>
     line({ type: "session_meta", payload: { id: "duplicate", title, cwd: home } });
   const socket = join(home, "shared.sock");
-  await writeFile(b, meta("B") + message(1, shell(socket, "%1")));
-  await writeFile(c, meta("C") + message(9, shell(socket, "%3")));
+  await writeFile(
+    b,
+    meta("B") + message(1, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")),
+  );
+  await writeFile(
+    c,
+    meta("C") + message(9, shell(socket, "ahub-00000000-0000-0000-0000-000000000003")),
+  );
   const source = await createCodexSessionSource(home);
   const log = vi.fn();
   const sessions = new SessionReadService([source], {
@@ -225,7 +246,9 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   expect(initial).toHaveLength(1);
   expect(initial[0]!.title).toBe("B");
   const id = initial[0]!.id;
-  expect(bindings.latest(id)).toMatchObject({ paneId: "%1" });
+  expect(bindings.latest(id)).toMatchObject({
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  });
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(1);
@@ -235,11 +258,16 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
   ).toHaveLength(1);
-  await writeFile(a, meta("A") + message(2, shell(socket, "%2")));
-  await appendFile(c, message(9, shell(socket, "%4")));
+  await writeFile(
+    a,
+    meta("A") + message(2, shell(socket, "ahub-00000000-0000-0000-0000-000000000002")),
+  );
+  await appendFile(c, message(9, shell(socket, "ahub-00000000-0000-0000-0000-000000000004")));
   await sessions.refresh();
   expect((await sessions.managementSnapshot()).sessions).toMatchObject([{ id, title: "B" }]);
-  expect(bindings.latest(id)).toMatchObject({ paneId: "%1" });
+  expect(bindings.latest(id)).toMatchObject({
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  });
   expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 0 });
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
@@ -248,14 +276,21 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
   await sessions.refresh();
   expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 1, appendFiles: 0 });
   expect((await sessions.managementSnapshot()).sessions).toMatchObject([{ id, title: "A" }]);
-  expect(bindings.latest(id)).toMatchObject({ paneId: "%2" });
-  await appendFile(a, message(3, shell(socket, "%5")));
+  expect(bindings.latest(id)).toMatchObject({
+    sessionName: "ahub-00000000-0000-0000-0000-000000000002",
+  });
+  await appendFile(a, message(3, shell(socket, "ahub-00000000-0000-0000-0000-000000000005")));
   await sessions.refresh();
   expect(source.lastRefreshTelemetry()).toMatchObject({ fullFiles: 0, appendFiles: 1 });
-  expect(bindings.latest(id)).toMatchObject({ paneId: "%5" });
+  expect(bindings.latest(id)).toMatchObject({
+    sessionName: "ahub-00000000-0000-0000-0000-000000000005",
+  });
   await unlink(c);
   await sessions.refresh();
-  await writeFile(c, meta("C") + message(9, shell(socket, "%3")));
+  await writeFile(
+    c,
+    meta("C") + message(9, shell(socket, "ahub-00000000-0000-0000-0000-000000000003")),
+  );
   await sessions.refresh();
   expect(
     log.mock.calls.filter(([item]) => item.code === "duplicate_native_session_id"),
@@ -275,7 +310,7 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
     (await source.refresh()).sessions[0]!.normalized.session.projectDirectory;
   expect(await project()).toBe("/missing/working");
   const bind = (path: string) =>
-    `<user_shell_command>\nAHUB_TMUX_BIND_V1\n/tmp/socket\n%1\n\n${path}\n</user_shell_command>`;
+    `<user_shell_command>\nAHUB_TMUX_BIND_V3\n/tmp/socket\nahub-00000000-0000-0000-0000-000000000001\n\n${path}\n</user_shell_command>`;
   await appendFile(file, message(1, bind("/missing/project ' $()")));
   expect(await project()).toBe("/missing/project ' $()");
   expect((await source.refresh()).sessions[0]!.normalized.session.workingDirectory).toBe(
@@ -283,7 +318,10 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
   );
   await appendFile(file, message(2, bind("relative")));
   expect(await project()).toBe("/missing/project ' $()");
-  await appendFile(file, message(3, shell("/tmp/socket", "%2")));
+  await appendFile(
+    file,
+    message(3, shell("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000002")),
+  );
   expect(await project()).toBe("/missing/project ' $()");
   const rebuilt = await createCodexSessionSource(home);
   expect((await rebuilt.refresh()).sessions[0]!.normalized.session.projectDirectory).toBe(
@@ -300,12 +338,15 @@ it("updates project and task from valid bindings while preserving omitted or inv
   await mkdir(join(home, "sessions"));
   const file = join(home, "sessions/rollout-metadata.jsonl");
   const meta = line({ type: "session_meta", payload: { id: "metadata", cwd: "/working" } });
-  await writeFile(file, meta + message(1, shell("/tmp/socket", "%1")));
+  await writeFile(
+    file,
+    meta + message(1, shell("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000001")),
+  );
   const source = await createCodexSessionSource(home);
   const read = async () => (await source.refresh()).sessions[0]!.normalized.session;
   expect(await read()).toMatchObject({ projectDirectory: "/working", taskName: undefined });
   const bind = (project: string, task: string, socket = "/tmp/socket") =>
-    `<user_shell_command>\nAHUB_TMUX_BIND_V2\n${socket}\n%1\n\n${project}\n${task}\n</user_shell_command>`;
+    `<user_shell_command>\nAHUB_TMUX_BIND_V3\n${socket}\nahub-00000000-0000-0000-0000-000000000001\n\n${project}\n${task}\n</user_shell_command>`;
   await appendFile(file, message(2, bind("/first", JSON.stringify(" first "))));
   const first = await read();
   expect(first).toMatchObject({ projectDirectory: "/first", taskName: "first" });
@@ -316,7 +357,10 @@ it("updates project and task from valid bindings while preserving omitted or inv
   await appendFile(file, message(4, bind("/second", JSON.stringify("second"))));
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
   expect(first).toMatchObject({ projectDirectory: "/first", taskName: "first" });
-  await appendFile(file, message(5, shell("/tmp/socket", "%2")));
+  await appendFile(
+    file,
+    message(5, shell("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000002")),
+  );
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
   await appendFile(file, message(6, bind("/ignored", JSON.stringify("ignored"), "relative")));
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });

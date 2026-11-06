@@ -21,6 +21,7 @@ import { TerminalActivityService } from "./terminal-activity-service.js";
 import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
 import { createTmuxPreviewListener, type PreviewListener } from "./tmux-preview-listener.js";
+import { validTmuxSessionName } from "./tmux-target.js";
 import {
   type InteractionTransport,
   InteractionTransportError,
@@ -43,12 +44,8 @@ export class SessionInteractionError extends Error {
   }
 }
 
-interface CheckedBinding {
-  readonly attempt: InteractionBindingAttempt & { readonly valid: true };
+interface PreparedBinding {
   readonly binding: TmuxBinding;
-}
-
-interface ResolvedBinding extends CheckedBinding {
   readonly interruptSteps: DomainAgentInteraction["interruptSteps"];
   readonly bindingCommand: string;
   readonly keyBindings: NonNullable<InteractionSessionSnapshot["interaction"]>["keyBindings"];
@@ -95,7 +92,6 @@ export class SessionInteractionService {
       (binding, assertOwner) =>
         this.#perform(() => this.tmux.captureTerminal(binding, assertOwner)),
       listener,
-      (binding) => this.tmux.resolveTarget({ valid: true, ordinal: 0, ...binding }),
     );
     this.#unsubscribe = bindings.subscribe(() => {
       this.#previews.invalidate();
@@ -117,8 +113,8 @@ export class SessionInteractionService {
     return target && this.bindings.owns(sessionId, target) ? target : null;
   }
   async interruptLaunch(target: TmuxBinding, sessionId: string, assertActive: () => void) {
-    const { binding, interruptSteps } = await this.#resolve(sessionId);
-    if (binding.socketPath !== target.socketPath || binding.paneId !== target.paneId)
+    const { binding, interruptSteps } = await this.#prepare(sessionId);
+    if (binding.socketPath !== target.socketPath || binding.sessionName !== target.sessionName)
       throw new Error("Launch binding changed before interrupt");
     await this.tmux.sendKeys(target, interruptSteps(), () => {
       assertActive();
@@ -138,7 +134,7 @@ export class SessionInteractionService {
     });
   }
   killTarget(target: TmuxBinding, sessionId: string, assertActive: () => void) {
-    return this.tmux.killPane(target, () => {
+    return this.tmux.killSession(target, () => {
       assertActive();
       this.#assertOwner(sessionId, target);
     });
@@ -173,9 +169,7 @@ export class SessionInteractionService {
     }
     const observed =
       session.observation ??
-      (await observePaneBinding(sessionId, this.bindings, (attempt) =>
-        this.#check(attempt).then((checked) => checked?.binding ?? null),
-      ));
+      (await observePaneBinding(sessionId, this.bindings, (attempt) => this.#check(attempt)));
     if (observed.state !== "alive" || observed.replacement !== null)
       this.#activity.remove(sessionId);
     if (observed.sessionId !== sessionId || !isCurrentObservation(observed, this.bindings)) {
@@ -211,29 +205,26 @@ export class SessionInteractionService {
     }
   }
 
-  #check(attempt: InteractionBindingAttempt & { valid: true }): Promise<CheckedBinding | null> {
+  #check(attempt: InteractionBindingAttempt & { valid: true }): Promise<TmuxBinding | null> {
     const connection = this.runtime ? this.runtime.probe(attempt) : this.tmux.connect(attempt);
-    return connection.then(
-      (binding) => (binding === null ? null : { attempt, binding }),
-      (error: unknown) => {
-        if (error instanceof InteractionTransportError && error.code === "disconnected")
-          return null;
-        throw error;
-      },
-    );
+    return connection.catch((error: unknown) => {
+      if (error instanceof InteractionTransportError && error.code === "disconnected") return null;
+      throw error;
+    });
   }
 
   async matchesTarget(sessionId: string, target: TmuxBinding): Promise<boolean> {
-    const resolved = await this.#resolve(sessionId);
+    const resolved = await this.#prepare(sessionId);
     return (
-      resolved.binding.socketPath === target.socketPath && resolved.binding.paneId === target.paneId
+      resolved.binding.socketPath === target.socketPath &&
+      resolved.binding.sessionName === target.sessionName
     );
   }
 
   async sendMessage(sessionId: string, message: string, requireIdle = false): Promise<void> {
     message = normalizeMessage(message);
     this.#assertAvailable(sessionId);
-    const { binding } = await this.#resolve(sessionId);
+    const { binding } = await this.#prepare(sessionId);
     this.#assertAvailable(sessionId);
     this.#assertInputAllowed(sessionId, binding, requireIdle);
     await this.#perform(() =>
@@ -243,7 +234,7 @@ export class SessionInteractionService {
 
   async handoffPaneBinding(sessionId: string): Promise<void> {
     this.#assertAvailable(sessionId);
-    const { binding, bindingCommand } = await this.#resolve(sessionId);
+    const { binding, bindingCommand } = await this.#prepare(sessionId);
     this.#assertAvailable(sessionId);
     await this.#perform(() =>
       this.tmux.sendMessage(binding, bindingCommand, () =>
@@ -258,7 +249,7 @@ export class SessionInteractionService {
     requireIdle = false,
   ): Promise<void> {
     this.#assertAvailable(sessionId);
-    const { binding, keyBindings, interruptSteps } = await this.#resolve(sessionId);
+    const { binding, keyBindings, interruptSteps } = await this.#prepare(sessionId);
     this.#assertAvailable(sessionId);
     this.#assertInputAllowed(sessionId, binding, requireIdle);
     const mapped = keys.flatMap((key): readonly InteractionKeyStep[] =>
@@ -270,8 +261,13 @@ export class SessionInteractionService {
   }
 
   async captureTerminal(sessionId: string) {
-    const { binding } = await this.#resolve(sessionId);
-    return this.#previews.captureFresh(binding, () => this.#assertOwner(sessionId, binding));
+    this.#assertAvailable(sessionId);
+    const { binding } = await this.#prepare(sessionId);
+    this.#assertAvailable(sessionId);
+    return this.#previews.captureFresh(binding, () => {
+      this.#assertAvailable(sessionId);
+      this.#assertOwner(sessionId, binding);
+    });
   }
 
   async subscribePreview(
@@ -280,10 +276,9 @@ export class SessionInteractionService {
     fail: (error: unknown) => void,
     signal: AbortSignal,
   ): Promise<() => void> {
-    const { binding } = await this.#resolve(sessionId);
+    const { binding } = await this.#prepare(sessionId);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     return this.#previews.subscribe(
-      sessionId,
       binding,
       () => this.#assertOwner(sessionId, binding),
       frame,
@@ -292,7 +287,7 @@ export class SessionInteractionService {
     );
   }
 
-  async #resolve(sessionId: string): Promise<ResolvedBinding> {
+  async #prepare(sessionId: string): Promise<PreparedBinding> {
     const session = await this.sessions.getInteractionSession(sessionId);
     if (session === null) {
       throw new SessionInteractionError("session_not_found", "Session not found");
@@ -312,16 +307,10 @@ export class SessionInteractionService {
       );
     }
     this.#assertOwner(sessionId, attempt);
-    let checked: CheckedBinding | null;
-    try {
-      checked = await this.#check(attempt);
-    } catch (error) {
-      return this.#translateConnectionError(error);
-    }
-    if (checked === null) return this.#translateConnectionError(null);
-    this.#assertOwner(sessionId, attempt);
+    if (!attempt.socketPath.startsWith("/") || !validTmuxSessionName(attempt.sessionName))
+      throw new SessionInteractionError("interaction_not_connected", "Invalid tmux binding");
     return {
-      ...checked,
+      binding: { socketPath: attempt.socketPath, sessionName: attempt.sessionName },
       interruptSteps: () => interaction.interruptSteps(),
       keyBindings: interaction.keyBindings,
       bindingCommand: interaction.bindingCommand,
@@ -382,21 +371,6 @@ export class SessionInteractionService {
     }
   }
 
-  #translateConnectionError(error: unknown): never {
-    if (error instanceof InteractionTransportError && error.code === "timeout") {
-      throw new SessionInteractionError(
-        "operation_result_unknown",
-        "The tmux validation timed out; its result is unknown and was not retried",
-      );
-    }
-    throw new SessionInteractionError(
-      error === null ? "interaction_not_connected" : "interaction_failed",
-      error === null
-        ? "The session is not connected to a valid tmux pane"
-        : "tmux target validation failed",
-    );
-  }
-
   #supported(session: InteractionSessionSnapshot): boolean {
     return this.enabled && !session.archived && session.interaction !== null;
   }
@@ -411,15 +385,12 @@ function response(
     tmux: binding
       ? {
           socketPath: binding.socketPath,
-          paneId: binding.paneId,
-          sessionName: binding.sessionName ?? null,
+          sessionName: binding.sessionName,
         }
       : null,
     state,
     activity: null,
     supersededBySessionId: null,
-    attachCommand: binding?.sessionName
-      ? attachCommand(binding.socketPath, binding.sessionName)
-      : null,
+    attachCommand: binding ? attachCommand(binding.socketPath, binding.sessionName) : null,
   };
 }

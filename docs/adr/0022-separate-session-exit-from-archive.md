@@ -22,7 +22,7 @@ that same service before its native command; exit itself never archives data.
 Binding, including manual binding, transfers control of the whole pane. Codex's
 strategy is three separate `Ctrl+C` inputs one second apart. The common service
 waits four more seconds, sends `Ctrl+D` once, and waits nine seconds before issuing
-one targeted `kill-pane`. Confirm disappearance or a dead pane before success.
+one targeted `kill-session`. Confirm session disappearance before success.
 An unavailable pane finishes early. Source bindings are refreshed, queued effects
 revalidate ownership and operation activity, and uncertain effects are not retried.
 Exit has a 30-second total deadline; cancellation prevents subsequent effects.
