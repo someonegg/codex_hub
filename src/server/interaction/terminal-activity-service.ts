@@ -37,12 +37,14 @@ export class TerminalActivityService {
         observation.expiresAt <= this.now() ||
         observation.binding.socketPath !== binding.socketPath ||
         observation.binding.paneId !== binding.paneId ||
-        observation.binding.sessionName !== binding.sessionName)
+        (binding.sessionName !== undefined &&
+          observation.binding.sessionName !== binding.sessionName))
     ) {
       this.remove(sessionId);
       observation = undefined;
     }
     if (!observation) {
+      if (binding.sessionName === undefined) return "unknown";
       observation = { binding, expiresAt: this.now() + LEASE_MS, failed: false };
       this.#observations.set(sessionId, observation);
       this.#subscribe(observation);

@@ -10,6 +10,7 @@ import {
   type InteractionTransport,
   InteractionTransportError,
   type TmuxBinding,
+  type InspectionAction,
 } from "./transport.js";
 
 export const MAX_TERMINAL_PREVIEW_BYTES = 256_000;
@@ -120,6 +121,7 @@ export class TmuxInteractionService implements InteractionTransport {
 
   killPane(binding: TmuxBinding, assertAvailable: () => void = () => {}): Promise<void> {
     return this.#serialize(binding, async () => {
+      assertAvailable();
       await this.#revalidate(binding);
       assertAvailable();
       await this.#run(binding, ["kill-pane", "-t", binding.paneId]);
@@ -133,6 +135,7 @@ export class TmuxInteractionService implements InteractionTransport {
   ): Promise<void> {
     const normalized = normalizeMessage(message);
     return this.#serialize(binding, async () => {
+      assertAvailable();
       await this.#revalidate(binding);
       assertAvailable();
       const bufferName = `ahub-${process.pid}-${randomUUID()}`;
@@ -172,6 +175,7 @@ export class TmuxInteractionService implements InteractionTransport {
     return this.#serialize(binding, async () => {
       for (const step of steps) {
         if (step.delayMs > 0) await delay(step.delayMs);
+        assertAvailable();
         await this.#revalidate(binding);
         assertAvailable();
         await this.#run(binding, ["send-keys", "-t", binding.paneId, ...step.keys]);
@@ -187,7 +191,8 @@ export class TmuxInteractionService implements InteractionTransport {
     readonly truncated: boolean;
   }> {
     return this.#serialize(binding, async () => {
-      await this.#revalidate(binding);
+      assertAvailable();
+      await this.#revalidate(binding, true);
       assertAvailable();
       const result = await this.runner.run(
         binding.socketPath,
@@ -205,8 +210,32 @@ export class TmuxInteractionService implements InteractionTransport {
     return (await this.resolveTarget({ valid: true, ordinal: 0, ...binding })) ? "alive" : "exited";
   }
 
-  async #revalidate(binding: TmuxBinding): Promise<void> {
-    if (!(await this.resolveTarget({ valid: true, ordinal: 0, ...binding }))) throw disconnected();
+  inspectAndAct(
+    binding: TmuxBinding,
+    action: InspectionAction,
+    assertAvailable: () => void = () => {},
+  ): Promise<"alive" | "exited"> {
+    return this.#serialize(binding, async () => {
+      assertAvailable();
+      const state = await this.inspect(binding);
+      assertAvailable();
+      if (state === "exited") return state;
+      if (action === "kill") await this.#run(binding, ["kill-pane", "-t", binding.paneId]);
+      else if (action !== "observe")
+        await this.#run(binding, ["send-keys", "-t", binding.paneId, ...action.keys]);
+      return state;
+    });
+  }
+
+  async #revalidate(binding: TmuxBinding, checkSession = false): Promise<void> {
+    const current = await this.resolveTarget({ valid: true, ordinal: 0, ...binding });
+    if (
+      !current ||
+      (checkSession &&
+        binding.sessionName !== undefined &&
+        current.sessionName !== binding.sessionName)
+    )
+      throw disconnected();
   }
 
   async #run(binding: TmuxBinding, args: readonly string[], input?: string): Promise<void> {

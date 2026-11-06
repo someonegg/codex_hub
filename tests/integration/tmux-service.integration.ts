@@ -187,16 +187,16 @@ it("forces only the transferred pane closed when its outer shell ignores interru
       "Enter",
     ]);
     await waitForPreview(transport, target, "EXIT-READY");
-    const killTarget = vi.fn(async (pane: TmuxBinding, _id: string, check: () => void) =>
-      transport.killPane(pane, check),
+    const killTarget = vi.fn(async (_pane: TmuxBinding, _id: string, check: () => void) =>
+      Promise.resolve(check()),
     );
     let now = 0;
     const exit = new SessionExitService(
       {
-        inspectTarget: (pane) => transport.inspect(pane),
-        sendExitKeys: (pane, _id, keys, check) =>
-          transport.sendKeys(pane, [{ keys, delayMs: 0 }], check),
-        killTarget,
+        inspectAndAct: async (pane, _id, action, check) => {
+          if (action === "kill") await killTarget(pane, _id, () => {});
+          return transport.inspectAndAct(pane, action, check);
+        },
       },
       () => now,
     );
@@ -289,7 +289,6 @@ it.each(["move-window", "join-pane"])(
     const service = new TerminalPreviewService(
       (binding, guard) => transport.captureTerminal(binding, guard),
       undefined,
-      (binding) => transport.resolveTarget({ valid: true, ordinal: 0, ...binding }),
     );
     run("new-session", "-d", "-s", "source", "sleep 60");
     run("new-window", "-d", "-t", "source", "-n", "keep", "sleep 60");
@@ -342,7 +341,6 @@ it("sends chat messages while WebSocket preview is subscribed", async () => {
   const service = new TerminalPreviewService(
     (target, guard) => transport.captureTerminal(target, guard),
     undefined,
-    (target) => transport.resolveTarget({ valid: true, ordinal: 0, ...target }),
   );
   run("new-session", "-d", "-s", "chat", "bash --noprofile --norc -i");
   const binding = await transport.connect({

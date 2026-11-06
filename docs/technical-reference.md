@@ -411,7 +411,7 @@ CLI-only and does not change API validation.
 
 CLI messages/ordinary keys default to `requireIdle: true`: non-idle input fails at
 transaction entry without waiting/retry. `--force` sends `requireIdle: false`, allowing
-input while working; browser calls omit the idle restriction. Connection, ownership, and management occupancy checks apply throughout. Ordinary keys use
+input while working; browser calls omit the idle restriction. Pane liveness is checked before execution; ownership and management occupancy checks apply throughout. Ordinary keys use
 the non-interrupt whitelist. Interrupt and handoff also skip the idle requirement while
 retaining other checks. Handoff sends the adapter binding command; success means sent,
 not confirmed binding.

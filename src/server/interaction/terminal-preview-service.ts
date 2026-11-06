@@ -40,18 +40,9 @@ export class TerminalPreviewService {
       assertOwner: () => void,
     ) => Promise<{ content: string; truncated: boolean }>,
     private readonly listen: PreviewListener = createTmuxPreviewListener(),
-    private readonly resolveTarget?: (binding: TmuxBinding) => Promise<TmuxBinding | null>,
   ) {}
 
   async captureFresh(binding: TmuxBinding, assertOwner: () => void) {
-    if (this.resolveTarget) {
-      const current = await this.resolveTarget(binding);
-      if (!current || current.sessionName !== binding.sessionName)
-        throw new InteractionTransportError(
-          "disconnected",
-          "The pane no longer exists in its tmux session",
-        );
-    }
     assertOwner();
     const result = await this.capture(binding, assertOwner);
     assertOwner();

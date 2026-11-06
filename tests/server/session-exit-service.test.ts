@@ -1,3 +1,4 @@
+import type { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { SessionExitService } from "../../src/server/management/session-exit-service.js";
@@ -8,6 +9,19 @@ describe("session exit state machine", () => {
     let now = 0;
     let active = true;
     const interaction = {
+      inspectAndAct: vi.fn<SessionInteractionService["inspectAndAct"]>(
+        async (pane, id, action, check): Promise<"alive" | "exited"> => {
+          check();
+          const state = await interaction.inspectTarget();
+          check();
+          if (state === "alive") {
+            if (action === "kill") await interaction.killTarget(pane, id, check);
+            else if (action !== "observe")
+              await interaction.sendExitKeys(pane, id, action.keys, check);
+          }
+          return state;
+        },
+      ),
       inspectTarget: vi.fn(async () => "alive" as "alive" | "exited"),
       sendExitKeys: vi.fn(async (_target, _sessionId, _keys, check) => check()),
       killTarget: vi.fn(async (_target, _sessionId, check) => check()),

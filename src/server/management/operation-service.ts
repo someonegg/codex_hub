@@ -61,14 +61,7 @@ export class OperationService {
     private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
     private readonly interaction: Pick<
       SessionInteractionService,
-      | "describe"
-      | "matchesTarget"
-      | "resolveTarget"
-      | "sendExitKeys"
-      | "interruptLaunch"
-      | "killTarget"
-      | "inspectTarget"
-      | "setBusy"
+      "describe" | "resolveTarget" | "interruptLaunch" | "inspectAndAct" | "setBusy"
     >,
     private readonly managers: SessionManagerRegistry,
     options: OperationServiceOptions = {},

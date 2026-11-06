@@ -16,7 +16,7 @@ export class SessionLifecycleExecutor {
     private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
     private readonly interaction: Pick<
       SessionInteractionService,
-      "resolveTarget" | "sendExitKeys" | "killTarget" | "inspectTarget"
+      "resolveTarget" | "inspectAndAct"
     >,
     private readonly managers: SessionManagerRegistry,
     private readonly control: OperationControl,

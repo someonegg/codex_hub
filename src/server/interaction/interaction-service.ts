@@ -25,6 +25,7 @@ import {
   type InteractionTransport,
   InteractionTransportError,
   type TmuxBinding,
+  type InspectionAction,
 } from "./transport.js";
 
 export class SessionInteractionError extends Error {
@@ -95,7 +96,6 @@ export class SessionInteractionService {
       (binding, assertOwner) =>
         this.#perform(() => this.tmux.captureTerminal(binding, assertOwner)),
       listener,
-      (binding) => this.tmux.resolveTarget({ valid: true, ordinal: 0, ...binding }),
     );
     this.#unsubscribe = bindings.subscribe(() => {
       this.#previews.invalidate();
@@ -113,8 +113,7 @@ export class SessionInteractionService {
     const attempt = this.bindings.latest(sessionId);
     if (this.bindings.replacement(sessionId) !== null) return null;
     if (!attempt?.valid) return null;
-    const target = await this.tmux.resolveTarget(attempt);
-    return target && this.bindings.owns(sessionId, target) ? target : null;
+    return this.bindings.owns(sessionId, attempt) ? attempt : null;
   }
   async interruptLaunch(target: TmuxBinding, sessionId: string, assertActive: () => void) {
     const { binding, interruptSteps } = await this.#resolve(sessionId);
@@ -148,6 +147,17 @@ export class SessionInteractionService {
     const state = await this.tmux.inspect(target);
     this.#assertOwner(sessionId, target);
     return state;
+  }
+  inspectAndAct(
+    target: TmuxBinding,
+    sessionId: string,
+    action: InspectionAction,
+    assertActive: () => void,
+  ) {
+    return this.tmux.inspectAndAct(target, action, () => {
+      assertActive();
+      this.#assertOwner(sessionId, target);
+    });
   }
   #assertAvailable(sessionId: string) {
     if (this.#busy.has(sessionId))
@@ -235,7 +245,7 @@ export class SessionInteractionService {
     this.#assertAvailable(sessionId);
     const { binding } = await this.#resolve(sessionId);
     this.#assertAvailable(sessionId);
-    this.#assertInputAllowed(sessionId, binding, requireIdle);
+    this.#assertInputAllowed(sessionId, binding);
     await this.#perform(() =>
       this.tmux.sendMessage(binding, message, this.#inputGuard(sessionId, binding, requireIdle)),
     );
@@ -260,7 +270,7 @@ export class SessionInteractionService {
     this.#assertAvailable(sessionId);
     const { binding, keyBindings, interruptSteps } = await this.#resolve(sessionId);
     this.#assertAvailable(sessionId);
-    this.#assertInputAllowed(sessionId, binding, requireIdle);
+    this.#assertInputAllowed(sessionId, binding);
     const mapped = keys.flatMap((key): readonly InteractionKeyStep[] =>
       key === "interrupt" ? interruptSteps() : [{ keys: [keyBindings[key]], delayMs: 0 }],
     );
@@ -280,7 +290,13 @@ export class SessionInteractionService {
     fail: (error: unknown) => void,
     signal: AbortSignal,
   ): Promise<() => void> {
-    const { binding } = await this.#resolve(sessionId);
+    const resolved = await this.#resolve(sessionId);
+    const checked = await this.#check(resolved.attempt).catch((error: unknown) =>
+      this.#translateConnectionError(error),
+    );
+    if (!checked) return this.#translateConnectionError(null);
+    const { binding } = checked;
+    this.#assertOwner(sessionId, binding);
     if (signal.aborted) throw new DOMException("Aborted", "AbortError");
     return this.#previews.subscribe(
       sessionId,
@@ -312,16 +328,9 @@ export class SessionInteractionService {
       );
     }
     this.#assertOwner(sessionId, attempt);
-    let checked: CheckedBinding | null;
-    try {
-      checked = await this.#check(attempt);
-    } catch (error) {
-      return this.#translateConnectionError(error);
-    }
-    if (checked === null) return this.#translateConnectionError(null);
-    this.#assertOwner(sessionId, attempt);
     return {
-      ...checked,
+      attempt,
+      binding: attempt,
       interruptSteps: () => interaction.interruptSteps(),
       keyBindings: interaction.keyBindings,
       bindingCommand: interaction.bindingCommand,

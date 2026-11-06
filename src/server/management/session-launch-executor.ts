@@ -14,10 +14,7 @@ import { type ManagementSnapshot, type SessionManagerRegistry } from "./session-
 export class SessionLaunchExecutor {
   constructor(
     private readonly sessions: { managementSnapshot(): Promise<ManagementSnapshot> },
-    private readonly interaction: Pick<
-      SessionInteractionService,
-      "describe" | "matchesTarget" | "interruptLaunch"
-    >,
+    private readonly interaction: Pick<SessionInteractionService, "describe" | "interruptLaunch">,
     private readonly managers: SessionManagerRegistry,
     private readonly bindings: PaneBindingManager,
     private readonly control: OperationControl,
@@ -153,9 +150,13 @@ export class SessionLaunchExecutor {
     if (binding?.supported && binding.state === "unknown") return;
     if (!binding?.supported || binding.state !== "connected")
       throw new AssociationError("The new session binding failed validation");
-    const matchesTarget = await this.interaction.matchesTarget(match.id, context.target);
-    if (!this.control.pending(entry)) return;
-    if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
+    if (
+      binding.tmux?.socketPath !== context.target.socketPath ||
+      binding.tmux.paneId !== context.target.paneId ||
+      this.bindings.latest(match.id) !== attempt ||
+      !this.bindings.owns(match.id, context.target)
+    )
+      throw new AssociationError("Binding does not match the launched target");
     entry.metadata.sessionId = match.id;
     if (this.managers.get(entry.home).interruptAfterBinding) {
       try {

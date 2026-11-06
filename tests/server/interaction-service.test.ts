@@ -174,10 +174,18 @@ describe("session interaction policy", () => {
       capturedAt: expect.any(String),
       revision: expect.any(String),
     });
-    expect(tmux.sendMessage).toHaveBeenCalledWith(binding, "hello", expect.any(Function));
-    expect(tmux.sendMessage).toHaveBeenCalledWith(binding, "! bind", expect.any(Function));
+    expect(tmux.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ socketPath: binding.socketPath, paneId: binding.paneId }),
+      "hello",
+      expect.any(Function),
+    );
+    expect(tmux.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ socketPath: binding.socketPath, paneId: binding.paneId }),
+      "! bind",
+      expect.any(Function),
+    );
     expect(tmux.sendKeys).toHaveBeenCalledWith(
-      binding,
+      expect.objectContaining({ socketPath: binding.socketPath, paneId: binding.paneId }),
       [
         ...(["Enter", "Up", "Down", "Left", "Right"] as const).map((key) => ({
           keys: [key],
@@ -254,8 +262,11 @@ it("freshly resolves management targets and rejects input while busy", async () 
     state: "connected",
     attachCommand: "tmux -S '/tmp/ahub.sock' attach-session -t 'ahub-test'",
   });
-  expect(await service.resolveTarget("session")).toBeNull();
-  expect(tmux.resolveTarget).toHaveBeenCalledOnce();
+  expect(await service.resolveTarget("session")).toMatchObject({
+    socketPath: binding.socketPath,
+    paneId: binding.paneId,
+  });
+  expect(tmux.resolveTarget).not.toHaveBeenCalled();
   expect(reader.getInteractionSession).toHaveBeenCalledTimes(2);
   expect(tmux.connect).toHaveBeenCalledOnce();
   service.setBusy("session", true);
@@ -366,24 +377,21 @@ it.each(["message", "keys", "preview", "handoffPaneBinding", "exit", "kill"] as 
   },
 );
 
-it("rechecks management target ownership after validation", async () => {
+it("rejects replaced management bindings without querying tmux", async () => {
   const reader = repository(boundSession());
   const target = { socketPath: "/tmp/ahub.sock", paneId: "%7" };
-  const tmux = {
-    resolveTarget: vi.fn(async () => {
-      bindings.submit({
-        sessionId: "replacement",
-        time: 1,
-        ordinal: 1,
-        position: 0,
-        attempt: { valid: true, ordinal: 1, ...target },
-      });
-      return target;
-    }),
-  } as unknown as TmuxInteractionService;
+  bindings.submit({
+    sessionId: "replacement",
+    time: 1,
+    ordinal: 1,
+    position: 0,
+    attempt: { valid: true, ordinal: 1, ...target },
+  });
+  const tmux = { resolveTarget: vi.fn() } as unknown as TmuxInteractionService;
   expect(
     await new TestSessionInteractionService(reader, true, tmux).resolveTarget("session"),
   ).toBeNull();
+  expect(tmux.resolveTarget).not.toHaveBeenCalled();
 });
 
 it.each([false, true])(
@@ -592,7 +600,7 @@ it.each([
   },
 );
 
-it("checks idle both before transport and at actual input, while allowing interrupt and handoff", async () => {
+it("checks idle at transaction entry, while allowing interrupt and handoff", async () => {
   vi.useFakeTimers();
   try {
     const snapshot = boundSession();
@@ -615,11 +623,12 @@ it("checks idle both before transport and at actual input, while allowing interr
     await expect(service.sendMessage("session", "hello", true)).rejects.toMatchObject({
       code: "session_busy",
     });
-    expect(tmux.sendMessage).not.toHaveBeenCalled();
+    expect(tmux.sendMessage).toHaveBeenCalledOnce();
     await expect(service.sendKeys("session", ["enter"], true)).rejects.toMatchObject({
       code: "session_busy",
     });
-    expect(tmux.sendKeys).not.toHaveBeenCalled();
+    expect(tmux.sendKeys).toHaveBeenCalledOnce();
+    await service.describe("session");
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(5001);
     await service.sendMessage("session", "hello", true);
@@ -641,11 +650,15 @@ it("checks idle both before transport and at actual input, while allowing interr
       code: "session_busy",
     });
     service.setBusy("session", false);
-    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (tmux.sendMessage as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new InteractionTransportError("disconnected", "gone"),
+    );
     await expect(service.sendMessage("session", "forced", false)).rejects.toMatchObject({
       code: "interaction_not_connected",
     });
-    (tmux.connect as ReturnType<typeof vi.fn>).mockResolvedValueOnce(null);
+    (tmux.sendKeys as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new InteractionTransportError("disconnected", "gone"),
+    );
     await expect(service.sendKeys("session", ["enter"], false)).rejects.toMatchObject({
       code: "interaction_not_connected",
     });

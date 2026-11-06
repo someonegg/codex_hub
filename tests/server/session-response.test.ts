@@ -128,11 +128,11 @@ describe("request-scoped session responses", () => {
       await f.reader.getSession(f.session.id);
       expect(f.resolveTarget).toHaveBeenCalledTimes(1);
       await f.interaction.sendKeys(f.session.id, ["enter"]);
-      expect(f.resolveTarget).toHaveBeenCalledTimes(2);
+      expect(f.resolveTarget).toHaveBeenCalledTimes(1);
       expect(f.sendKeys).toHaveBeenCalledTimes(1);
       f.resolveTarget.mockResolvedValue(null);
       const next = await f.reader.getSession(f.session.id);
-      expect(f.resolveTarget).toHaveBeenCalledTimes(3);
+      expect(f.resolveTarget).toHaveBeenCalledTimes(2);
       expect(next).toMatchObject({
         session: { status: "normal", resume: { allowed: true } },
         interaction: { state: "disconnected" },

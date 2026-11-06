@@ -4,6 +4,10 @@ import { join } from "node:path";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_KEY_BINDINGS } from "../../src/server/adapters/shared/session-management.js";
+import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
+import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 import { normalizeMessage } from "../../src/server/interaction/message.js";
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import {
@@ -496,4 +500,185 @@ it("does not treat a non-socket binding path as confirmed pane death", async () 
     service.resolveTarget({ valid: true, ordinal: 1, socketPath, paneId: "%3" }),
   ).rejects.toMatchObject({ code: "command_failed" });
   expect(runner.calls).toEqual([]);
+});
+
+it("queries once per serialized business transaction and per exit advance", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  const transport = new TmuxInteractionService(runner);
+  const bindings = new PaneBindingManager();
+  const target = { socketPath, paneId: "%3" };
+  bindings.submit({
+    sessionId: "session",
+    time: 0,
+    ordinal: 1,
+    position: 0,
+    attempt: { valid: true, ordinal: 1, ...target },
+  });
+  let notify!: () => void;
+  const service = new SessionInteractionService(
+    {
+      getInteractionSession: async () => ({
+        archived: false,
+        interaction: {
+          transport: "tmux",
+          bindingCommand: "! bind",
+          keyBindings: DEFAULT_KEY_BINDINGS,
+          interruptSteps: () => [
+            { keys: ["Escape"], delayMs: 0 },
+            { keys: ["C-c"], delayMs: 1 },
+          ],
+        },
+      }),
+    },
+    transport,
+    {
+      enabled: true,
+      bindings,
+      listener: (_binding, change) => {
+        notify = () => change("%3");
+        return { ready: Promise.resolve(), close() {} };
+      },
+    },
+  );
+  const queries = () => runner.calls.filter((call) => call.args[0] === "list-panes").length;
+  const check = async (count: number, action: () => Promise<unknown>) => {
+    const before = queries();
+    await action();
+    expect(queries() - before).toBe(count);
+  };
+  try {
+    await check(1, () => service.sendMessage("session", "hello"));
+    await check(1, () => service.handoffPaneBinding("session"));
+    await check(2, () => service.sendKeys("session", ["interrupt"]));
+    await check(1, () => service.captureTerminal("session"));
+    const frames: unknown[] = [];
+    const before = queries();
+    const close = await service.subscribePreview(
+      "session",
+      (frame) => frames.push(frame),
+      (error) => {
+        throw error;
+      },
+      new AbortController().signal,
+    );
+    await vi.waitFor(() => expect(frames).toHaveLength(1));
+    expect(queries() - before).toBe(2); // connection observation, then first capture
+    const next = queries();
+    notify();
+    await vi.waitFor(() => expect(queries()).toBe(next + 1));
+    close();
+    await check(0, () => service.resolveTarget("session"));
+    let now = 0;
+    const task = new SessionExitService(service, () => now).start(
+      "session",
+      target,
+      { exitSteps: () => [{ keys: ["C-c"], delayMs: 0 }] },
+      () => {},
+    );
+    await check(1, () => task.advance());
+    await check(1, () => task.advance()); // waiting
+    now = 4000;
+    await check(1, () => task.advance());
+    now = 13000;
+    await check(1, () => task.advance()); // kill
+    await check(1, () => task.advance()); // observation only
+    expect(runner.calls.filter((call) => call.args[0] === "kill-pane")).toHaveLength(1);
+    runner.present = false;
+    await check(1, async () => expect(await task.advance()).toBe(true));
+  } finally {
+    service.close();
+  }
+});
+
+it("rejects preview session movement in the same observation used for capture", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  const service = new TmuxInteractionService(runner);
+  await expect(
+    service.captureTerminal({ socketPath, paneId: "%3", sessionName: "old" }),
+  ).rejects.toMatchObject({ code: "disconnected" });
+  expect(runner.calls.map((call) => call.args[0])).toEqual(["list-panes"]);
+});
+
+it.each(["cancel", "query", "exited"] as const)(
+  "does not act after %s during exit inspection",
+  async (scenario) => {
+    const socketPath = await unixSocket();
+    const runner = new FakeRunner();
+    const transport = new TmuxInteractionService(runner);
+    let active = true;
+    runner.present = scenario !== "exited";
+    runner.failure = (call) => {
+      if (call.args[0] !== "list-panes") return null;
+      if (scenario === "cancel") active = false;
+      return scenario === "query" ? new InteractionTransportError("timeout", "query failed") : null;
+    };
+    const result = transport.inspectAndAct({ socketPath, paneId: "%3" }, "kill", () => {
+      if (!active) throw new Error("cancelled");
+    });
+    if (scenario === "exited") expect(await result).toBe("exited");
+    else await expect(result).rejects.toThrow(scenario === "cancel" ? "cancelled" : "query failed");
+    expect(runner.calls.map((call) => call.args[0])).toEqual(["list-panes"]);
+  },
+);
+
+it("never retries an uncertain exit kill and confirms exit on a later advance", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  const transport = new TmuxInteractionService(runner);
+  const failure = new InteractionTransportError("timeout", "kill outcome unknown");
+  runner.failure = (call) => (call.args[0] === "kill-pane" ? failure : null);
+  let now = 0;
+  const task = new SessionExitService(
+    {
+      inspectAndAct: (target, _session, action, check) =>
+        transport.inspectAndAct(target, action, check),
+    },
+    () => now,
+    { eofDelayMs: 0, killDelayMs: 0 },
+  ).start("session", { socketPath, paneId: "%3" }, { exitSteps: () => [] }, () => {});
+  expect(await task.advance()).toBe(false); // EOF
+  await expect(task.advance()).rejects.toBe(failure);
+  now++;
+  expect(await task.advance()).toBe(false);
+  runner.present = false;
+  expect(await task.advance()).toBe(true);
+  expect(runner.calls.filter((call) => call.args[0] === "kill-pane")).toHaveLength(1);
+  expect(runner.calls.filter((call) => call.args[0] === "list-panes")).toHaveLength(4);
+});
+
+it("allows another pane to execute while one pane transaction is blocked", async () => {
+  const socketPath = await unixSocket();
+  let started!: () => void;
+  const loading = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  class BlockingRunner extends FakeRunner {
+    override async run(socket: string, args: readonly string[], input: string | undefined) {
+      const result = await super.run(socket, args, input);
+      if (args[0] === "load-buffer") {
+        started();
+        await blocked;
+      }
+      return result;
+    }
+  }
+  const runner = new BlockingRunner();
+  runner.paneOutput = "%3|0|session\n%4|0|session";
+  const transport = new TmuxInteractionService(runner);
+  const message = transport.sendMessage({ socketPath, paneId: "%3" }, "hello");
+  await loading;
+  try {
+    await transport.sendKeys({ socketPath, paneId: "%4" }, [{ keys: ["Enter"], delayMs: 0 }]);
+    expect(runner.calls.at(-1)?.args).toEqual(["send-keys", "-t", "%4", "Enter"]);
+    expect(runner.calls.some((call) => call.args[0] === "paste-buffer")).toBe(false);
+  } finally {
+    release();
+    await message;
+  }
 });

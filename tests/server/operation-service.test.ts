@@ -18,13 +18,14 @@ import type { UploadCleanup } from "../../src/server/uploads/store.js";
 const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
 const services: OperationService[] = [];
 let bindings = new PaneBindingManager();
+let bindingTime = 0;
 afterEach(() => services.splice(0).forEach((service) => service.close()));
 const flush = () => settlePromises();
 function session(id = "session", operationId?: string): DomainSession {
   if (operationId)
     bindings.submit({
       sessionId: id,
-      time: 0,
+      time: ++bindingTime,
       ordinal: 1,
       position: 0,
       attempt: { ordinal: 1, valid: true, ...target, operationId },
@@ -63,11 +64,25 @@ function setup(managementWaitMs = 30, uploads?: UploadCleanup) {
     interruptLaunch: vi.fn().mockResolvedValue(undefined),
     setBusy: vi.fn(),
     resolveTarget: vi.fn(async () => null as typeof target | null),
-    killTarget: vi.fn(async () => undefined),
+    killTarget: vi.fn(async (_pane: typeof target, _id: string, _check: () => void) => undefined),
     sendExitKeys: vi.fn<SessionInteractionService["sendExitKeys"]>(async () => undefined),
+    inspectAndAct: vi.fn<SessionInteractionService["inspectAndAct"]>(
+      async (pane, id, action, check): Promise<"alive" | "exited"> => {
+        check();
+        const state = await interaction.inspectTarget();
+        check();
+        if (state === "alive") {
+          if (action === "kill") await interaction.killTarget(pane, id, check);
+          else if (action !== "observe")
+            await interaction.sendExitKeys(pane, id, action.keys, check);
+        }
+        return state;
+      },
+    ),
     inspectTarget: vi.fn(async () => "exited" as "exited" | "alive"),
     matchesTarget: vi.fn(async () => true),
     describe: vi.fn(async () => ({
+      tmux: { ...target, sessionName: null },
       supported: true as const,
       activity: "unknown" as const,
       supersededBySessionId: null,
@@ -196,7 +211,7 @@ describe("observed management operations", () => {
       if (scenario === "wrong-target")
         bindings.submit({
           sessionId: record.id,
-          time: 1,
+          time: ++bindingTime,
           ordinal: 2,
           position: 0,
           attempt: {
@@ -1377,3 +1392,41 @@ it("gives delete and confirmation fresh budgets after a slow exit", async () => 
   await service.poll();
   expect(await service.get(op.operationId)).toMatchObject({ status: "succeeded" });
 });
+
+it.each([false, true])(
+  "associates launch with one connection observation and rechecks current bindings (replaced=%s)",
+  async (replaced) => {
+    const { service, interaction, set } = setup();
+    const operation = service.create({
+      projectDirectory: "/project",
+      worktree: false,
+      requestId: "single-observation",
+    });
+    await flush();
+    set({ sessions: [session("session", operation.operationId)] });
+    if (replaced)
+      interaction.describe.mockImplementationOnce(async () => {
+        bindings.submit({
+          sessionId: "session",
+          time: ++bindingTime,
+          ordinal: 2,
+          position: 0,
+          attempt: { valid: false, ordinal: 2 },
+        });
+        return {
+          supported: true,
+          tmux: { ...target, sessionName: null },
+          activity: "unknown",
+          supersededBySessionId: null,
+          attachCommand: null,
+          state: "connected",
+        };
+      });
+    await service.poll();
+    expect(await service.get(operation.operationId)).toMatchObject({
+      status: replaced ? "unknown" : "succeeded",
+    });
+    expect(interaction.describe).toHaveBeenCalledOnce();
+    expect(interaction.matchesTarget).not.toHaveBeenCalled();
+  },
+);

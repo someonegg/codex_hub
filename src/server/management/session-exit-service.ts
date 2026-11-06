@@ -2,10 +2,7 @@ import type { SessionInteractionService } from "../interaction/interaction-servi
 import type { TmuxBinding } from "../interaction/transport.js";
 import type { SessionExitCapability, SessionExitStep } from "./session-manager.js";
 
-type ExitInteraction = Pick<
-  SessionInteractionService,
-  "inspectTarget" | "sendExitKeys" | "killTarget"
->;
+type ExitInteraction = Pick<SessionInteractionService, "inspectAndAct">;
 
 /** A caller-owned task: advance it serially and stop advancing it when cancelled. */
 export interface SessionExitTask {
@@ -40,22 +37,22 @@ export class SessionExitService {
       },
       advance: async () => {
         assertActive();
-        const state = await this.interaction.inspectTarget(target, sessionId);
+        const step = steps[index];
+        const act = this.now() >= due && !killed;
+        // Claim before awaiting: an uncertain kill is never retried.
+        if (act && !step) killed = true;
+        const state = await this.interaction.inspectAndAct(
+          target,
+          sessionId,
+          !act ? "observe" : step ? { keys: step.keys } : "kill",
+          assertActive,
+        );
         assertActive();
         if (state === "exited") return true;
-        if (this.now() < due || killed) return false;
-        const step = steps[index];
-        if (step) {
-          await this.interaction.sendExitKeys(target, sessionId, step.keys, assertActive);
-          assertActive();
+        if (act && step) {
           index++;
           phase = index < steps.length - 1 ? "sending_exit" : "waiting_exit";
           due = this.now() + (steps[index]?.delayMs ?? this.timing.killDelayMs);
-        } else {
-          // Claim before awaiting: an uncertain kill is never retried.
-          killed = true;
-          await this.interaction.killTarget(target, sessionId, assertActive);
-          assertActive();
         }
         return false;
       },

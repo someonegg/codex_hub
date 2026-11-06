@@ -217,19 +217,6 @@ it("replaces subscriptions when the resolved tmux session changes", async () => 
   expect(next.frames).toHaveLength(1);
 });
 
-it("detects pane movement before capturing, including topology-only notifications", async () => {
-  service.close();
-  let current = binding;
-  service = new TerminalPreviewService(capture, listen, async () => current);
-  const viewer = subscribe();
-  await flush();
-  current = { ...binding, sessionName: "destination" };
-  change();
-  await vi.advanceTimersByTimeAsync(350);
-  expect(viewer.failed).toHaveBeenCalledWith(expect.objectContaining({ code: "disconnected" }));
-  expect(capture).toHaveBeenCalledOnce();
-});
-
 it("publishes truncation-only updates and isolates binding revisions", async () => {
   content = "stable\n".repeat(100);
   const viewer = subscribe();

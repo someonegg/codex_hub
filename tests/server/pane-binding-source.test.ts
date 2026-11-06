@@ -65,6 +65,7 @@ it.each([false, true])(
       sendKeys: vi.fn(),
       captureTerminal: vi.fn(),
       inspect: vi.fn(),
+      inspectAndAct: vi.fn(),
       killPane: vi.fn(),
     } satisfies InteractionTransport;
     const service = closeAfterEach(

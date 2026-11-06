@@ -1,4 +1,8 @@
-import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
+import type {
+  InteractionBindingAttempt,
+  InteractionKeyStep,
+  TmuxKey,
+} from "../domain/session-domain.js";
 
 export interface TmuxBinding {
   readonly socketPath: string;
@@ -6,7 +10,14 @@ export interface TmuxBinding {
   readonly sessionName?: string;
 }
 
+export type InspectionAction = { readonly keys: readonly TmuxKey[] } | "kill" | "observe";
+
 export interface InteractionTransport {
+  inspectAndAct(
+    target: TmuxBinding,
+    action: InspectionAction,
+    assertAvailable?: () => void,
+  ): Promise<"alive" | "exited">;
   connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding>;
   resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;
   killPane(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
