@@ -7,10 +7,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/session-domain.js";
 import { normalizeMessage } from "./message.js";
 import {
+  type InspectionAction,
   type InteractionTransport,
   InteractionTransportError,
   type TmuxBinding,
-  type InspectionAction,
 } from "./transport.js";
 
 export const MAX_TERMINAL_PREVIEW_BYTES = 256_000;

@@ -1,6 +1,6 @@
-import type { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { describe, expect, it, vi } from "vitest";
 
+import type { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 
 describe("session exit state machine", () => {

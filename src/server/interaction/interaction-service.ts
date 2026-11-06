@@ -22,10 +22,10 @@ import { TerminalPreviewService } from "./terminal-preview-service.js";
 import { attachCommand } from "./tmux-launcher.js";
 import { createTmuxPreviewListener, type PreviewListener } from "./tmux-preview-listener.js";
 import {
+  type InspectionAction,
   type InteractionTransport,
   InteractionTransportError,
   type TmuxBinding,
-  type InspectionAction,
 } from "./transport.js";
 
 export class SessionInteractionError extends Error {

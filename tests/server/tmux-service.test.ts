@@ -6,9 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_KEY_BINDINGS } from "../../src/server/adapters/shared/session-management.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
-import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
-import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 import { normalizeMessage } from "../../src/server/interaction/message.js";
+import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
 import { SessionRuntime } from "../../src/server/interaction/session-runtime.js";
 import {
   type TmuxCommandOptions,
@@ -16,6 +15,7 @@ import {
   TmuxInteractionService,
 } from "../../src/server/interaction/tmux-service.js";
 import { InteractionTransportError } from "../../src/server/interaction/transport.js";
+import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../src/shared/interaction.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
