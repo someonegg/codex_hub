@@ -705,7 +705,7 @@ describe("composer uploads", () => {
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await vi.waitFor(() =>
       expect(handlers.onSendMessage).toHaveBeenCalledWith(
-        '"/tmp/space dir/one.png"\n/tmp/two.txt\n\nbefore replace after',
+        '- "/tmp/space dir/one.png"\n- /tmp/two.txt\n\nbefore replace after',
       ),
     );
     await vi.waitFor(() => expect(screen.queryByText("two.txt")).not.toBeInTheDocument());
@@ -1037,7 +1037,7 @@ it("retains attachment drafts across sessions and failed sends, then sends witho
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
   expect(screen.getByRole("button", { name: "Remove report.txt" })).toBeEnabled();
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
-  expect(handlers.onSendMessage).toHaveBeenLastCalledWith("/tmp/report.txt");
+  expect(handlers.onSendMessage).toHaveBeenLastCalledWith("- /tmp/report.txt");
   expect(screen.queryByRole("button", { name: "Remove report.txt" })).not.toBeInTheDocument();
   upload.mockRestore();
 });
@@ -1058,7 +1058,7 @@ it("counts attachment paths in the message limit", async () => {
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
-  expect(handlers.onSendMessage).toHaveBeenCalledWith("/tmp/report.txt\n\n/help");
+  expect(handlers.onSendMessage).toHaveBeenCalledWith("- /tmp/report.txt\n\n/help");
   upload.mockRestore();
 });
 

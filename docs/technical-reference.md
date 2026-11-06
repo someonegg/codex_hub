@@ -347,9 +347,10 @@ delete/startup; startup also cleans interrupted uploads without blocking service
 or other uploads. Confirmed session deletion triggers background cleanup;
 archive/exit and unconfirmed deletion retain files.
 
-Attachment sends prepend absolute server paths, one per line, before optional
-text. Message limits include these paths. Failed sends retain drafts; successful
-sends clear unchanged drafts. Removing a draft attachment retains its stored file.
+Attachment sends prepend absolute server paths as a Markdown unordered list
+(`- ` per attachment), separated from optional text by a blank line. Message limits
+include these paths. Failed sends retain drafts; successful sends clear unchanged
+drafts. Removing a draft attachment retains its stored file.
 See [usage](usage.md#file-uploads).
 
 ## Tmux interaction
