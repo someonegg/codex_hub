@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { expect, it, vi } from "vitest";
@@ -9,7 +9,7 @@ import {
   claudeBindingCommand,
   claudeInteraction,
 } from "../../src/server/adapters/claude/interaction.js";
-import { checkClaudeReadyScript } from "../../src/server/adapters/claude/ready-script.js";
+import * as readyScript from "../../src/server/adapters/claude/ready-script.js";
 import {
   BINDING_PROMPT_WAIT_MS,
   ClaudeSessionManager,
@@ -17,6 +17,11 @@ import {
 import { interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+
+// Route promise-based sleeps through the clock controlled by vi.useFakeTimers().
+vi.mock("node:timers/promises", () => ({
+  setTimeout: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+}));
 
 it("validates identity and missing directories before starting Claude", async () => {
   const tmux = new TmuxLauncher();
@@ -290,19 +295,13 @@ it("emits V3 using launcher metadata without executing commands in Claude's shel
 });
 
 it("skips missing snapshots, preserves context, and resets it for each launch", async () => {
-  const directory = await createTempDirectory("claude-ready-");
-  const script = join(directory, "ready");
-  await writeFile(
-    script,
-    `#!/usr/bin/env node
-let input = "";
-for await (const chunk of process.stdin) input += chunk;
-const { current, context } = JSON.parse(input);
-if (current.content !== "Starting…") process.exit(2);
-process.stdout.write(JSON.stringify({ ready: context === "next", context: "next" }));
-`,
-  );
-  await chmod(script, 0o755);
+  vi.useFakeTimers();
+  const check = vi
+    .spyOn(readyScript, "checkClaudeReadyScript")
+    .mockResolvedValueOnce({ ready: false, context: "next" })
+    .mockResolvedValueOnce({ ready: true, context: "done" })
+    .mockResolvedValueOnce({ ready: false, context: "next" })
+    .mockResolvedValueOnce({ ready: true, context: "done" });
   const { tmux, capture, send } = mockClaudeLaunch();
   const screen = { content: "Starting…", cursorX: 0, cursorY: 0 };
   capture
@@ -310,22 +309,19 @@ process.stdout.write(JSON.stringify({ ready: context === "next", context: "next"
     .mockResolvedValueOnce(null)
     .mockResolvedValueOnce(screen)
     .mockResolvedValueOnce(null);
-  const manager = new ClaudeSessionManager("/home", tmux, script);
-  await manager.launch(launchOptions);
-  await manager.launch(launchOptions);
+  const manager = new ClaudeSessionManager("/home", tmux, "/ready");
+  const first = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(3_000);
+  await expect(first).resolves.toEqual(target);
+  const second = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(1_000);
+  await expect(second).resolves.toEqual(target);
+  expect(check.mock.calls.map(([, current, context]) => ({ current, context }))).toEqual([
+    { current: screen, context: "" },
+    { current: screen, context: "next" },
+    { current: screen, context: "" },
+    { current: screen, context: "next" },
+  ]);
   expect(capture).toHaveBeenCalledTimes(6);
   expect(send).toHaveBeenCalledTimes(2);
-}, 10_000);
-
-it.each([
-  'process.stdout.write("not json")',
-  "process.stdout.write(JSON.stringify({ ready: true, context: 123 }))",
-  "process.exit(2)",
-  "setInterval(() => {}, 1000)",
-])("rejects a faulty script: %s", async (body) => {
-  const directory = await createTempDirectory("claude-ready-error-");
-  const script = join(directory, "ready");
-  await writeFile(script, "#!/usr/bin/env node\n" + body);
-  await chmod(script, 0o755);
-  await expect(checkClaudeReadyScript(script, readyScreen, "", 200)).rejects.toThrow();
 });
