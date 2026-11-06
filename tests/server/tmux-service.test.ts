@@ -30,6 +30,7 @@ class FakeRunner implements TmuxCommandRunner {
   failure: ((call: Call) => Error | null) | null = null;
   terminalOutput = "recent terminal output";
   terminalTruncated = false;
+  cursorOutput = "2,1,120,3\nHeader\n❯ \nStatus\n2,1,120,3\n";
 
   async run(
     socketPath: string,
@@ -49,6 +50,9 @@ class FakeRunner implements TmuxCommandRunner {
     }
     if (args[0] === "capture-pane") {
       return { stdout: this.terminalOutput, truncated: this.terminalTruncated };
+    }
+    if (args[0] === "display-message") {
+      return { stdout: this.cursorOutput, truncated: this.terminalTruncated };
     }
     return { stdout: "" };
   }
@@ -79,6 +83,50 @@ async function unixSocket(): Promise<string> {
   });
   return path;
 }
+
+it("captures visible rows and cursor together without changing ordinary terminal previews", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  const service = new TmuxInteractionService(runner);
+  const binding = { socketPath, sessionName: MAIN };
+  await expect(service.captureTerminalWithCursor(binding)).resolves.toEqual({
+    content: "Header\n❯ \nStatus",
+    cursorX: 2,
+    cursorY: 1,
+  });
+  expect(runner.calls[0].args.filter((arg) => arg === ";")).toHaveLength(2);
+  await expect(service.captureTerminal(binding)).resolves.toEqual({
+    content: runner.terminalOutput,
+    truncated: false,
+  });
+});
+
+it.each([
+  "2,1,120,3\nHeader\n❯ \nStatus\n3,1,120,3\n", // cursor moved
+  "2,1,120,3\nHeader\n❯ \nStatus\n2,1,100,3\n", // pane resized
+  "120,1,120,3\nHeader\n❯ \nStatus\n120,1,120,3\n", // out of bounds
+  "2,3,120,3\nHeader\n❯ \nStatus\n2,3,120,3\n",
+  "2,1,120,3\n❯ \nStatus\n2,1,120,3\n", // lost rows
+  "Header\n❯ \nStatus\n2,1,120,3\n", // lost metadata
+  "2,1,120,3\nHeader\n❯ \nStatus\n2,1,120,3", // incomplete output
+  "garbage\nHeader\n❯ \nStatus\ngarbage\n",
+])("discards inconsistent terminal/cursor snapshots: %j", async (output) => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  runner.cursorOutput = output;
+  await expect(
+    new TmuxInteractionService(runner).captureTerminalWithCursor({ socketPath, sessionName: MAIN }),
+  ).resolves.toBeNull();
+});
+
+it("discards truncated cursor captures even when their remaining output looks complete", async () => {
+  const socketPath = await unixSocket();
+  const runner = new FakeRunner();
+  runner.terminalTruncated = true;
+  await expect(
+    new TmuxInteractionService(runner).captureTerminalWithCursor({ socketPath, sessionName: MAIN }),
+  ).resolves.toBeNull();
+});
 
 describe("tmux interaction transport", () => {
   it("normalizes message newlines and enforces whitespace and UTF-8 byte limits", () => {

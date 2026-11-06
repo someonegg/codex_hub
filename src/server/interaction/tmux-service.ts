@@ -10,6 +10,7 @@ import { ownedSocket, tmuxTarget, validTmuxSessionName } from "./tmux-target.js"
 import {
   type InteractionTransport,
   InteractionTransportError,
+  type TerminalCursorSnapshot,
   type TmuxBinding,
 } from "./transport.js";
 
@@ -187,28 +188,78 @@ export class TmuxInteractionService implements InteractionTransport {
     readonly truncated: boolean;
   }> {
     return this.#serialize(binding, async () => {
-      if (!binding.socketPath.startsWith("/") || !validTmuxSessionName(binding.sessionName))
-        throw disconnected();
-      await validateSocket(binding.socketPath);
-      assertAvailable();
-      try {
-        const result = await this.runner.run(
-          binding.socketPath,
-          ["capture-pane", "-p", "-t", tmuxTarget(binding.sessionName)],
-          undefined,
-          this.timeoutMs,
-          { maxOutputBytes: MAX_TERMINAL_PREVIEW_BYTES, truncateStart: true },
-        );
-        return { content: result.stdout, truncated: result.truncated === true };
-      } catch (error) {
-        // Only confirmed absence replaces the capture error; failed probes prove nothing.
-        const target = await this.resolveTarget({ valid: true, ordinal: 0, ...binding }).catch(
-          () => undefined,
-        );
-        if (target === null) throw disconnected();
-        throw error;
-      }
+      const result = await this.#capture(
+        binding,
+        ["capture-pane", "-p", "-t", tmuxTarget(binding.sessionName)],
+        assertAvailable,
+      );
+      return { content: result.stdout, truncated: result.truncated === true };
     });
+  }
+
+  /** Read cursor and screen in one tmux command queue; discard moving or truncated captures. */
+  captureTerminalWithCursor(binding: TmuxBinding): Promise<TerminalCursorSnapshot | null> {
+    return this.#serialize(binding, async () => {
+      const target = tmuxTarget(binding.sessionName);
+      const position = [
+        "display-message",
+        "-p",
+        "-t",
+        target,
+        "#{cursor_x},#{cursor_y},#{pane_width},#{pane_height}",
+      ];
+      const result = await this.#capture(binding, [
+        ...position,
+        ";",
+        "capture-pane",
+        "-p",
+        "-t",
+        target,
+        ";",
+        ...position,
+      ]);
+      if (result.truncated) return null;
+      const lines = result.stdout.split("\n");
+      if (lines.pop() !== "") return null;
+      const before = lines.shift();
+      const after = lines.pop();
+      if (!before || before !== after || !/^\d+,\d+,\d+,\d+$/.test(before)) return null;
+      const [cursorX, cursorY, width, height] = before.split(",").map(Number);
+      if (
+        ![cursorX, cursorY, width, height].every(Number.isSafeInteger) ||
+        width <= 0 ||
+        height <= 0 ||
+        cursorX >= width ||
+        cursorY >= height ||
+        lines.length !== height
+      )
+        return null;
+      return { content: lines.join("\n"), cursorX, cursorY };
+    });
+  }
+
+  async #capture(
+    binding: TmuxBinding,
+    args: readonly string[],
+    assertAvailable: () => void = () => {},
+  ) {
+    if (!binding.socketPath.startsWith("/") || !validTmuxSessionName(binding.sessionName))
+      throw disconnected();
+    await validateSocket(binding.socketPath);
+    assertAvailable();
+    try {
+      return await this.runner.run(binding.socketPath, args, undefined, this.timeoutMs, {
+        maxOutputBytes: MAX_TERMINAL_PREVIEW_BYTES,
+        truncateStart: true,
+      });
+    } catch (error) {
+      // Only confirmed absence replaces the capture error; failed probes prove nothing.
+      const target = await this.resolveTarget({ valid: true, ordinal: 0, ...binding }).catch(
+        () => undefined,
+      );
+      if (target === null) throw disconnected();
+      throw error;
+    }
   }
 
   /** Query errors never establish that the selected session exited. */

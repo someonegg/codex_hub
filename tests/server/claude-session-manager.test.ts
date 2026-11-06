@@ -105,49 +105,91 @@ it("provides the shared interrupt and exit capabilities", () => {
   expect(new ClaudeSessionManager("/test/home").exitSteps).toBe(exitSteps);
 });
 
-it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?"])(
-  "sends once on readiness or after the fallback delay (terminal=%s)",
-  async (content) => {
-    const ready = content === "❯ ";
-    vi.useFakeTimers();
-    try {
-      const tmux = new TmuxLauncher();
-      const target = {
-        socketPath: "/tmp/claude-test.sock",
-        sessionName: "ahub-00000000-0000-0000-0000-000000000002",
-      };
-      const options = {
-        operationId: "00000000-0000-4000-8000-000000000001",
-        workingDirectory: "/project",
-        worktree: false,
-        yolo: false,
-      };
-      vi.spyOn(tmux, "launch").mockResolvedValue(target);
-      vi.spyOn(tmux.transport, "captureTerminal").mockResolvedValue({
-        content,
-        truncated: false,
-      });
-      const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
-      const launch = new ClaudeSessionManager("/home", tmux).launch(options);
-      if (!ready) {
-        await vi.advanceTimersByTimeAsync(BINDING_PROMPT_WAIT_MS - 100);
-        expect(send).not.toHaveBeenCalled();
-        await vi.advanceTimersByTimeAsync(100);
-      }
-      await expect(launch).resolves.toEqual(target);
-      expect(send).toHaveBeenCalledExactlyOnceWith(
-        target,
-        claudeBindingCommand(options.operationId),
-      );
-      const captures = vi.mocked(tmux.transport.captureTerminal).mock.calls.length;
-      await vi.advanceTimersByTimeAsync(30_000);
-      expect(tmux.transport.captureTerminal).toHaveBeenCalledTimes(captures);
-      expect(send).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+const target = {
+  socketPath: "/tmp/claude-test.sock",
+  sessionName: "ahub-00000000-0000-4000-8000-000000000002",
+};
+const launchOptions = {
+  operationId: "00000000-0000-4000-8000-000000000001",
+  workingDirectory: "/project",
+  worktree: false,
+  yolo: false,
+};
+const readyScreen = { content: "Welcome\n\n❯\u00a0\nStatus", cursorX: 2, cursorY: 2 };
+
+function mockClaudeLaunch() {
+  const tmux = new TmuxLauncher();
+  vi.spyOn(tmux, "launch").mockResolvedValue(target);
+  const capture = vi
+    .spyOn(tmux.transport, "captureTerminalWithCursor")
+    .mockResolvedValue(readyScreen);
+  const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
+  return { manager: new ClaudeSessionManager("/home", tmux), capture, send };
+}
+
+it("requires two consecutive ready samples and sends the binding only once", async () => {
+  vi.useFakeTimers();
+  const { manager, capture, send } = mockClaudeLaunch();
+  capture.mockResolvedValueOnce(readyScreen).mockResolvedValueOnce(null);
+  const launch = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(299);
+  expect(send).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(launch).resolves.toEqual(target);
+  expect(capture).toHaveBeenCalledTimes(4);
+  expect(send).toHaveBeenCalledExactlyOnceWith(
+    target,
+    claudeBindingCommand(launchOptions.operationId),
+  );
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(capture).toHaveBeenCalledTimes(4);
+  expect(send).toHaveBeenCalledTimes(1);
+});
+
+it.each([
+  { content: "Starting…", cursorX: 2, cursorY: 0 },
+  {
+    content: "Is this a project you trust?\n❯ No, exit\n  Yes, I trust this folder",
+    cursorX: 2,
+    cursorY: 1,
   },
-);
+  // A dialog retains a previous empty prompt, but owns the cursor elsewhere.
+  { content: "❯ \n\nUpdate available\n❯ Restart now\n  Later", cursorX: 2, cursorY: 3 },
+  { content: "❯ \n\nStatus", cursorX: 8, cursorY: 0 },
+  null,
+])("never sends on an unconfirmed screen: %j", async (screen) => {
+  vi.useFakeTimers();
+  const { manager, capture, send } = mockClaudeLaunch();
+  capture.mockResolvedValue(screen);
+  const result = manager.launch(launchOptions).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  await vi.advanceTimersByTimeAsync(BINDING_PROMPT_WAIT_MS);
+  expect(await result).toMatchObject({
+    outcome: "unknown",
+    target,
+    attachCommand: expect.stringContaining("tmux"),
+    message: expect.stringContaining("readiness was not confirmed"),
+  });
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("does not count a capture that finishes after the readiness deadline", async () => {
+  vi.useFakeTimers();
+  const { manager, capture, send } = mockClaudeLaunch();
+  capture.mockResolvedValueOnce(readyScreen).mockImplementation(async () => {
+    await new Promise((resolve) => setTimeout(resolve, BINDING_PROMPT_WAIT_MS));
+    return readyScreen;
+  });
+  const result = manager.launch(launchOptions).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  await vi.advanceTimersByTimeAsync(BINDING_PROMPT_WAIT_MS + 100);
+  expect(await result).toMatchObject({ outcome: "unknown" });
+  expect(send).not.toHaveBeenCalled();
+});
 
 it.each(["capture", "send"])("preserves recovery information when %s fails", async (failure) => {
   const tmux = new TmuxLauncher();
@@ -157,8 +199,8 @@ it.each(["capture", "send"])("preserves recovery information when %s fails", asy
   };
   vi.spyOn(tmux, "launch").mockResolvedValue(target);
   const capture = vi
-    .spyOn(tmux.transport, "captureTerminal")
-    .mockResolvedValue({ content: "❯ ", truncated: false });
+    .spyOn(tmux.transport, "captureTerminalWithCursor")
+    .mockResolvedValue(readyScreen);
   const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
   if (failure === "capture") capture.mockRejectedValue(new Error("capture failed"));
   else send.mockRejectedValue(new Error("send failed"));

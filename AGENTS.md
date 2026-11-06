@@ -2,6 +2,11 @@
 
 - UI changes must include regenerated README screenshots and animations affected by the change.
 
+## Commit discipline
+
+- Before every commit, format changed files with Prettier and run `npm run lint`; fix all failures, including import ordering, before committing.
+- After formatting and fixes, run `npm run format:check` and `git diff --check` before staging the final changes.
+
 ## Documentation discipline
 
 - Keep `docs/usage.md` and `docs/development.md` concise, task-oriented guides for users and contributors respectively; link to technical details rather than embedding them.

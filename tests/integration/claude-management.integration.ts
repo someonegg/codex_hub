@@ -5,11 +5,84 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { expect, it, vi } from "vitest";
 
+import { claudePromptPosition } from "../../src/server/adapters/claude/prompt-readiness.js";
+import { ClaudeSessionManager } from "../../src/server/adapters/claude/session-manager.js";
 import { createCodexHub } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
+import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import { startHttpServer } from "../helpers/http-server.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
+
+it("does not send bootstrap input to Claude's real directory trust dialog", async () => {
+  const root = await realpath(await createTempDirectory("claude-native-trust-"));
+  const directory = join(root, "untrusted-project");
+  const home = join(root, "home");
+  const socket = join(root, "tmux.sock");
+  await mkdir(directory);
+  await mkdir(home);
+  const key = "test-only-not-a-real-api-key";
+  await writeFile(
+    join(home, ".claude.json"),
+    JSON.stringify({
+      hasCompletedOnboarding: true,
+      lastOnboardingVersion: "2.1.318",
+      theme: "dark",
+      customApiKeyResponses: { approved: [key.slice(-20)], rejected: [] },
+    }),
+  );
+  await writeFile(
+    join(home, "settings.json"),
+    JSON.stringify({
+      env: {
+        ANTHROPIC_API_KEY: key,
+        ANTHROPIC_BASE_URL: "http://127.0.0.1:1",
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+      },
+    }),
+  );
+  const tmux = new TmuxLauncher(socket);
+  const send = vi.spyOn(tmux.transport, "sendMessage");
+  const operationId = "00000000-0000-4000-8000-000000000001";
+  const target = { socketPath: socket, sessionName: `ahub-${operationId}` };
+  const result = new ClaudeSessionManager(home, tmux)
+    .launch({
+      operationId,
+      workingDirectory: directory,
+      worktree: false,
+      yolo: false,
+    })
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  try {
+    let sawTrustDialog = false;
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const snapshot = await tmux.transport.captureTerminalWithCursor(target).catch(() => null);
+      if (snapshot?.content.includes("Yes, I trust this folder")) {
+        expect(claudePromptPosition(snapshot)).toBeNull();
+        sawTrustDialog = true;
+        break;
+      }
+      await delay(100);
+    }
+    expect(sawTrustDialog).toBe(true);
+    expect(await result).toMatchObject({
+      outcome: "unknown",
+      target,
+      message: expect.stringContaining("readiness was not confirmed"),
+      attachCommand: expect.stringContaining("tmux"),
+    });
+    expect(send).not.toHaveBeenCalled();
+  } finally {
+    try {
+      execFileSync("tmux", ["-S", socket, "kill-server"]);
+    } catch {}
+    await result;
+  }
+}, 30_000);
 
 /** Native CLI and tmux; credentials, model responses, homes and projects are test-owned. */
 it("creates, interacts, interrupts, exits and resumes the original Claude identity, including worktrees", async () => {

@@ -29,6 +29,41 @@ beforeAll(() => {
 });
 
 describe("tmux interaction integration", () => {
+  it("captures the visible terminal with zero-based cursor coordinates", async () => {
+    const directory = await createTempDirectory("tmux-cursor-");
+    const socketPath = join(directory, "server.sock");
+    const sessionName = "ahub-00000000-0000-4000-8000-000000000001";
+    const script = join(directory, "screen.cjs");
+    await writeFile(
+      script,
+      `process.stdout.write("\\x1b[2J\\x1b[HHeader\\n❯ \\nStatus\\x1b[2;3H"); process.stdin.resume();`,
+    );
+    execFileSync("tmux", [
+      "-S",
+      socketPath,
+      "new-session",
+      "-d",
+      "-s",
+      sessionName,
+      "-x",
+      "120",
+      "-y",
+      "40",
+      process.execPath,
+      script,
+    ]);
+    try {
+      const service = new TmuxInteractionService();
+      const binding = { socketPath, sessionName };
+      await waitForPreview(service, binding, "Header");
+      const snapshot = await service.captureTerminalWithCursor(binding);
+      expect(snapshot).toMatchObject({ cursorX: 2, cursorY: 1 });
+      expect(snapshot?.content.split("\n").slice(0, 3)).toEqual(["Header", "❯", "Status"]);
+    } finally {
+      execFileSync("tmux", ["-S", socketPath, "kill-server"]);
+    }
+  });
+
   it("delivers interrupt Ctrl+U then Escape separately through a real terminal", async () => {
     const directory = await createTempDirectory("codex-interrupt-tmux-");
     const socketPath = join(directory, "server.sock");

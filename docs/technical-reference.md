@@ -96,9 +96,10 @@ are defined in [JSONL processing](session-jsonl-filtering.md#claude-code).
 Before launching, configure and authenticate the local `claude` CLI for the home.
 Launch sets `CLAUDE_CONFIG_DIR` and runs interactive `claude`, with
 `--resume <UUID>`, `--worktree`, or `--dangerously-skip-permissions` as applicable.
-The adapter waits up to 15 seconds for the native prompt, then pastes the complete
-`! printf ...` binding command once, even if no prompt was detected. Binding uses
-shell expansion without tmux queries to accommodate worktree isolation checks.
+The adapter waits up to 15 seconds for a confirmed native prompt before sending
+the binding command once. If readiness is not confirmed, it sends no input and
+reports an unknown result with the target/attach command. Binding uses shell
+expansion without tmux queries to accommodate worktree isolation checks.
 
 A CLI prompt starting with `!` is ordinary model input; this behavior was verified
 against Claude Code 2.1.318 and needs rechecking after upgrades. Claude records the
