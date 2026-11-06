@@ -442,7 +442,24 @@ it("renders human output and sends human diagnostics to stderr", async () => {
   expect(failure.stderr).toContain("Unsupported key");
 });
 
-it("uses child IDs directly for queries, input and lifecycle operations without catalog requests", async () => {
+it.each([
+  { args: ["inspect", "child"], requests: ["GET /api/v1/sessions/child/messages"] },
+  { args: ["terminal", "child"], requests: ["GET /api/v1/sessions/child/terminal"] },
+  {
+    args: ["send", "child", "--message", "hello"],
+    requests: ["POST /api/v1/sessions/child/messages"],
+  },
+  { args: ["keys", "child", "enter"], requests: ["POST /api/v1/sessions/child/keys"] },
+  { args: ["interrupt", "child"], requests: ["POST /api/v1/sessions/child/keys"] },
+  { args: ["handoff", "child"], requests: ["POST /api/v1/sessions/child/handoff-pane-binding"] },
+  { args: ["exit", "child"], requests: ["POST /api/v1/sessions/child/exit"] },
+  { args: ["archive", "child"], requests: ["POST /api/v1/sessions/child/archive"] },
+  { args: ["delete", "child"], requests: ["DELETE /api/v1/sessions/child"] },
+  {
+    args: ["resume", "child"],
+    requests: ["POST /api/v1/sessions", "GET /api/v1/sessions/child/messages?limit=1"],
+  },
+])("uses child IDs directly for $args without catalog requests", async ({ args, requests }) => {
   const seen: string[] = [];
   const base = await serve((req, res, body) => {
     seen.push(`${req.method} ${req.url}`);
@@ -480,36 +497,11 @@ it("uses child IDs directly for queries, input and lifecycle operations without 
       reply(res, { status: "succeeded", sessionId: "child" });
     } else reply(res, { status: "succeeded", sessionId: "child" });
   });
-  for (const args of [
-    ["inspect", "child"],
-    ["terminal", "child"],
-    ["send", "child", "--message", "hello"],
-    ["keys", "child", "enter"],
-    ["interrupt", "child"],
-    ["handoff", "child"],
-    ["exit", "child"],
-    ["archive", "child"],
-    ["delete", "child"],
-    ["resume", "child"],
-  ]) {
-    const result = await cli([...args, "--url", base, "--json"]);
-    expect(result.code).toBe(0);
-    expect(result.stdout).not.toContain("private");
-    expect(result.stdout).not.toContain("parent");
-  }
-  expect(seen).toEqual([
-    "GET /api/v1/sessions/child/messages",
-    "GET /api/v1/sessions/child/terminal",
-    "POST /api/v1/sessions/child/messages",
-    "POST /api/v1/sessions/child/keys",
-    "POST /api/v1/sessions/child/keys",
-    "POST /api/v1/sessions/child/handoff-pane-binding",
-    "POST /api/v1/sessions/child/exit",
-    "POST /api/v1/sessions/child/archive",
-    "DELETE /api/v1/sessions/child",
-    "POST /api/v1/sessions",
-    "GET /api/v1/sessions/child/messages?limit=1",
-  ]);
+  const result = await cli([...args, "--url", base, "--json"]);
+  expect(result.code).toBe(0);
+  expect(result.stdout).not.toContain("private");
+  expect(result.stdout).not.toContain("parent");
+  expect(seen).toEqual(requests);
 });
 
 it("keeps connection failures classified as query_failed", async () => {

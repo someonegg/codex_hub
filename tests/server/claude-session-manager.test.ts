@@ -13,7 +13,7 @@ import {
   BINDING_PROMPT_WAIT_MS,
   ClaudeSessionManager,
 } from "../../src/server/adapters/claude/session-manager.js";
-import { exitSteps, interruptSteps } from "../../src/server/adapters/shared/session-management.js";
+import { interruptSteps } from "../../src/server/adapters/shared/session-management.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
@@ -100,9 +100,20 @@ it.each([false, true])(
   },
 );
 
-it("provides the shared interrupt and exit capabilities", () => {
+it("provides shared interrupt steps and two pairs of exit interrupts", () => {
   expect(claudeInteraction(null, null).interruptSteps).toBe(interruptSteps);
-  expect(new ClaudeSessionManager("/test/home").exitSteps).toBe(exitSteps);
+  let elapsed = 0;
+  expect(
+    new ClaudeSessionManager("/test/home").exitSteps().map((step) => ({
+      keys: step.keys,
+      atMs: (elapsed += step.delayMs),
+    })),
+  ).toEqual([
+    { keys: ["C-c"], atMs: 0 },
+    { keys: ["C-c"], atMs: 200 },
+    { keys: ["C-c"], atMs: 2000 },
+    { keys: ["C-c"], atMs: 2200 },
+  ]);
 });
 
 const target = {

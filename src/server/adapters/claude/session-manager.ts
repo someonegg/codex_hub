@@ -8,7 +8,7 @@ import {
   type SessionLaunchOptions,
   type SessionManager,
 } from "../../management/session-manager.js";
-import { exitSteps, resolveDirectory } from "../shared/session-management.js";
+import { resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 import { claudePromptPosition } from "./prompt-readiness.js";
 
@@ -105,7 +105,14 @@ export class ClaudeSessionManager implements SessionManager {
       await rm(join(directory, `${nativeId}.jsonl`), { force: true });
     }
   }
-  exitSteps = exitSteps;
+  exitSteps() {
+    return [
+      { keys: ["C-c"] as const, delayMs: 0 },
+      { keys: ["C-c"] as const, delayMs: 200 },
+      { keys: ["C-c"] as const, delayMs: 1800 },
+      { keys: ["C-c"] as const, delayMs: 200 },
+    ];
+  }
 }
 export const createClaudeSessionManager = (home: string, socket?: string): SessionManager =>
   new ClaudeSessionManager(home, new TmuxLauncher(socket));
