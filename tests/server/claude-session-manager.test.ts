@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 import { expect, it, vi } from "vitest";
@@ -9,6 +9,7 @@ import {
   claudeBindingCommand,
   claudeInteraction,
 } from "../../src/server/adapters/claude/interaction.js";
+import { checkClaudeReadyScript } from "../../src/server/adapters/claude/ready-script.js";
 import {
   BINDING_PROMPT_WAIT_MS,
   ClaudeSessionManager,
@@ -135,26 +136,30 @@ function mockClaudeLaunch() {
     .spyOn(tmux.transport, "captureTerminalWithCursor")
     .mockResolvedValue(readyScreen);
   const send = vi.spyOn(tmux.transport, "sendMessage").mockResolvedValue();
-  return { manager: new ClaudeSessionManager("/home", tmux), capture, send };
+  return { manager: new ClaudeSessionManager("/home", tmux), tmux, capture, send };
 }
 
-it("requires two consecutive ready samples and sends the binding only once", async () => {
-  vi.useFakeTimers();
+it("accepts a single ready sample and sends the binding once", async () => {
   const { manager, capture, send } = mockClaudeLaunch();
-  capture.mockResolvedValueOnce(readyScreen).mockResolvedValueOnce(null);
-  const launch = manager.launch(launchOptions);
-  await vi.advanceTimersByTimeAsync(299);
-  expect(send).not.toHaveBeenCalled();
-  await vi.advanceTimersByTimeAsync(1);
-  await expect(launch).resolves.toEqual(target);
-  expect(capture).toHaveBeenCalledTimes(4);
+  await expect(manager.launch(launchOptions)).resolves.toEqual(target);
+  expect(capture).toHaveBeenCalledTimes(1);
   expect(send).toHaveBeenCalledExactlyOnceWith(
     target,
     claudeBindingCommand(launchOptions.operationId),
   );
-  await vi.advanceTimersByTimeAsync(30_000);
-  expect(capture).toHaveBeenCalledTimes(4);
-  expect(send).toHaveBeenCalledTimes(1);
+});
+
+it("waits one second between samples", async () => {
+  vi.useFakeTimers();
+  const { manager, capture, send } = mockClaudeLaunch();
+  capture.mockResolvedValueOnce(null);
+  const launch = manager.launch(launchOptions);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(capture).toHaveBeenCalledTimes(1);
+  expect(send).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  await expect(launch).resolves.toEqual(target);
+  expect(capture).toHaveBeenCalledTimes(2);
 });
 
 it.each([
@@ -189,7 +194,7 @@ it.each([
 it("does not count a capture that finishes after the readiness deadline", async () => {
   vi.useFakeTimers();
   const { manager, capture, send } = mockClaudeLaunch();
-  capture.mockResolvedValueOnce(readyScreen).mockImplementation(async () => {
+  capture.mockImplementation(async () => {
     await new Promise((resolve) => setTimeout(resolve, BINDING_PROMPT_WAIT_MS));
     return readyScreen;
   });
@@ -282,4 +287,45 @@ it("emits V3 using launcher metadata without executing commands in Claude's shel
       taskName: "Task",
     },
   ]);
+});
+
+it("skips missing snapshots, preserves context, and resets it for each launch", async () => {
+  const directory = await createTempDirectory("claude-ready-");
+  const script = join(directory, "ready");
+  await writeFile(
+    script,
+    `#!/usr/bin/env node
+let input = "";
+for await (const chunk of process.stdin) input += chunk;
+const { current, context } = JSON.parse(input);
+if (current.content !== "Starting…") process.exit(2);
+process.stdout.write(JSON.stringify({ ready: context === "next", context: "next" }));
+`,
+  );
+  await chmod(script, 0o755);
+  const { tmux, capture, send } = mockClaudeLaunch();
+  const screen = { content: "Starting…", cursorX: 0, cursorY: 0 };
+  capture
+    .mockResolvedValue(screen)
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(screen)
+    .mockResolvedValueOnce(null);
+  const manager = new ClaudeSessionManager("/home", tmux, script);
+  await manager.launch(launchOptions);
+  await manager.launch(launchOptions);
+  expect(capture).toHaveBeenCalledTimes(6);
+  expect(send).toHaveBeenCalledTimes(2);
+}, 10_000);
+
+it.each([
+  'process.stdout.write("not json")',
+  "process.stdout.write(JSON.stringify({ ready: true, context: 123 }))",
+  "process.exit(2)",
+  "setInterval(() => {}, 1000)",
+])("rejects a faulty script: %s", async (body) => {
+  const directory = await createTempDirectory("claude-ready-error-");
+  const script = join(directory, "ready");
+  await writeFile(script, "#!/usr/bin/env node\n" + body);
+  await chmod(script, 0o755);
+  await expect(checkClaudeReadyScript(script, readyScreen, "", 200)).rejects.toThrow();
 });

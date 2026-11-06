@@ -25,16 +25,20 @@ import type { UploadCleanup } from "./uploads/store.js";
 export async function createCodexHub({
   homes,
   socket,
+  claudeReadyScript,
   interactionEnabled = true,
   uploads,
 }: {
   homes: readonly SessionHomeConfig[];
   socket?: string;
+  claudeReadyScript?: string;
   interactionEnabled?: boolean;
   uploads?: UploadCleanup;
 }) {
   const paneBindings = new PaneBindingManager();
-  const adapters = await Promise.all(homes.map((home) => createAdapter(home, socket)));
+  const adapters = await Promise.all(
+    homes.map((home) => createAdapter(home, socket, claudeReadyScript)),
+  );
   const sources = adapters.map((adapter) => adapter.source);
   const managers = new SessionManagerRegistry(sources[0]!.descriptor.home);
   for (const { source, manager } of adapters) managers.register(source.descriptor.home, manager);
@@ -97,12 +101,16 @@ interface SessionAdapter {
   readonly manager: SessionManager;
 }
 
-async function createAdapter(home: SessionHomeConfig, socket?: string): Promise<SessionAdapter> {
+async function createAdapter(
+  home: SessionHomeConfig,
+  socket?: string,
+  claudeReadyScript?: string,
+): Promise<SessionAdapter> {
   switch (home.adapter ?? "codex") {
     case "claude":
       return {
         source: await createClaudeSessionSource(home.path, { home: home.nickname }),
-        manager: createClaudeSessionManager(home.path, socket),
+        manager: createClaudeSessionManager(home.path, socket, claudeReadyScript),
       };
     case "codex":
       return {

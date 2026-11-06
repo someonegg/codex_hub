@@ -97,3 +97,9 @@ it.each(["65536", "1.5"])("names --local-port in invalid port errors (%s)", (val
     "--local-port must be an integer between 0 and 65535",
   );
 });
+
+it("resolves the global Claude readiness script and rejects empty paths", () => {
+  expect(runnable(["--claude-ready-script", "./ready"]).claudeReadyScript).toBe(resolve("ready"));
+  expect(runnable([]).claudeReadyScript).toBeUndefined();
+  expect(() => runnable(["--claude-ready-script", " "])).toThrow("must not be empty");
+});

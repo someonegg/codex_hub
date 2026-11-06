@@ -11,6 +11,7 @@ import {
 import { exitSteps, resolveDirectory } from "../shared/session-management.js";
 import { claudeBindingCommand, validClaudeId } from "./interaction.js";
 import { claudePromptPosition } from "./prompt-readiness.js";
+import { checkClaudeReadyScript } from "./ready-script.js";
 
 /** Never deliver bootstrap input unless the native prompt is confirmed ready. */
 export const BINDING_PROMPT_WAIT_MS = 15_000;
@@ -19,6 +20,7 @@ export class ClaudeSessionManager implements SessionManager {
   constructor(
     private readonly home: string,
     private readonly tmux = new TmuxLauncher(),
+    private readonly readyScript?: string,
   ) {}
   readonly interruptAfterBinding = true;
   isValidNativeId = validClaudeId;
@@ -36,18 +38,28 @@ export class ClaudeSessionManager implements SessionManager {
     ]);
     try {
       const deadline = Date.now() + BINDING_PROMPT_WAIT_MS;
-      let previousPrompt: number | null = null;
+      let context = "";
       let ready = false;
       while (Date.now() < deadline) {
         const snapshot = await this.tmux.transport.captureTerminalWithCursor(target);
         if (Date.now() >= deadline) break;
-        const prompt = claudePromptPosition(snapshot);
-        if (prompt !== null && prompt === previousPrompt) {
-          ready = true;
-          break;
+        if (snapshot) {
+          const result = this.readyScript
+            ? await checkClaudeReadyScript(
+                this.readyScript,
+                snapshot,
+                context,
+                deadline - Date.now(),
+              )
+            : { ready: claudePromptPosition(snapshot) !== null, context: "" };
+          if (Date.now() >= deadline) break;
+          context = result.context;
+          if (result.ready) {
+            ready = true;
+            break;
+          }
         }
-        previousPrompt = prompt;
-        await delay(100);
+        await delay(Math.min(1_000, Math.max(0, deadline - Date.now())));
       }
       if (!ready)
         throw new Error(
@@ -107,5 +119,8 @@ export class ClaudeSessionManager implements SessionManager {
   }
   exitSteps = exitSteps;
 }
-export const createClaudeSessionManager = (home: string, socket?: string): SessionManager =>
-  new ClaudeSessionManager(home, new TmuxLauncher(socket));
+export const createClaudeSessionManager = (
+  home: string,
+  socket?: string,
+  readyScript?: string,
+): SessionManager => new ClaudeSessionManager(home, new TmuxLauncher(socket), readyScript);

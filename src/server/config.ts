@@ -39,6 +39,7 @@ export interface ServerConfig {
   tls: ServerTlsConfig;
   interactionEnabled: boolean;
   tmuxSocket?: string;
+  claudeReadyScript?: string;
   uploadDirectory?: string;
   hostingDirectory?: string;
 }
@@ -85,6 +86,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       help: { type: "boolean" },
       version: { type: "boolean" },
       "tmux-socket": { type: "string" },
+      "claude-ready-script": { type: "string" },
       "home-dir": { type: "string" },
       hosting: { type: "boolean" },
     },
@@ -146,6 +148,14 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     kind: "run",
     config: {
       host,
+      ...(values["claude-ready-script"] !== undefined
+        ? {
+            claudeReadyScript: resolveDirectoryOption(
+              "claude-ready-script",
+              values["claude-ready-script"],
+            ),
+          }
+        : {}),
       port: parsePort(values.port),
       ...(values["local-port"] !== undefined
         ? { localPort: parsePort(values["local-port"], "local-port") }
@@ -184,6 +194,8 @@ Options:
   --ssl-cert <path>    PEM server certificate or certificate chain
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
+  --claude-ready-script <path>
+                       Executable Claude readiness checker (all homes)
   --tmux-socket <path> tmux socket (default: tmux default selection)
   --help               Show this help
   --version            Show the current version

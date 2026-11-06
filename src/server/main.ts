@@ -27,6 +27,7 @@ async function main(): Promise<void> {
   const hub = await createCodexHub({
     homes: config.homes,
     socket: config.tmuxSocket,
+    claudeReadyScript: config.claudeReadyScript,
     interactionEnabled: config.interactionEnabled,
     uploads,
   });
