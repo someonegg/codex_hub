@@ -43,7 +43,7 @@ Catalog discovery now scans only the allowlisted `sessions/` and `archived_sessi
 ### Negative Consequences
 
 - Rollouts discoverable only through SQLite metadata are no longer shown.
-- Database-only titles, paths, parent relationships, agent fields, and precise timestamps are no longer available.
+- Database-only titles, paths, parent relationships, subagent fields, and precise timestamps are no longer available.
 - Unreadable rollouts cannot retain SQLite-derived identity in their unavailable placeholders.
 - Restoring metadata enrichment later would require a new source contract and cache policy.
 

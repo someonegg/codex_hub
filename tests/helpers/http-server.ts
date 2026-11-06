@@ -15,7 +15,7 @@ export async function startHttpServer(routes: ApiRouter, closeServices: () => vo
     {
       host: LOOPBACK_HOST,
       port: 0,
-      homes: [],
+      agents: [],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,

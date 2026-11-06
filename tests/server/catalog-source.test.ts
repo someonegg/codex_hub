@@ -26,12 +26,12 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("catalog discovery", () => {
   it("scans configured JSONL roots and filters rollout names", async () => {
-    const home = await createTempDirectory("codex-catalog-");
-    await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
-    await writeFile(join(home, "sessions/not-a-rollout.jsonl"), "{}\n");
-    await writeFile(join(home, "rollout-outside-root.jsonl"), "{}\n");
+    const agent = await createTempDirectory("codex-catalog-");
+    await cp(resolve("tests/fixtures/codex-home"), agent, { recursive: true });
+    await writeFile(join(agent, "sessions/not-a-rollout.jsonl"), "{}\n");
+    await writeFile(join(agent, "rollout-outside-root.jsonl"), "{}\n");
 
-    const discovery = await new JsonlCatalogSource(home).discover();
+    const discovery = await new JsonlCatalogSource(agent).discover();
 
     expect(discovery.entries).toHaveLength(4);
     expect(discovery.entries.filter((entry) => entry.descriptor.archived)).toHaveLength(1);
@@ -46,17 +46,17 @@ describe("catalog discovery", () => {
   });
 
   it("reads archives once while discovering additions, removals and restored sessions", async () => {
-    const home = await createTempDirectory("codex-archive-once-");
-    const directory = join(home, "archived_sessions");
+    const agent = await createTempDirectory("codex-archive-once-");
+    const directory = join(agent, "archived_sessions");
     await mkdir(directory);
-    await mkdir(join(home, "sessions"));
+    await mkdir(join(agent, "sessions"));
     const file = join(directory, "rollout-first.jsonl");
     const content = (id: string) =>
       JSON.stringify({ type: "session_meta", payload: { id } }) + "\n";
     await writeFile(file, content("first"));
     const decoder = new CheckpointedJsonlDecoder();
     const decode = vi.fn(decoder.decode.bind(decoder));
-    const source = new CodexSessionSource(home, "archive-once", { decoder: { decode } });
+    const source = new CodexSessionSource(agent, "archive-once", { decoder: { decode } });
     const first = await source.refresh();
 
     await writeFile(file, content("changed"));
@@ -72,7 +72,7 @@ describe("catalog discovery", () => {
     expect((await source.refresh()).sessions).toHaveLength(1);
     expect(decode).toHaveBeenCalledTimes(2);
 
-    await rename(file, join(home, "sessions/rollout-first.jsonl"));
+    await rename(file, join(agent, "sessions/rollout-first.jsonl"));
     const restored = await source.refresh();
     expect(restored.sessions).toHaveLength(1);
     expect(restored.sessions[0]!.normalized.session.archived).toBe(false);
@@ -82,10 +82,10 @@ describe("catalog discovery", () => {
 
   it("keys decoded rollouts by source-relative path using logical paths across root link changes", async () => {
     const base = await createTempDirectory("codex-adapter-cache-identity-");
-    const home = join(base, "home");
+    const agent = join(base, "agent");
     const firstRoot = join(base, "first-sessions");
     const secondRoot = join(base, "second-sessions");
-    await mkdir(home);
+    await mkdir(agent);
     await mkdir(firstRoot);
     await mkdir(secondRoot);
     const firstRollout = join(firstRoot, "rollout-stable.jsonl");
@@ -105,12 +105,12 @@ describe("catalog discovery", () => {
       join(secondRoot, "rollout-new.jsonl"),
       '{"type":"session_meta","payload":{"id":"new","title":"New"}}\n',
     );
-    const sessionsLink = join(home, "sessions");
+    const sessionsLink = join(agent, "sessions");
     await symlink(firstRoot, sessionsLink);
 
     const decoder = new CheckpointedJsonlDecoder();
     const decodedPaths: string[] = [];
-    const source = new CodexSessionSource(home, "codex-cache-identity", {
+    const source = new CodexSessionSource(agent, "codex-cache-identity", {
       decoder: {
         async decode(descriptor) {
           decodedPaths.push(descriptor.path);
@@ -120,15 +120,15 @@ describe("catalog discovery", () => {
     });
     const first = await source.refresh();
     const firstDescriptor = await rolloutDescriptor(
-      home,
+      agent,
       join(sessionsLink, "rollout-stable.jsonl"),
     );
 
-    const nextLink = join(home, "next-sessions");
+    const nextLink = join(agent, "next-sessions");
     await symlink(secondRoot, nextLink);
     await rename(nextLink, sessionsLink);
     const secondDescriptor = await rolloutDescriptor(
-      home,
+      agent,
       join(sessionsLink, "rollout-stable.jsonl"),
     );
     const second = await source.refresh();
@@ -154,15 +154,15 @@ describe("catalog discovery", () => {
   it.each(["sessions", "archived_sessions"])(
     "hides unreadable %s rollouts and retries them",
     async (root) => {
-      const home = await createTempDirectory("codex-adapter-errors-");
-      await mkdir(join(home, root));
+      const agent = await createTempDirectory("codex-adapter-errors-");
+      await mkdir(join(agent, root));
       await writeFile(
-        join(home, root, "rollout-error.jsonl"),
+        join(agent, root, "rollout-error.jsonl"),
         '{"type":"session_meta","payload":{"id":"error"}}\n',
       );
       const decoder = new CheckpointedJsonlDecoder();
       let attempts = 0;
-      const recovering = new CodexSessionSource(home, "codex-errors", {
+      const recovering = new CodexSessionSource(agent, "codex-errors", {
         decoder: {
           async decode(descriptor) {
             attempts += 1;
@@ -181,7 +181,7 @@ describe("catalog discovery", () => {
           severity: "warning",
         }),
       ]);
-      expect(JSON.stringify(unavailable.diagnostics)).not.toContain(home);
+      expect(JSON.stringify(unavailable.diagnostics)).not.toContain(agent);
 
       const repository = new SessionReadService([recovering]);
       await expect(repository.list()).resolves.toMatchObject({
@@ -201,13 +201,13 @@ describe("catalog discovery", () => {
   );
 
   it("propagates unexpected decoder failures", async () => {
-    const home = await createTempDirectory("codex-adapter-broken-");
-    await mkdir(join(home, "sessions"));
+    const agent = await createTempDirectory("codex-adapter-broken-");
+    await mkdir(join(agent, "sessions"));
     await writeFile(
-      join(home, "sessions/rollout-error.jsonl"),
+      join(agent, "sessions/rollout-error.jsonl"),
       '{"type":"session_meta","payload":{"id":"error"}}\n',
     );
-    const broken = new CodexSessionSource(home, "codex-broken", {
+    const broken = new CodexSessionSource(agent, "codex-broken", {
       decoder: {
         async decode() {
           throw new Error("decoder invariant");
@@ -218,9 +218,9 @@ describe("catalog discovery", () => {
   });
 
   it("keeps the prior source checkpoint after an incremental derivation failure", async () => {
-    const home = await createTempDirectory("codex-adapter-atomic-");
-    await mkdir(join(home, "sessions"));
-    const path = join(home, "sessions/rollout-atomic.jsonl");
+    const agent = await createTempDirectory("codex-adapter-atomic-");
+    await mkdir(join(agent, "sessions"));
+    const path = join(agent, "sessions/rollout-atomic.jsonl");
     await writeFile(
       path,
       '{"type":"event_msg","payload":{"type":"agent_message","message":"one"}}\n',
@@ -240,7 +240,7 @@ describe("catalog discovery", () => {
         },
       },
     );
-    const source = new CodexSessionSource(home, "codex-atomic", { normalizer });
+    const source = new CodexSessionSource(agent, "codex-atomic", { normalizer });
     const first = await source.refresh();
     failNextAppend = true;
     await appendFile(
@@ -256,22 +256,22 @@ describe("catalog discovery", () => {
     expect(source.lastRefreshTelemetry()).toMatchObject({ appendFiles: 1 });
   });
 
-  it("ignores duplicate native IDs and exposes declared agent versions", async () => {
-    const home = await createTempDirectory("codex-adapter-identities-");
-    await mkdir(join(home, "sessions"), { recursive: true });
+  it("ignores duplicate native IDs and exposes declared runtime versions", async () => {
+    const agent = await createTempDirectory("codex-adapter-identities-");
+    await mkdir(join(agent, "sessions"), { recursive: true });
     const metadata = (title: string) =>
       JSON.stringify({
         type: "session_meta",
         payload: { id: "duplicate", title, cli_version: "2.4.0" },
       }) + "\n";
-    await writeFile(join(home, "sessions/rollout-first.jsonl"), metadata("First"));
-    await writeFile(join(home, "sessions/rollout-second.jsonl"), metadata("Second"));
+    await writeFile(join(agent, "sessions/rollout-first.jsonl"), metadata("First"));
+    await writeFile(join(agent, "sessions/rollout-second.jsonl"), metadata("Second"));
     await writeFile(
-      join(home, "sessions/rollout-no-id.jsonl"),
+      join(agent, "sessions/rollout-no-id.jsonl"),
       '{"type":"session_meta","payload":{"title":"No ID"}}\n',
     );
 
-    const snapshot = await new CodexSessionSource(home, "codex-identities").refresh();
+    const snapshot = await new CodexSessionSource(agent, "codex-identities").refresh();
     expect(snapshot.sessions).toHaveLength(2);
     expect(new Set(snapshot.sessions.map((entry) => entry.localId)).size).toBe(2);
     expect(snapshot.diagnostics).toContainEqual(
@@ -281,7 +281,7 @@ describe("catalog discovery", () => {
     );
     expect(
       snapshot.sessions.find((entry) => entry.nativeSessionId === "duplicate")?.origin,
-    ).toMatchObject({ agentName: "Codex", agentVersion: "2.4.0" });
+    ).toMatchObject({ runtimeName: "Codex", runtimeVersion: "2.4.0" });
     expect(snapshot.sessions.find((entry) => entry.nativeSessionId === null)?.localId).toBe(
       "resource:sessions/rollout-no-id.jsonl",
     );
@@ -297,37 +297,37 @@ describe("catalog discovery", () => {
     ).toBe("First");
   });
 
-  it("keeps source identity stable when a symlinked Codex home is created later", async () => {
+  it("keeps source identity stable when a symlinked Codex agent is created later", async () => {
     const base = await createTempDirectory("codex-adapter-identity-");
     const target = join(base, "target");
     const alias = join(base, "alias");
-    const configuredHome = join(alias, ".codex");
+    const configuredAgent = join(alias, ".codex");
     await mkdir(target);
     await symlink(target, alias);
 
-    const before = await createCodexSessionSource(configuredHome);
+    const before = await createCodexSessionSource(configuredAgent);
     await mkdir(join(target, ".codex"));
-    const after = await createCodexSessionSource(configuredHome);
+    const after = await createCodexSessionSource(configuredAgent);
 
     expect(after.descriptor.instanceKey).toBe(before.descriptor.instanceKey);
-    expect(after.descriptor.home).toBe(before.descriptor.home);
+    expect(after.descriptor.agent).toBe(before.descriptor.agent);
   });
 });
 
 it("returns an empty management snapshot after a known root disappears", async () => {
-  const home = await createTempDirectory("codex-management-roots-");
-  await mkdir(join(home, "sessions"));
-  const source = await createCodexSessionSource(home);
+  const agent = await createTempDirectory("codex-management-roots-");
+  await mkdir(join(agent, "sessions"));
+  const source = await createCodexSessionSource(agent);
   const reader = new SessionReadService([source]);
   expect((await reader.managementSnapshot()).sessions).toEqual([]);
-  await rename(join(home, "sessions"), join(home, "sessions-moved"));
+  await rename(join(agent, "sessions"), join(agent, "sessions-moved"));
   expect((await reader.managementSnapshot()).sessions).toEqual([]);
 });
 it("retains a rollout without a valid native identity for management validation", async () => {
-  const home = await createTempDirectory("codex-management-identity-");
-  await mkdir(join(home, "sessions"));
-  await writeFile(join(home, "sessions", "rollout-invalid.jsonl"), "invalid JSON\n");
-  const source = await createCodexSessionSource(home);
+  const agent = await createTempDirectory("codex-management-identity-");
+  await mkdir(join(agent, "sessions"));
+  await writeFile(join(agent, "sessions", "rollout-invalid.jsonl"), "invalid JSON\n");
+  const source = await createCodexSessionSource(agent);
   expect(
     (await new SessionReadService([source]).managementSnapshot()).sessions[0]?.sourceId,
   ).toBeNull();

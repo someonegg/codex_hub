@@ -43,14 +43,14 @@ function session(id = "session", operationId?: string): DomainSession {
     updatedAt: null,
     parentId: null,
     childIds: [],
-    agent: null,
+    subagent: null,
     warningCount: 0,
     diagnostics: [],
     origin: {
       sourceType: "codex-jsonl",
-      home: "test",
-      agentName: "Codex",
-      agentVersion: null,
+      agent: "test",
+      runtimeName: "Codex",
+      runtimeVersion: null,
     },
   };
 }
@@ -610,7 +610,7 @@ it.each(["archive", "delete"] as const)(
     const remote = {
       ...local,
       id: "remote",
-      origin: { ...local.origin, home: "other" },
+      origin: { ...local.origin, agent: "other" },
     };
     set({ sessions: [local, remote] });
     const op = service.manage(type, "remote");
@@ -631,7 +631,7 @@ it("never falls back to a default manager for an unregistered source", async () 
   const { service, manager, interaction, set } = setup();
   const record = session();
   set({
-    sessions: [{ ...record, origin: { ...record.origin, home: "unregistered" } }],
+    sessions: [{ ...record, origin: { ...record.origin, agent: "unregistered" } }],
   });
   const op = service.manage("archive", record.id);
   await flush();
@@ -714,20 +714,20 @@ it("isolates creation association and fingerprints the selected source", async (
     delete: vi.fn(async () => undefined),
   };
   registry.register("other", other);
-  const input = { projectDirectory: "/project", worktree: false, requestId: "multi-home-create" };
-  expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
-  const operation = service.create({ ...input, home: "other" });
-  expect(() => service.create({ ...input, home: "test" })).toThrow("different parameters");
+  const input = { projectDirectory: "/project", worktree: false, requestId: "multi-agent-create" };
+  expect(() => service.create({ ...input, agent: "missing" })).toThrow("Unknown agent");
+  const operation = service.create({ ...input, agent: "other" });
+  expect(() => service.create({ ...input, agent: "test" })).toThrow("different parameters");
   await flush();
   expect(other.launch).toHaveBeenCalledTimes(1);
   expect(manager.launch).not.toHaveBeenCalled();
-  const wrong = session("wrong-home", operation.operationId);
+  const wrong = session("wrong-agent", operation.operationId);
   set({ sessions: [wrong] });
   await service.poll();
   expect((await service.get(operation.operationId))!.status).toBe("pending");
   expect(interaction.describe).not.toHaveBeenCalled();
-  const candidate = session("right-home", operation.operationId);
-  const correct = { ...candidate, origin: { ...candidate.origin, home: "other" } };
+  const candidate = session("right-agent", operation.operationId);
+  const correct = { ...candidate, origin: { ...candidate.origin, agent: "other" } };
   set({ sessions: [wrong, correct] });
   await service.poll();
   expect((await service.get(operation.operationId))!.sessionId).toBe(correct.id);
@@ -1055,7 +1055,7 @@ describe("safe resume operations", () => {
     expect(f.manager.launch).toHaveBeenCalledTimes(2);
   });
 
-  it("uses the original home even with multiple configured sources and accepts only yolo", async () => {
+  it("uses the original agent even with multiple configured sources and accepts only yolo", async () => {
     const f = resumable();
     f.registry.register("other", { ...f.manager });
     const op = f.service.create({ ...request, yolo: true });
@@ -1142,23 +1142,23 @@ describe("session upload cleanup", () => {
   });
 });
 
-it("defaults to the first configured home and resolves explicit nicknames without fallback", async () => {
+it("defaults to the first configured agent and resolves explicit nicknames without fallback", async () => {
   const { service, manager, registry } = setup();
   const other = { ...manager, launch: vi.fn(async () => target) };
   registry.register("secondary", other);
-  const input = { projectDirectory: "/project", worktree: false, requestId: "default-home-test" };
+  const input = { projectDirectory: "/project", worktree: false, requestId: "default-agent-test" };
   service.create(input);
-  service.create({ ...input, requestId: "explicit-home-test", home: "secondary" });
-  expect(() => service.create({ ...input, home: "missing" })).toThrow("Unknown home");
+  service.create({ ...input, requestId: "explicit-agent-test", agent: "secondary" });
+  expect(() => service.create({ ...input, agent: "missing" })).toThrow("Unknown agent");
   await flush();
   expect(manager.launch).toHaveBeenCalledOnce();
   expect(other.launch).toHaveBeenCalledOnce();
 });
 
-it("rejects empty and duplicate management home nicknames", () => {
+it("rejects empty and duplicate management agent nicknames", () => {
   const { manager, registry } = setup();
-  expect(() => registry.register(" ", manager)).toThrow("Empty home nickname");
-  expect(() => registry.register("test", manager)).toThrow("Duplicate home nickname");
+  expect(() => registry.register(" ", manager)).toThrow("Empty agent nickname");
+  expect(() => registry.register("test", manager)).toThrow("Duplicate agent nickname");
 });
 
 it("prunes batches while retaining recent results and active request identities", async () => {

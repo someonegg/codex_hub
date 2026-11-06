@@ -5,7 +5,7 @@
 面向 Codex 和 Claude Code 的本地網頁中心，將清晰易讀的工作階段記錄與即時 CLI 互動結合起來。
 按專案瀏覽工作階段、跟進最新回覆，並從電腦或手機繼續工作。
 
-支援 Codex 和 Claude Code 主工作階段，詳見[多個 Home 設定](docs/usage.zh-TW.md#多個-home)。
+支援 Codex 和 Claude Code 主工作階段，詳見[多個智慧體設定](docs/usage.zh-TW.md#多個智慧體)。
 
 ![建立工作階段、傳送提示並檢視已回答的使用者輸入卡片](docs/images/zh-TW/ahub-intro.gif)
 
@@ -23,7 +23,7 @@
 執行要求：
 
 - macOS 或 Linux，Node.js >=22.13 與 npm
-- 本地 Codex Home（通常為 `~/.codex`）
+- 本地 Codex 智慧體（通常為 `~/.codex`）
 - 支援 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force` 的 Codex CLI
 - tmux，用於建立工作階段和互動
 
@@ -43,7 +43,7 @@ codex-hub
 開啟 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止伺服器。
 介面預設英文，在側邊欄底部開啟 **Settings → Language → 简体中文 / 繁體中文** 即可切換；選擇儲存在目前瀏覽器。
 
-Home、連接埠與可選網頁／差異託管設定見[使用與設定](docs/usage.zh-TW.md)。
+智慧體、連接埠與可選網頁／差異託管設定見[使用與設定](docs/usage.zh-TW.md)。
 
 升級時再次執行
 `npm install -g @someonegg/codex-hub@latest`。從原始碼執行請參閱[開發指南（英文）](docs/development.md)。
@@ -83,10 +83,10 @@ Home、連接埠與可選網頁／差異託管設定見[使用與設定](docs/us
 ## 透過管理 CLI 操作工作階段
 
 使用 `ahub-cli session` 在另一個終端中列出、建立、恢復、檢視和管理工作階段，或向執行中的工作階段傳送輸入。
-新增 `--json` 可輸出結構化結果，方便指令碼和代理工作流程使用。
+新增 `--json` 可輸出結構化結果，方便指令碼和智慧體工作流程使用。
 命令與範例見[工作階段 CLI 使用說明](docs/usage.zh-TW.md#工作階段命令)。
 
-如需代理程式協助管理工作階段，可使用 npm 套件附帶的
+如需智慧體協助管理工作階段，可使用 npm 套件附帶的
 [`ahub-control` skill](skills/ahub-control)。執行
 `ahub-cli skill path ahub-control` 查看目錄。`npx` 回傳快取路徑，長期使用請複製該目錄。
 

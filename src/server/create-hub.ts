@@ -5,7 +5,7 @@ import { createCodexSessionManager } from "./adapters/codex/session-manager.js";
 import { CatalogInteractionSessionReader } from "./application/interaction-session-reader.js";
 import { SessionReadService } from "./application/session-read-service.js";
 import { SessionCatalogService } from "./catalog/session-catalog-service.js";
-import type { SessionHomeConfig } from "./config.js";
+import type { AgentConfig } from "./config.js";
 import { SessionInteractionService } from "./interaction/interaction-service.js";
 import { PaneBindingManager } from "./interaction/pane-binding-manager.js";
 import { SessionRuntime } from "./interaction/session-runtime.js";
@@ -21,15 +21,15 @@ import type { SessionSource } from "./source/session-source.js";
 import { SessionUpdatesService } from "./updates/session-updates-service.js";
 import type { UploadCleanup } from "./uploads/store.js";
 
-/** Compose reading and management using the adapter's published Home nickname. */
+/** Compose reading and management using the adapter's published Agent nickname. */
 export async function createCodexHub({
-  homes,
+  agents,
   socket,
   claudeReadyScript,
   interactionEnabled = true,
   uploads,
 }: {
-  homes: readonly SessionHomeConfig[];
+  agents: readonly AgentConfig[];
   socket?: string;
   claudeReadyScript?: string;
   interactionEnabled?: boolean;
@@ -37,11 +37,11 @@ export async function createCodexHub({
 }) {
   const paneBindings = new PaneBindingManager();
   const adapters = await Promise.all(
-    homes.map((home) => createAdapter(home, socket, claudeReadyScript)),
+    agents.map((agent) => createAdapter(agent, socket, claudeReadyScript)),
   );
   const sources = adapters.map((adapter) => adapter.source);
-  const managers = new SessionManagerRegistry(sources[0]!.descriptor.home);
-  for (const { source, manager } of adapters) managers.register(source.descriptor.home, manager);
+  const managers = new SessionManagerRegistry(sources[0]!.descriptor.agent);
+  for (const { source, manager } of adapters) managers.register(source.descriptor.agent, manager);
   const transport = new TmuxInteractionService();
   const runtime = new SessionRuntime(transport, managers, paneBindings);
   const store = new CatalogSnapshotStore(sources, undefined, undefined, {
@@ -64,11 +64,11 @@ export async function createCodexHub({
     interaction,
     resolveDisplayTitle: (session) =>
       sources
-        .find((source) => source.descriptor.home === session.origin.home)
+        .find((source) => source.descriptor.agent === session.origin.agent)
         ?.displayTitleFor?.(session) ?? null,
-    homes: sources.map((source) => ({
-      nickname: source.descriptor.home,
-      management: managementCapabilities(managers.get(source.descriptor.home)),
+    agents: sources.map((source) => ({
+      nickname: source.descriptor.agent,
+      management: managementCapabilities(managers.get(source.descriptor.agent)),
     })),
   });
   const cleanup: (() => void)[] = [() => interaction.close()];
@@ -102,20 +102,20 @@ interface SessionAdapter {
 }
 
 async function createAdapter(
-  home: SessionHomeConfig,
+  agent: AgentConfig,
   socket?: string,
   claudeReadyScript?: string,
 ): Promise<SessionAdapter> {
-  switch (home.adapter ?? "codex") {
+  switch (agent.adapter ?? "codex") {
     case "claude":
       return {
-        source: await createClaudeSessionSource(home.path, { home: home.nickname }),
-        manager: createClaudeSessionManager(home.path, socket, claudeReadyScript),
+        source: await createClaudeSessionSource(agent.path, { agent: agent.nickname }),
+        manager: createClaudeSessionManager(agent.path, socket, claudeReadyScript),
       };
     case "codex":
       return {
-        source: await createCodexSessionSource(home.path, { home: home.nickname }),
-        manager: createCodexSessionManager(home.path, socket),
+        source: await createCodexSessionSource(agent.path, { agent: agent.nickname }),
+        manager: createCodexSessionManager(agent.path, socket),
       };
   }
 }

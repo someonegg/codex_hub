@@ -18,9 +18,9 @@ const base = {
     status: "live",
     origin: {
       sourceType: "codex",
-      agentName: "Codex",
-      home: "work",
-      agentVersion: "secret",
+      runtimeName: "Codex",
+      agent: "work",
+      runtimeVersion: "secret",
     },
     workingDirectory: "/project/worktree",
     projectDirectory: "/project",
@@ -48,7 +48,7 @@ const record = { id: "record", ordinal: 42, timestamp: null, secret: "secret" };
 
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
   const response = {
-    homes: [{ nickname: "default" }],
+    agents: [{ nickname: "default" }],
     projects: [{ directory: "/project" }],
     revision: "secret",
     sessions: [
@@ -56,7 +56,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "main",
         title: "title",
         status: "normal",
-        home: "default",
+        agent: "default",
         projectDirectory: "/project",
         updatedAt: null,
         isChild: false,
@@ -69,7 +69,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "missing",
         title: "missing",
         status: "archived",
-        home: "work",
+        agent: "work",
         projectDirectory: null,
         updatedAt: null,
       },
@@ -82,7 +82,7 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "main",
         title: "title",
         status: "normal",
-        home: "default",
+        agent: "default",
         projectDirectory: "/project",
         updatedAt: null,
       },
@@ -90,13 +90,13 @@ it("maps the list with a field whitelist and excludes ordinary and orphan childr
         id: "missing",
         title: "missing",
         status: "archived",
-        home: "work",
+        agent: "work",
         projectDirectory: null,
         updatedAt: null,
       },
     ],
   });
-  expect(mapList({ homes: [], projects: [], sessions: [], revision: "" }, "/project")).toEqual({
+  expect(mapList({ agents: [], projects: [], sessions: [], revision: "" }, "/project")).toEqual({
     sessions: [],
   });
 });
@@ -175,7 +175,7 @@ it("aligns complete session list columns, including empty projects and long opaq
     id: "id",
     title: "中文 title",
     status: "live",
-    home: "工作",
+    agent: "工作",
     projectDirectory: "/project",
     updatedAt: null,
   };
@@ -187,7 +187,7 @@ it("aligns complete session list columns, including empty projects and long opaq
           ...row,
           id: "opaque-session-with-a-long-native-id",
           status: "archived",
-          home: "e\u0301",
+          agent: "e\u0301",
           projectDirectory: null,
           title: "👩🏽‍💻 fix",
         },
@@ -195,20 +195,20 @@ it("aligns complete session list columns, including empty projects and long opaq
     }),
   ).toBe(
     [
-      "ID                                    STATUS    HOME  PROJECT   TITLE",
-      "id                                    live      工作  /project  中文 title",
-      "opaque-session-with-a-long-native-id  archived  e\u0301               👩🏽‍💻 fix",
+      "ID                                    STATUS    AGENT  PROJECT   TITLE",
+      "id                                    live      工作   /project  中文 title",
+      "opaque-session-with-a-long-native-id  archived  e\u0301                👩🏽‍💻 fix",
     ].join("\n"),
   );
   const withTask = formatResult("list", {
     sessions: [row, { ...row, taskName: "修复" }],
   }).split("\n");
   expect(withTask).toEqual([
-    "ID  STATUS  HOME  PROJECT   TASK  TITLE",
-    "id  live    工作  /project        中文 title",
-    "id  live    工作  /project  修复  中文 title",
+    "ID  STATUS  AGENT  PROJECT   TASK  TITLE",
+    "id  live    工作   /project        中文 title",
+    "id  live    工作   /project  修复  中文 title",
   ]);
   expect(formatResult("list", { sessions: [] })).toBe(
-    "ID  STATUS  HOME  PROJECT  TITLE\nNo sessions.",
+    "ID  STATUS  AGENT  PROJECT  TITLE\nNo sessions.",
   );
 });

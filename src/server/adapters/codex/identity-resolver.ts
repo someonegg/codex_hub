@@ -1,15 +1,15 @@
 import { basename } from "node:path";
 
-import type { DomainAgentIdentity as AgentIdentity } from "../../domain/session-domain.js";
+import type { SubagentIdentity } from "../../domain/session-domain.js";
 import type { DecodedRecord } from "../shared/jsonl-decoder.js";
 import { isObject } from "../shared/jsonl-decoder.js";
-import { nonEmptyAgentIdentity, taskNameFromAgentPath } from "./agent-identity.js";
 import type { RolloutDescriptor } from "./rollout-descriptor.js";
+import { nonEmptySubagentIdentity, taskNameFromSubagentPath } from "./subagent-identity.js";
 import { nonEmptyString } from "./value-readers.js";
 
 export interface SessionMetadata {
   threadId: string | null;
-  agentVersion: string | null;
+  runtimeVersion: string | null;
   title: string | null;
   workingDirectory: string | null;
   projectDirectory: string | null;
@@ -17,17 +17,17 @@ export interface SessionMetadata {
   updatedAt: string | null;
   parentThreadId: string | null;
   archived: boolean;
-  agent?: AgentIdentity | null;
+  subagent?: SubagentIdentity | null;
 }
 
 interface RawMetadata {
   id: string | null;
-  agentVersion: string | null;
+  runtimeVersion: string | null;
   title: string | null;
   cwd: string | null;
   timestamp: string | null;
   parentThreadId: string | null;
-  agent: AgentIdentity | null;
+  subagent: SubagentIdentity | null;
 }
 
 export interface IdentityAccumulatorState {
@@ -97,7 +97,7 @@ export class IdentityResolver {
     const raw = state.firstMatchingMetadata ?? state.firstMetadata;
     return {
       threadId: raw?.id ?? null,
-      agentVersion: raw?.agentVersion ?? null,
+      runtimeVersion: raw?.runtimeVersion ?? null,
       title: raw?.title ?? null,
       workingDirectory: raw?.cwd ?? null,
       projectDirectory: raw?.cwd ?? null,
@@ -105,7 +105,7 @@ export class IdentityResolver {
       updatedAt: state.lastTimestamp,
       parentThreadId: raw?.parentThreadId ?? null,
       archived: state.archived,
-      agent: raw?.agent ?? null,
+      subagent: raw?.subagent ?? null,
     };
   }
 }
@@ -115,7 +115,7 @@ function rawMetadata(value: unknown): RawMetadata | null {
   const spawn = threadSpawn(value);
   return {
     id: nonEmptyString(value.id),
-    agentVersion: nonEmptyString(value.cli_version ?? value.agent_version),
+    runtimeVersion: nonEmptyString(value.cli_version ?? value.agent_version),
     title: nonEmptyString(value.title),
     cwd: nonEmptyString(value.cwd),
     timestamp: nonEmptyString(value.timestamp),
@@ -123,7 +123,7 @@ function rawMetadata(value: unknown): RawMetadata | null {
       nonEmptyString(value.parent_thread_id) ??
       nonEmptyString(value.parent_id) ??
       nonEmptyString(spawn?.parent_thread_id),
-    agent: rawAgent(value, spawn),
+    subagent: rawSubagent(value, spawn),
   };
 }
 
@@ -133,14 +133,14 @@ function threadSpawn(value: Record<string, unknown>): Record<string, unknown> | 
   return isObject(subagent) && isObject(subagent.thread_spawn) ? subagent.thread_spawn : null;
 }
 
-function rawAgent(
+function rawSubagent(
   value: Record<string, unknown>,
   spawn: Record<string, unknown> | null,
-): AgentIdentity | null {
+): SubagentIdentity | null {
   const source = isObject(value.source) ? value.source : null;
   const subagent = source?.subagent;
-  return nonEmptyAgentIdentity({
-    taskName: taskNameFromAgentPath(
+  return nonEmptySubagentIdentity({
+    taskName: taskNameFromSubagentPath(
       nonEmptyString(value.agent_path) ?? nonEmptyString(spawn?.agent_path),
     ),
     nickname: nonEmptyString(value.agent_nickname) ?? nonEmptyString(spawn?.agent_nickname),

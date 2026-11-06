@@ -70,7 +70,7 @@ describe("session identity and recovery", () => {
     const normalized = await normalizeFixture("rollout-2026-07-28T11-00-00-child-session.jsonl");
     expect(normalized.session.workingDirectory).toBe("/synthetic/child");
     expect(normalized.session.parentId).toBe("basic-session");
-    expect(normalized.session.agent).toEqual({
+    expect(normalized.session.subagent).toEqual({
       taskName: "widget_review",
       nickname: "Sagan",
       role: "reviewer",
@@ -102,7 +102,7 @@ describe("session identity and recovery", () => {
 
     expect(resolveIdentity(decoded)).toMatchObject({
       parentThreadId: "parent-session",
-      agent: { taskName: "nested-child" },
+      subagent: { taskName: "nested-child" },
     });
   });
 });

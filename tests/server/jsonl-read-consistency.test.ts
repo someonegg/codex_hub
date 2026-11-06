@@ -45,8 +45,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 });
 
 it("fixes EOF and uses the opened inode", async () => {
-  const home = await createTempDirectory("jsonl-eof-");
-  const path = join(home, "log.jsonl");
+  const agent = await createTempDirectory("jsonl-eof-");
+  const path = join(agent, "log.jsonl");
   const first = '{"value":"first"}\n';
   const second = '{"value":"second"}\n';
   await writeFile(path, first);
@@ -73,13 +73,13 @@ it("fixes EOF and uses the opened inode", async () => {
 it.each(["ESTALE", "EISDIR", "ELOOP", "EACCES"])(
   "bounds Claude file and directory diagnostics for %s",
   async (code) => {
-    const home = await createTempDirectory("claude-io-");
-    await mkdir(join(home, "projects/project"), { recursive: true });
+    const agent = await createTempDirectory("claude-io-");
+    await mkdir(join(agent, "projects/project"), { recursive: true });
     await writeFile(
-      join(home, "projects/project/11111111-2222-4333-8444-555555555555.jsonl"),
+      join(agent, "projects/project/11111111-2222-4333-8444-555555555555.jsonl"),
       "{}\n",
     );
-    const source = await createClaudeSessionSource(home);
+    const source = await createClaudeSessionSource(agent);
     const error = Object.assign(new Error(code), { code });
     expect(isExpectedIoError(error)).toBe(true);
     try {

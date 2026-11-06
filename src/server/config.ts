@@ -21,17 +21,14 @@ export type ServerTlsConfig =
       readonly certificateAuthorityPath?: string;
     };
 
-export interface SessionHomeConfig {
+export interface AgentConfig {
   nickname: string;
   path: string;
   adapter?: "codex" | "claude";
 }
 
-/** Backwards-compatible name for callers configuring Codex-only homes. */
-export type CodexHomeConfig = SessionHomeConfig;
-
 export interface ServerConfig {
-  homes: SessionHomeConfig[];
+  agents: AgentConfig[];
   host: string;
   port: number;
   localPort?: number;
@@ -74,8 +71,8 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
     allowPositionals: false,
     strict: true,
     options: {
-      "codex-home": { type: "string", multiple: true },
-      "claude-home": { type: "string", multiple: true },
+      "codex-agent": { type: "string", multiple: true },
+      "claude-agent": { type: "string", multiple: true },
       host: { type: "string" },
       port: { type: "string" },
       "local-port": { type: "string" },
@@ -99,14 +96,14 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
   const names = new Set<string>();
   const paths = new Set<string>();
   let entries = tokens.flatMap((token) =>
-    token.kind === "option" && (token.name === "codex-home" || token.name === "claude-home")
+    token.kind === "option" && (token.name === "codex-agent" || token.name === "claude-agent")
       ? [{ option: token.name, value: token.value! }]
       : [],
   );
   if (entries.length === 0) {
     entries = [
-      { option: "codex-home", value: "codex=~/.codex" },
-      { option: "claude-home", value: "claude=~/.claude" },
+      { option: "codex-agent", value: "codex=~/.codex" },
+      { option: "claude-agent", value: "claude=~/.claude" },
     ];
     try {
       statSync(resolve(homedir(), ".codex"));
@@ -116,9 +113,9 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       else if (code !== "EACCES" && code !== "EPERM") throw error;
     }
   }
-  const homes = entries.map(({ option, value }) => ({
-    ...parseHome(value, option, names, paths),
-    ...(option === "claude-home" ? { adapter: "claude" as const } : {}),
+  const agents = entries.map(({ option, value }) => ({
+    ...parseAgent(value, option, names, paths),
+    ...(option === "claude-agent" ? { adapter: "claude" as const } : {}),
   }));
   const certificatePath = nonEmptyOption("ssl-cert", values["ssl-cert"]);
   const privateKeyPath = nonEmptyOption("ssl-key", values["ssl-key"]);
@@ -160,7 +157,7 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
       ...(values["local-port"] !== undefined
         ? { localPort: parsePort(values["local-port"], "local-port") }
         : {}),
-      homes,
+      agents,
       clientDirectory: fileURLToPath(new URL("../../client/", import.meta.url)),
       tls,
       interactionEnabled: true,
@@ -181,12 +178,12 @@ export function commandLineHelp(): string {
 Options:
   --hosting            Enable trusted same-origin static web hosting
   --home-dir <path>    Hub data root (default: ~/.codex-hub; uploads/ and hosting/)
-  --codex-home <nickname=path>
-                       Codex home; repeat for multiple homes
-  --claude-home <nickname=path>
-                       Claude Code home; repeat for multiple homes
-  Default homes: codex=~/.codex, claude=~/.claude (Claude first if ~/.codex is absent).
-  Any explicit home replaces both defaults; argument order determines the default home.
+  --codex-agent <nickname=path>
+                       Codex agent; repeat for multiple agents
+  --claude-agent <nickname=path>
+                       Claude Code agent; repeat for multiple agents
+  Default agents: codex=~/.codex, claude=~/.claude (Claude first if ~/.codex is absent).
+  Any explicit agent replaces both defaults; argument order determines the default agent.
   --host <host>        Listen host (default: 127.0.0.1)
   --port <port>        Listen port, or 0 for a free port (default: 4173)
   --local-port <port>  Additional HTTP listener on 127.0.0.1 (disabled by default)
@@ -195,7 +192,7 @@ Options:
   --ssl-key <path>     PEM server private key
   --ssl-ca <path>      PEM CA bundle; enables mandatory client certificates
   --claude-ready-script <path>
-                       Executable Claude readiness checker (all homes)
+                       Executable Claude readiness checker (all agents)
   --tmux-socket <path> tmux socket (default: tmux default selection)
   --help               Show this help
   --version            Show the current version
@@ -207,19 +204,19 @@ mTLS example:
   codex-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
 }
 
-function parseHome(
+function parseAgent(
   value: string,
   option: string,
   names: Set<string>,
   paths: Set<string>,
-): SessionHomeConfig {
+): AgentConfig {
   const separator = value.indexOf("=");
   const nickname = value.slice(0, separator).trim();
-  const homePath = value.slice(separator + 1).trim();
-  if (separator < 0 || !nickname || !homePath) {
+  const agentPath = value.slice(separator + 1).trim();
+  if (separator < 0 || !nickname || !agentPath) {
     throw new Error(`--${option} requires nickname=path with a non-empty nickname and path`);
   }
-  const path = resolvePathOption(option, homePath);
+  const path = resolvePathOption(option, agentPath);
   let canonical = path;
   try {
     canonical = realpathSync(path);
@@ -234,8 +231,8 @@ function parseHome(
     )
       throw error;
   }
-  if (names.has(nickname)) throw new Error(`Duplicate home nickname: ${nickname}`);
-  if (paths.has(canonical)) throw new Error("Duplicate home path");
+  if (names.has(nickname)) throw new Error(`Duplicate agent nickname: ${nickname}`);
+  if (paths.has(canonical)) throw new Error("Duplicate agent path");
   names.add(nickname);
   paths.add(canonical);
   return { nickname, path };

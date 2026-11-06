@@ -628,36 +628,36 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
 });
 
 it("initializes creation options only when opening the dialog", () => {
-  const homes = [{ nickname: "default" }, { nickname: "work" }, { nickname: "other" }];
-  act(() => updatePreferences({ defaultHome: "default" }));
-  const props = { homes, project: "/project", projects: [], onCreated: vi.fn() };
+  const agents = [{ nickname: "default" }, { nickname: "work" }, { nickname: "other" }];
+  act(() => updatePreferences({ defaultAgent: "default" }));
+  const props = { agents, project: "/project", projects: [], onCreated: vi.fn() };
   const view = render(<CreateSession {...props} open={false} />);
   view.rerender(<CreateSession {...props} open />);
-  expect(screen.getByLabelText("Session home")).toHaveValue("default");
-  fireEvent.change(screen.getByLabelText("Session home"), { target: { value: "work" } });
+  expect(screen.getByLabelText("Session agent")).toHaveValue("default");
+  fireEvent.change(screen.getByLabelText("Session agent"), { target: { value: "work" } });
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/manual" } });
   fireEvent.click(screen.getByRole("checkbox", { name: "Enable worktree" }));
   fireEvent.click(screen.getByRole("checkbox", { name: "Enable YOLO mode" }));
-  act(() => updatePreferences({ defaultHome: "other", worktree: true, yolo: true }));
+  act(() => updatePreferences({ defaultAgent: "other", worktree: true, yolo: true }));
   act(() => updatePreferences({ worktree: false, yolo: false }));
   view.rerender(<CreateSession {...props} project="/updated" open />);
   expect(screen.getByLabelText("Project directory")).toHaveValue("/manual");
   expect(screen.getByRole("checkbox", { name: "Enable worktree" })).toBeChecked();
   expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).toBeChecked();
-  expect(screen.getByLabelText("Session home")).toHaveValue("work");
+  expect(screen.getByLabelText("Session agent")).toHaveValue("work");
   view.rerender(<CreateSession {...props} open={false} />);
   view.rerender(<CreateSession {...props} open />);
-  expect(screen.getByLabelText("Session home")).toHaveValue("other");
+  expect(screen.getByLabelText("Session agent")).toHaveValue("other");
   expect(screen.getByLabelText("Project directory")).toHaveValue("/project");
   expect(screen.getByRole("checkbox", { name: "Enable worktree" })).not.toBeChecked();
   expect(screen.getByRole("checkbox", { name: "Enable YOLO mode" })).not.toBeChecked();
-  act(() => updatePreferences({ defaultHome: "" }));
+  act(() => updatePreferences({ defaultAgent: "" }));
 });
 
 it("hides unsupported Claude archive while keeping delete and exit", async () => {
   const session = {
     ...baseSession,
-    origin: { ...baseSession.origin, home: "glm", agentName: "Claude Code" },
+    origin: { ...baseSession.origin, agent: "glm", runtimeName: "Claude Code" },
   };
   render(
     <ManageSession

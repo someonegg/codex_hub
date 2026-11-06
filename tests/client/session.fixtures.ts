@@ -11,9 +11,9 @@ export const baseSession: SessionDetail = {
   projectDirectory: "/project/reader",
   origin: {
     sourceType: "codex-jsonl",
-    home: "default",
-    agentName: "Codex",
-    agentVersion: null,
+    agent: "default",
+    runtimeName: "Codex",
+    runtimeVersion: null,
   },
   createdAt: "2026-07-28T10:00:00Z",
   updatedAt: "2026-07-28T11:00:00Z",
@@ -21,15 +21,15 @@ export const baseSession: SessionDetail = {
   resume: { allowed: false, reason: "No pane binding has been recorded" },
   parentId: null,
   childIds: [],
-  agent: null,
+  subagent: null,
 };
 
 export const listBody = {
-  homes: [{ nickname: "default" }],
+  agents: [{ nickname: "default" }],
   revision: "a".repeat(43),
   sessions: [
     {
-      home: "default",
+      agent: "default",
       id: SESSION_ID,
       title: baseSession.title,
       projectDirectory: "/project/reader",

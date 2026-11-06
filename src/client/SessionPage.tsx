@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { SessionHome } from "../shared/api-contract";
+import type { SessionAgent } from "../shared/api-contract";
 import type { SessionSummary } from "../shared/domain";
 
 import { ErrorState } from "./components/ErrorState";
@@ -15,7 +15,7 @@ import { useHubOperation } from "./state/use-hub-operation";
 import { useSessionReader } from "./state/use-session-reader";
 
 interface SessionPageProps {
-  homes?: readonly SessionHome[];
+  agents?: readonly SessionAgent[];
   sessionId: string;
   sessions?: readonly SessionSummary[];
   includeArchived?: boolean;
@@ -27,7 +27,7 @@ interface SessionPageProps {
 export function SessionPage({
   sessionId,
   sessions = [],
-  homes = [],
+  agents = [],
   includeArchived = false,
   onNavigate,
   onCatalogChanged,
@@ -78,7 +78,7 @@ export function SessionPage({
     <div className="reader-page">
       {reader.context ? (
         <SessionReader
-          homeNickname={homes.length > 1 ? reader.context.session.origin.home : undefined}
+          agentNickname={agents.length > 1 ? reader.context.session.origin.agent : undefined}
           managementBusy={operation.busy}
           operationStatus={
             !showManagementStatus ? <OperationStatus controller={operation} /> : null
@@ -99,7 +99,7 @@ export function SessionPage({
           management={
             <ManageSession
               management={
-                homes.find((home) => home.nickname === reader.context!.session.origin.home)
+                agents.find((agent) => agent.nickname === reader.context!.session.origin.agent)
                   ?.management
               }
               key={sessionId}

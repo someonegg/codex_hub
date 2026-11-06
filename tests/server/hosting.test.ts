@@ -77,7 +77,7 @@ it("serves immutable snapshot paths, MIME and HEAD with independent headers and 
   await mkdir(client);
   await writeFile(join(client, "index.html"), "hub");
   const server = createServer({
-    homes: [],
+    agents: [],
     host: "127.0.0.1",
     port: 0,
     clientDirectory: client,
@@ -177,7 +177,7 @@ it("keeps all hosting routes disabled without touching existing snapshots", asyn
   await mkdir(client);
   await writeFile(join(client, "index.html"), "hub");
   const server = createServer({
-    homes: [],
+    agents: [],
     host: "127.0.0.1",
     port: 0,
     clientDirectory: client,
@@ -223,7 +223,7 @@ it("classifies malformed paths, missing files and storage failures with correlat
   const logger = { error: vi.fn() };
   const server = createServer(
     {
-      homes: [],
+      agents: [],
       host: "127.0.0.1",
       port: 0,
       clientDirectory: client,

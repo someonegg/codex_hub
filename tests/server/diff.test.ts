@@ -78,7 +78,7 @@ it("gates routes, preserves CSP and no-store, and returns 404 after deletion", a
   await writeFile(join(client, "index.html"), "hub");
   for (const enabled of [false, true]) {
     const server = createServer({
-      homes: [],
+      agents: [],
       host: "127.0.0.1",
       port: 0,
       clientDirectory: client,
@@ -194,7 +194,7 @@ it("serves pages and deletes resources without loading diff bodies", async () =>
   await mkdir(client);
   await writeFile(join(client, "index.html"), "hub");
   const server = createServer({
-    homes: [],
+    agents: [],
     host: "127.0.0.1",
     port: 0,
     clientDirectory: client,

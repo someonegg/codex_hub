@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { SessionHome, SessionListResponse } from "../../shared/api-contract.js";
+import type { SessionAgent, SessionListResponse } from "../../shared/api-contract.js";
 import type { SessionDetail, SessionStatus } from "../../shared/domain.js";
 import type { DomainSession } from "../domain/session-domain.js";
 
@@ -9,7 +9,7 @@ export type SessionDisplayTitleResolver = (session: DomainSession) => string | n
 export class SessionApiMapper {
   constructor(
     private readonly resolveDisplayTitle: SessionDisplayTitleResolver = () => null,
-    private readonly homes: SessionHome[] = [],
+    private readonly agents: SessionAgent[] = [],
   ) {}
 
   list(
@@ -24,7 +24,7 @@ export class SessionApiMapper {
         if (!isChild && projectDirectory !== null) projectDirectories.add(projectDirectory);
         return {
           id: session.id,
-          home: session.origin.home,
+          agent: session.origin.agent,
           title: this.resolveDisplayTitle(session) ?? session.title,
           projectDirectory,
           ...(session.taskName ? { taskName: session.taskName } : {}),
@@ -38,13 +38,13 @@ export class SessionApiMapper {
       })
       .sort((a, b) => compareIds(a.id, b.id));
     const structure = {
-      homes: [...this.homes],
+      agents: [...this.agents],
       projects: [...projectDirectories].sort(compareIds).map((directory) => ({ directory })),
       sessions: summaries.map(({ updatedAt, ...summary }) => summary),
     };
     return {
       revision: createHash("sha256").update(JSON.stringify(structure)).digest("base64url"),
-      homes: structure.homes,
+      agents: structure.agents,
       projects: structure.projects,
       sessions: summaries,
     };
@@ -64,7 +64,7 @@ export class SessionApiMapper {
       status: session.archived ? ("archived" as const) : ("normal" as const),
       parentId: session.parentId,
       childIds: [...session.childIds],
-      agent: session.agent === null ? null : { ...session.agent },
+      subagent: session.subagent === null ? null : { ...session.subagent },
       sourceId: session.sourceId,
     };
   }

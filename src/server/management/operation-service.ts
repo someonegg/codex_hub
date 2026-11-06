@@ -117,14 +117,14 @@ export class OperationService {
 
   create(input: CreateSessionRequest): HubOperation {
     if (input.resumeSessionId !== undefined) return this.#resume(input);
-    let home: string;
+    let agent: string;
     try {
-      home = this.managers.resolveCreateHome(input.home);
+      agent = this.managers.resolveCreateAgent(input.agent);
     } catch (error) {
       throw new ManagementError(400, (error as Error).message);
     }
     const fingerprint = JSON.stringify([
-      home,
+      agent,
       "create",
       input.projectDirectory,
       input.taskName?.trim() || null,
@@ -136,7 +136,7 @@ export class OperationService {
     if (duplicate) return { ...duplicate };
     const entry = this.#new("create", null);
     entry.metadata.mode = "new";
-    entry.home = home;
+    entry.agent = agent;
     this.#requests.set(input.requestId, { fingerprint, operationId: entry.metadata.operationId });
     void this.#launch.create(entry, input);
     return this.#project(entry);
@@ -166,7 +166,7 @@ export class OperationService {
   async assertSupported(type: "exit" | "archive" | "delete", sessionId: string): Promise<void> {
     if (type !== "archive") return;
     const session = (await this.sessions.managementSnapshot()).byId.get(sessionId);
-    if (session && typeof this.managers.get(session.origin.home).archive !== "function")
+    if (session && typeof this.managers.get(session.origin.agent).archive !== "function")
       throw new ManagementError(
         409,
         "Operation is not supported by this session source",
@@ -359,7 +359,7 @@ export class OperationService {
         createdAt: timestamp,
         updatedAt: timestamp,
       },
-      home: this.managers.defaultHome,
+      agent: this.managers.defaultAgent,
       stage:
         type === "create"
           ? { kind: "create", phase: "resolving", deadline: null }

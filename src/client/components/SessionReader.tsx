@@ -14,7 +14,7 @@ import { SessionInteraction } from "./SessionInteraction";
 import { Timeline } from "./Timeline";
 
 interface SessionReaderProps {
-  homeNickname?: string;
+  agentNickname?: string;
   recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
   managementBusy?: boolean;
@@ -30,7 +30,7 @@ interface SessionReaderProps {
 }
 
 export function SessionReader({
-  homeNickname,
+  agentNickname,
   recoveryActions,
   operationStatus,
   managementBusy,
@@ -75,7 +75,7 @@ export function SessionReader({
   return (
     <section className="reader" aria-labelledby="session-title">
       <SessionHeader
-        homeNickname={homeNickname}
+        agentNickname={agentNickname}
         management={management}
         session={context.session}
       />

@@ -5,11 +5,11 @@ const destination = process.argv[2];
 if (!destination || process.argv.length !== 3) {
   throw new Error("Usage: node scripts/create-docs-demo.mjs <new-directory>");
 }
-const home = resolve(destination);
-// Exclusive creation prevents overwriting an existing Codex home.
-await mkdir(home);
-await mkdir(join(home, "sessions"));
-await mkdir(join(home, "archived_sessions"));
+const agent = resolve(destination);
+// Exclusive creation prevents overwriting an existing Codex agent.
+await mkdir(agent);
+await mkdir(join(agent, "sessions"));
+await mkdir(join(agent, "archived_sessions"));
 
 const sessions = [
   {
@@ -83,12 +83,12 @@ for (const session of sessions) {
     });
   });
   await writeFile(
-    join(home, session.archived ? "archived_sessions" : "sessions", `rollout-${session.id}.jsonl`),
+    join(agent, session.archived ? "archived_sessions" : "sessions", `rollout-${session.id}.jsonl`),
     records.map((record) => JSON.stringify(record)).join("\n") + "\n",
   );
 }
 await writeFile(
-  join(home, "session_index.jsonl"),
+  join(agent, "session_index.jsonl"),
   sessions.map(({ id, title }) => JSON.stringify({ id, thread_name: title })).join("\n") + "\n",
 );
-console.log(`Documentation demo created at ${home}`);
+console.log(`Documentation demo created at ${agent}`);

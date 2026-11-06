@@ -128,13 +128,13 @@ try {
     await resource("diff", "delete", entry.id);
   }
   assert.equal(JSON.parse((await resource("diff", "list")).stdout).length, 0);
-  const home = join(temporary, "empty-home");
-  await mkdir(home);
-  await mkdir(join(home, "sessions"));
-  await mkdir(join(home, "archived_sessions"));
+  const agent = join(temporary, "empty-agent");
+  await mkdir(agent);
+  await mkdir(join(agent, "sessions"));
+  await mkdir(join(agent, "archived_sessions"));
   server = spawn(
     serverBinary,
-    ["--codex-home", `smoke=${home}`, "--port", "0", "--hosting", "--home-dir", hosting],
+    ["--codex-agent", `smoke=${agent}`, "--port", "0", "--hosting", "--home-dir", hosting],
     { cwd: temporary, stdio: ["ignore", "pipe", "pipe"] },
   );
   let output = "";

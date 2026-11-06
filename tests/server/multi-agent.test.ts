@@ -13,24 +13,24 @@ vi.mock("../../src/server/interaction/tmux-preview-listener.js", () => ({
   createTmuxPreviewListener: () => createTestPreviewListener(),
 }));
 
-it("isolates native identities, names and relationships while merging projects and retaining empty homes", async () => {
-  const root = await createTempDirectory("multi-home-");
-  const homes = ["personal", "work", "empty"].map((nickname) => ({
+it("isolates native identities, names and relationships while merging projects and retaining empty agents", async () => {
+  const root = await createTempDirectory("multi-agent-");
+  const agents = ["personal", "work", "empty"].map((nickname) => ({
     nickname,
     path: join(root, nickname),
   }));
-  for (const home of homes.slice(0, 2)) {
-    await cp(resolve("tests/fixtures/codex-home"), home.path, { recursive: true });
+  for (const agent of agents.slice(0, 2)) {
+    await cp(resolve("tests/fixtures/codex-home"), agent.path, { recursive: true });
     await writeFile(
-      join(home.path, "session_index.jsonl"),
-      JSON.stringify({ id: "basic-session", thread_name: `${home.nickname} title` }) + "\n",
+      join(agent.path, "session_index.jsonl"),
+      JSON.stringify({ id: "basic-session", thread_name: `${agent.nickname} title` }) + "\n",
     );
   }
-  await mkdir(homes[2]!.path);
-  const hub = await createCodexHub({ homes: homes });
+  await mkdir(agents[2]!.path);
+  const hub = await createCodexHub({ agents: agents });
   try {
     const list = await hub.sessions.list();
-    expect(list.homes).toEqual([
+    expect(list.agents).toEqual([
       { nickname: "personal", management: { archive: true } },
       { nickname: "work", management: { archive: true } },
       { nickname: "empty", management: { archive: true } },
@@ -39,8 +39,8 @@ it("isolates native identities, names and relationships while merging projects a
     const personal = list.sessions.find((session) => session.title === "personal title")!;
     const work = list.sessions.find((session) => session.title === "work title")!;
     expect(personal.id).not.toBe(work.id);
-    expect(personal.home).toBe("personal");
-    expect(work.home).toBe("work");
+    expect(personal.agent).toBe("personal");
+    expect(work.agent).toBe("work");
     expect(personal.projectDirectory).toBe(work.projectDirectory);
     for (const parent of [personal, work]) {
       const detail = (await hub.sessions.getSession(parent.id))!.session;
@@ -49,12 +49,12 @@ it("isolates native identities, names and relationships while merging projects a
       expect(detail.childIds).toHaveLength(1);
       const child = (await hub.sessions.getSession(detail.childIds[0]!))!.session;
       expect(child.parentId).toBe(parent.id);
-      expect(child.origin.home).toBe(parent.home);
+      expect(child.origin.agent).toBe(parent.agent);
     }
     const reordered = await createCodexHub({
-      homes: [...homes]
+      agents: [...agents]
         .reverse()
-        .map((home) => ({ ...home, nickname: `${home.nickname} renamed` })),
+        .map((agent) => ({ ...agent, nickname: `${agent.nickname} renamed` })),
     });
     try {
       const next = await reordered.sessions.list();
@@ -62,18 +62,18 @@ it("isolates native identities, names and relationships while merging projects a
         list.sessions.map((session) => session.id),
       );
       expect(next.revision).not.toBe(list.revision);
-      expect(next.sessions.find((session) => session.id === personal.id)?.home).toBe(
+      expect(next.sessions.find((session) => session.id === personal.id)?.agent).toBe(
         "personal renamed",
       );
-      expect((await reordered.sessions.getSession(personal.id))!.session.origin.home).toBe(
+      expect((await reordered.sessions.getSession(personal.id))!.session.origin.agent).toBe(
         "personal renamed",
       );
     } finally {
       reordered.close();
     }
-    // A recoverably unreadable session root must not prevent access to another home.
-    await rename(join(homes[0]!.path, "sessions"), join(root, "offline"));
-    await writeFile(join(homes[0]!.path, "sessions"), "unavailable");
+    // A recoverably unreadable session root must not prevent access to another agent.
+    await rename(join(agents[0]!.path, "sessions"), join(root, "offline"));
+    await writeFile(join(agents[0]!.path, "sessions"), "unavailable");
     await hub.sessions.refresh();
     expect((await hub.sessions.getSession(work.id))!.session.title).toBe("work title");
   } finally {
@@ -81,11 +81,14 @@ it("isolates native identities, names and relationships while merging projects a
   }
 });
 
-it("keeps automatic updates reads isolated and resolves tmux takeover across homes", async () => {
-  const root = await createTempDirectory("multi-home-updates-");
-  const homes = ["personal", "work"].map((nickname) => ({ nickname, path: join(root, nickname) }));
+it("keeps automatic updates reads isolated and resolves tmux takeover across agents", async () => {
+  const root = await createTempDirectory("multi-agent-updates-");
+  const agents = ["personal", "work"].map((nickname) => ({ nickname, path: join(root, nickname) }));
   const rollout = (index: number) =>
-    join(homes[index]!.path, "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl");
+    join(
+      agents[index]!.path,
+      "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
+    );
   const target = {
     socketPath: join(root, "tmux.sock"),
     sessionName: "ahub-00000000-0000-0000-0000-000000000007",
@@ -105,23 +108,23 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
         ],
       },
     }) + "\n";
-  for (let index = 0; index < homes.length; index++) {
-    await cp(resolve("tests/fixtures/codex-home"), homes[index]!.path, { recursive: true });
+  for (let index = 0; index < agents.length; index++) {
+    await cp(resolve("tests/fixtures/codex-home"), agents[index]!.path, { recursive: true });
     await appendFile(rollout(index), bind(`2026-07-28T12:00:0${index}.000Z`));
   }
   const connect = vi
     .spyOn(TmuxInteractionService.prototype, "resolveTarget")
     .mockResolvedValue(target);
-  const hub = await createCodexHub({ homes: homes });
+  const hub = await createCodexHub({ agents: agents });
   try {
     const list = await hub.sessions.list();
-    expect(list.homes).toEqual(
-      homes.map(({ nickname }) => ({ nickname, management: { archive: true } })),
+    expect(list.agents).toEqual(
+      agents.map(({ nickname }) => ({ nickname, management: { archive: true } })),
     );
-    const parents = homes.map(
-      (home) =>
+    const parents = agents.map(
+      (agent) =>
         list.sessions.find(
-          (session) => session.home === home.nickname && session.title === "Synthetic trace",
+          (session) => session.agent === agent.nickname && session.title === "Synthetic trace",
         )!,
     );
     const [personal, work] = parents;
@@ -149,7 +152,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
       stateRevision: "unseen" as UpdateRevision,
     });
     expect(updates!.items).toHaveLength(1);
-    expect(updates!.session.origin.home).toBe(personal!.home);
+    expect(updates!.session.origin.agent).toBe(personal!.agent);
     const other = await hub.updates.wait(work!.id, {
       after: workPage.nextAfter,
       stateRevision: "unseen" as UpdateRevision,

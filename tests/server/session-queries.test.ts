@@ -22,9 +22,9 @@ const session: DomainSession = {
   archived: false,
   origin: {
     sourceType: "test",
-    home: "test",
-    agentName: "Test",
-    agentVersion: null,
+    agent: "test",
+    runtimeName: "Test",
+    runtimeVersion: null,
   },
   projectDirectory: null,
   workingDirectory: null,
@@ -32,7 +32,7 @@ const session: DomainSession = {
   updatedAt: null,
   parentId: null,
   childIds: [],
-  agent: null,
+  subagent: null,
   warningCount: 0,
   diagnostics: [],
 };

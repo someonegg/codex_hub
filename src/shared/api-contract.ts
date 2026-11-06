@@ -21,13 +21,13 @@ export interface SessionProject {
   directory: string;
 }
 
-export interface SessionHome {
+export interface SessionAgent {
   management?: { archive: boolean };
   nickname: string;
 }
 
 export interface SessionListResponse {
-  homes: SessionHome[];
+  agents: SessionAgent[];
   revision: string;
   projects: SessionProject[];
   sessions: SessionSummary[];
@@ -132,7 +132,7 @@ export interface HubOperation {
 export type CreateSessionRequest =
   | {
       resumeSessionId: string;
-      home?: never;
+      agent?: never;
       projectDirectory?: never;
       taskName?: never;
       workingDirectory?: never;
@@ -142,7 +142,7 @@ export type CreateSessionRequest =
     }
   | {
       resumeSessionId?: never;
-      home?: string;
+      agent?: string;
       projectDirectory: string;
       taskName?: string;
       workingDirectory?: string;

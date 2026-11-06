@@ -8,8 +8,8 @@ date: 2026-10-16
 Current scope: the unified hub remains in force. Navigation storage now records
 `includeArchived`, `expanded` project IDs, and `scroll`; the `collapsed` field
 described below is historical. See [usage](../usage.md#read-conversations)
-for current navigation behavior. The home filter is stored separately under
-`ahub.home`; a missing or removed home falls back to **All homes**.
+for current navigation behavior. The agent filter is stored separately under
+`ahub.agent`; a missing or removed agent falls back to **All agents**.
 
 ## Context and Problem Statement
 

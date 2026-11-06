@@ -9,7 +9,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   enter: "Enter",
   aborted: "已中止",
-  allHomes: "所有 Home",
+  allAgents: "所有智能体",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "所有成功上传的文件都会保留，包括从草稿中移除的文件。",
 
@@ -91,15 +91,15 @@ export const messages: Record<keyof typeof english, string> = {
 
   fileDiffs: "文件差异",
   filesMustBeAtMost20MiB: "单个文件不能超过 20 MiB",
-  filterByHome: "按 Home 筛选",
+  filterByAgent: "按智能体筛选",
   foldersAreNotSupported: "不支持文件夹",
   goToBoundSession: "前往已绑定会话",
-  handOffThisPaneSBindingToTheActiveCodexSession: "将此窗格的绑定移交给当前活动的 agent 会话。",
+  handOffThisPaneSBindingToTheActiveCodexSession: "将此窗格的绑定移交给当前活动的智能体会话。",
   handoff: "移交绑定",
   hide: "隐藏",
 
-  home: "Home",
-  homeLabel: "Home：",
+  agent: "智能体",
+  agentLabel: "智能体：",
   idle: "空闲",
 
   interrupt: "中断",
@@ -120,7 +120,7 @@ export const messages: Record<keyof typeof english, string> = {
   messageToAgent: "发送给智能体的消息",
   newSession: "新建会话",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
-    "尚未检测到 agent 会话。请连接 tmux 查看启动进度。",
+    "尚未检测到智能体会话。请连接 tmux 查看启动进度。",
   noAnswerRecorded: "尚无回答记录。",
 
   noMainSessionsYet: "暂无主会话",
@@ -172,7 +172,7 @@ export const messages: Record<keyof typeof english, string> = {
   scrollableCodeBlock: "可滚动代码块",
   scrollableMathFormula: "可滚动数学公式",
   scrollableTable: "可滚动表格",
-  selectAHome: "选择 Home",
+  selectAnAgent: "选择智能体",
   selectASessionFromTheSidebar: "从侧边栏选择会话",
   selected: "已选择",
   send: "发送",
@@ -181,7 +181,7 @@ export const messages: Record<keyof typeof english, string> = {
   sessionList: "会话列表",
 
   sessionCreated: "会话已创建。",
-  sessionHome: "会话 Home",
+  sessionAgent: "会话智能体",
   sessionInformation: "会话信息",
   sessionInteraction: "会话交互",
   sessionIsBusyTryAgainLater: "会话正忙，请稍后重试",
@@ -192,7 +192,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分内容未能完整解析，请查看下方原文。",
-  startingCodex: "正在启动 agent",
+  startingCodex: "正在启动智能体",
   superseded: "已被替代",
   takePhoto: "拍照",
   terminalPreview: "终端预览",
@@ -286,9 +286,9 @@ export const settings: Record<keyof typeof englishSettings, string> = {
   mist: "薄雾",
   paper: "纸张",
   launch: "会话启动默认设置",
-  home: "默认 Home",
+  agent: "默认智能体",
   auto: "自动",
-  unavailable: "不可用的 Home",
+  unavailable: "不可用的智能体",
   worktree: "默认启用 worktree",
   yolo: "默认启用 YOLO",
   enter: "按 Enter 发送（Shift+Enter 换行）",

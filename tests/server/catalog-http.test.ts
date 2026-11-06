@@ -11,8 +11,8 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 async function startApi() {
-  const home = await createTempDirectory("catalog-http-");
-  const repository = await createCodexSessionReadService(home);
+  const agent = await createTempDirectory("catalog-http-");
+  const repository = await createCodexSessionReadService(agent);
 
   const updates = new SessionUpdatesService(repository, {
     probeIntervalMs: 5,

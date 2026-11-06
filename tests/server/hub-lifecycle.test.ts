@@ -13,14 +13,14 @@ import { emptyApiRouter } from "../../src/server/http/router.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
 
 async function config(): Promise<ServerConfig> {
-  const home = await createTempDirectory("codex-lifecycle-");
-  const clientDirectory = join(home, "client");
+  const agent = await createTempDirectory("codex-lifecycle-");
+  const clientDirectory = join(agent, "client");
   await mkdir(clientDirectory);
   await writeFile(join(clientDirectory, "index.html"), "hub");
   return {
     host: "127.0.0.1",
     port: 0,
-    homes: [{ nickname: "default", path: home }],
+    agents: [{ nickname: "default", path: agent }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
@@ -29,7 +29,7 @@ async function config(): Promise<ServerConfig> {
 
 it("closes the composed services once before waiting for HTTP connections", async () => {
   const settings = await config();
-  const hub = await createCodexHub({ homes: settings.homes, interactionEnabled: false });
+  const hub = await createCodexHub({ agents: settings.agents, interactionEnabled: false });
   const catalogClose = vi.spyOn(hub.catalog, "close");
   const updatesClose = vi.spyOn(hub.updates, "close");
   const operationsClose = vi.spyOn(hub.operations, "close");
@@ -98,7 +98,7 @@ it("releases services if server construction or listening fails", async () => {
 
 it("isolates pane bindings between hubs and after closing and recreating a hub", async () => {
   const settings = await config();
-  const sessions = join(settings.homes[0]!.path, "sessions");
+  const sessions = join(settings.agents[0]!.path, "sessions");
   await mkdir(sessions);
   const rollout = join(sessions, "rollout-isolation.jsonl");
   const metadata =
@@ -123,7 +123,7 @@ it("isolates pane bindings between hubs and after closing and recreating a hub",
       },
     }) + "\n";
   await writeFile(rollout, metadata + invalidBinding);
-  const first = await createCodexHub({ homes: settings.homes });
+  const first = await createCodexHub({ agents: settings.agents });
   let second: Awaited<ReturnType<typeof createCodexHub>> | undefined;
   try {
     const session = (await first.sessions.list()).sessions[0]!;
@@ -131,14 +131,14 @@ it("isolates pane bindings between hubs and after closing and recreating a hub",
 
     // The same source identity now has no binding. Only the first hub saw the old event.
     await writeFile(rollout, metadata);
-    second = await createCodexHub({ homes: settings.homes });
+    second = await createCodexHub({ agents: settings.agents });
     const nextSession = (await second.sessions.list()).sessions[0]!;
     expect(nextSession.id).toBe(session.id);
     expect(await second.interaction.describe(session.id)).toMatchObject({ state: "unbound" });
     expect(await first.interaction.describe(session.id)).toMatchObject({ state: "disconnected" });
 
     first.close();
-    const recreated = await createCodexHub({ homes: settings.homes });
+    const recreated = await createCodexHub({ agents: settings.agents });
     try {
       expect(await recreated.interaction.describe(session.id)).toMatchObject({ state: "unbound" });
     } finally {

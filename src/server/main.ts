@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   const uploads = new UploadStore(await uploadDirectory(config.uploadDirectory));
   await uploads.initialize();
   const hub = await createCodexHub({
-    homes: config.homes,
+    agents: config.agents,
     socket: config.tmuxSocket,
     claudeReadyScript: config.claudeReadyScript,
     interactionEnabled: config.interactionEnabled,

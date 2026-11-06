@@ -1,12 +1,12 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { SessionHome } from "../../shared/api-contract";
+import type { SessionAgent } from "../../shared/api-contract";
 
 import { isLanguage, languageOptions } from "../i18n";
 import { updatePreferences, usePreferences } from "../state/preferences";
 
-export function Settings({ homes }: { homes: readonly SessionHome[] }) {
+export function Settings({ agents }: { agents: readonly SessionAgent[] }) {
   const { t } = useTranslation("settings");
   const preferences = usePreferences();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -62,19 +62,19 @@ export function Settings({ homes }: { homes: readonly SessionHome[] }) {
           </label>
           <fieldset className="settings-launch" aria-label={t("launch")}>
             <label>
-              {t("home")}
+              {t("agent")}
               <select
-                value={preferences.defaultHome}
-                onChange={(event) => updatePreferences({ defaultHome: event.target.value })}
+                value={preferences.defaultAgent}
+                onChange={(event) => updatePreferences({ defaultAgent: event.target.value })}
               >
                 <option value="">{t("auto")}</option>
-                {preferences.defaultHome &&
-                !homes.some((home) => home.nickname === preferences.defaultHome) ? (
-                  <option value={preferences.defaultHome}>{t("unavailable")}</option>
+                {preferences.defaultAgent &&
+                !agents.some((agent) => agent.nickname === preferences.defaultAgent) ? (
+                  <option value={preferences.defaultAgent}>{t("unavailable")}</option>
                 ) : null}
-                {homes.map((home) => (
-                  <option key={home.nickname} value={home.nickname}>
-                    {home.nickname}
+                {agents.map((agent) => (
+                  <option key={agent.nickname} value={agent.nickname}>
+                    {agent.nickname}
                   </option>
                 ))}
               </select>

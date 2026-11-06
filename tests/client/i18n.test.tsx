@@ -27,7 +27,7 @@ describe("language preferences", () => {
       setItem: (key: string, value: string) => values.set(key, value),
     });
     updatePreferences({ language: "en" });
-    render(<Settings homes={[]} />);
+    render(<Settings agents={[]} />);
     fireEvent.change(screen.getByRole("combobox", { name: "Language", hidden: true }), {
       target: { value: "zh-CN" },
     });
@@ -52,7 +52,7 @@ it("continues switching when storage is unavailable", () => {
     },
   });
   updatePreferences({ language: "en" });
-  render(<Settings homes={[]} />);
+  render(<Settings agents={[]} />);
   fireEvent.change(screen.getByRole("combobox", { name: "Language", hidden: true }), {
     target: { value: "zh-CN" },
   });
@@ -61,7 +61,7 @@ it("continues switching when storage is unavailable", () => {
 
 it("updates mounted controls when another tab selects Chinese", () => {
   updatePreferences({ language: "en" });
-  render(<Settings homes={[]} />);
+  render(<Settings agents={[]} />);
   vi.stubGlobal("localStorage", { getItem: () => JSON.stringify({ language: "zh-CN" }) });
   act(() => window.dispatchEvent(new StorageEvent("storage", { key: "ahub.preferences.v1" })));
   expect(screen.getByRole("combobox", { name: "语言", hidden: true })).toHaveValue("zh-CN");

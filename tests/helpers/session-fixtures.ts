@@ -7,9 +7,9 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
     id: "session",
     origin: {
       sourceType: "test",
-      home: "test",
-      agentName: "Test",
-      agentVersion: null,
+      agent: "test",
+      runtimeName: "Test",
+      runtimeVersion: null,
     },
     title: "Session",
     workingDirectory: null,
@@ -20,7 +20,7 @@ export function sessionDetail(overrides: Partial<SessionDetail> = {}): SessionDe
     resume: { allowed: false, reason: "Unavailable" },
     parentId: null,
     childIds: [],
-    agent: null,
+    subagent: null,
     sourceId: "session",
     ...overrides,
   };

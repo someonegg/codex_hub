@@ -3,7 +3,7 @@ import { opaqueIdForParts } from "../security/opaque-id.js";
 import type { SessionSourceDescriptor, SessionSourceSnapshot } from "../source/session-source.js";
 
 export interface DiagnosticLogRecord extends DomainDiagnostic {
-  readonly home: string;
+  readonly agent: string;
   readonly sessionId: string | null;
   readonly scope: "source" | "session" | "aggregate";
 }
@@ -46,10 +46,10 @@ export class RefreshDiagnosticLogger {
   ): void {
     const next = new Map<string, SourceState>();
     for (const { descriptor, snapshot } of sources) {
-      const home = descriptor.home;
-      const previous = this.#sources.get(home);
+      const agent = descriptor.agent;
+      const previous = this.#sources.get(agent);
       if (previous?.snapshot === snapshot) {
-        next.set(home, previous);
+        next.set(agent, previous);
         continue;
       }
       const diagnostics = new Map<string, DiagnosticState>();
@@ -70,7 +70,7 @@ export class RefreshDiagnosticLogger {
           if (!signatures.has(signature) && !prior?.signatures.has(signature)) {
             try {
               this.logger.log({
-                home,
+                agent,
                 sessionId,
                 scope,
                 severity: item.severity,
@@ -94,10 +94,10 @@ export class RefreshDiagnosticLogger {
         record(`session:${sessionId}`, entry.normalized.session.diagnostics, "session", sessionId);
         ids.add(entry.localId);
       }
-      for (const { sessionId, diagnostic } of aggregates.get(home) ?? []) {
+      for (const { sessionId, diagnostic } of aggregates.get(agent) ?? []) {
         record(`aggregate:${sessionId}`, [diagnostic], "aggregate", sessionId);
       }
-      next.set(home, { snapshot, diagnostics });
+      next.set(agent, { snapshot, diagnostics });
     }
     this.#sources = next;
   }

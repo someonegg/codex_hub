@@ -67,21 +67,21 @@ export class CodexSessionSource implements SessionSource {
   private readonly sessionIndex: SessionIndexReader;
 
   constructor(
-    private readonly codexHome: string,
+    private readonly codexAgent: string,
     instanceKey: string,
     {
       decoder = new CheckpointedJsonlDecoder(),
       identity = new IdentityResolver(),
       normalizer = new DefaultSessionNormalizer(),
-      sessionIndex = new SessionIndexReader(codexHome),
-      home = "default",
+      sessionIndex = new SessionIndexReader(codexAgent),
+      agent = "default",
     }: CodexSourceOptions = {},
   ) {
     this.decoder = decoder;
     this.identity = identity;
     this.normalizer = normalizer;
     this.sessionIndex = sessionIndex;
-    this.descriptor = { sourceType: "codex-jsonl", instanceKey, home, displayName: "Codex" };
+    this.descriptor = { sourceType: "codex-jsonl", instanceKey, agent, displayName: "Codex" };
   }
 
   async refresh(): Promise<SessionSourceSnapshot> {
@@ -91,7 +91,7 @@ export class CodexSessionSource implements SessionSource {
         .filter((entry) => entry.descriptor.archived)
         .map((entry) => [entry.descriptor.path, entry.descriptor] as const),
     );
-    const discovery = await new JsonlCatalogSource(this.codexHome, archivedDescriptors).discover();
+    const discovery = await new JsonlCatalogSource(this.codexAgent, archivedDescriptors).discover();
     const discoverySignature = JSON.stringify({
       diagnostics: discovery.diagnostics,
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
@@ -193,7 +193,7 @@ export class CodexSessionSource implements SessionSource {
   }
 
   displayTitleFor(session: DomainSession): string | null {
-    if (session.origin.home !== this.descriptor.home || session.sourceId === null) return null;
+    if (session.origin.agent !== this.descriptor.agent || session.sourceId === null) return null;
     return this.sessionIndex.threadName(session.sourceId);
   }
 
@@ -239,7 +239,7 @@ export class CodexSessionSource implements SessionSource {
       });
       binds.set(descriptor.id, bindingEvents);
       const metadata = this.identity.metadata(identityState);
-      const origin = this.#origin(metadata.agentVersion);
+      const origin = this.#origin(metadata.runtimeVersion);
       const baseNormalized =
         decoded.mode === "append" &&
         cached !== undefined &&
@@ -291,12 +291,12 @@ export class CodexSessionSource implements SessionSource {
     }
   }
 
-  #origin(agentVersion: string | null): DomainSessionOrigin {
+  #origin(runtimeVersion: string | null): DomainSessionOrigin {
     return {
       sourceType: this.descriptor.sourceType,
-      home: this.descriptor.home,
-      agentName: this.descriptor.displayName,
-      agentVersion,
+      agent: this.descriptor.agent,
+      runtimeName: this.descriptor.displayName,
+      runtimeVersion,
     };
   }
 }
@@ -306,14 +306,14 @@ export interface CodexSourceOptions {
   readonly identity?: IdentityResolver;
   readonly normalizer?: SessionNormalizer;
   readonly sessionIndex?: SessionIndexReader;
-  readonly home?: string;
+  readonly agent?: string;
 }
 
 export async function createCodexSessionSource(
-  codexHome: string,
+  codexAgent: string,
   options: CodexSourceOptions = {},
 ) {
-  const configured = resolve(codexHome);
+  const configured = resolve(codexAgent);
   return new CodexSessionSource(configured, `codex-jsonl\0${configured}`, options);
 }
 
@@ -349,8 +349,8 @@ function rolloutUnavailableDiagnostic(): DomainDiagnostic {
 function sameOrigin(left: DomainSessionOrigin, right: DomainSessionOrigin): boolean {
   return (
     left.sourceType === right.sourceType &&
-    left.home === right.home &&
-    left.agentName === right.agentName &&
-    left.agentVersion === right.agentVersion
+    left.agent === right.agent &&
+    left.runtimeName === right.runtimeName &&
+    left.runtimeVersion === right.runtimeVersion
   );
 }

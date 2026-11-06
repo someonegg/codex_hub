@@ -30,7 +30,7 @@ archive facts inside source snapshots. Status participates in catalog revisions;
 status, resume capability and interaction participate in reader revisions.
 
 Resume extends the existing create request with an exclusive `resumeSessionId`
-form. Resolve its home, native identity and directory on the server. Require a
+form. Resolve its agent, native identity and directory on the server. Require a
 valid latest binding with confirmed pane death or explicit ownership transfer,
 or no binding record, and a unique valid native identity and usable directory.
 The 2026-10-22 refinement permits unbound sessions to resume and places a concise

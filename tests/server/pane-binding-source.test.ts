@@ -39,13 +39,13 @@ it.each([false, true])(
   async (reverse) => {
     const root = await createTempDirectory("pane-bindings-");
     const socket = join(root, "shared.sock");
-    const homes = [join(root, "one"), join(root, "two")];
-    for (const home of homes) {
-      await mkdir(join(home, "sessions"), { recursive: true });
-      await mkdir(join(home, "archived_sessions"));
+    const agents = [join(root, "one"), join(root, "two")];
+    for (const agent of agents) {
+      await mkdir(join(agent, "sessions"), { recursive: true });
+      await mkdir(join(agent, "archived_sessions"));
     }
-    const fileA = join(homes[0]!, "sessions", "rollout-a.jsonl");
-    const fileC = join(homes[1]!, "sessions", "rollout-c.jsonl");
+    const fileA = join(agents[0]!, "sessions", "rollout-a.jsonl");
+    const fileC = join(agents[1]!, "sessions", "rollout-c.jsonl");
     const meta = line({ type: "session_meta", payload: { id: "same-native-id", cwd: root } });
     await writeFile(
       fileA,
@@ -63,7 +63,7 @@ it.each([false, true])(
         ),
     );
     const sources = await Promise.all(
-      homes.map((home, index) => createCodexSessionSource(home, { home: String(index) })),
+      agents.map((agent, index) => createCodexSessionSource(agent, { agent: String(index) })),
     );
     const sessions = new SessionReadService(reverse ? [...sources].reverse() : sources, {
       publishBindings: (events) => {
@@ -123,7 +123,7 @@ it.each([false, true])(
     await sessions.refresh();
     await sessions.refresh();
     expect(await service.describe(a)).toMatchObject({ state: "superseded" });
-    const archived = join(homes[1]!, "archived_sessions", "rollout-c.jsonl");
+    const archived = join(agents[1]!, "archived_sessions", "rollout-c.jsonl");
     await rename(fileC, archived);
     await sessions.refresh();
     expect(await service.describe(a)).toMatchObject({
@@ -149,22 +149,22 @@ it.each([false, true])(
 );
 
 it("consumes late-arriving older binds for their pane without changing the session's newer binding", async () => {
-  const home = await createTempDirectory("pane-binding-batches-");
-  const socket = join(home, "shared.sock");
-  await mkdir(join(home, "sessions"));
-  const aFile = join(home, "sessions", "rollout-a.jsonl");
-  const cFile = join(home, "sessions", "rollout-c.jsonl");
+  const agent = await createTempDirectory("pane-binding-batches-");
+  const socket = join(agent, "shared.sock");
+  await mkdir(join(agent, "sessions"));
+  const aFile = join(agent, "sessions", "rollout-a.jsonl");
+  const cFile = join(agent, "sessions", "rollout-c.jsonl");
   await writeFile(
     aFile,
-    line({ type: "session_meta", payload: { id: "a", cwd: home } }) +
+    line({ type: "session_meta", payload: { id: "a", cwd: agent } }) +
       message(1, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")),
   );
   await writeFile(
     cFile,
-    line({ type: "session_meta", payload: { id: "c", cwd: home } }) +
+    line({ type: "session_meta", payload: { id: "c", cwd: agent } }) +
       message(3, shell(socket, "ahub-00000000-0000-0000-0000-000000000002")),
   );
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const sessions = new SessionReadService([source], {
     publishBindings: (events) => {
       for (const event of events) bindings.submit(event);
@@ -196,7 +196,7 @@ it("consumes late-arriving older binds for their pane without changing the sessi
   expect(await service.describe(c)).toMatchObject({ state: "connected" });
   // A forced full decode must produce the same result as the append path.
   const rebuiltBindings = new PaneBindingManager();
-  const rebuilt = new SessionReadService([await createCodexSessionSource(home)], {
+  const rebuilt = new SessionReadService([await createCodexSessionSource(agent)], {
     publishBindings: (events) => {
       for (const event of events) rebuiltBindings.submit(event);
     },
@@ -218,14 +218,14 @@ it("consumes late-arriving older binds for their pane without changing the sessi
 });
 
 it("keeps the accepted duplicate, ignores its competitors' claims, and fully loads the first replacement", async () => {
-  const home = await createTempDirectory("duplicate-rollouts-");
-  await mkdir(join(home, "sessions"));
-  const a = join(home, "sessions/rollout-a.jsonl");
-  const b = join(home, "sessions/rollout-b.jsonl");
-  const c = join(home, "sessions/rollout-c.jsonl");
+  const agent = await createTempDirectory("duplicate-rollouts-");
+  await mkdir(join(agent, "sessions"));
+  const a = join(agent, "sessions/rollout-a.jsonl");
+  const b = join(agent, "sessions/rollout-b.jsonl");
+  const c = join(agent, "sessions/rollout-c.jsonl");
   const meta = (title: string) =>
-    line({ type: "session_meta", payload: { id: "duplicate", title, cwd: home } });
-  const socket = join(home, "shared.sock");
+    line({ type: "session_meta", payload: { id: "duplicate", title, cwd: agent } });
+  const socket = join(agent, "shared.sock");
   await writeFile(
     b,
     meta("B") + message(1, shell(socket, "ahub-00000000-0000-0000-0000-000000000001")),
@@ -234,7 +234,7 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
     c,
     meta("C") + message(9, shell(socket, "ahub-00000000-0000-0000-0000-000000000003")),
   );
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const log = vi.fn();
   const sessions = new SessionReadService([source], {
     publishBindings: (events) => {
@@ -298,14 +298,14 @@ it("keeps the accepted duplicate, ignores its competitors' claims, and fully loa
 });
 
 it("accumulates valid V1 project backups and rebuilds the same grouping without filesystem lookup", async () => {
-  const home = await createTempDirectory("project-backup-");
-  await mkdir(join(home, "sessions"));
-  const file = join(home, "sessions/rollout-project.jsonl");
+  const agent = await createTempDirectory("project-backup-");
+  await mkdir(join(agent, "sessions"));
+  const file = join(agent, "sessions/rollout-project.jsonl");
   await writeFile(
     file,
     line({ type: "session_meta", payload: { id: "project", cwd: "/missing/working" } }),
   );
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const project = async () =>
     (await source.refresh()).sessions[0]!.normalized.session.projectDirectory;
   expect(await project()).toBe("/missing/working");
@@ -323,7 +323,7 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
     message(3, shell("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000002")),
   );
   expect(await project()).toBe("/missing/project ' $()");
-  const rebuilt = await createCodexSessionSource(home);
+  const rebuilt = await createCodexSessionSource(agent);
   expect((await rebuilt.refresh()).sessions[0]!.normalized.session.projectDirectory).toBe(
     await project(),
   );
@@ -334,15 +334,15 @@ it("accumulates valid V1 project backups and rebuilds the same grouping without 
 });
 
 it("updates project and task from valid bindings while preserving omitted or invalid fields", async () => {
-  const home = await createTempDirectory("binding-metadata-");
-  await mkdir(join(home, "sessions"));
-  const file = join(home, "sessions/rollout-metadata.jsonl");
+  const agent = await createTempDirectory("binding-metadata-");
+  await mkdir(join(agent, "sessions"));
+  const file = join(agent, "sessions/rollout-metadata.jsonl");
   const meta = line({ type: "session_meta", payload: { id: "metadata", cwd: "/working" } });
   await writeFile(
     file,
     meta + message(1, shell("/tmp/socket", "ahub-00000000-0000-0000-0000-000000000001")),
   );
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const read = async () => (await source.refresh()).sessions[0]!.normalized.session;
   expect(await read()).toMatchObject({ projectDirectory: "/working", taskName: undefined });
   const bind = (project: string, task: string, socket = "/tmp/socket") =>
@@ -364,7 +364,7 @@ it("updates project and task from valid bindings while preserving omitted or inv
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
   await appendFile(file, message(6, bind("/ignored", JSON.stringify("ignored"), "relative")));
   expect(await read()).toMatchObject({ projectDirectory: "/second", taskName: "second" });
-  const rebuilt = await createCodexSessionSource(home);
+  const rebuilt = await createCodexSessionSource(agent);
   expect((await rebuilt.refresh()).sessions[0]!.normalized.session).toMatchObject({
     projectDirectory: "/second",
     taskName: "second",

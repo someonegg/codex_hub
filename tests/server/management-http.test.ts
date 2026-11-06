@@ -18,8 +18,8 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 
 it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves operations after a page reload", async () => {
-  const home = await createTempDirectory("management-http-");
-  const source = await createCodexSessionSource(home);
+  const agent = await createTempDirectory("management-http-");
+  const source = await createCodexSessionSource(agent);
   const store = new CatalogSnapshotStore([source]);
   const interaction = new SessionInteractionService(
     new CatalogInteractionSessionReader(store),
@@ -37,7 +37,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     store,
     interaction,
     resolveDisplayTitle: (session) => source.displayTitleFor(session),
-    homes: [{ nickname: "default" }],
+    agents: [{ nickname: "default" }],
   });
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
@@ -69,7 +69,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     },
   );
   const base = `${origin}/api/v1`;
-  const body = { projectDirectory: home, worktree: false, requestId: "http-request-one" };
+  const body = { projectDirectory: agent, worktree: false, requestId: "http-request-one" };
   const post = (path: string, value: unknown, extra: RequestInit = {}) =>
     fetch(`${base}${path}`, {
       method: "POST",
@@ -152,9 +152,9 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     yolo: false,
   };
   for (const extra of [
-    { projectDirectory: home },
-    { workingDirectory: home },
-    { home: "test" },
+    { projectDirectory: agent },
+    { workingDirectory: agent },
+    { agent: "test" },
     { worktree: false },
     { yolo: "true" },
     { resumeSessionId: "" },
@@ -183,9 +183,9 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   expect(await (await post("/sessions", body)).json()).toMatchObject({
     operationId: operation.operationId,
   });
-  expect(await (await post("/sessions", { ...body, workingDirectory: home })).json()).toMatchObject(
-    { operationId: operation.operationId },
-  );
+  expect(
+    await (await post("/sessions", { ...body, workingDirectory: agent })).json(),
+  ).toMatchObject({ operationId: operation.operationId });
   expect((await post("/sessions", { ...body, workingDirectory: "/other" })).status).toBe(409);
   expect((await post("/sessions", { ...body, worktree: true })).status).toBe(409);
   const retrieved = await fetch(`${base}/operations/${operation.operationId}`);
@@ -216,7 +216,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   expect(split.status).toBe(202);
   await vi.waitFor(() =>
     expect(manager.launch).toHaveBeenLastCalledWith(
-      expect.objectContaining({ projectDirectory: home, workingDirectory: "/other" }),
+      expect.objectContaining({ projectDirectory: agent, workingDirectory: "/other" }),
     ),
   );
   const id = "abcdefghijklmnopqrstuvwxyzABCDEFGH123456789";
@@ -231,6 +231,6 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     ).status,
   ).toBe(403);
   expect(
-    (await post("/sessions", { projectDirectory: home, requestId: "bad-request" })).status,
+    (await post("/sessions", { projectDirectory: agent, requestId: "bad-request" })).status,
   ).toBe(400);
 });

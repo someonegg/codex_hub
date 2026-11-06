@@ -12,7 +12,7 @@ export interface DomainDiagnostic {
   readonly ordinal: number | null;
 }
 
-export interface DomainAgentIdentity {
+export interface SubagentIdentity {
   readonly taskName: string | null;
   readonly nickname: string | null;
   readonly role: string | null;
@@ -20,9 +20,9 @@ export interface DomainAgentIdentity {
 
 export interface DomainSessionOrigin {
   readonly sourceType: string;
-  readonly home: string;
-  readonly agentName: string;
-  readonly agentVersion: string | null;
+  readonly agent: string;
+  readonly runtimeName: string;
+  readonly runtimeVersion: string | null;
 }
 
 export type InteractionBindingAttempt =
@@ -103,7 +103,7 @@ export interface DomainSession {
   readonly isChild?: boolean;
   readonly parentId: DomainSessionId | null;
   readonly childIds: readonly DomainSessionId[];
-  readonly agent: DomainAgentIdentity | null;
+  readonly subagent: SubagentIdentity | null;
   readonly warningCount: number;
   readonly diagnostics: readonly DomainDiagnostic[];
 }

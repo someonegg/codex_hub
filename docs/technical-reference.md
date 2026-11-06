@@ -22,7 +22,7 @@ ordinal numbers; pass each returned `nextAfter` as the next request’s `after`.
 
 Codex scans `rollout-*.jsonl` under `sessions/` and `archived_sessions/`;
 `session_index.jsonl` supplies advisory titles. Claude scans
-`projects/<project>/<UUID>.jsonl`. Codex follows trusted-home symlinks through
+`projects/<project>/<UUID>.jsonl`. Codex follows trusted-directory symlinks through
 depth 8 (root = 0), without cycle detection or real-path deduplication.
 Logical paths determine discovery order, fallback identity, and cache keys.
 
@@ -40,7 +40,7 @@ edits. Discovery, removal, advisory metadata refresh, and failed-load retries co
 
 ### Session identity
 
-Native IDs and parent relationships are home-scoped. Shared services check native
+Native IDs and parent relationships are agent-scoped. Shared services check native
 ID presence; format validation belongs to the owning adapter (both current adapters
 require UUIDs). Missing native IDs use path identity.
 
@@ -55,8 +55,8 @@ Changed candidates and replacements are reloaded; missing paths leave the caches
 Adapters publish deeply immutable snapshots. Reused references indicate unchanged
 content; an unchanged source signature returns the same snapshot object.
 Binding events come from the current decoded batch; project/task metadata
-accumulates. Public origins expose `agentVersion`, omitting `formatVersion`.
-Registration requires independently unique, nonempty `instanceKey` and `home`.
+accumulates. Public origins expose `runtimeVersion`, omitting `formatVersion`.
+Registration requires independently unique, nonempty `instanceKey` and `agent`.
 See [adapter domain types](../src/server/domain/session-domain.ts).
 
 Diagnostics affect logs only, never responses, policy, or revisions. Default
@@ -71,19 +71,24 @@ Session API path IDs use the opaque Hub ID syntax (`[A-Za-z0-9_-]{20,100}`),
 not native session IDs. Message reads also validate ordinal bounds. See
 [path validation](../src/server/http/session-path.ts).
 
-### Home identity and routing
+### Agent identity and routing
 
-Home nicknames route publicly; configured absolute paths namespace internally. Renaming/reordering homes preserves session IDs; moving a home changes them.
-Projects merge by directory across homes; home paths remain private.
+An Agent owns configuration, Skills, memory, and model settings. Codex and Claude
+Code are Runtimes; task-spawned identities are Subagents. Session origins expose
+`agent`, `runtimeName`, and nullable `runtimeVersion`; session details expose
+nullable `subagent` identity (`taskName`, `nickname`, `role`).
 
-Without explicit home options, both `codex=~/.codex` and `claude=~/.claude`
+Agent nicknames route publicly; configured absolute paths namespace internally. Renaming/reordering agents preserves session IDs; moving an agent changes them.
+Projects merge by directory across agents; agent paths remain private.
+
+Without explicit agent options, both `codex=~/.codex` and `claude=~/.claude`
 remain configured. Codex comes first unless `~/.codex` is absent, when Claude
-comes first. Explicit homes replace both defaults and retain argument order;
+comes first. Explicit agents replace both defaults and retain argument order;
 `default` has no special meaning as a nickname.
 
-Creation defaults `home` to the first configured nickname. Unknown nicknames return `400`; reusing a request ID across homes returns
-`409`. Operations use the selected/owning adapter's local CLI and home environment
-(`CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude). See [Multiple homes](usage.md#multiple-homes).
+Creation defaults `agent` to the first configured nickname. Unknown nicknames return `400`; reusing a request ID across agents returns
+`409`. Operations use the selected/owning adapter's local CLI and agent environment
+(`CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude). See [Multiple agents](usage.md#multiple-agents).
 
 ### Claude Code adapter
 
@@ -93,7 +98,7 @@ unavailable; native shell commands/output are excluded from conversations. Readi
 does not modify native history or depend on Codex internals. Filtering and limits
 are defined in [JSONL processing](session-jsonl-filtering.md#claude-code).
 
-Before launching, configure and authenticate the local `claude` CLI for the home.
+Before launching, configure and authenticate the local `claude` CLI for the agent.
 Launch sets `CLAUDE_CONFIG_DIR` and runs interactive `claude`, with
 `--resume <UUID>`, `--worktree`, or `--dangerously-skip-permissions` as applicable.
 The adapter waits up to 15 seconds for a confirmed native prompt before sending
@@ -102,7 +107,7 @@ allowed rectangle is sufficient; unsuccessful checks wait one second before
 capturing again.
 
 Optional global `--claude-ready-script <path>` replaces the built-in predicate
-for all Claude homes. The executable runs directly (no shell) once per captured
+for all Claude agents. The executable runs directly (no shell) once per captured
 snapshot. stdin is JSON `{ "current": { "content": "...", "cursorX": 2,
 "cursorY": 1 }, "context": "" }`; coordinates are zero-based. Missing snapshots
 skip script execution, preserve context, and retry after one second. stdout must
@@ -151,15 +156,15 @@ loaded input requests and responses by `callId` into cards. See
 ## Catalog
 
 `GET /api/v1/sessions` returns a complete catalog snapshot:
-`{ revision, homes, projects, sessions }`. Clients filter and group sessions locally.
+`{ revision, agents, projects, sessions }`. Clients filter and group sessions locally.
 
-| Collection | Fields                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------ |
-| `homes`    | `nickname` and `management: { archive }`, including empty homes                                              |
-| `projects` | `directory`                                                                                                  |
-| `sessions` | `id`, `home`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
+| Collection | Fields                                                                                                        |
+| ---------- | ------------------------------------------------------------------------------------------------------------- |
+| `agents`   | `nickname` and `management: { archive }`, including empty agents                                              |
+| `projects` | `directory`                                                                                                   |
+| `sessions` | `id`, `agent`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
 
-Reads/updates resolve titles from valid owning-Home `thread_name`, then original title. Missing directories yield
+Reads/updates resolve titles from valid owning-agent `thread_name`, then original title. Missing directories yield
 `projectDirectory: null`; `isChild` preserves declared parentage even without `parentId`.
 
 Only `after` (43-character base64url revision) is accepted; invalid/extra queries return `400`.
@@ -172,7 +177,7 @@ Only `after` (43-character base64url revision) is accepted; invalid/extra querie
 | Over 100 waiters                            | `429`, `Retry-After: 2`  |
 
 Waiters share a 1.5-second probe, stopped when idle; disconnect/shutdown releases
-them. Revisions cover homes, titles, projects, task associations, effective runtime status,
+them. Revisions cover agents, titles, projects, task associations, effective runtime status,
 and relationships. Timestamps, conversation content, and diagnostics are excluded.
 
 Browser sorting uses best-effort `updatedAt`, retaining newer snapshot/reader
@@ -269,18 +274,18 @@ CLI output uses explicit whitelists independent of HTTP response types. It omits
 operation/request IDs and attach commands. Exact fields and text formatting live
 in [session-output.ts](../src/server/cli/session-output.ts).
 
-| Command       | Result                                                                             |
-| ------------- | ---------------------------------------------------------------------------------- |
-| `list`        | `{ sessions }`: identity, title, status, home, project, update time, optional task |
-| `inspect`     | `{ session, interaction, items, nextAfter, hasMore }`                              |
-| `terminal`    | `{ content, truncated, capturedAt }`                                               |
-| Input/handoff | `{ sessionId, status: "sent" }`                                                    |
-| Lifecycle     | `{ sessionId, status: "succeeded" }`; create/resume also include `tmux`            |
+| Command       | Result                                                                              |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `list`        | `{ sessions }`: identity, title, status, agent, project, update time, optional task |
+| `inspect`     | `{ session, interaction, items, nextAfter, hasMore }`                               |
+| `terminal`    | `{ content, truncated, capturedAt }`                                                |
+| Input/handoff | `{ sessionId, status: "sent" }`                                                     |
+| Lifecycle     | `{ sessionId, status: "succeeded" }`; create/resume also include `tmux`             |
 
 `list` excludes children, including orphans; `--project` filters project association,
 not launch/worktree location. Explicit IDs, including children, go directly to
 endpoints without catalog lookup or parent redirection. Nullable metadata remains
-null; absent task names remain omitted. Inspect includes the owning home's nickname
+null; absent task names remain omitted. Inspect includes the owning agent's nickname
 and current interaction, with `tmux: { socketPath, sessionName } | null`.
 
 Items retain message Markdown and user-input content. Plans and input requests
@@ -407,7 +412,7 @@ Invalid required V3 fields produce an invalid binding event.
 An invalid latest binding attempt never falls back.
 
 A process-wide manager tracks latest attempts/session and valid claims/socket/session
-across homes, ordered by timestamp (invalid = zero), global session ID, ordinal,
+across agents, ordered by timestamp (invalid = zero), global session ID, ordinal,
 position, including appends. New claims retain claims
 on other sessions. Takeover makes former owners `superseded`, revoking effects and
 attach. `supersededBySessionId` names a readable replacement (including archived),
@@ -423,7 +428,7 @@ paths and do not invalidate pane bindings.
 ### Task association
 
 Create accepts optional `taskName`; resume retains it and rejects overrides.
-Names are trimmed, case-sensitive, and shared across homes/projects;
+Names are trimmed, case-sensitive, and shared across agents/projects;
 `<`, `>`, NUL, CR and LF are rejected. Unassigned responses omit the field.
 
 Latest valid bind overrides the task; empty or invalid task fields preserve the
@@ -477,13 +482,13 @@ backoff. See [service](../src/server/interaction/terminal-preview-service.ts) an
 
 ## Asynchronous management
 
-| Endpoint                              | Body / result                                                                                                                                                   |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /api/v1/sessions`               | New: `{ home?, projectDirectory, workingDirectory?, taskName?, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
-| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                                          |
-| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                                          |
-| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                                          |
-| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                                               |
+| Endpoint                              | Body / result                                                                                                                                                    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions`               | New: `{ agent?, projectDirectory, workingDirectory?, taskName?, worktree, yolo?, requestId }`; resume: `{ resumeSessionId, yolo?, requestId }` → `202` operation |
+| `POST /api/v1/sessions/:id/exit`      | `{}` → `202` operation                                                                                                                                           |
+| `POST /api/v1/sessions/:id/archive`   | `{}` → `202` operation                                                                                                                                           |
+| `DELETE /api/v1/sessions/:id`         | `{}` → `202` operation                                                                                                                                           |
+| `GET /api/v1/operations/:operationId` | Current operation                                                                                                                                                |
 
 Creation requires `projectDirectory`; optional `workingDirectory` defaults to it.
 The adapter validates both as absolute existing local directories and resolves
@@ -522,7 +527,7 @@ share session occupancy: identical lifecycle operations coalesce, conflicts retu
 
 ### Execution and confirmation
 
-Delete is required; archive is optional. Public home archive capability derives from
+Delete is required; archive is optional. Public agent archive capability derives from
 method presence; Codex supports archive and Claude does not. Unsupported archive
 HTTP requests return `409 operation_not_supported`; lifecycle execution repeats
 the check before resolving targets, exiting, or invoking native effects.
@@ -531,7 +536,7 @@ Create/resume share launch; worktree/YOLO are options. Resume occupies the sessi
 refreshes source once, records a binding baseline, and evaluates runtime once,
 reusing its directory. Prelaunch checks binding/operation validity without another
 external-change scan or filesystem/tmux atomicity. Native commands use the
-[owning adapter's home environment](#home-identity-and-routing). Shared services
+[owning adapter's agent environment](#agent-identity-and-routing). Shared services
 delegate native history changes to the owning adapter.
 
 | Operation | Validation and confirmation                                                                                                                                                                                                                                                                                                                                         |
@@ -547,7 +552,7 @@ Codex launches `ahub-<operationId>` with `--no-daemon --no-alt-screen`, optional
 provides the operation marker and project/task association. Resume uses
 `codex resume <UUID>`, trying Working then Project Directory: skip invalid paths,
 fall back only on missing/non-directory paths. Launch from chosen real path,
-retain original project association; reject home/projectDirectory/workingDirectory/worktree overrides.
+retain original project association; reject agent/projectDirectory/workingDirectory/worktree overrides.
 Users must ensure unbound sessions' original processes have exited.
 
 Attach appears after 30 seconds and survives timeout, using known target or
@@ -597,7 +602,7 @@ Avoid manual storage changes while publishing.
 
 `GET /api/v1/artifacts` rescans projects (`directory`, `artifacts`);
 `DELETE /api/v1/artifacts/:id` removes all snapshots. Invalid metadata is diagnosed
-and skipped; resources do not depend on homes/sessions.
+and skipped; resources do not depend on agents/sessions.
 
 Without `--name`, the page name is the source directory basename after resolving
 symlinks. Updates retain the title unless `--title` is supplied.

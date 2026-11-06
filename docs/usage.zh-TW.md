@@ -24,12 +24,12 @@ npx @someonegg/codex-hub@latest
 ## 建立與管理工作階段
 
 點選專案旁的 **+**，或全域 **+** 後選擇專案、輸入本機絕對目錄。
-選擇 [Home](#多個-home) 和可選的啟動設定：
+選擇 [智慧體](#多個智慧體) 和可選的啟動設定：
 
 - **Worktree：**在獨立 Git worktree 中啟動，隔離程式碼變更。
-- **YOLO：**略過代理程式的核准提示；Codex 也會停用其沙盒。
+- **YOLO：**略過執行工具的核准提示；Codex 也會停用其沙盒。
 
-開啟已退出的工作階段，在可用時點選**恢復**繼續。恢復保留原 Home 和專案歸屬，使用可用的原工作目錄或專案目錄。
+開啟已退出的工作階段，在可用時點選**恢復**繼續。恢復保留原智慧體和專案歸屬，使用可用的原工作目錄或專案目錄。
 恢復從其他位置啟動的工作階段前，請確認原處理程序已經退出。
 
 透過工作階段的 **…** 選單執行：
@@ -60,18 +60,18 @@ npx @someonegg/codex-hub@latest
 使用附件按鈕**拍照**、**選擇圖片**或**選擇檔案**，也可貼上圖片或拖放檔案。
 傳送前可預覽或移除附件，支援單獨傳送附件和多個檔案，不支援資料夾。**每個檔案最大 20 MiB**。
 
-圖片保留原始內容，包括 EXIF 中繼資料。相機行為取決於瀏覽器；HEIC/HEIF 支援取決於代理程式。
+圖片保留原始內容，包括 EXIF 中繼資料。相機行為取決於瀏覽器；HEIC/HEIF 支援取決於執行工具。
 
 從工作階段標題區域開啟**上傳記錄**，預覽、下載或刪除檔案，包括未傳送的上傳檔案。
 從草稿移除附件不會刪除已上傳檔案；從上傳記錄刪除檔案也會將其從草稿移除。
 
-檔案儲存在 [Hub 資料目錄](#設定伺服器)的 `uploads/` 下，代理程式必須能存取此目錄。
+檔案儲存在 [Hub 資料目錄](#設定伺服器)的 `uploads/` 下，智慧體必須能存取此目錄。
 刪除工作階段觸發背景清理，封存與退出保留檔案。儲存和清理細節見[上傳參考（英文）](technical-reference.md#file-uploads)，
 也可[檢視上傳記錄截圖](images/zh-TW/ahub-uploads.png)。
 
 ## 瀏覽器設定
 
-在側邊欄底部開啟**設定**，選擇語言、主題、新工作階段預設 Home，以及 Worktree、YOLO 預設值。
+在側邊欄底部開啟**設定**，選擇語言、主題、新工作階段預設智慧體，以及 Worktree、YOLO 預設值。
 修改自動儲存在目前瀏覽器。YOLO 預設值也用於恢復工作階段，啟動對話方塊可覆寫預設值。
 
 介面初始為英文，切換語言立即生效，不翻譯工作階段或終端原文。
@@ -104,9 +104,9 @@ ahub-cli session inspect <id> --follow
 `inspect` 也接受子工作階段 ID。將傳回的 `Next after` 值傳給 `--after <value>` 讀取下一頁。
 `--follow` 持續觀察直到按 `Ctrl+C` 停止，不會因任務完成自動結束。
 
-建立預設使用專案目錄和第一個已設定 Home。用 `--cwd` 修改工作目錄而保留專案歸屬，
-用 `--home <nickname>` 選擇 Home；可選 `--worktree` 和 `--yolo` 控制啟動行為。
-`resume <id>` 保留原 Home，支援 `--yolo`。
+建立預設使用專案目錄和第一個已設定智慧體。用 `--cwd` 修改工作目錄而保留專案歸屬，
+用 `--agent <nickname>` 選擇智慧體；可選 `--worktree` 和 `--yolo` 控制啟動行為。
+`resume <id>` 保留原智慧體，支援 `--yolo`。
 用 `create --task <name>` 和 `list --task <name>` 跨專案分組工作階段。
 
 輸入預設要求終端已連線且閒置。用 `send <id> --stdin` 接收管線輸入，`terminal <id>` 檢視終端，
@@ -160,7 +160,7 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 參閱[差異參考（英文）](technical-reference.md#temporary-diffs)及
 [桌面](images/zh-TW/ahub-diff.png) / [手機](images/zh-TW/ahub-diff-mobile.png)預覽。
 
-### 透過代理程式發布
+### 透過智慧體發布
 
 安裝附帶的 [`ahub-publish` skill](../skills/ahub-publish)，並按名稱請求使用。
 執行 `ahub-cli skill path ahub-publish` 定位目錄；使用 `npx` 時，請將傳回的快取目錄複製到長期使用的技能位置。
@@ -176,20 +176,20 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 | `--hosting`            | 關閉           | 提供已發布網頁與差異存取                    |
 | `--tmux-socket <path>` | tmux 預設值    | 使用自訂 tmux socket                        |
 
-### 多個 Home
+### 多個智慧體
 
-Home 是代理程式的工作階段與設定目錄：Codex 包含 `sessions/`，Claude Code 包含 `projects/`。
-每個 Home 需使用唯一暱稱和目錄：
+智慧體是獨立擁有設定、Skills、記憶和模型設定的身分。Codex 和 Claude Code 是執行工具，任務中衍生的身分稱為子智慧體。智慧體目錄在 Codex 中包含 `sessions/`，在 Claude Code 中包含 `projects/`。
+每個智慧體需使用唯一暱稱和目錄：
 
 ```sh
 codex-hub \
-  --codex-home 'work=~/.codex-work' \
-  --claude-home 'claude=~/.claude'
+  --codex-agent 'work=~/.codex-work' \
+  --claude-agent 'claude=~/.claude'
 ```
 
-可重複或混合傳入這些選項。明確設定會替換**兩個預設 Home**，建立預設使用第一項。
-透過側邊欄 Home 篩選器縮小範圍。網頁建立時，有效的 Home 篩選或預設 Home 偏好優先於第一項。
-完整規則見 [Home 路由（英文）](technical-reference.md#home-identity-and-routing)。
+可重複或混合傳入這些選項。明確設定會替換**兩個預設智慧體**，建立預設使用第一項。
+透過側邊欄智慧體篩選器縮小範圍。網頁建立時，有效的智慧體篩選或預設智慧體偏好優先於第一項。
+完整規則見 [智慧體路由（英文）](technical-reference.md#agent-identity-and-routing)。
 
 ## 從其他裝置存取
 
@@ -220,7 +220,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 
 ## 疑難排解
 
-- **沒有工作階段：**檢查各 Home 是否包含 `sessions/`（Codex）或 `projects/`（Claude）。檢視伺服器輸出中的不可讀或跳過檔案提示。
+- **沒有工作階段：**檢查各智慧體是否包含 `sessions/`（Codex）或 `projects/`（Claude）。檢視伺服器輸出中的不可讀或跳過檔案提示。
 - **連接埠占用：**改用其他連接埠，例如 `codex-hub --port 4180`。
 - **無法傳送輸入：**透過**連線 tmux**完成 CLI 提示，忙碌時等待，或在可用時使用**恢復**。封存工作階段唯讀，僅有日誌不代表終端已連線。
 - **建立或恢復狀態不明：**重試前檢查 tmux 並重新整理工作階段列表，避免重複啟動。關閉頁面不會停止操作，重新啟動伺服器會遺失進度追蹤。

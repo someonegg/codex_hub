@@ -21,7 +21,7 @@ describe("server command line", () => {
     expect(runnable([])).toMatchObject({
       host: "127.0.0.1",
       port: 4173,
-      homes: (existsSync(resolve(homedir(), ".codex"))
+      agents: (existsSync(resolve(homedir(), ".codex"))
         ? ["codex", "claude"]
         : ["claude", "codex"]
       ).map((nickname) => ({ nickname, path: resolve(homedir(), `.${nickname}`) })),
@@ -34,7 +34,7 @@ describe("server command line", () => {
   it("parses all server and mutual TLS options", () => {
     expect(
       runnable([
-        "--codex-home",
+        "--codex-agent",
         "personal=fixtures/codex",
         "--host",
         "0.0.0.0",
@@ -51,7 +51,7 @@ describe("server command line", () => {
     ).toMatchObject({
       host: "0.0.0.0",
       port: 0,
-      homes: [{ nickname: "personal", path: resolve("fixtures/codex") }],
+      agents: [{ nickname: "personal", path: resolve("fixtures/codex") }],
       tls: {
         enabled: true,
         certificatePath: resolve("certs/server.pem"),
@@ -81,7 +81,7 @@ it("resolves upload directories and rejects empty configuration", () => {
   expect(() => loadConfig(["--home-dir", " "])).toThrow("--home-dir must not be empty");
 });
 
-it("shares the Hub root for uploads and hosting, expanding home-relative paths", () => {
+it("shares the Hub root for uploads and hosting, expanding agent-relative paths", () => {
   expect(runnable(["--hosting"])).toMatchObject({
     uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
     hostingDirectory: resolve(homedir(), ".codex-hub/hosting"),
@@ -109,9 +109,9 @@ it.each(["~/config with spaces", "./config with spaces", "/tmp/config with space
   (path) => {
     const expected = path.startsWith("~/") ? resolve(homedir(), path.slice(2)) : resolve(path);
     const config = runnable([
-      "--codex-home",
+      "--codex-agent",
       `codex=${path}/codex`,
-      "--claude-home",
+      "--claude-agent",
       `claude=${path}/claude`,
       "--home-dir",
       path,
@@ -129,7 +129,7 @@ it.each(["~/config with spaces", "./config with spaces", "/tmp/config with space
       path,
     ]);
     expect(config).toMatchObject({
-      homes: [
+      agents: [
         { nickname: "codex", path: resolve(expected, "codex") },
         { nickname: "claude", path: resolve(expected, "claude") },
       ],

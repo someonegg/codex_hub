@@ -46,20 +46,20 @@ it("preserves and safely quotes shell characters in project paths", () => {
 });
 
 it("validates create directories, resolves symlinks and passes the explicit project through worktree launch", async () => {
-  const home = await createTempDirectory("create-directory-");
-  const directory = join(home, "project");
+  const agent = await createTempDirectory("create-directory-");
+  const directory = join(agent, "project");
   await mkdir(directory);
-  await symlink(directory, join(home, "link"));
-  await writeFile(join(home, "file"), "x");
+  await symlink(directory, join(agent, "link"));
+  await writeFile(join(agent, "file"), "x");
   const launch = vi.fn(async (_operation: string, _directory: string, _args: string[]) => ({
     socketPath: "/tmp/socket",
     sessionName: "ahub-00000000-0000-0000-0000-000000000001",
   }));
-  const manager = new CodexSessionManager(home, { launch } as never);
-  const resolved = await manager.resolveDirectory(join(home, "link"));
+  const manager = new CodexSessionManager(agent, { launch } as never);
+  const resolved = await manager.resolveDirectory(join(agent, "link"));
   expect(resolved.directory).toMatch(/\/project$/);
-  await expect(manager.resolveDirectory(join(home, "file"))).rejects.toThrow("not a directory");
-  await expect(manager.resolveDirectory(join(home, "missing"))).rejects.toMatchObject({
+  await expect(manager.resolveDirectory(join(agent, "file"))).rejects.toThrow("not a directory");
+  await expect(manager.resolveDirectory(join(agent, "missing"))).rejects.toMatchObject({
     code: "ENOENT",
   });
   for (const path of ["relative", "/a\nb", "/a\rb", "/a\0b"])

@@ -23,7 +23,7 @@ export async function startPreviewServer(
     {
       host: "127.0.0.1",
       port: 0,
-      homes: [],
+      agents: [],
       clientDirectory: directory,
       tls,
       interactionEnabled: true,

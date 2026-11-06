@@ -13,12 +13,12 @@ import {
 import type { DomainDiagnostic } from "../../src/server/domain/session-domain.js";
 import { rolloutDescriptor } from "../helpers/rollout-descriptor.js";
 
-const fixtureHome = resolve("tests/fixtures/codex-home");
+const fixtureAgent = resolve("tests/fixtures/codex-home");
 
 export async function normalizeFixture(fileName: string) {
   const descriptor = await rolloutDescriptor(
-    fixtureHome,
-    resolve(fixtureHome, "sessions/2026/07/28", fileName),
+    fixtureAgent,
+    resolve(fixtureAgent, "sessions/2026/07/28", fileName),
   );
   if (descriptor === null) throw new Error(`Fixture rollout was not discovered: ${fileName}`);
   const decoded = { ...(await new CheckpointedJsonlDecoder().decode(descriptor)), descriptor };
@@ -52,7 +52,7 @@ export function decodedRollout(id: string, records: DecodedRecord[]): DecodedRol
 export function sessionMetadata(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
   return {
     threadId: null,
-    agentVersion: null,
+    runtimeVersion: null,
     title: null,
     workingDirectory: null,
     projectDirectory: null,

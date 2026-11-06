@@ -5,10 +5,9 @@ export const docsSession = {
   title: "Design the project dashboard",
   origin: {
     sourceType: "codex",
-    home: "default",
-    agentName: "Codex",
-    agentVersion: null,
-    formatVersion: null,
+    agent: "default",
+    runtimeName: "Codex",
+    runtimeVersion: null,
   },
   workingDirectory: "/projects/atlas-dashboard",
   projectDirectory: "/projects/atlas-dashboard",
@@ -18,7 +17,7 @@ export const docsSession = {
   resume: { allowed: false, reason: "Session is already live" },
   parentId: null,
   childIds: [],
-  agent: null,
+  subagent: null,
   messageCount: 0,
   sourceId: null,
 };

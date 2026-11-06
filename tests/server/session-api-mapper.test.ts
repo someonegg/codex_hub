@@ -8,9 +8,9 @@ const session = domainSession({
   sourceId: "private-source-id",
   origin: {
     sourceType: "test",
-    home: "test-source",
-    agentName: "Test Agent",
-    agentVersion: "1.0.0",
+    agent: "test-source",
+    runtimeName: "Test Agent",
+    runtimeVersion: "1.0.0",
   },
   title: "Session one",
   workingDirectory: "/project",
@@ -18,7 +18,7 @@ const session = domainSession({
   createdAt: "2026-07-28T00:00:00Z",
   updatedAt: "2026-07-28T01:00:00Z",
   childIds: ["child"],
-  agent: { taskName: "task", nickname: null, role: "worker" },
+  subagent: { taskName: "task", nickname: null, role: "worker" },
   warningCount: 1,
   diagnostics: [
     {
@@ -36,7 +36,7 @@ describe("session API mapping", () => {
     const catalog = mapper.list([session]);
     expect(catalog.sessions[0]).toEqual({
       id: session.id,
-      home: session.origin.home,
+      agent: session.origin.agent,
       title: session.title,
       projectDirectory: "/project",
       status: "normal",
@@ -52,7 +52,7 @@ describe("session API mapping", () => {
     expect(session.diagnostics[0]!.message).toBe("Partial");
     expect(detail.origin).not.toBe(session.origin);
     expect(detail.origin).not.toHaveProperty("formatVersion");
-    expect(detail.origin.agentVersion).toBe("1.0.0");
+    expect(detail.origin.runtimeVersion).toBe("1.0.0");
   });
 
   it("excludes child-only projects while retaining child sessions in the catalog", () => {
