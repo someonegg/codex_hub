@@ -17,7 +17,7 @@ export class SessionExitService {
   constructor(
     private readonly interaction: ExitInteraction,
     private readonly now = Date.now,
-    private readonly timing = { eofDelayMs: 4_000, killDelayMs: 9_000 },
+    private readonly timing = { eofDelayMs: 3_200, killDelayMs: 9_000 },
   ) {}
 
   start(

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { exitSteps } from "../../src/server/adapters/shared/session-management.js";
 import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 
 describe("session exit state machine", () => {
@@ -20,11 +21,7 @@ describe("session exit state machine", () => {
       "session",
       target,
       {
-        exitSteps: () => [
-          { keys: ["Escape"], delayMs: 0 },
-          { keys: ["C-c"], delayMs: 1000 },
-          { keys: ["Enter"], delayMs: 1000 },
-        ],
+        exitSteps,
       },
       () => {
         if (!active) throw new Error("cancelled");
@@ -45,29 +42,36 @@ describe("session exit state machine", () => {
   it("uses adapter steps once, then EOF and one targeted kill, and requires exit confirmation", async () => {
     const { task, interaction, time } = setup();
     expect(await task.advance()).toBe(false);
-    expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([["Escape"]]);
+    expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([["C-c"]]);
     expect(task.phase).toBe("sending_exit");
-    time(999);
+    time(199);
     await task.advance();
     expect(interaction.sendExitKeys).toHaveBeenCalledTimes(1);
-    time(1_000);
+    time(200);
     await task.advance();
     expect(task.phase).toBe("sending_exit");
-    time(1_999);
+    time(2_599);
     await task.advance();
     expect(interaction.sendExitKeys).toHaveBeenCalledTimes(2);
-    time(2_000);
+    time(2_600);
+    await task.advance();
+    expect(task.phase).toBe("sending_exit");
+    time(2_799);
+    await task.advance();
+    expect(interaction.sendExitKeys).toHaveBeenCalledTimes(3);
+    time(2_800);
     await task.advance();
     expect(task.phase).toBe("waiting_exit");
     time(5_999);
     await task.advance();
-    expect(interaction.sendExitKeys).toHaveBeenCalledTimes(3);
+    expect(interaction.sendExitKeys).toHaveBeenCalledTimes(4);
     time(6_000);
     await task.advance();
     expect(interaction.sendExitKeys.mock.calls.map((call) => call[2])).toEqual([
-      ["Escape"],
       ["C-c"],
-      ["Enter"],
+      ["C-c"],
+      ["C-c"],
+      ["C-c"],
       ["C-d"],
     ]);
     time(14_999);
@@ -87,10 +91,10 @@ describe("session exit state machine", () => {
     expect(await task.advance()).toBe(true);
   });
 
-  it.each([0, 4])("stops after natural exit following %i steps", async (count) => {
+  it.each([0, 5])("stops after natural exit following %i steps", async (count) => {
     const { task, interaction, time } = setup();
     for (let index = 0; index < count; index++) {
-      time([0, 1_000, 2_000, 6_000][index]!);
+      time([0, 200, 2_600, 2_800, 6_000][index]!);
       await task.advance();
     }
     interaction.inspectTarget.mockResolvedValue("exited");
@@ -102,7 +106,7 @@ describe("session exit state machine", () => {
 
   it("does not turn an observation error into a kill", async () => {
     const { task, interaction, time } = setup();
-    for (const value of [0, 1_000, 2_000, 6_000]) {
+    for (const value of [0, 200, 2_600, 2_800, 6_000]) {
       time(value);
       await task.advance();
     }
