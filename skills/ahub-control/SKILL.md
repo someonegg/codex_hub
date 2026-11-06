@@ -12,7 +12,7 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - Check `command -v ahub-cli` and `ahub-cli session --help` for the commands and options needed by the task. Report missing capabilities; install, update, or start services only when authorized.
 - Address precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Keep custom addresses consistent across commands.
 - HTTP and HTTPS origins are supported. HTTPS uses Node.js certificate verification; for a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
-- Select existing sessions with `list --project /absolute/project --json`. It lists unarchived main sessions; add `--all` to include archived sessions. Known child IDs can be inspected directly. Treat IDs as opaque strings.
+- Select existing sessions with `list --project /absolute/project --json`. It lists main sessions. Known child IDs can be inspected directly. Treat IDs as opaque strings.
 
 ## Create, resume, and send
 
@@ -21,7 +21,7 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - Creation accepts `--home <nickname>`, defaulting to the first configured Home. Use `--worktree` and `--yolo` as authorized launch options, not universal defaults.
 - `resume <id>` retains the original Home and uses an available original working or project directory. It accepts `--yolo` but no directory overrides.
 - Successful create/resume means the session was observed live, connected, and idle. Save `sessionId` and `tmux` (`socketPath`, `sessionName`); diagnostics may be null.
-- Before sending, inspect and save `nextAfter` as the turn's baseline; then observe new replies from that position.
+- Before sending, inspect and follow `nextAfter` until `hasMore=false`. Save the final `nextAfter` as the turn's baseline, then observe new replies from that position.
 - Specify the objective, output location, constraints, and acceptance criteria. Prefer `--stdin` from a file or pipe for long messages to avoid shell interpolation and quoting errors. `sent` confirms delivery only.
 
 Replace the example IDs, positions, and paths with actual values:
@@ -31,7 +31,7 @@ ahub-cli session create --project /absolute/project --json
 # Save sessionId; add --cwd /absolute/working-directory if needed.
 
 ahub-cli session inspect SESSION_ID --json
-# Save nextAfter as BASELINE.
+# If hasMore, continue with --after <nextAfter>; save the final nextAfter as BASELINE.
 
 ahub-cli session send SESSION_ID --stdin --json < /absolute/task.txt
 ahub-cli session inspect SESSION_ID --after BASELINE --follow --count 10 --json
@@ -81,13 +81,13 @@ For questions (not Plans), an alternative is to interrupt, organize the chosen a
 
 - Read and retain each new assistant `phase=response` reply. Continue observing until connected and idle, collecting any subsequent messages; if already connected and idle, proceed immediately.
 - Use the collected replies and verification of deliverables against the task's acceptance criteria to decide whether to finish or address questions, blockers, or remaining work. Neither idle nor a reply alone proves completion. Resolve output locations against the actual `workingDirectory`, which may differ from `projectDirectory` with explicit cwd or worktrees.
-- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; archive retains the session as archived; delete permanently removes session history. Verify an uncertain exit before claiming success.
+- Perform lifecycle actions as requested, not automatically on a final reply. `exit <id>` ends session execution; delete permanently removes session history. Verify an uncertain exit before claiming success.
 - Report deliverables, verification scope, and whether the session exited.
 
 ## Recover from errors
 
-- Follow defaults to 30 seconds per request. Other defaults are 15 seconds for list, inspect, terminal, send, keys, and interrupt; 45 seconds for create, resume, exit, archive, and delete. `--timeout` limits the invocation, except in follow where it limits each HTTP request and there is no overall deadline.
+- Follow defaults to 30 seconds per request. Other defaults are 15 seconds for list, inspect, terminal, send, keys, and interrupt; 45 seconds for create, resume, exit, and delete. `--timeout` limits the invocation, except in follow where it limits each HTTP request and there is no overall deadline.
 - Exit code 0 means command success, not task completion; 1 means a definite failure or query error; 2 means a submitted write has an uncertain result.
 - After a timeout or exit code 2, check state before repeating a write. Stopping the client does not cancel backend operations; resubmitting create/send can duplicate sessions or messages.
 - For create/resume errors, read `error.code`, `error.message`, `error.sessionId`, and `error.tmux`. Use inspect/terminal when an ID is known; otherwise use the project list and tmux diagnostics.
-- For exceptional tmux diagnosis, use `tmux -S SOCKET capture-pane -p -t PANE`; a human can connect with `tmux -S SOCKET attach-session -t SESSION_NAME`. Substitute and quote actual values. Do not bypass the CLI to send tasks directly to a pane.
+- For exceptional tmux diagnosis, use `tmux -S SOCKET capture-pane -p -t =SESSION_NAME:`; a human can connect with `tmux -S SOCKET attach-session -t =SESSION_NAME:`. Use the returned `tmux.socketPath` for `SOCKET` and `tmux.sessionName` for `SESSION_NAME`; shell-quote each argument. Do not bypass the CLI to send tasks directly to a pane.
