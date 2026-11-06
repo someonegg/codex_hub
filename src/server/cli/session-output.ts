@@ -133,8 +133,7 @@ export function mapInspect(value: SessionMessagesResponse): CliInspect {
           tmux: i.tmux
             ? {
                 socketPath: i.tmux.socketPath,
-                paneId: i.tmux.paneId,
-                sessionName: i.tmux.sessionName ?? null,
+                sessionName: i.tmux.sessionName,
               }
             : null,
           state: i.state,

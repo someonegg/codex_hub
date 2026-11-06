@@ -31,6 +31,10 @@ You can bookmark a session URL or share it with another device that can access t
 - **Archive:** use the session's **…** menu to stop execution and mark the session as archived.
 - **Delete:** use the session's **…** menu to permanently remove session history. Deletion requires confirmation.
 
+Hub tmux sessions use names of the form `ahub-<UUID>` and must contain exactly
+one window and one pane. Do not rename sessions or rename, move, link, or add
+windows/panes. Hub does not inspect or repair this topology.
+
 Creating and resuming sessions use tmux. If startup needs login or permission
 confirmation, use **Tmux access** in the session's **…** menu or the attach command
 shown by the hub to finish in the terminal. Before resuming a session

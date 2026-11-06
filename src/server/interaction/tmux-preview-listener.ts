@@ -1,14 +1,17 @@
 import { spawn } from "node:child_process";
+import { lstatSync } from "node:fs";
 
+import { ownedSocket, tmuxTarget, validTmuxSessionName } from "./tmux-target.js";
 import type { TmuxBinding } from "./transport.js";
 
 export interface PreviewSubscription {
   ready: Promise<void>;
   close(): void;
 }
+/** `change` reports a possible content change; true means terminal output was observed. */
 export type PreviewListener = (
   binding: TmuxBinding,
-  change: (pane?: string) => void,
+  change: (output: boolean) => void,
   fail: (error: Error) => void,
 ) => PreviewSubscription;
 
@@ -17,13 +20,19 @@ export function createTmuxPreviewListener(): PreviewListener {
   const connections = new Map<
     string,
     {
-      subscribe(change: (pane?: string) => void, fail: (error: Error) => void): PreviewSubscription;
+      subscribe(
+        change: (output: boolean) => void,
+        fail: (error: Error) => void,
+      ): PreviewSubscription;
     }
   >();
   return (binding, change, fail) => {
+    if (!binding.socketPath.startsWith("/") || !validTmuxSessionName(binding.sessionName))
+      throw new Error("Invalid tmux binding");
     const key = JSON.stringify([binding.socketPath, binding.sessionName]);
     let connection = connections.get(key);
     if (!connection) {
+      if (!ownedSocket(lstatSync(binding.socketPath))) throw new Error("Unsafe tmux socket");
       const child = spawn(
         "tmux",
         [
@@ -37,12 +46,12 @@ export function createTmuxPreviewListener(): PreviewListener {
           "ignore-size",
           "-E",
           "-t",
-          `=${binding.sessionName}`,
+          tmuxTarget(binding.sessionName),
         ],
         { stdio: ["pipe", "pipe", "pipe"] },
       );
       const subscribers = new Set<{
-        change: (pane?: string) => void;
+        change: (output: boolean) => void;
         fail: (error: Error) => void;
       }>();
       let buffer = "";
@@ -82,14 +91,14 @@ export function createTmuxPreviewListener(): PreviewListener {
             failure(new Error("tmux control connection ended"));
             return;
           }
-          const output = /^%(?:output|extended-output) (%\d+) /.exec(line);
-          if (output) for (const subscriber of subscribers) subscriber.change(output[1]);
+          const output = /^%(?:output|extended-output) /.test(line);
+          if (output) for (const subscriber of subscribers) subscriber.change(true);
           else if (
             /^%(?:layout-change|window-add|window-close|unlinked-window-close|sessions-changed|session-changed|session-window-changed|window-pane-changed|pane-mode-changed)\b/.test(
               line,
             )
           )
-            for (const subscriber of subscribers) subscriber.change();
+            for (const subscriber of subscribers) subscriber.change(false);
         }
         if (buffer.length > 2_000_000) failure(new Error("tmux control line exceeds limit"));
       });

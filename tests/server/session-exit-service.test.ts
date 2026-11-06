@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { SessionExitService } from "../../src/server/management/session-exit-service.js";
 
 describe("session exit state machine", () => {
-  const target = { socketPath: "/tmp/test.sock", paneId: "%1" };
+  const target = {
+    socketPath: "/tmp/test.sock",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  };
   function setup() {
     let now = 0;
     let active = true;

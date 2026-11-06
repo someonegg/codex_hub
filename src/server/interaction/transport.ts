@@ -2,14 +2,13 @@ import type { InteractionBindingAttempt, InteractionKeyStep } from "../domain/se
 
 export interface TmuxBinding {
   readonly socketPath: string;
-  readonly paneId: string;
-  readonly sessionName?: string;
+  readonly sessionName: string;
 }
 
 export interface InteractionTransport {
   connect(attempt: InteractionBindingAttempt): Promise<TmuxBinding>;
   resolveTarget(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null>;
-  killPane(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
+  killSession(target: TmuxBinding, assertAvailable?: () => void): Promise<void>;
   inspect(target: TmuxBinding): Promise<"alive" | "exited">;
   sendMessage(target: TmuxBinding, message: string, assertAvailable?: () => void): Promise<void>;
   sendKeys(

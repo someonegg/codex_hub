@@ -111,14 +111,14 @@ versioned — verified against Claude Code 2.1.318 — and should be re-verified
 after CLI upgrades.
 The adapter waits up to 15 seconds for the native interactive prompt, then pastes
 the complete `! printf ...` binding command once, even if no prompt was detected.
-It then waits for binding evidence without further prompt checks or retries. The command reads
-`"${TMUX%%,*}"` and `"$TMUX_PANE"` using native shell expansion; avoiding command
-substitution also permits binding under Claude's worktree isolation checks.
+It then waits for binding evidence without further prompt checks or retries. The
+[binding command](#binding-format-and-ownership) uses shell expansion only, so no
+tmux query runs inside Claude's worktree isolation checks.
 Claude records the binding itself. Create/resume interrupts once after binding
 confirmation, before reporting success; handoff does not interrupt.
 Terminal capture, command delivery, or interrupt failures retain
 the target and attach command as an unknown launch result. A running process alone
-never confirms launch: public management still verifies operation ID, pane ownership, project,
+never confirms launch: public management still verifies operation ID, binding ownership, project,
 and original identity on resume.
 
 Interrupt clears input with Ctrl-U, waits 100 ms, then sends Escape, matching
@@ -181,7 +181,7 @@ timestamps in memory. Projects follow their latest visible main session; IDs
 break ties, invalid times sort last, and hidden pages pause requests.
 
 Status is `normal | live | archived`: archive wins; Live requires an observed
-living, owned pane. Normal does not authorize Resume. Runtime checks coalesce
+living, owned tmux session. Normal does not authorize Resume. Runtime checks coalesce
 concurrent observations and bound socket concurrency; errors revoke Live and resume.
 
 ## Reader and automatic updates
@@ -206,7 +206,7 @@ bodyless `204`. Probes run every 1.5 seconds with capacity 100/process and
 10/session; overflow returns `429` and `Retry-After: 2`. Disconnect, timeout, and
 shutdown release capacity. Concurrent same-session probes share immutable source
 and runtime observations; pagination remains request-specific. Each response
-uses the same pane observation for status and interaction; effects revalidate.
+uses the same runtime observation for status and interaction; effects revalidate.
 
 Public response assembly belongs to `SessionReadService`. Interaction operations
 read internal facts through `InteractionSessionReader` over the same catalog,
@@ -268,7 +268,7 @@ Lifecycle commands run without a CLI confirmation prompt; [execution rules](#exe
 
 Text/JSON whitelists are independent of HTTP types; extra fields never pass through. Readiness uses API `session.status` and interaction before
 mapping. Operation/request IDs and attach commands are excluded. Tmux diagnostics
-include socketPath, paneId, and sessionName (null when unknown).
+include required socketPath and sessionName fields; the complete target may be null.
 
 | Command/result    | Public fields                                                                                                                                                      |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -325,10 +325,10 @@ not guarantee history consistency. Pagination without forward progress fails
 with exit code 1. API/network/request timeout errors end observation without
 retrying; Ctrl+C cancels reads and timers and exits normally.
 
-CLI inspection exposes `interaction.tmux: { socketPath, paneId, sessionName } | null`, using
-the current observation and ownership checks. When sessionName is known, attach
-with `tmux -S <socketPath> attach-session -t <sessionName>`, quoting each argument
-for the shell. This attaches the containing session; it does not select a pane.
+CLI inspection exposes `interaction.tmux: { socketPath, sessionName } | null`, using
+the current observation and ownership checks. Attach
+with `tmux -S <socketPath> attach-session -t =<sessionName>:`, quoting each argument
+for the shell.
 
 Launch success exposes `tmux`; launch errors include known `sessionId` and `tmux`
 inside `error` (unknown values are null), retaining backend diagnostics and the
@@ -397,12 +397,18 @@ Supported responses include `state`, `activity`, `supersededBySessionId`,
 `attachCommand`; unsupported responses contain `supported: false`, `attachCommand`.
 States: `unbound`, `disconnected`, `connected`, `unknown`, `superseded`.
 
-Effects require current-user socket ownership, pane liveness, binding ownership.
-Concurrent checks coalesce without caching completed results. Missing sockets,
-stopped servers, and dead/missing panes mean unavailable; permissions, timeouts,
-and malformed responses mean unknown. Binding changes during awaits fail closed.
-Queued input/previews revalidate ownership; uncertain input never resends.
-Socket/pane reuse has no process-identity check.
+Effects require current-user socket ownership, session liveness, and binding ownership.
+Targets use a required absolute `socketPath` and `sessionName` matching `ahub-<UUID>`.
+Each session must have exactly one window and one pane. Users must not rename,
+move, link, or add windows/panes; Hub validates names but does not inspect or repair topology.
+
+Liveness matches session names exactly. Concurrent checks coalesce without caching
+completed results. Missing sockets, stopped servers, and absent sessions establish
+exit; permissions, timeouts, and query errors do not. Binding changes during awaits
+fail closed. Input and captures serialize per target and revalidate liveness and
+ownership before effects; uncertain writes are never retried. Socket/session reuse
+has no process-identity check. See [runtime](../src/server/interaction/session-runtime.ts)
+and [tmux service](../src/server/interaction/tmux-service.ts).
 
 CLI `send` rejects messages whose first character is `/`, unless `--force` is
 used. It checks only the start of the entire message, without trimming whitespace,
@@ -418,16 +424,21 @@ not confirmed binding.
 
 ### Binding format and ownership
 
-Codex reads five-line `AHUB_TMUX_BIND_V1` records from user-message
-`<user_shell_command>` output: marker, absolute socket path, numeric `%` pane ID,
-optional operation UUID, optional project directory (empty fields retain lines).
-Six-line `AHUB_TMUX_BIND_V2` records add a final JSON task name or `null`.
+Both adapters bind using `printf` and shell environment expansion without tmux
+queries, allowing binding under Claude's worktree isolation checks.
+
+Codex and Claude emit and recognize six-line `AHUB_TMUX_BIND_V3` records:
+marker, absolute socket path, `ahub-<UUID>` session name, optional operation UUID,
+optional project directory, and JSON task name or `null` (empty fields retain lines).
+Codex accepts user-message `<user_shell_command>` output; Claude accepts native
+main-user `<bash-stdout>` output. Unknown markers produce no binding events.
+Invalid required V3 fields produce an invalid binding event.
 An invalid latest binding attempt never falls back.
 
-A process-wide manager tracks latest attempts/session and valid claims/socket/pane
+A process-wide manager tracks latest attempts/session and valid claims/socket/session
 across homes, ordered by timestamp (invalid = zero), global session ID, ordinal,
 position, including appends. New claims retain claims
-on other panes. Takeover makes former owners `superseded`, revoking effects and
+on other sessions. Takeover makes former owners `superseded`, revoking effects and
 attach. `supersededBySessionId` names a readable replacement (including archived),
 otherwise null. Claims survive archive, deletion, rereads, and Hub close for the
 process lifetime; later explicit binds can reclaim them. See [binding manager](../src/server/interaction/pane-binding-manager.ts).
@@ -523,7 +534,7 @@ shutdown reuses the exit service.
 
 Operations include `operationId`, `type`, `status`, `createdAt`, `updatedAt`,
 nullable `sessionId`, `error`, `phase`, `attachCommand`, optional
-`target: { socketPath, paneId, sessionName }`, and launch `mode: new | resume`.
+`target: { socketPath, sessionName }`, and launch `mode: new | resume`.
 Types: `create`, `exit`, `archive`, `delete`; statuses: `pending`, `succeeded`,
 `failed`, `unknown`. Exit phases are `sending_exit`, `waiting_exit`; archive adds
 `archiving`, `confirming_archive`; delete adds `deleting`, `confirming_delete`.
@@ -553,8 +564,8 @@ delegate native history changes to the owning adapter.
 | Operation | Validation and confirmation                                                                                                                                                                                                                                                                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Create    | Project and effective working directories independently resolve to existing real paths; equal inputs share resolution. Confirm operation marker, target, project, valid bind within 60 seconds after launch.                                                                                                                                                        |
-| Resume    | Require unarchived unique valid native identity, plus no binding, confirmed pane death, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.                                                                                                                                                |
-| Exit      | Validate latest bind; interrupt/EOF then force-close entire pane if needed. Confirm dead/missing within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks.                                                                                                                                      |
+| Resume    | Require unarchived unique valid native identity, plus no binding, confirmed session exit, or explicit transfer. Invalid/uncertain bindings deny resume. Confirm original identity, marker, project, live owned target.                                                                                                                                              |
+| Exit      | Validate latest bind; interrupt/EOF then force-close the tmux session if needed. Confirm session absence within 30 seconds; query errors/ownership changes mean `unknown`. Unbound succeeds, missing fails; archived uses same checks.                                                                                                                              |
 | Archive   | Refresh source; already archived succeeds. Validate unique native identity, exit, run native archive once (25-second command limit), confirm within 30 seconds.                                                                                                                                                                                                     |
 | Delete    | Run Exit validation and sequence first, then permanently remove history through the owning adapter (Codex: `codex delete <UUID> --force`; Claude: remove session JSONL and associated subagents directory). Exit, deletion, and same-source absence confirmation have separate 30-, 25-, and 30-second budgets. Initially absent in a successful snapshot succeeds. |
 
@@ -571,10 +582,10 @@ configured socket/deterministic session name. Confirmed no-launch tmux errors
 mean `failed`; launch timeout, malformed success, and post-launch errors mean
 `unknown`, without retry/teardown.
 
-Exit controls the whole pane, including manual binds, retaining session data;
+Exit controls the whole tmux session, including manual binds, retaining session data;
 see [ADR-0022](adr/0022-separate-session-exit-from-archive.md). After the adapter's
 exit steps, the shared state machine waits 4 seconds before Ctrl-D and another
-9 seconds before one targeted `kill-pane`. Each step checks cancellation and
+9 seconds before one targeted `kill-session`. Each step checks cancellation and
 target ownership/state; natural exit stops further sends, and forced close still
 requires exit confirmation. Occupancy blocks
 ordinary input/handoff with `409 session_busy`; archive and delete hold it through confirmation.

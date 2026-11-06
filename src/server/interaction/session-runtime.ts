@@ -25,12 +25,12 @@ export class SessionRuntime {
 
   probe(attempt: InteractionBindingAttempt): Promise<TmuxBinding | null> {
     if (!attempt.valid) return Promise.reject(new Error("Invalid binding"));
-    const key = JSON.stringify([attempt.socketPath, attempt.paneId]);
+    const key = JSON.stringify([attempt.socketPath, attempt.sessionName]);
     const existing = this.#pending.get(key);
     if (existing) return existing;
     const query = (async () => {
-      // Different panes on one socket must reach the transport together so they
-      // can share one list-panes query, even when there are more than eight panes.
+      // Different sessions on one socket must reach the transport together so they
+      // can share one list-sessions query, even when there are more than eight sessions.
       while (!this.#activeSockets.has(attempt.socketPath) && this.#activeSockets.size >= 8)
         await new Promise<void>((resolve) => this.#waiting.push(resolve));
       this.#activeSockets.set(

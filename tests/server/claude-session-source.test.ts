@@ -119,7 +119,7 @@ describe("Claude JSONL adapter", () => {
     });
     expect(
       bindings.latest(opaqueIdForParts(source.descriptor.instanceKey, entry.localId)),
-    ).toMatchObject({ valid: true, paneId: "%9" });
+    ).toMatchObject({ valid: true, sessionName: "ahub-00000000-0000-0000-0000-000000000009" });
   });
 
   it("commits complete lines, rereads tails, diagnoses malformed lines and rebuilds rewrites", async () => {
@@ -197,9 +197,12 @@ it("keeps Codex and Claude homes independently routed while merging project asso
 
 it("retains binding order when multiple native stdout blocks share one line", async () => {
   const { home, path } = await createSessionHome("claude-binding-order-");
-  const content = ["%1", "%2"].map((pane) => ({
+  const content = [
+    "ahub-00000000-0000-0000-0000-000000000001",
+    "ahub-00000000-0000-0000-0000-000000000002",
+  ].map((pane) => ({
     type: "text",
-    text: `<bash-stdout>AHUB_TMUX_BIND_V2\n/tmp/claude.sock\n${pane}\n\n/project\nnull</bash-stdout>`,
+    text: `<bash-stdout>AHUB_TMUX_BIND_V3\n/tmp/claude.sock\n${pane}\n\n/project\nnull</bash-stdout>`,
   }));
   await writeFile(
     path,
@@ -220,7 +223,7 @@ it("retains binding order when multiple native stdout blocks share one line", as
     });
   expect(
     bindings.latest(opaqueIdForParts(source.descriptor.instanceKey, snapshot.sessions[0]!.localId)),
-  ).toMatchObject({ valid: true, paneId: "%2" });
+  ).toMatchObject({ valid: true, sessionName: "ahub-00000000-0000-0000-0000-000000000002" });
   expect(snapshot.sessions[0]!.normalized.timeline).toEqual([]);
 });
 

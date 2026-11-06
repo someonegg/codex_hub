@@ -31,9 +31,7 @@ export function formatTable(headers: string[], rows: string[][]): string {
 
 export function formatTmux(target: TmuxTarget | null): string {
   if (!target) return "unknown";
-  return singleLine(
-    `${target.socketPath} ${target.paneId} (session: ${target.sessionName ?? "unknown"})`,
-  );
+  return singleLine(`${target.socketPath} ${target.sessionName}`);
 }
 
 export function output(result: unknown, json: boolean, human: string): void {

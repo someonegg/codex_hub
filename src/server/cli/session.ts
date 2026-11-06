@@ -278,8 +278,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           if (current.target)
             launchDiagnostics.tmux = {
               socketPath: current.target.socketPath,
-              paneId: current.target.paneId,
-              sessionName: current.target.sessionName ?? null,
+              sessionName: current.target.sessionName,
             };
         }
       });

@@ -86,7 +86,10 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
   const homes = ["personal", "work"].map((nickname) => ({ nickname, path: join(root, nickname) }));
   const rollout = (index: number) =>
     join(homes[index]!.path, "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl");
-  const target = { socketPath: join(root, "tmux.sock"), paneId: "%7" };
+  const target = {
+    socketPath: join(root, "tmux.sock"),
+    sessionName: "ahub-00000000-0000-0000-0000-000000000007",
+  };
   const bind = (timestamp: string) =>
     JSON.stringify({
       timestamp,
@@ -97,7 +100,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across hom
         content: [
           {
             type: "input_text",
-            text: `<user_shell_command>\nAHUB_TMUX_BIND_V1\n${target.socketPath}\n${target.paneId}\n\n\n</user_shell_command>`,
+            text: `<user_shell_command>\nAHUB_TMUX_BIND_V3\n${target.socketPath}\n${target.sessionName}\n\n\n</user_shell_command>`,
           },
         ],
       },

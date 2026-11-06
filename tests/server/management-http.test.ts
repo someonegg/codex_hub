@@ -42,7 +42,10 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory: vi.fn(async (directory: string) => ({ directory })),
-    launch: vi.fn(async () => ({ socketPath: "/tmp/test", paneId: "%1" })),
+    launch: vi.fn(async () => ({
+      socketPath: "/tmp/test",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+    })),
     exitSteps: () => [{ keys: ["C-c"] as const, delayMs: 0 }],
     archive: vi.fn(async () => undefined),
     delete: vi.fn(async () => undefined),

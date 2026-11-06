@@ -63,7 +63,7 @@ export interface TerminalResponse {
 
 export type InteractionState = "unknown" | "unbound" | "disconnected" | "connected" | "superseded";
 
-export type TmuxTarget = { socketPath: string; paneId: string; sessionName: string | null };
+export type TmuxTarget = { socketPath: string; sessionName: string };
 
 export type InteractionResponse =
   | { supported: false; tmux?: TmuxTarget | null; attachCommand: string | null }
@@ -111,7 +111,7 @@ export type TerminalPreviewMessage = TerminalPreviewFrame | TerminalPreviewError
 
 export interface HubOperation {
   mode?: "new" | "resume";
-  target?: { socketPath: string; paneId: string; sessionName?: string | null };
+  target?: { socketPath: string; sessionName: string };
   phase:
     | "sending_exit"
     | "waiting_exit"

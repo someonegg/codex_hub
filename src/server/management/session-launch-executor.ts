@@ -143,7 +143,7 @@ export class SessionLaunchExecutor {
     if (
       !attempt?.valid ||
       attempt.socketPath !== context.target.socketPath ||
-      attempt.paneId !== context.target.paneId ||
+      attempt.sessionName !== context.target.sessionName ||
       match.projectDirectory !== context.project
     ) {
       throw new AssociationError("Binding does not match the launched target/project");

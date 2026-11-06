@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -38,11 +39,11 @@ it("validates identity and missing directories before starting Claude", async ()
 });
 
 it("validates independent V2 binding metadata, preserving pane validity for invalid optional metadata", () => {
-  expect(claudeBindingCommand("", "/project with 'quotes'", "Task")).toContain("AHUB_TMUX_BIND_V2");
+  expect(claudeBindingCommand("", "/project with 'quotes'", "Task")).toContain("AHUB_TMUX_BIND_V3");
   expect(() => claudeBindingCommand("bad-operation")).toThrow("Invalid operation ID");
   expect(
     claudeBindingAttempts(
-      "<bash-stdout>AHUB_TMUX_BIND_V2\n/tmp/tmux.sock\n%2\n\n/project\ninvalid-json</bash-stdout>",
+      "<bash-stdout>AHUB_TMUX_BIND_V3\n/tmp/tmux.sock\nahub-00000000-0000-0000-0000-000000000002\n\n/project\ninvalid-json</bash-stdout>",
       1,
     ),
   ).toEqual([
@@ -50,19 +51,19 @@ it("validates independent V2 binding metadata, preserving pane validity for inva
       ordinal: 1,
       valid: true,
       socketPath: "/tmp/tmux.sock",
-      paneId: "%2",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000002",
       projectDirectory: "/project",
     },
   ]);
   expect(
     claudeBindingAttempts(
-      "<bash-stdout>AHUB_TMUX_BIND_V2\nrelative\n%2\n\n/project\nnull</bash-stdout>",
+      "<bash-stdout>AHUB_TMUX_BIND_V3\nrelative\nahub-00000000-0000-0000-0000-000000000002\n\n/project\nnull</bash-stdout>",
       2,
     ),
   ).toEqual([{ ordinal: 2, valid: false }]);
   expect(
     claudeBindingAttempts(
-      "<bash-stderr>AHUB_TMUX_BIND_V2\n/tmp/tmux.sock\n%2\n\n/project\nnull</bash-stderr>",
+      "<bash-stderr>AHUB_TMUX_BIND_V3\n/tmp/tmux.sock\nahub-00000000-0000-0000-0000-000000000002\n\n/project\nnull</bash-stderr>",
       3,
     ),
   ).toEqual([]);
@@ -111,7 +112,10 @@ it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?
     vi.useFakeTimers();
     try {
       const tmux = new TmuxLauncher();
-      const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
+      const target = {
+        socketPath: "/tmp/claude-test.sock",
+        sessionName: "ahub-00000000-0000-0000-0000-000000000002",
+      };
       const options = {
         operationId: "00000000-0000-4000-8000-000000000001",
         workingDirectory: "/project",
@@ -147,7 +151,10 @@ it.each(["❯ ", "Starting…", "Is this a project you created or one you trust?
 
 it.each(["capture", "send"])("preserves recovery information when %s fails", async (failure) => {
   const tmux = new TmuxLauncher();
-  const target = { socketPath: "/tmp/claude-test.sock", paneId: "%2" };
+  const target = {
+    socketPath: "/tmp/claude-test.sock",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000002",
+  };
   vi.spyOn(tmux, "launch").mockResolvedValue(target);
   const capture = vi
     .spyOn(tmux.transport, "captureTerminal")
@@ -193,4 +200,33 @@ it("deletes Claude logs and subagents across projects while preserving other con
     expect(await readFile(join(root, id, "keep"), "utf8")).toBe("keep");
     expect(await readFile(join(root, "other.jsonl"), "utf8")).toBe("other");
   }
+});
+
+it.each(["V1", "V2", "V4"])("ignores Claude binding marker %s", (version) => {
+  expect(
+    claudeBindingAttempts(
+      `<bash-stdout>AHUB_TMUX_BIND_${version}\n/tmp/socket\nahub-00000000-0000-0000-0000-000000000001\n\n/project\nnull</bash-stdout>`,
+      1,
+    ),
+  ).toEqual([]);
+});
+
+it("emits V3 using launcher metadata without executing commands in Claude's shell", () => {
+  const sessionName = "ahub-00000000-0000-0000-0000-000000000001";
+  const command = claudeBindingCommand("", "/project", "Task");
+  expect(command).not.toContain("$(");
+  const output = execFileSync("bash", ["-c", command.slice(2)], {
+    encoding: "utf8",
+    env: { ...process.env, TMUX: "/tmp/test.sock,123,0", AHUB_TMUX_SESSION_NAME: sessionName },
+  });
+  expect(claudeBindingAttempts(`<bash-stdout>${output}</bash-stdout>`, 1)).toEqual([
+    {
+      ordinal: 1,
+      valid: true,
+      socketPath: "/tmp/test.sock",
+      sessionName,
+      projectDirectory: "/project",
+      taskName: "Task",
+    },
+  ]);
 });

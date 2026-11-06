@@ -371,7 +371,10 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   const initial = (await bootstrapReader.list()).sessions[0]!;
   const domain = (await bootstrapReader.managementSnapshot()).sessions[0]!;
   const bindings = new PaneBindingManager();
-  const pane = { socketPath: "/tmp/runtime.sock", paneId: "%1", sessionName: "runtime" };
+  const pane = {
+    socketPath: "/tmp/runtime.sock",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  };
   bindings.submit({
     sessionId: initial.id,
     time: 1,

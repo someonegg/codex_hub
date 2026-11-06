@@ -11,9 +11,10 @@ it.each([
   "passes only enabled creation flags (worktree=%s, yolo=%s)",
   async (worktree, yolo, flags) => {
     const tmux = new TmuxLauncher();
-    const launch = vi
-      .spyOn(tmux, "launch")
-      .mockResolvedValue({ socketPath: "/tmp/test", paneId: "%1" });
+    const launch = vi.spyOn(tmux, "launch").mockResolvedValue({
+      socketPath: "/tmp/test",
+      sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+    });
     const manager = new CodexSessionManager("/codex-home", tmux);
     await manager.launch({
       operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
@@ -28,9 +29,10 @@ it.each([
 
 it("resumes an explicit UUID in the original CODEX_HOME with an operation binding prompt", async () => {
   const tmux = new TmuxLauncher();
-  const launch = vi
-    .spyOn(tmux, "launch")
-    .mockResolvedValue({ socketPath: "/tmp/test", paneId: "%1" });
+  const launch = vi.spyOn(tmux, "launch").mockResolvedValue({
+    socketPath: "/tmp/test",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  });
   const manager = new CodexSessionManager("/original-home", tmux);
   const nativeId = "00000000-0000-4000-8000-000000000001";
   await manager.launch({

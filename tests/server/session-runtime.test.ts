@@ -6,7 +6,10 @@ import { SessionRuntime } from "../../src/server/interaction/session-runtime.js"
 import type { InteractionTransport } from "../../src/server/interaction/transport.js";
 import { SessionManagerRegistry } from "../../src/server/management/session-manager.js";
 
-const pane = { socketPath: "/tmp/runtime.sock", paneId: "%1" };
+const pane = {
+  socketPath: "/tmp/runtime.sock",
+  sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+};
 function setup() {
   const bindings = new PaneBindingManager();
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
@@ -158,7 +161,7 @@ describe("session runtime evidence", () => {
       const batch = Array.from({ length: 20 }, (_, i) =>
         f.runtime.probe({
           ...shared,
-          paneId: `%${i + 2}`,
+          sessionName: `ahub-00000000-0000-0000-0000-${String(i + 2).padStart(12, "0")}`,
           socketPath: sockets === "shared" ? shared.socketPath : `/socket-${i}`,
         }),
       );

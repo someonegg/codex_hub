@@ -4,12 +4,15 @@ import { TerminalActivityService } from "../../src/server/interaction/terminal-a
 import type { PreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
 import { closeAfterEach } from "../helpers/cleanup.js";
 
-const binding = { socketPath: "/tmp/test", paneId: "%1", sessionName: "test" };
+const binding = {
+  socketPath: "/tmp/test",
+  sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+};
 beforeEach(() => vi.useFakeTimers({ now: 0 }));
 
 function setup() {
   const subscriptions: {
-    output: (pane?: string) => void;
+    output: (hasOutput: boolean) => void;
     fail: (error: Error) => void;
     ready: () => void;
     close: ReturnType<typeof vi.fn>;
@@ -34,24 +37,23 @@ it("waits for readiness and five seconds of observation before reporting idle", 
   expect(service.read("one", binding)).toBe("unknown");
   first.ready();
   await vi.advanceTimersByTimeAsync(4999);
-  first.output("%2");
-  first.output();
+  first.output(false);
   expect(service.read("one", binding)).toBe("unknown");
   await vi.advanceTimersByTimeAsync(1);
   expect(service.read("one", binding)).toBe("idle");
 });
 
-it("renews the five-second working window only for output from the selected pane", async () => {
+it("renews the five-second working window only for output notifications", async () => {
   const { service, first } = setup();
   first.ready();
   await vi.advanceTimersByTimeAsync(5000);
-  first.output("%1");
+  first.output(true);
   expect(service.read("one", binding)).toBe("working");
   await vi.advanceTimersByTimeAsync(4999);
   expect(service.read("one", binding)).toBe("working");
-  first.output("%1");
+  first.output(true);
   await vi.advanceTimersByTimeAsync(4999);
-  first.output("%2");
+  first.output(false);
   expect(service.read("one", binding)).toBe("working");
   await vi.advanceTimersByTimeAsync(1);
   expect(service.read("one", binding)).toBe("idle");
@@ -61,7 +63,7 @@ it("closes a failed subscription and retries with a fresh observation on the nex
   const { service, listen, subscriptions, first } = setup();
   first.ready();
   await vi.advanceTimersByTimeAsync(0);
-  first.output("%1");
+  first.output(true);
   expect(service.read("one", binding)).toBe("working");
   first.fail(new Error("lost"));
   expect(first.close).toHaveBeenCalledOnce();
@@ -69,7 +71,7 @@ it("closes a failed subscription and retries with a fresh observation on the nex
   expect(listen).toHaveBeenCalledTimes(2);
   subscriptions[1]!.ready();
   await vi.advanceTimersByTimeAsync(0);
-  subscriptions[1]!.output("%1");
+  subscriptions[1]!.output(true);
   expect(service.read("one", binding)).toBe("working");
 });
 
@@ -98,7 +100,7 @@ it("renews the subscription lease on reads and closes it only at the new deadlin
 
 it("invalidates only subscriptions that lost ownership and stops its timer on close", async () => {
   const { service, listen, first } = setup();
-  service.read("two", { ...binding, paneId: "%2" });
+  service.read("two", { ...binding, sessionName: "ahub-00000000-0000-0000-0000-000000000002" });
   const second = listen.mock.results[1]!.value;
   service.invalidate((id) => id === "two");
   expect(first.close).toHaveBeenCalledOnce();
@@ -110,15 +112,16 @@ it("invalidates only subscriptions that lost ownership and stops its timer on cl
   expect(listen).toHaveBeenCalledTimes(2);
 });
 
-it.each([{ socketPath: "/tmp/other" }, { paneId: "%2" }, { sessionName: "second" }])(
-  "rebuilds observation when the binding changes: %j",
-  async (change) => {
-    const { service, listen, first } = setup();
-    first.ready();
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(service.read("one", binding)).toBe("idle");
-    expect(service.read("one", { ...binding, ...change })).toBe("unknown");
-    expect(first.close).toHaveBeenCalledOnce();
-    expect(listen).toHaveBeenCalledTimes(2);
-  },
-);
+it.each([
+  { socketPath: "/tmp/other" },
+  { sessionName: "ahub-00000000-0000-0000-0000-000000000002" },
+  { sessionName: "second" },
+])("rebuilds observation when the binding changes: %j", async (change) => {
+  const { service, listen, first } = setup();
+  first.ready();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(service.read("one", binding)).toBe("idle");
+  expect(service.read("one", { ...binding, ...change })).toBe("unknown");
+  expect(first.close).toHaveBeenCalledOnce();
+  expect(listen).toHaveBeenCalledTimes(2);
+});

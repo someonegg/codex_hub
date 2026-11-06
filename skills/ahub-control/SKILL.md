@@ -20,7 +20,7 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - Add `--task <name>` when creating a session to assign an optional task name. Use `list --task <name>` to find matching sessions across projects.
 - Creation accepts `--home <nickname>`, defaulting to the first configured Home. Use `--worktree` and `--yolo` as authorized launch options, not universal defaults.
 - `resume <id>` retains the original Home and uses an available original working or project directory. It accepts `--yolo` but no directory overrides.
-- Successful create/resume means the session was observed live, connected, and idle. Save `sessionId` and `tmux` (`socketPath`, `paneId`, `sessionName`); diagnostics may be null.
+- Successful create/resume means the session was observed live, connected, and idle. Save `sessionId` and `tmux` (`socketPath`, `sessionName`); diagnostics may be null.
 - Before sending, inspect and save `nextAfter` as the turn's baseline; then observe new replies from that position.
 - Specify the objective, output location, constraints, and acceptance criteria. Prefer `--stdin` from a file or pipe for long messages to avoid shell interpolation and quoting errors. `sent` confirms delivery only.
 

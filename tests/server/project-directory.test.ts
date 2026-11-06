@@ -20,19 +20,29 @@ it.each([null, "relative", "/a\0b", "/a\rb", "/a\nb"])(
   },
 );
 it("omits project paths containing NUL from binding commands", () => {
-  expect(codexBindingCommand(undefined, "/a\0b")).toMatch(/'' ''$/);
+  expect(codexBindingCommand(undefined, "/a\0b")).toMatch(/'' '' 'null'$/);
 });
 it("preserves and safely quotes shell characters in project paths", () => {
   const path = "/a space/'quote'/$HOME;$(echo bad)`echo bad`";
   expect(validProjectDirectory(path)).toBe(true);
-  const command = codexBindingCommand(undefined, path)
-    .slice(2)
-    .replace("\"$(tmux display-message -p '#{socket_path}')\"", "'/tmp/socket'");
+  const command = codexBindingCommand(undefined, path).slice(2);
   const output = execFileSync("bash", ["-c", command], {
-    env: { ...process.env, TMUX_PANE: "%1" },
+    env: {
+      ...process.env,
+      TMUX: "/tmp/socket,123,0",
+      AHUB_TMUX_SESSION_NAME: "ahub-00000000-0000-0000-0000-000000000001",
+    },
     encoding: "utf8",
   });
-  expect(output.split("\n")).toEqual(["AHUB_TMUX_BIND_V1", "/tmp/socket", "%1", "", path, ""]);
+  expect(output.split("\n")).toEqual([
+    "AHUB_TMUX_BIND_V3",
+    "/tmp/socket",
+    "ahub-00000000-0000-0000-0000-000000000001",
+    "",
+    path,
+    "null",
+    "",
+  ]);
 });
 
 it("validates create directories, resolves symlinks and passes the explicit project through worktree launch", async () => {
@@ -43,7 +53,7 @@ it("validates create directories, resolves symlinks and passes the explicit proj
   await writeFile(join(home, "file"), "x");
   const launch = vi.fn(async (_operation: string, _directory: string, _args: string[]) => ({
     socketPath: "/tmp/socket",
-    paneId: "%1",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
   }));
   const manager = new CodexSessionManager(home, { launch } as never);
   const resolved = await manager.resolveDirectory(join(home, "link"));

@@ -27,7 +27,10 @@ async function setup() {
   const session = (await bootstrapReader.list()).sessions.find(
     (item) => item.title === "Synthetic trace",
   )!;
-  const pane = { socketPath: "/tmp/response.sock", paneId: "%1", sessionName: "response" };
+  const pane = {
+    socketPath: "/tmp/response.sock",
+    sessionName: "ahub-00000000-0000-0000-0000-000000000001",
+  };
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
   const sendKeys = vi.fn<InteractionTransport["sendKeys"]>().mockResolvedValue(undefined);
   const transport = { resolveTarget, sendKeys } as unknown as InteractionTransport;
@@ -122,17 +125,17 @@ describe("request-scoped session responses", () => {
     },
   );
 
-  it("makes fresh observations for subsequent reads and input operations", async () => {
+  it("makes fresh observations for subsequent reads without prechecking queued input", async () => {
     const f = await setup();
     try {
       await f.reader.getSession(f.session.id);
       expect(f.resolveTarget).toHaveBeenCalledTimes(1);
       await f.interaction.sendKeys(f.session.id, ["enter"]);
-      expect(f.resolveTarget).toHaveBeenCalledTimes(2);
+      expect(f.resolveTarget).toHaveBeenCalledTimes(1);
       expect(f.sendKeys).toHaveBeenCalledTimes(1);
       f.resolveTarget.mockResolvedValue(null);
       const next = await f.reader.getSession(f.session.id);
-      expect(f.resolveTarget).toHaveBeenCalledTimes(3);
+      expect(f.resolveTarget).toHaveBeenCalledTimes(2);
       expect(next).toMatchObject({
         session: { status: "normal", resume: { allowed: true } },
         interaction: { state: "disconnected" },
