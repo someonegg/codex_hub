@@ -6,69 +6,56 @@ import { ProjectDirectory } from "../../src/client/components/ProjectDirectory";
 
 // @vitest-environment jsdom
 
-function Field() {
-  const [value, setValue] = useState("");
+function Field({
+  projects = [{ project: "/projects/atlas" }, { project: "/projects/reader" }],
+  initial = "/projects/atlas",
+  disabled = false,
+}) {
+  const [value, setValue] = useState(initial);
   return (
-    <form>
-      <ProjectDirectory
-        value={value}
-        projects={[{ project: "/projects/atlas" }, { project: "/projects/reader" }]}
-        disabled={false}
-        onChange={setValue}
-      />
-      <button type="submit">Create</button>
-    </form>
+    <ProjectDirectory value={value} projects={projects} disabled={disabled} onChange={setValue} />
   );
 }
 
-describe("project directory suggestions", () => {
-  it.each([{ isComposing: true }, { keyCode: 229 }])("ignores IME keys when %j", (composition) => {
+describe("project directory selection", () => {
+  it("selects existing paths without exposing or focusing a text input", () => {
     render(<Field />);
-    const input = screen.getByRole("combobox");
-    fireEvent.focus(input);
-    for (const key of ["ArrowUp", "ArrowDown"]) {
-      expect(fireEvent.keyDown(input, { key, ...composition })).toBe(true);
-      expect(screen.queryByRole("option", { selected: true })).toBeNull();
-    }
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-    for (const key of ["Enter", "Escape"]) {
-      expect(fireEvent.keyDown(input, { key, ...composition })).toBe(true);
-      expect(input).toHaveValue("");
-      expect(screen.getByRole("listbox")).toBeInTheDocument();
-    }
-  });
-  it("shows full paths in the page, filters and selects without submitting", () => {
-    render(<Field />);
-    const input = screen.getByRole("combobox");
-    expect(input).not.toHaveFocus();
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-    fireEvent.focus(input);
-    expect(input).not.toHaveAttribute("list");
-    expect(screen.getAllByRole("option")).toHaveLength(2);
-    fireEvent.change(input, { target: { value: "reader" } });
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    fireEvent.click(screen.getByRole("option", { name: "/projects/reader" }));
-    expect(input).toHaveValue("/projects/reader");
-    expect(input).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
-    fireEvent.click(input);
-    expect(screen.getByRole("listbox")).toBeInTheDocument();
-    fireEvent.blur(input, { relatedTarget: screen.getByRole("button", { name: "Create" }) });
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    const select = screen.getByRole("combobox", { name: "Project directory" });
+    expect(select.tagName).toBe("SELECT");
+    expect(select).toHaveValue("/projects/atlas");
+    fireEvent.change(select, { target: { value: "/projects/reader" } });
+    expect(select).toHaveValue("/projects/reader");
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
   });
 
-  it("supports arrow selection, Enter, Escape and unmatched custom directories", () => {
+  it("requires an explicit custom selection, allows typing a known path, and returns to selection", () => {
     render(<Field />);
-    const input = screen.getByRole("combobox");
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(screen.getByRole("option", { selected: true })).toHaveTextContent("/projects/reader");
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(input).toHaveValue("/projects/reader");
-    fireEvent.click(input);
-    fireEvent.keyDown(input, { key: "Escape" });
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+    const select = screen.getByRole("combobox");
+    fireEvent.change(select, { target: { value: "custom" } });
+    const input = screen.getByRole("textbox", { name: "Custom directory" });
+    expect(input).toHaveValue("");
+    expect(input).not.toHaveFocus();
+    expect(input).toBeRequired();
+    fireEvent.change(input, { target: { value: "/projects/atlas" } });
+    expect(input).toHaveValue("/projects/atlas");
+    fireEvent.change(input, { target: { value: "/new/project" } });
+    fireEvent.change(select, { target: { value: "/projects/reader" } });
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(select).toHaveValue("/projects/reader");
+  });
+
+  it("accepts a directory when there are no known projects", () => {
+    render(<Field projects={[]} initial="" />);
+    expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+    const input = screen.getByRole("textbox", { name: "Project directory" });
     fireEvent.change(input, { target: { value: "/new/project" } });
     expect(input).toHaveValue("/new/project");
-    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+  });
+
+  it("preserves an unknown initial directory and disables both controls while busy", () => {
+    render(<Field initial="/external/project" disabled />);
+    expect(screen.getByRole("combobox")).toBeDisabled();
+    expect(screen.getByRole("textbox")).toHaveValue("/external/project");
+    expect(screen.getByRole("textbox")).toBeDisabled();
   });
 });

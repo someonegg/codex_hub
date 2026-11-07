@@ -187,7 +187,7 @@ async function record(
       throw new Error("Agent options must include the runtime name");
     await capture(900);
     const directory = demo.getByRole("combobox", { name: label("Project directory") });
-    await directory.fill("/projects/atlas-dashboard");
+    await directory.selectOption("/projects/atlas-dashboard");
     await capture(1100);
     await demo.getByRole("button", { name: label("Create session"), exact: true }).click();
     const composer = demo.getByRole("textbox", { name: label("Message to agent") });

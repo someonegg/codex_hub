@@ -27,8 +27,9 @@ individual plans, including opening several at once.
 
 ## Create and manage sessions
 
-Click a project's **+**, or the global **+** to select a project or enter an
-absolute local directory. Choose a [Agent](#multiple-agents) and optional launch settings:
+Click a project's **+**, or the global **+** to select an existing project directory.
+Choose **Other directory…** to enter a new absolute local directory.
+Choose an [Agent](#multiple-agents) and optional launch settings:
 
 - **Worktree:** start in a separate Git worktree for isolated changes.
 - **YOLO:** skip the runtime's approval prompts; Codex also disables its sandbox.

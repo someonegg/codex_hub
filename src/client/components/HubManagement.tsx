@@ -219,6 +219,7 @@ export function CreateSession({
           </label>
         ) : null}
         <ProjectDirectory
+          key={String(open)}
           value={directory}
           projects={projects}
           disabled={controller.busy}
