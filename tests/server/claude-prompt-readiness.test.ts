@@ -4,6 +4,20 @@ import { claudePromptPosition } from "../../src/server/adapters/claude/prompt-re
 
 const content = "Welcome\n\n❯\u00a0\n\nStatus";
 
+it.each(["", " ", "\t", "\u00a0", "\u3000", " \t\u00a0\u3000"])(
+  "accepts an empty prompt with horizontal whitespace: %j",
+  (whitespace) => {
+    expect(claudePromptPosition({ content: `❯${whitespace}`, cursorX: 2, cursorY: 0 })).toBe(0);
+  },
+);
+
+it.each(["\u200b", "\tExisting draft", "\rtext", "\u2028text", "\u2029text"])(
+  "rejects prompt content that is not horizontal whitespace: %j",
+  (suffix) => {
+    expect(claudePromptPosition({ content: `❯${suffix}`, cursorX: 2, cursorY: 0 })).toBeNull();
+  },
+);
+
 it.each(
   [1, 2, 3, 4, 5].flatMap((cursorX) => [0, 1, 2, 3, 4].map((cursorY) => ({ cursorX, cursorY }))),
 )("allows cursor drift within the prompt rectangle: %j", (cursor) => {
