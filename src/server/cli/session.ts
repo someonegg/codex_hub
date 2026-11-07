@@ -41,7 +41,7 @@ export const sessionHelp = `Usage: ahub-cli session <command> [options]
 Options: --url <http(s)-url> --json --timeout <seconds> (default 15; follow: 30; create/resume/exit/archive/delete: 45)
 List: excludes archived sessions unless --all is set.
 Follow: timeout applies to each HTTP request; observation continues until stopped.
-Address: --url, CODEX_HUB_URL, http://127.0.0.1:4173
+Address: --url, AGENT_HUB_URL, http://127.0.0.1:4173
 Messages: update indicates progress; response indicates a reply, not verified task completion.
 Input: send/keys require connected and idle; --force skips the idle check, allowing input while working.
 Send: messages starting with / are rejected by the CLI; --force skips this check too.
@@ -186,7 +186,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
-    const parsed = parseSessionArguments(args, process.env.CODEX_HUB_URL);
+    const parsed = parseSessionArguments(args, process.env.AGENT_HUB_URL);
     const { values } = parsed;
     json = values.json ?? false;
     if (parsed.help) {

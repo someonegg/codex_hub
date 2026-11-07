@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 
 import { expect, it, vi } from "vitest";
 
-import { createCodexHub } from "../../src/server/create-hub.js";
+import { createAhub } from "../../src/server/create-hub.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
 import type { UpdateRevision } from "../../src/shared/api-contract.js";
 import { createTempDirectory } from "../helpers/temp-directories.js";
@@ -27,7 +27,7 @@ it("isolates native identities, names and relationships while merging projects a
     );
   }
   await mkdir(agents[2]!.path);
-  const hub = await createCodexHub({ agents: agents });
+  const hub = await createAhub({ agents: agents });
   try {
     const list = await hub.sessions.list();
     expect(list.agents).toEqual([
@@ -51,7 +51,7 @@ it("isolates native identities, names and relationships while merging projects a
       expect(child.parentId).toBe(parent.id);
       expect(child.origin.agent).toBe(parent.agent);
     }
-    const reordered = await createCodexHub({
+    const reordered = await createAhub({
       agents: [...agents]
         .reverse()
         .map((agent) => ({ ...agent, nickname: `${agent.nickname} renamed` })),
@@ -115,7 +115,7 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across age
   const connect = vi
     .spyOn(TmuxInteractionService.prototype, "resolveTarget")
     .mockResolvedValue(target);
-  const hub = await createCodexHub({ agents: agents });
+  const hub = await createAhub({ agents: agents });
   try {
     const list = await hub.sessions.list();
     expect(list.agents).toEqual(

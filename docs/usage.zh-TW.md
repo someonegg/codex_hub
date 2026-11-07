@@ -5,7 +5,7 @@
 ## 啟動 Hub
 
 ```sh
-npx @someonegg/codex-hub@latest
+npx @someonegg/agent-hub@latest
 ```
 
 開啟 <http://127.0.0.1:4173> 或伺服器輸出的位址，按 `Ctrl-C` 停止伺服器。
@@ -78,15 +78,15 @@ npx @someonegg/codex-hub@latest
 
 ## 使用 CLI
 
-`codex-hub` 啟動伺服器，`ahub-cli` 管理工作階段和發布資源。下文範例假定已全域安裝：
+`agent-hub` 啟動伺服器，`ahub-cli` 管理工作階段和發布資源。下文範例假定已全域安裝：
 
 ```sh
-npm install -g @someonegg/codex-hub
+npm install -g @someonegg/agent-hub
 ahub-cli --help
 ```
 
 不需全域安裝時，將範例中的 `ahub-cli` 替換為
-`npx --package=@someonegg/codex-hub@latest ahub-cli`。加入 `--json` 可取得結構化命令結果。
+`npx --package=@someonegg/agent-hub@latest ahub-cli`。加入 `--json` 可取得結構化命令結果。
 
 ### 工作階段命令
 
@@ -113,7 +113,7 @@ ahub-cli session inspect <id> --follow
 `interrupt <id>` 中斷執行。`send` 或 `keys` 的 `--force` 允許在工作中傳送輸入，
 也允許 `send` 傳送以 `/` 開頭的訊息。終端切換工作階段後，用 `handoff <id>` 移交繫結。
 
-預設連線至 `http://127.0.0.1:4173`。用 `CODEX_HUB_URL` 或 `--url` 修改位址，
+預設連線至 `http://127.0.0.1:4173`。用 `AGENT_HUB_URL` 或 `--url` 修改位址，
 用 `--timeout <seconds>` 調整逾時。使用私有 CA 時，啟動 CLI 前設定
 `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。
 
@@ -126,7 +126,7 @@ ahub-cli session inspect <id> --follow
 用 `--hosting` 啟動 Hub 以檢視發布資源。發布命令讀取 Hub 所在機器的本機檔案，伺服器停止時也可執行。
 命令輸出相對 URL 和 Markdown 連結，請在 Hub 伺服器位址下開啟。
 
-預設儲存在 `~/.codex-hub/hosting`。自訂資料目錄時，命令與伺服器必須使用相同的 `--home-dir /path`。
+預設儲存在 `~/.agent-hub/hosting`。自訂資料目錄時，命令與伺服器必須使用相同的 `--home-dir /path`。
 
 ### 發布網頁
 
@@ -167,14 +167,16 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 
 ## 設定伺服器
 
-啟動時傳入選項，修改後重新啟動。完整列表見 `codex-hub --help`。
+啟動時傳入選項，修改後重新啟動。完整列表見 `agent-hub --help`。
 
 | 選項                   | 預設值         | 用途                                        |
 | ---------------------- | -------------- | ------------------------------------------- |
 | `--port <port>`        | `4173`         | 監聽連接埠，`0` 自動選擇閒置連接埠          |
-| `--home-dir <path>`    | `~/.codex-hub` | Hub 資料目錄，包含 `uploads/` 和 `hosting/` |
+| `--home-dir <path>`    | `~/.agent-hub` | Hub 資料目錄，包含 `uploads/` 和 `hosting/` |
 | `--hosting`            | 關閉           | 提供已發布網頁與差異存取                    |
 | `--tmux-socket <path>` | tmux 預設值    | 使用自訂 tmux socket                        |
+
+Agent Hub 預設使用 `~/.agent-hub`，不會自動遷移舊資料。如需使用原有 Codex Hub 資料目錄，請為伺服器和資源管理命令傳入 `--home-dir ~/.codex-hub`。
 
 ### 多個智慧體
 
@@ -182,7 +184,7 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 每個智慧體需使用唯一暱稱和目錄：
 
 ```sh
-codex-hub \
+agent-hub \
   --codex-agent 'work=~/.codex-work' \
   --claude-agent 'claude=~/.claude'
 ```
@@ -199,7 +201,7 @@ Hub 沒有應用層登入，任何能存取它的人都能閱讀工作階段、�
 使用內建 mTLS：
 
 ```sh
-codex-hub \
+agent-hub \
   --host 0.0.0.0 \
   --ssl \
   --ssl-cert /path/to/server-fullchain.pem \
@@ -221,7 +223,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 ## 疑難排解
 
 - **沒有工作階段：**檢查各智慧體是否包含 `sessions/`（Codex）或 `projects/`（Claude）。檢視伺服器輸出中的不可讀或跳過檔案提示。
-- **連接埠占用：**改用其他連接埠，例如 `codex-hub --port 4180`。
+- **連接埠占用：**改用其他連接埠，例如 `agent-hub --port 4180`。
 - **無法傳送輸入：**透過**連線 tmux**完成 CLI 提示，忙碌時等待，或在可用時使用**恢復**。封存工作階段唯讀，僅有日誌不代表終端已連線。
 - **建立或恢復狀態不明：**重試前檢查 tmux 並重新整理工作階段列表，避免重複啟動。關閉頁面不會停止操作，重新啟動伺服器會遺失進度追蹤。
 - **相機不可用或上傳中斷：**使用檔案選擇器，檢查工作階段已連線且閒置後重試。
@@ -233,7 +235,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 停止伺服器。全域安裝時執行：
 
 ```sh
-npm uninstall -g @someonegg/codex-hub
+npm uninstall -g @someonegg/agent-hub
 ```
 
 `npx` 不需全域移除安裝。工作階段、worktree、執行中的 tmux 工作階段、上傳檔案和託管快照仍會保留，請按需另行清理。

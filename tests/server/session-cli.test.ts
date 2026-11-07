@@ -40,12 +40,12 @@ async function serve(
   await new Promise<void>((done) => server.listen(0, "127.0.0.1", done));
   return `${secure ? "https" : "http"}://127.0.0.1:${(server.address() as AddressInfo).port}`;
 }
-function cli(args: string[], stdin = "", env: Record<string, string> = {}) {
+function cli(args: string[], stdin = "", env: Record<string, string | undefined> = {}) {
   return new Promise<{ code: number | null; stdout: string; stderr: string }>((done, reject) => {
     const child = spawn(
       process.execPath,
       ["--import", "tsx", "src/server/cli/main.ts", "session", ...args],
-      { env: { ...process.env, CODEX_HUB_URL: "http://127.0.0.1:1", ...env } },
+      { env: { ...process.env, AGENT_HUB_URL: "http://127.0.0.1:1", ...env } },
     );
     let stdout = "",
       stderr = "";
@@ -91,7 +91,7 @@ it.each([true, false])("wires invalid arguments without requests (json=%s)", asy
     res.end();
   });
   const result = await cli(["list", "extra", ...(json ? ["--json"] : [])], "", {
-    CODEX_HUB_URL: base,
+    AGENT_HUB_URL: base,
   });
   expect(result.code).toBe(1);
   expect(requests).toBe(0);
@@ -193,7 +193,7 @@ it("uses explicit URL over the environment and filters by associated project", a
       updatedAt: null,
     },
   ]);
-  expect((await cli(["list", "--json"], "", { CODEX_HUB_URL: base })).code).toBe(0);
+  expect((await cli(["list", "--json"], "", { AGENT_HUB_URL: base })).code).toBe(0);
 });
 
 it("requires idle for send and keys unless forced, leaving interrupt and handoff unchanged", async () => {
@@ -789,4 +789,19 @@ it("retries an out-of-range inspect once from the start", async () => {
     "/api/v1/sessions/id/messages?after=99",
     "/api/v1/sessions/id/messages?after=0",
   ]);
+});
+
+it("ignores the legacy URL environment variable", async () => {
+  let requests = 0;
+  const base = await serve((_req, res) => {
+    requests++;
+    reply(res, { sessions: [], agents: [], projects: [] });
+  });
+  const result = await cli(["list", "--json"], "", {
+    AGENT_HUB_URL: undefined,
+    CODEX_HUB_URL: base,
+  });
+  expect(requests).toBe(0);
+  // The default listener may be running; the legacy listener must never be contacted.
+  expect(result.stdout).not.toContain(base);
 });

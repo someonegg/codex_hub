@@ -244,10 +244,10 @@ other resource failures use `command_failed`. Session connection errors use
 ### Client behavior and results
 
 `ahub-cli session` is a stateless HTTP client: no rollout reads, direct tmux
-control, server discovery/startup, or persisted recovery state. `codex-hub` starts
+control, server discovery/startup, or persisted recovery state. `agent-hub` starts
 the server; `ahub-cli page`/`diff` access local hosting storage via `--home-dir`.
 
-URL precedence: `--url`, `CODEX_HUB_URL`, `http://127.0.0.1:4173`. HTTP and HTTPS
+URL precedence: `--url`, `AGENT_HUB_URL`, `http://127.0.0.1:4173`. HTTP and HTTPS
 origins are accepted. HTTPS uses Node.js certificate verification. For a private CA, set
 `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Codex Hub",
-  "short_name": "Codex Hub",
+  "name": "Agent Hub",
+  "short_name": "Agent Hub",
   "description": "A private, local reader for Codex sessions",
   "start_url": "/",
   "scope": "/",

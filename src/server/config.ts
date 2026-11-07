@@ -6,7 +6,7 @@ import { parseArgs } from "node:util";
 
 export function resolveHomeDirectory(value?: string): string {
   return value === undefined
-    ? resolve(homedir(), ".codex-hub")
+    ? resolve(homedir(), ".agent-hub")
     : resolvePathOption("home-dir", value);
 }
 
@@ -173,11 +173,11 @@ export function loadConfig(args: readonly string[] = process.argv.slice(2)): Com
 }
 
 export function commandLineHelp(): string {
-  return `Usage: codex-hub [options]
+  return `Usage: agent-hub [options]
 
 Options:
   --hosting            Enable trusted same-origin static web hosting
-  --home-dir <path>    Hub data root (default: ~/.codex-hub; uploads/ and hosting/)
+  --home-dir <path>    Hub data root (default: ~/.agent-hub; uploads/ and hosting/)
   --codex-agent <nickname=path>
                        Codex agent; repeat for multiple agents
   --claude-agent <nickname=path>
@@ -198,10 +198,10 @@ Options:
   --version            Show the current version
 
 TLS example:
-  codex-hub --ssl --ssl-cert server.crt --ssl-key server.key
+  agent-hub --ssl --ssl-cert server.crt --ssl-key server.key
 
 mTLS example:
-  codex-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
+  agent-hub --ssl --ssl-cert server.crt --ssl-key server.key --ssl-ca ca.crt`;
 }
 
 function parseAgent(

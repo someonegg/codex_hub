@@ -1,7 +1,7 @@
 {
-  "name": "@someonegg/codex-hub",
+  "name": "@someonegg/agent-hub",
   "version": "0.6.3",
-  "description": "Local project and session hub for Codex",
+  "description": "Local project and session hub for coding agents",
   "type": "module",
   "engines": {
     "node": ">=22.13"
@@ -51,13 +51,13 @@
   },
   "overrides": {
     "katex": "$katex",
-    "@codex-hub/client-lint": {
+    "@ahub/client-lint": {
       "minimatch": "^11.0.1"
     }
   },
   "devDependencies": {
     "@babel/parser": "^7.29.12",
-    "@codex-hub/client-lint": "file:tools/client-lint",
+    "@ahub/client-lint": "file:tools/client-lint",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -74,7 +74,7 @@
     "vitest": "^4.1.10"
   },
   "bin": {
-    "codex-hub": "dist/server/server/main.js",
+    "agent-hub": "dist/server/server/main.js",
     "ahub-cli": "dist/server/server/cli/main.js"
   },
   "files": [

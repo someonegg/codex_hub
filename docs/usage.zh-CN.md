@@ -5,7 +5,7 @@
 ## 启动 Hub
 
 ```sh
-npx @someonegg/codex-hub@latest
+npx @someonegg/agent-hub@latest
 ```
 
 打开 <http://127.0.0.1:4173> 或服务器打印的地址，按 `Ctrl-C` 停止服务器。
@@ -78,15 +78,15 @@ npx @someonegg/codex-hub@latest
 
 ## 使用 CLI
 
-`codex-hub` 启动服务器，`ahub-cli` 管理会话和发布资源。下文示例假定已全局安装：
+`agent-hub` 启动服务器，`ahub-cli` 管理会话和发布资源。下文示例假定已全局安装：
 
 ```sh
-npm install -g @someonegg/codex-hub
+npm install -g @someonegg/agent-hub
 ahub-cli --help
 ```
 
 无需全局安装时，将示例中的 `ahub-cli` 替换为
-`npx --package=@someonegg/codex-hub@latest ahub-cli`。添加 `--json` 可获取结构化命令结果。
+`npx --package=@someonegg/agent-hub@latest ahub-cli`。添加 `--json` 可获取结构化命令结果。
 
 ### 会话命令
 
@@ -113,7 +113,7 @@ ahub-cli session inspect <id> --follow
 `interrupt <id>` 中断执行。`send` 或 `keys` 的 `--force` 允许在工作中发送输入，
 也允许 `send` 发送以 `/` 开头的消息。终端切换会话后，用 `handoff <id>` 移交绑定。
 
-默认连接 `http://127.0.0.1:4173`。用 `CODEX_HUB_URL` 或 `--url` 修改地址，
+默认连接 `http://127.0.0.1:4173`。用 `AGENT_HUB_URL` 或 `--url` 修改地址，
 用 `--timeout <seconds>` 调整超时。私有 CA 场景下，启动 CLI 前设置
 `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem`。
 
@@ -126,7 +126,7 @@ ahub-cli session inspect <id> --follow
 用 `--hosting` 启动 Hub 以查看发布资源。发布命令读取 Hub 所在机器的本地文件，服务器停止时也可执行。
 命令输出相对 URL 和 Markdown 链接，请在 Hub 服务器地址下打开。
 
-默认存储在 `~/.codex-hub/hosting`。自定义数据目录时，命令与服务器必须使用相同的 `--home-dir /path`。
+默认存储在 `~/.agent-hub/hosting`。自定义数据目录时，命令与服务器必须使用相同的 `--home-dir /path`。
 
 ### 发布网页
 
@@ -167,14 +167,16 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 
 ## 配置服务器
 
-启动时传入选项，修改后重启。完整列表见 `codex-hub --help`。
+启动时传入选项，修改后重启。完整列表见 `agent-hub --help`。
 
 | 选项                   | 默认值         | 用途                                        |
 | ---------------------- | -------------- | ------------------------------------------- |
 | `--port <port>`        | `4173`         | 监听端口，`0` 自动选择空闲端口              |
-| `--home-dir <path>`    | `~/.codex-hub` | Hub 数据目录，包含 `uploads/` 和 `hosting/` |
+| `--home-dir <path>`    | `~/.agent-hub` | Hub 数据目录，包含 `uploads/` 和 `hosting/` |
 | `--hosting`            | 关闭           | 提供已发布网页与差异访问                    |
 | `--tmux-socket <path>` | tmux 默认值    | 使用自定义 tmux socket                      |
+
+Agent Hub 默认使用 `~/.agent-hub`，不会自动迁移旧数据。如需使用原有 Codex Hub 数据目录，请为服务器和资源管理命令传入 `--home-dir ~/.codex-hub`。
 
 ### 多个智能体
 
@@ -182,7 +184,7 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 每个智能体需使用唯一昵称和目录：
 
 ```sh
-codex-hub \
+agent-hub \
   --codex-agent 'work=~/.codex-work' \
   --claude-agent 'claude=~/.claude'
 ```
@@ -199,7 +201,7 @@ Hub 没有应用层登录，任何能访问它的人都能阅读会话、发送�
 使用内置 mTLS：
 
 ```sh
-codex-hub \
+agent-hub \
   --host 0.0.0.0 \
   --ssl \
   --ssl-cert /path/to/server-fullchain.pem \
@@ -221,7 +223,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 ## 故障排查
 
 - **没有会话：**检查各智能体是否包含 `sessions/`（Codex）或 `projects/`（Claude）。查看服务器输出中的不可读或跳过文件提示。
-- **端口占用：**换用其他端口，例如 `codex-hub --port 4180`。
+- **端口占用：**换用其他端口，例如 `agent-hub --port 4180`。
 - **无法发送输入：**通过**连接 tmux**完成 CLI 提示，正忙时等待，或在可用时使用**恢复**。归档会话只读，仅有日志不代表终端已连接。
 - **创建或恢复状态不明：**重试前检查 tmux 并刷新会话列表，避免重复启动。关闭页面不会停止操作，重启服务器会丢失进度追踪。
 - **相机不可用或上传中断：**使用文件选择器，检查会话已连接且空闲后重试。
@@ -233,7 +235,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 停止服务器。全局安装时执行：
 
 ```sh
-npm uninstall -g @someonegg/codex-hub
+npm uninstall -g @someonegg/agent-hub
 ```
 
 `npx` 无需全局卸载。会话、worktree、运行中的 tmux 会话、上传文件和托管快照仍会保留，请按需另行清理。

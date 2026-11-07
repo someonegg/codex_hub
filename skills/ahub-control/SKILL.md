@@ -1,16 +1,16 @@
 ---
 name: ahub-control
-description: Manage agent sessions through an existing Codex Hub using ahub-cli session. Use only when the user explicitly requests `ahub-control` by name.
+description: Manage agent sessions through an existing Agent Hub using ahub-cli session. Use only when the user explicitly requests `ahub-control` by name.
 ---
 
-# Coordinate sessions through Codex Hub
+# Coordinate sessions through Agent Hub
 
 The CLI reports runtime state, replies, input requests, and diagnostics. The caller verifies deliverables and decides whether the task is complete. Create, control, or clean up only sessions within the authorized task scope.
 
 ## Check the environment and target
 
 - Check `command -v ahub-cli` and `ahub-cli session --help` for the commands and options needed by the task. Report missing capabilities; install, update, or start services only when authorized.
-- Address precedence is `--url`, `CODEX_HUB_URL`, then `http://127.0.0.1:4173`. Keep custom addresses consistent across commands.
+- Address precedence is `--url`, `AGENT_HUB_URL`, then `http://127.0.0.1:4173`. Keep custom addresses consistent across commands.
 - HTTP and HTTPS origins are supported. HTTPS uses Node.js certificate verification; for a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 - Select existing sessions with `list --project /absolute/project --json`. It lists main sessions. Known child IDs can be inspected directly. Treat IDs as opaque strings.
 

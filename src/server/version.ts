@@ -5,7 +5,7 @@ export async function packageVersion(): Promise<string> {
   while (true) {
     try {
       const manifest = JSON.parse(await readFile(new URL("package.json", directory), "utf8"));
-      if (manifest.name === "@someonegg/codex-hub" && typeof manifest.version === "string") {
+      if (manifest.name === "@someonegg/agent-hub" && typeof manifest.version === "string") {
         return manifest.version;
       }
     } catch (error) {

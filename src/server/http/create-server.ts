@@ -205,7 +205,7 @@ export async function startServer(
       await listenServer(local, config.localPort, "127.0.0.1");
       const address = local.address();
       if (address && typeof address === "object")
-        console.log(`Codex Hub local HTTP listening on http://127.0.0.1:${address.port}`);
+        console.log(`Agent Hub local HTTP listening on http://127.0.0.1:${address.port}`);
     }
     const server = primary;
     const close = server.close.bind(server);

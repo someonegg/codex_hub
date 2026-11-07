@@ -18,7 +18,7 @@ import { DirectoryLock } from "../directory-lock.js";
 import { ResourceValidationError } from "./validation-error.js";
 
 export const ID = /^[a-f0-9]{32}$/;
-export const defaultHostingDirectory = join(homedir(), ".codex-hub", "hosting");
+export const defaultHostingDirectory = join(homedir(), ".agent-hub", "hosting");
 export interface Artifact {
   id: string;
   name: string;

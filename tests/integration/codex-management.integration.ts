@@ -9,7 +9,7 @@ import { createCodexSessionSource } from "../../src/server/adapters/codex/codex-
 import { codexBindingCommand } from "../../src/server/adapters/codex/interaction-parser.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
 import { SessionReadService } from "../../src/server/application/session-read-service.js";
-import { createCodexHub } from "../../src/server/create-hub.js";
+import { createAhub } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { PaneBindingManager } from "../../src/server/interaction/pane-binding-manager.js";
@@ -355,7 +355,7 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
   });
   const emptyAgent = join(root, "empty-agent");
   await mkdir(emptyAgent);
-  const hub = await createCodexHub({
+  const hub = await createAhub({
     agents: [
       { nickname: "empty", path: emptyAgent },
       { nickname: "work", path: agent },
@@ -451,7 +451,7 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const hub = await createCodexHub({ agents: [{ nickname: "work", path: agent }], socket: socket });
+  const hub = await createAhub({ agents: [{ nickname: "work", path: agent }], socket: socket });
   const { base } = await startHttpServer(createApiRouter(hub), hub.close);
   const cli = async (...args: string[]) => {
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [

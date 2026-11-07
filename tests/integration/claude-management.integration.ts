@@ -7,7 +7,7 @@ import { expect, it, vi } from "vitest";
 
 import { claudePromptPosition } from "../../src/server/adapters/claude/prompt-readiness.js";
 import { ClaudeSessionManager } from "../../src/server/adapters/claude/session-manager.js";
-import { createCodexHub } from "../../src/server/create-hub.js";
+import { createAhub } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import { TmuxLauncher } from "../../src/server/interaction/tmux-launcher.js";
 import { TmuxInteractionService } from "../../src/server/interaction/tmux-service.js";
@@ -205,7 +205,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
       model: "claude-sonnet-4-6",
     }),
   );
-  const hub = await createCodexHub({
+  const hub = await createAhub({
     agents: [{ nickname: "claude", path: agent, adapter: "claude" }],
     socket,
   });

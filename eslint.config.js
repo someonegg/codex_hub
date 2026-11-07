@@ -1,4 +1,4 @@
-import { tseslint, reactHooks, simpleImportSort } from "@codex-hub/client-lint";
+import { tseslint, reactHooks, simpleImportSort } from "@ahub/client-lint";
 
 export default tseslint.config(
   {

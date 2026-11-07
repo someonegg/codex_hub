@@ -17,7 +17,7 @@ function resourceHelp(resource: string): string {
   ${resource} list
   ${resource} delete <id>
 Options: --home-dir <directory> --json --help
-Commands operate on local Hub storage (default: ~/.codex-hub).`;
+Commands operate on local Hub storage (default: ~/.agent-hub).`;
 }
 
 export async function runResourceCommand(

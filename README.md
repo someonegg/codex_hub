@@ -1,4 +1,4 @@
-# Codex Hub
+# Agent Hub
 
 English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
@@ -8,7 +8,7 @@ either runtime from desktop or mobile.
 
 Codex and Claude Code main sessions are supported; see [Agent configuration](docs/usage.md#multiple-agents).
 
-![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
+![Agent Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 
 <details>
 <summary>Mobile screenshots</summary>
@@ -31,20 +31,20 @@ Runtime requirements:
 Try it without a global installation:
 
 ```sh
-npx @someonegg/codex-hub@latest
+npx @someonegg/agent-hub@latest
 ```
 
 Or install it for regular use:
 
 ```sh
-npm install -g @someonegg/codex-hub
-codex-hub
+npm install -g @someonegg/agent-hub
+agent-hub
 ```
 
 Open <http://127.0.0.1:4173>. Open **Settings → Language** at the bottom of the sidebar to switch between English (the default), 简体中文, and 繁體中文. The choice is saved in this browser. Press `Ctrl-C` to stop the server.
 For agent configuration, ports, and optional page/diff hosting, see [Usage](docs/usage.md).
 
-To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
+To upgrade, run `npm install -g @someonegg/agent-hub@latest` again.
 For running from source, see [Development](docs/development.md).
 
 ## Features
@@ -97,7 +97,7 @@ directory from the temporary cache for lasting use.
 
 ## Security
 
-Codex Hub reads local session logs and the session index, interacts with Codex
+Agent Hub reads local session logs and the session index, interacts with Codex
 through tmux, and manages sessions through native CLI commands. Authentication
 stays with Codex; the hub does not read or manage tokens, API keys, or credential files.
 

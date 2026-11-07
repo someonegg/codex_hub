@@ -1,4 +1,4 @@
-# Codex Hub
+# Agent Hub
 
 [English](README.md) | 简体中文 | [繁體中文](README.zh-TW.md)
 
@@ -30,14 +30,14 @@
 无需全局安装即可试用：
 
 ```sh
-npx @someonegg/codex-hub@latest
+npx @someonegg/agent-hub@latest
 ```
 
 也可以安装后长期使用：
 
 ```sh
-npm install -g @someonegg/codex-hub
-codex-hub
+npm install -g @someonegg/agent-hub
+agent-hub
 ```
 
 打开 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止服务器。
@@ -46,7 +46,7 @@ codex-hub
 智能体、端口与可选网页／差异托管配置见[使用与配置](docs/usage.zh-CN.md)。
 
 升级时再次执行
-`npm install -g @someonegg/codex-hub@latest`。从源码运行请参阅[开发指南（英文）](docs/development.md)。
+`npm install -g @someonegg/agent-hub@latest`。从源码运行请参阅[开发指南（英文）](docs/development.md)。
 
 ## 功能
 
@@ -92,7 +92,7 @@ codex-hub
 
 ## 安全
 
-Codex Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原生 CLI 命令管理会话。
+Agent Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原生 CLI 命令管理会话。
 身份认证由 Codex 负责；Hub 不读取或管理令牌、API 密钥或凭据文件。
 
 服务器默认仅监听回环地址，交互和管理功能没有应用层登录保护。对外开放前，请添加身份认证

@@ -51,7 +51,7 @@ it("keeps unsupported files on the app page and explains the Safari alternative"
   const { canShare, share } = setup();
   canShare.mockReturnValue(false);
   fireEvent.click(screen.getByRole("button", { name: "Download" }));
-  expect(await screen.findByRole("alert")).toHaveTextContent("Open Codex Hub in Safari");
+  expect(await screen.findByRole("alert")).toHaveTextContent("Open Agent Hub in Safari");
   expect(share).not.toHaveBeenCalled();
   expect(screen.queryByRole("link")).not.toBeInTheDocument();
 });

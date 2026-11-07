@@ -142,7 +142,7 @@ the catalog. Offline session access is not supported.
 
 ## Release
 
-The npm package is `@someonegg/codex-hub`; it provides `codex-hub` (server) and
+The npm package is `@someonegg/agent-hub`; it provides `agent-hub` (server) and
 `ahub-cli` (management commands).
 
 1. Update package and lockfile versions in a PR, run the standard checks and
