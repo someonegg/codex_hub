@@ -39,7 +39,6 @@ export const namespaceKeys = {
     "noMainSessionsYet",
     "openSession",
     "operation",
-    "projectDirectories",
     "selectProjectDirectory",
     "otherProjectDirectory",
     "customProjectDirectory",

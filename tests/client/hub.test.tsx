@@ -312,10 +312,6 @@ describe("unified hub", () => {
     expect(within(dialog).getByRole("heading", { name: "New session" })).toHaveFocus();
     expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
     expect(within(dialog).queryByRole("textbox", { name: "Name" })).not.toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Close new session" }));
-    fireEvent.click(screen.getByRole("button", { name: "New session in reader" }));
-    expect(within(dialog).getByRole("heading", { name: "New session" })).toHaveFocus();
-    expect(within(dialog).queryByRole("listbox")).not.toBeInTheDocument();
     fireEvent.focus(within(dialog).getByRole("combobox", { name: "Project directory" }));
     expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
     fireEvent.change(within(dialog).getByLabelText("Project directory"), {
@@ -326,6 +322,7 @@ describe("unified hub", () => {
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Close new session" }));
     fireEvent.click(screen.getByRole("button", { name: "New session in reader" }));
+    expect(within(dialog).getByRole("heading", { name: "New session" })).toHaveFocus();
     expect(within(dialog).getByLabelText("Project directory")).toHaveValue("/project/reader");
     expect(within(dialog).queryByRole("textbox")).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "Close new session" }));

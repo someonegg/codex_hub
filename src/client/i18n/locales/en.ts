@@ -149,7 +149,6 @@ export const messages = {
   selectProjectDirectory: "Select a project directory",
   otherProjectDirectory: "Other directory…",
   customProjectDirectory: "Custom directory",
-  projectDirectories: "Project directories",
   projectDirectoryLabel: "Project directory",
   projectHub: "Project hub",
   projects: "Projects",

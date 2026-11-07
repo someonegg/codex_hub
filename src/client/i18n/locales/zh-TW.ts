@@ -147,7 +147,6 @@ export const messages: Record<keyof typeof english, string> = {
   selectProjectDirectory: "選擇專案目錄",
   otherProjectDirectory: "其他目錄…",
   customProjectDirectory: "自訂目錄",
-  projectDirectories: "專案目錄列表",
   projectDirectoryLabel: "專案目錄",
   projectHub: "專案中心",
   projects: "專案",
