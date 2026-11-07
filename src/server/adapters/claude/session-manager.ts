@@ -18,7 +18,7 @@ export const BINDING_PROMPT_WAIT_MS = 15_000;
 
 export class ClaudeSessionManager implements SessionManager {
   constructor(
-    private readonly agent: string,
+    private readonly configDirectory: string,
     private readonly tmux = new TmuxLauncher(),
     private readonly readyScript?: string,
   ) {}
@@ -30,7 +30,7 @@ export class ClaudeSessionManager implements SessionManager {
       throw new Error("Invalid resume identity");
     const target = await this.tmux.launch(options.operationId, options.workingDirectory, [
       "env",
-      `CLAUDE_CONFIG_DIR=${this.agent}`,
+      `CLAUDE_CONFIG_DIR=${this.configDirectory}`,
       "claude",
       ...(options.resumeNativeId ? ["--resume", options.resumeNativeId] : []),
       ...(options.worktree ? ["--worktree"] : []),
@@ -85,7 +85,7 @@ export class ClaudeSessionManager implements SessionManager {
   }
   async delete(nativeId: string): Promise<void> {
     if (!this.isValidNativeId(nativeId)) throw new Error("Invalid Claude session identity");
-    const projects = join(this.agent, "projects");
+    const projects = join(this.configDirectory, "projects");
     let entries;
     try {
       entries = await readdir(projects, { withFileTypes: true });
@@ -120,7 +120,8 @@ export class ClaudeSessionManager implements SessionManager {
   exitSteps = exitSteps;
 }
 export const createClaudeSessionManager = (
-  agent: string,
+  configDirectory: string,
   socket?: string,
   readyScript?: string,
-): SessionManager => new ClaudeSessionManager(agent, new TmuxLauncher(socket), readyScript);
+): SessionManager =>
+  new ClaudeSessionManager(configDirectory, new TmuxLauncher(socket), readyScript);

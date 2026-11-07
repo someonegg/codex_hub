@@ -67,13 +67,13 @@ export class CodexSessionSource implements SessionSource {
   private readonly sessionIndex: SessionIndexReader;
 
   constructor(
-    private readonly codexAgent: string,
+    private readonly configDirectory: string,
     instanceKey: string,
     {
       decoder = new CheckpointedJsonlDecoder(),
       identity = new IdentityResolver(),
       normalizer = new DefaultSessionNormalizer(),
-      sessionIndex = new SessionIndexReader(codexAgent),
+      sessionIndex = new SessionIndexReader(configDirectory),
       agent = "default",
     }: CodexSourceOptions = {},
   ) {
@@ -91,7 +91,10 @@ export class CodexSessionSource implements SessionSource {
         .filter((entry) => entry.descriptor.archived)
         .map((entry) => [entry.descriptor.path, entry.descriptor] as const),
     );
-    const discovery = await new JsonlCatalogSource(this.codexAgent, archivedDescriptors).discover();
+    const discovery = await new JsonlCatalogSource(
+      this.configDirectory,
+      archivedDescriptors,
+    ).discover();
     const discoverySignature = JSON.stringify({
       diagnostics: discovery.diagnostics,
       entries: discovery.entries.map(({ descriptor }) => fingerprintOf(descriptor)),
@@ -310,10 +313,10 @@ export interface CodexSourceOptions {
 }
 
 export async function createCodexSessionSource(
-  codexAgent: string,
+  configDirectory: string,
   options: CodexSourceOptions = {},
 ) {
-  const configured = resolve(codexAgent);
+  const configured = resolve(configDirectory);
   return new CodexSessionSource(configured, `codex-jsonl\0${configured}`, options);
 }
 

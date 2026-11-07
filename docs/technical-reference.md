@@ -74,7 +74,8 @@ not native session IDs. Message reads also validate ordinal bounds. See
 ### Agent identity and routing
 
 An Agent owns configuration, Skills, memory, and model settings. Codex and Claude
-Code are Runtimes; task-spawned identities are Subagents. Session origins expose
+Code are Runtimes; task-spawned identities are Subagents. Agent catalog entries
+expose `nickname`, `runtimeName`, and management capabilities. Session origins expose
 `agent`, `runtimeName`, and nullable `runtimeVersion`; session details expose
 nullable `subagent` identity (`taskName`, `nickname`, `role`).
 
@@ -160,7 +161,7 @@ loaded input requests and responses by `callId` into cards. See
 
 | Collection | Fields                                                                                                        |
 | ---------- | ------------------------------------------------------------------------------------------------------------- |
-| `agents`   | `nickname` and `management: { archive }`, including empty agents                                              |
+| `agents`   | `nickname`, `runtimeName`, and `management: { archive }`, including empty agents                              |
 | `projects` | `directory`                                                                                                   |
 | `sessions` | `id`, `agent`, `title`, `projectDirectory`, optional `taskName`, `status`, `parentId`, `isChild`, `updatedAt` |
 

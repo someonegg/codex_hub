@@ -81,7 +81,7 @@ export function HubSidebar({
               <option value="">{t("allAgents")}</option>
               {catalog.list!.agents.map((agent) => (
                 <option key={agent.nickname} value={agent.nickname}>
-                  {agent.nickname}
+                  {agent.nickname} · {agent.runtimeName}
                 </option>
               ))}
             </select>

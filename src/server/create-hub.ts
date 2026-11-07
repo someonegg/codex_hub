@@ -68,6 +68,7 @@ export async function createCodexHub({
         ?.displayTitleFor?.(session) ?? null,
     agents: sources.map((source) => ({
       nickname: source.descriptor.agent,
+      runtimeName: source.descriptor.displayName,
       management: managementCapabilities(managers.get(source.descriptor.agent)),
     })),
   });

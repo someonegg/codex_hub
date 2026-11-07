@@ -244,7 +244,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     const nativeId = (await hub.sessions.managementSnapshot()).byId.get(sessionId)!.sourceId;
     expect(nativeId).toMatch(/^[a-f0-9-]+$/);
     expect((await hub.sessions.list()).agents).toEqual([
-      { nickname: "claude", management: { archive: false } },
+      { nickname: "claude", runtimeName: "Claude Code", management: { archive: false } },
     ]);
     // Unsupported HTTP and internal operations must leave the live pane untouched.
     const response = await fetch(`${base}/api/v1/sessions/${sessionId}/archive`, {

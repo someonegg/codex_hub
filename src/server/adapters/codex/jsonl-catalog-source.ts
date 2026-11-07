@@ -12,7 +12,7 @@ const ROLLOUT_NAME = /^rollout-[A-Za-z0-9][A-Za-z0-9._-]*\.jsonl$/;
 
 export class JsonlCatalogSource {
   constructor(
-    private readonly codexAgent: string,
+    private readonly configDirectory: string,
     private readonly archivedDescriptors: ReadonlyMap<string, RolloutDescriptor> = new Map(),
   ) {}
 
@@ -78,7 +78,7 @@ export class JsonlCatalogSource {
       }
     };
     for (const name of ["sessions", "archived_sessions"]) {
-      await scan(resolve(this.codexAgent, name), name, name === "archived_sessions", 0);
+      await scan(resolve(this.configDirectory, name), name, name === "archived_sessions", 0);
     }
     entries.sort((a, b) => a.descriptor.path.localeCompare(b.descriptor.path));
     return { entries, diagnostics };

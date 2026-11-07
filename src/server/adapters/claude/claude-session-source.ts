@@ -180,10 +180,10 @@ export class ClaudeSessionSource implements SessionSource {
   }
 }
 export async function createClaudeSessionSource(
-  agent: string,
+  configDirectory: string,
   options: { readonly agent?: string } = {},
 ) {
-  const directory = resolve(agent);
+  const directory = resolve(configDirectory);
   return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, options);
 }
 
