@@ -21,7 +21,7 @@
 运行要求：
 
 - macOS 或 Linux，Node.js >=22.13 与 npm
-- 至少一种已配置的本地 CLI：Codex 或 Claude Code
+- 已配置的本地 Codex 或 Claude Code CLI
 - tmux，用于创建、恢复会话和交互
 
 Hub 默认读取 `~/.codex` 和 `~/.claude`，两种运行时可单独或同时使用。
@@ -86,7 +86,7 @@ agent-hub
 ## 安全
 
 Agent Hub 读取本地会话记录，通过 tmux 控制已连接的 CLI 会话。
-模型访问与身份认证由所配置的 Codex 或 Claude Code CLI 负责；Hub 不管理 API 密钥或 CLI 凭据。
+模型访问与身份认证由所配置的 CLI 负责；Hub 不管理 API 密钥或 CLI 凭据。
 
 服务器默认仅监听回环地址，交互和管理功能没有应用层登录保护。对外开放前，请添加身份认证
 （例如内置 mTLS）并限制访问。参阅[安全说明](docs/usage.zh-CN.md#从其他设备访问)。

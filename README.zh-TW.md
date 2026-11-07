@@ -21,7 +21,7 @@
 執行要求：
 
 - macOS 或 Linux，Node.js >=22.13 與 npm
-- 至少一種已設定的本機 CLI：Codex 或 Claude Code
+- 已設定的本機 Codex 或 Claude Code CLI
 - tmux，用於建立、恢復工作階段和互動
 
 Hub 預設讀取 `~/.codex` 和 `~/.claude`，兩種執行環境可單獨或同時使用。
@@ -86,7 +86,7 @@ agent-hub
 ## 安全
 
 Agent Hub 讀取本機工作階段記錄，透過 tmux 控制已連線的 CLI 工作階段。
-模型存取與身分認證由所設定的 Codex 或 Claude Code CLI 負責；Hub 不管理 API 金鑰或 CLI 認證資料。
+模型存取與身分認證由所設定的 CLI 負責；Hub 不管理 API 金鑰或 CLI 認證資料。
 
 伺服器預設僅監聽回送位址，互動和管理功能沒有應用層登入保護。對外開放前，請新增身分認證
 （例如內建 mTLS）並限制存取。參閱[安全說明](docs/usage.zh-TW.md#從其他裝置存取)。

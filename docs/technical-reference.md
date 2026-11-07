@@ -93,16 +93,14 @@ Creation defaults `agent` to the first configured nickname. Unknown nicknames re
 
 ### Runtime CLI compatibility
 
-Session management invokes the owning runtime's CLI from `PATH`. Configure and
-authenticate it for each agent before launching sessions. Compatibility depends on
-the commands and flags used by that adapter:
+Before launching sessions, configure and authenticate each agent's runtime CLI
+on `PATH`. The adapters use these commands and flags:
 
 | Runtime     | Create and resume                                                                      | Launch options                                               | History management                                                                            |
 | ----------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Codex       | Interactive `codex` and `codex resume <UUID>`, both with `--no-daemon --no-alt-screen` | `--worktree`, `--yolo` when selected                         | `codex archive <UUID>` and `codex delete <UUID> --force`                                      |
 | Claude Code | Interactive `claude` and `claude --resume <UUID>`                                      | `--worktree`, `--dangerously-skip-permissions` when selected | The adapter deletes local session files directly; no native archive/delete command is invoked |
 
-Each adapter owns its CLI contract.
 See the [Codex adapter](../src/server/adapters/codex/session-manager.ts),
 [Claude Code adapter](../src/server/adapters/claude/session-manager.ts), and
 [execution and confirmation](#execution-and-confirmation) for behavior.

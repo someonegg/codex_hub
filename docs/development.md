@@ -12,9 +12,9 @@ npm start
 ```
 
 Open <http://127.0.0.1:4173>. Rebuild and restart after changing application code.
-See [Usage](usage.md#configure-the-server) for server options and the
-[README](../README.md#quick-start) for runtime requirements and the
-[CLI compatibility reference](technical-reference.md#runtime-cli-compatibility) for adapter commands and flags.
+See [runtime requirements](../README.md#quick-start),
+[server options](usage.md#configure-the-server), and
+[CLI compatibility](technical-reference.md#runtime-cli-compatibility).
 
 For frontend hot reload, run `npm run dev`. It starts Vite without the session
 API; use the built server for real sessions and end-to-end checks.

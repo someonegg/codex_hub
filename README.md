@@ -22,7 +22,7 @@ either runtime from desktop or mobile.
 Runtime requirements:
 
 - macOS or Linux with Node.js >=22.13 and npm
-- At least one configured local CLI: Codex or Claude Code
+- A locally configured Codex or Claude Code CLI
 - tmux for creating, resuming, and interacting with sessions
 
 Hub reads `~/.codex` and `~/.claude` by default. You can use either runtime or both;
@@ -89,8 +89,8 @@ directory from the temporary cache for lasting use.
 ## Security
 
 Agent Hub reads local session history and controls connected CLI sessions through
-tmux. Model access and authentication remain with the configured Codex or Claude
-Code CLI; Hub does not manage API keys or CLI credentials.
+tmux. The configured CLI handles model access and authentication; Hub does not
+manage API keys or CLI credentials.
 
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add
