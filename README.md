@@ -27,8 +27,6 @@ Runtime requirements:
 
 Hub reads `~/.codex` and `~/.claude` by default. You can use either runtime or both;
 see [Agent configuration](docs/usage.md#multiple-agents) for custom directories.
-For Codex session management, the CLI must support `resume`, `--no-daemon`,
-`--no-alt-screen`, `--worktree`, `archive`, and `delete --force`.
 
 Try it without a global installation:
 

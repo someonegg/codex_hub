@@ -26,7 +26,6 @@
 
 Hub 預設讀取 `~/.codex` 和 `~/.claude`，兩種執行環境可單獨或同時使用。
 自訂目錄見[多個智慧體設定](docs/usage.zh-TW.md#多個智慧體)。
-使用 Codex 工作階段管理功能時，CLI 需支援 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force`。
 
 無需全域安裝即可試用：
 

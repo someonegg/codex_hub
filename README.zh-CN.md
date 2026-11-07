@@ -26,7 +26,6 @@
 
 Hub 默认读取 `~/.codex` 和 `~/.claude`，两种运行时可单独或同时使用。
 自定义目录见[多个智能体配置](docs/usage.zh-CN.md#多个智能体)。
-使用 Codex 会话管理功能时，CLI 需支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force`。
 
 无需全局安装即可试用：
 
