@@ -156,3 +156,15 @@ The npm package is `@someonegg/agent-hub`; it provides `agent-hub` (server) and
 The workflow validates the tag, runs checks, and uses npm trusted publishing;
 routine releases need no npm token. Retries skip versions already published.
 Never reuse a published version; release fixes as a new patch version.
+
+For a new package name, establish npm publishing access before pushing the tag;
+the old package's trusted publisher does not authorize the new package. Configure
+the new package's trusted publisher for `someonegg/agent_hub` and `publish.yml`,
+allowing `npm publish`. If an authenticated first publish is needed to create the
+package, publish the validated release first, then configure trusted publishing
+and verify the tag workflow. See [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
+
+When renaming the GitHub repository, update package metadata and Git remotes
+before publishing. After the new package passes installation checks, deprecate
+`@someonegg/codex-hub` with a pointer to `@someonegg/agent-hub`. Release notes must
+include the new `agent-hub` command and the [existing-data instructions](usage.md#configure-the-server).
