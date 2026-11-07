@@ -37,7 +37,7 @@ it("accepts asynchronous writes, deduplicates, keeps reads routed, and retrieves
     store,
     interaction,
     resolveDisplayTitle: (session) => source.displayTitleFor(session),
-    agents: [{ nickname: "default" }],
+    agents: [{ nickname: "default", runtimeName: "Codex" }],
   });
   const manager = {
     isValidNativeId: vi.fn((_nativeId: string) => true),

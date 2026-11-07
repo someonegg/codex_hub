@@ -127,7 +127,10 @@ async function record(
       await new Promise((resolve) => setTimeout(resolve, 200));
       return json({
         revision: String(created),
-        agents: [{ nickname: "default" }, { nickname: "work" }],
+        agents: [
+          { nickname: "default", runtimeName: "Codex" },
+          { nickname: "work", runtimeName: "Claude Code" },
+        ],
         projects: [{ directory: "/projects/atlas-dashboard" }],
         sessions: created
           ? [
@@ -179,6 +182,9 @@ async function record(
     await demo.waitForFunction(
       () => document.querySelector("select[required]")?.value === "default",
     );
+    const agentSelect = demo.getByRole("combobox", { name: label("Session agent") });
+    if ((await agentSelect.locator('option[value="work"]').textContent()) !== "work · Claude Code")
+      throw new Error("Agent options must include the runtime name");
     await capture(900);
     const directory = demo.getByRole("combobox", { name: label("Project directory") });
     await directory.fill("/projects/atlas-dashboard");
@@ -223,6 +229,31 @@ async function record(
     if (errors.length) throw new Error(errors.join("\n"));
     const overflow = await demo.evaluate(() => document.documentElement.scrollWidth > innerWidth);
     if (overflow) throw new Error("Horizontal overflow in demo");
+    await demo.setViewportSize({ width: 390, height: 844 });
+    await demo.getByRole("button", { name: label("← Back to list") }).click();
+    await demo
+      .getByRole("button", { name: label("New session"), exact: true })
+      .first()
+      .click();
+    await agentSelect.waitFor();
+    await agentSelect.selectOption("work");
+    const mobileOverflow = await demo
+      .getByRole("dialog", { name: label("New session"), exact: true })
+      .evaluate((dialog) => {
+        const select = dialog.querySelector("select[required]");
+        if (!select) throw new Error("Agent selector is missing");
+        const outsideViewport = (element) => {
+          const bounds = element.getBoundingClientRect();
+          return bounds.left < -1 || bounds.right > innerWidth + 1;
+        };
+        return (
+          document.documentElement.scrollWidth > innerWidth + 1 ||
+          dialog.scrollWidth > dialog.clientWidth + 1 ||
+          outsideViewport(dialog) ||
+          outsideViewport(select)
+        );
+      });
+    if (mobileOverflow) throw new Error("Horizontal overflow in mobile agent selection");
     console.log(`Captured ${frame} frames to ${frames}`);
   } catch (error) {
     throw new Error(error.message + "\n" + (await demo.locator("body").innerText()));

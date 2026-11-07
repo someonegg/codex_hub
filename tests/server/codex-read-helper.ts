@@ -3,14 +3,14 @@ import { SessionReadService } from "../../src/server/application/session-read-se
 import { paneBindings } from "../../src/server/interaction/pane-binding-manager.js";
 
 export async function createCodexSessionReadService(
-  codexAgent: string,
+  configDirectory: string,
 ): Promise<SessionReadService> {
-  const source = await createCodexSessionSource(codexAgent);
+  const source = await createCodexSessionSource(configDirectory);
   return new SessionReadService([source], {
     publishBindings: (events) => {
       for (const event of events) paneBindings.submit(event);
     },
     resolveDisplayTitle: (session) => source.displayTitleFor(session),
-    agents: [{ nickname: "default" }],
+    agents: [{ nickname: "default", runtimeName: "Codex" }],
   });
 }

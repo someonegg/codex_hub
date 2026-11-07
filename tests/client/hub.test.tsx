@@ -380,7 +380,11 @@ it("feeds displayed session updatedAt back into sidebar ordering without refresh
 function multiAgentCatalog(): SessionListResponse {
   return {
     ...catalog,
-    agents: [{ nickname: "personal" }, { nickname: "work" }, { nickname: "empty" }],
+    agents: [
+      { nickname: "personal", runtimeName: "Codex" },
+      { nickname: "work", runtimeName: "Claude Code" },
+      { nickname: "empty", runtimeName: "Codex" },
+    ],
     sessions: [
       ...catalog.sessions.map((session) => ({ ...session, agent: "personal" })),
       {
@@ -406,6 +410,8 @@ it("aggregates and filters merged projects, remembers the agent and keeps a dire
     1,
   );
   expect(screen.getByText("Agent: default")).toBeInTheDocument();
+  expect(within(sidebar).getByRole("option", { name: "work · Claude Code" })).toHaveValue("work");
+  expect(within(sidebar).getByRole("option", { name: "empty · Codex" })).toHaveValue("empty");
   fireEvent.change(screen.getByRole("combobox", { name: "Filter by agent" }), {
     target: { value: "work" },
   });
@@ -419,6 +425,11 @@ it("aggregates and filters merged projects, remembers the agent and keeps a dire
   expect(within(sidebar).getByText("No main sessions yet")).toBeInTheDocument();
   fireEvent.click(within(sidebar).getByRole("button", { name: "New session" }));
   expect(screen.getByLabelText("Session agent")).toHaveValue("empty");
+  expect(
+    within(screen.getByLabelText("Session agent")).getByRole("option", {
+      name: "work · Claude Code",
+    }),
+  ).toHaveValue("work");
 });
 it("defaults creation to the first agent in aggregate view and restores a stored filter", async () => {
   window.history.replaceState(null, "", "/");
@@ -457,7 +468,7 @@ it("defaults creation to the first agent in aggregate view and restores a stored
 it("preselects the default creation agent and respects an explicit agent filter", async () => {
   window.history.replaceState(null, "", "/");
   const list = multiAgentCatalog();
-  list.agents[2] = { nickname: "default" };
+  list.agents[2] = { nickname: "default", runtimeName: "Codex" };
   vi.mocked(api.sessions)
     .mockReset()
     .mockResolvedValueOnce(list)

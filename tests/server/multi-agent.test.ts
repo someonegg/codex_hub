@@ -31,9 +31,9 @@ it("isolates native identities, names and relationships while merging projects a
   try {
     const list = await hub.sessions.list();
     expect(list.agents).toEqual([
-      { nickname: "personal", management: { archive: true } },
-      { nickname: "work", management: { archive: true } },
-      { nickname: "empty", management: { archive: true } },
+      { nickname: "personal", runtimeName: "Codex", management: { archive: true } },
+      { nickname: "work", runtimeName: "Codex", management: { archive: true } },
+      { nickname: "empty", runtimeName: "Codex", management: { archive: true } },
     ]);
     expect(JSON.stringify(list)).not.toContain(root);
     const personal = list.sessions.find((session) => session.title === "personal title")!;
@@ -119,7 +119,11 @@ it("keeps automatic updates reads isolated and resolves tmux takeover across age
   try {
     const list = await hub.sessions.list();
     expect(list.agents).toEqual(
-      agents.map(({ nickname }) => ({ nickname, management: { archive: true } })),
+      agents.map(({ nickname }) => ({
+        nickname,
+        runtimeName: "Codex",
+        management: { archive: true },
+      })),
     );
     const parents = agents.map(
       (agent) =>

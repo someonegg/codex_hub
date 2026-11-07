@@ -15,7 +15,7 @@ import { partitionMessages } from "../../src/client/i18n/namespaces";
 import { updatePreferences } from "../../src/client/state/preferences";
 
 afterEach(() => {
-  act(() => updatePreferences({ language: "en", theme: "mist", yolo: false }));
+  act(() => updatePreferences({ language: "en", defaultAgent: "", theme: "mist", yolo: false }));
   vi.unstubAllGlobals();
 });
 
@@ -127,4 +127,23 @@ it("translates an existing local error from its key", () => {
   expect(screen.getByText("Folders are not supported")).toBeInTheDocument();
   act(() => updatePreferences({ language: "zh-CN" }));
   expect(screen.getByText("不支持文件夹")).toBeInTheDocument();
+});
+
+it("shows runtime names in default agent options and stores only the nickname", () => {
+  act(() => updatePreferences({ language: "en", defaultAgent: "" }));
+  render(
+    <Settings
+      agents={[
+        { nickname: "work", runtimeName: "Codex" },
+        { nickname: "personal", runtimeName: "Claude Code" },
+      ]}
+    />,
+  );
+  expect(screen.getByRole("option", { name: "work · Codex", hidden: true })).toHaveValue("work");
+  expect(screen.getByRole("option", { name: "personal · Claude Code", hidden: true })).toHaveValue(
+    "personal",
+  );
+  const select = screen.getByRole("combobox", { name: "Default Agent", hidden: true });
+  fireEvent.change(select, { target: { value: "personal" } });
+  expect(select).toHaveValue("personal");
 });

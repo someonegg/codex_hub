@@ -168,7 +168,8 @@ dialog::backdrop {
 .session-action-menu button:hover {
   background: var(--hover-surface);
 }
-.create-session input {
+.create-session input,
+.create-session select {
   border: 1px solid var(--mist);
   background: var(--surface);
   color: var(--ink);

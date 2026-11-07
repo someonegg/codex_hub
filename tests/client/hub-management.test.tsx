@@ -628,7 +628,11 @@ it("offers a yolo-only resume dialog and shares operation occupancy with the man
 });
 
 it("initializes creation options only when opening the dialog", () => {
-  const agents = [{ nickname: "default" }, { nickname: "work" }, { nickname: "other" }];
+  const agents = [
+    { nickname: "default", runtimeName: "Codex" },
+    { nickname: "work", runtimeName: "Codex" },
+    { nickname: "other", runtimeName: "Codex" },
+  ];
   act(() => updatePreferences({ defaultAgent: "default" }));
   const props = { agents, project: "/project", projects: [], onCreated: vi.fn() };
   const view = render(<CreateSession {...props} open={false} />);

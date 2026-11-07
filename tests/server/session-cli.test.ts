@@ -423,7 +423,7 @@ it("renders human output and sends human diagnostics to stderr", async () => {
       });
     else
       reply(res, {
-        agents: [{ nickname: "work" }],
+        agents: [{ nickname: "work", runtimeName: "Codex" }],
         projects: [{ directory: "/project" }],
         sessions: [
           { id: "id", status: "live", agent: "work", projectDirectory: "/project", title: "Title" },

@@ -187,8 +187,8 @@ it("keeps Codex and Claude agents independently routed while merging project ass
     expect(hub.managers.get("glm").archive).toBeUndefined();
     expect(hub.managers.get("codex").archive).toBeTypeOf("function");
     expect((await hub.sessions.list()).agents).toEqual([
-      { nickname: "codex", management: { archive: true } },
-      { nickname: "glm", management: { archive: false } },
+      { nickname: "codex", runtimeName: "Codex", management: { archive: true } },
+      { nickname: "glm", runtimeName: "Claude Code", management: { archive: false } },
     ]);
   } finally {
     hub.close();

@@ -22,6 +22,7 @@ export interface SessionProject {
 }
 
 export interface SessionAgent {
+  runtimeName: string;
   management?: { archive: boolean };
   nickname: string;
 }

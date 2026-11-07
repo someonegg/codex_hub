@@ -198,7 +198,7 @@ async function capture(
       return route.fulfill({
         json: {
           revision: "demo-catalog",
-          agents: [{ nickname: "default" }],
+          agents: [{ nickname: "default", runtimeName: "Codex" }],
           projects: [
             { directory: session.projectDirectory },
             { directory: "/projects/harbor-api" },

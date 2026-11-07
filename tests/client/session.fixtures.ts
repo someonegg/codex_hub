@@ -25,7 +25,7 @@ export const baseSession: SessionDetail = {
 };
 
 export const listBody = {
-  agents: [{ nickname: "default" }],
+  agents: [{ nickname: "default", runtimeName: "Codex" }],
   revision: "a".repeat(43),
   sessions: [
     {

@@ -212,7 +212,7 @@ export function CreateSession({
               </option>
               {agents.map((agent) => (
                 <option key={agent.nickname} value={agent.nickname}>
-                  {agent.nickname}
+                  {agent.nickname} · {agent.runtimeName}
                 </option>
               ))}
             </select>

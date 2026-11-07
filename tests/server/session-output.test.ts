@@ -48,7 +48,7 @@ const record = { id: "record", ordinal: 42, timestamp: null, secret: "secret" };
 
 it("maps the list with a field whitelist and excludes ordinary and orphan children", () => {
   const response = {
-    agents: [{ nickname: "default" }],
+    agents: [{ nickname: "default", runtimeName: "Codex" }],
     projects: [{ directory: "/project" }],
     revision: "secret",
     sessions: [
