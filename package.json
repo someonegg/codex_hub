@@ -1,6 +1,6 @@
 {
   "name": "@someonegg/agent-hub",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Local project and session hub for coding agents",
   "type": "module",
   "engines": {
