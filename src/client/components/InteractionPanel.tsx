@@ -549,8 +549,7 @@ export function InteractionPanel({
               <button
                 type="button"
                 className="interaction-send"
-                disabled={!previewConnected || messageIsBlank || messageTooLarge}
-                aria-disabled={inputUnavailable}
+                aria-disabled={inputUnavailable || messageIsBlank || messageTooLarge}
                 onClick={() => void send().catch(() => undefined)}
               >
                 {t("send")}

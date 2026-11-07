@@ -171,16 +171,24 @@ describe("interaction panel", () => {
     expect(textarea).toHaveValue("");
   });
 
-  it("keeps Send disabled for blank input", async () => {
+  it("keeps Send focusable but blocks activation for blank input", async () => {
     const handlers = props(interaction("connected"));
     const user = userEvent.setup();
     render(<InteractionPanel {...handlers} />);
     const textarea = screen.getByRole("textbox", { name: "Message to agent" });
     const send = screen.getByRole("button", { name: "Send" });
-    expect(send).toBeDisabled();
+    expect(send).toBeEnabled();
+    expect(send).toHaveAttribute("aria-disabled", "true");
+    screen.getByRole("button", { name: "Attach files" }).focus();
+    await user.tab();
+    expect(send).toHaveFocus();
+    await user.keyboard("{Enter}");
+    await user.click(send);
+    expect(handlers.onSendMessage).not.toHaveBeenCalled();
 
     await user.type(textarea, "   ");
-    expect(send).toBeDisabled();
+    expect(send).toHaveAttribute("aria-disabled", "true");
+    await user.click(send);
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
     expect(handlers.onSendMessage).not.toHaveBeenCalled();
     expect(handlers.onSendKeys).not.toHaveBeenCalled();
@@ -1010,7 +1018,7 @@ it("previews, removes and releases image resources, falling back for undecodable
   expect(screen.getByText("Preview unavailable")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Remove photo.png" }));
   expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:preview");
-  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Send" })).toHaveAttribute("aria-disabled", "true");
   view.unmount();
   upload.mockRestore();
 });
@@ -1055,7 +1063,11 @@ it("counts attachment paths in the message limit", async () => {
   fireEvent.change(screen.getByRole("textbox"), {
     target: { value: "a".repeat(MAX_INTERACTION_MESSAGE_BYTES) },
   });
-  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+  const send = screen.getByRole("button", { name: "Send" });
+  expect(send).toBeEnabled();
+  expect(send).toHaveAttribute("aria-disabled", "true");
+  await act(async () => fireEvent.click(send));
+  expect(handlers.onSendMessage).not.toHaveBeenCalled();
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "/help" } });
   await act(async () => fireEvent.click(screen.getByRole("button", { name: "Send" })));
   expect(handlers.onSendMessage).toHaveBeenCalledWith("- /tmp/report.txt\n\n/help");
