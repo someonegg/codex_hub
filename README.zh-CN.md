@@ -5,8 +5,6 @@
 面向 Codex 和 Claude Code 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
 按项目浏览会话、跟进最新回复，并从电脑或手机继续工作。
 
-支持 Codex 和 Claude Code 主会话，详见[多个智能体配置](docs/usage.zh-CN.md#多个智能体)。
-
 ![创建会话、发送提示并查看已回答的用户输入卡片](docs/images/zh-CN/ahub-intro.gif)
 
 <details>
@@ -23,9 +21,12 @@
 运行要求：
 
 - macOS 或 Linux，Node.js >=22.13 与 npm
-- 本地 Codex 智能体（通常为 `~/.codex`）
-- 支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force` 的 Codex CLI
-- tmux，用于创建会话和交互
+- 至少一种已配置的本地 CLI：Codex 或 Claude Code
+- tmux，用于创建、恢复会话和交互
+
+Hub 默认读取 `~/.codex` 和 `~/.claude`，两种运行时可单独或同时使用。
+自定义目录见[多个智能体配置](docs/usage.zh-CN.md#多个智能体)。
+使用 Codex 会话管理功能时，CLI 需支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force`。
 
 无需全局安装即可试用：
 
@@ -55,6 +56,7 @@ agent-hub
 - 浏览历史记录的同时跟进会话更新。
 - 创建会话，可选 worktree；发送输入并预览终端。
 - 查看运行中的会话、恢复已退出会话、停止会话运行，以及归档或删除历史记录。
+- [发布静态网页和查看代码差异](docs/usage.zh-CN.md#发布网页与差异)，可选启用本地托管。
 - 在英文、简体中文与繁体中文之间切换界面。
 
 ## 会话交互
@@ -69,16 +71,8 @@ agent-hub
 
 </details>
 
-### 终端预览
-
-展开**终端预览**跟进实时 CLI。使用屏幕按钮，或聚焦预览后按方向键及 **Enter**，处理 CLI 提示。
-按 **Ctrl+C** 或点击**中断**可中断执行；**Esc** 收起预览。**工作中**与**空闲**仅反映近期终端输出，不代表任务完成。
-
-### 移交绑定后继续
-
-当 Codex 在同一终端中通过 `/clear`、`/resume` 或执行计划切换会话时，在旧会话页面点击**移交绑定**。
-显示**已被替代**后，点击**前往已绑定会话**。未发送草稿保留在旧页面。
-详见[与会话交互](docs/usage.zh-CN.md#发送提示与文件)。
+展开**终端预览**跟进 CLI，并通过屏幕按钮处理提示。
+快捷键、中断与 Codex 会话移交详见[与会话交互](docs/usage.zh-CN.md#发送提示与文件)。
 
 ## 通过管理 CLI 操作会话
 
@@ -92,8 +86,8 @@ agent-hub
 
 ## 安全
 
-Agent Hub 读取本地会话日志与索引，通过 tmux 交互，并使用原生 CLI 命令管理会话。
-身份认证由 Codex 负责；Hub 不读取或管理令牌、API 密钥或凭据文件。
+Agent Hub 读取本地会话记录，通过 tmux 控制已连接的 CLI 会话。
+模型访问与身份认证由所配置的 Codex 或 Claude Code CLI 负责；Hub 不管理 API 密钥或 CLI 凭据。
 
 服务器默认仅监听回环地址，交互和管理功能没有应用层登录保护。对外开放前，请添加身份认证
 （例如内置 mTLS）并限制访问。参阅[安全说明](docs/usage.zh-CN.md#从其他设备访问)。

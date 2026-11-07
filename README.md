@@ -6,8 +6,6 @@ A local web hub for Codex and Claude Code that pairs readable conversations with
 Browse sessions by project, follow responses in near real time, and keep working with
 either runtime from desktop or mobile.
 
-Codex and Claude Code main sessions are supported; see [Agent configuration](docs/usage.md#multiple-agents).
-
 ![Agent Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 
 <details>
@@ -24,9 +22,13 @@ Codex and Claude Code main sessions are supported; see [Agent configuration](doc
 Runtime requirements:
 
 - macOS or Linux with Node.js >=22.13 and npm
-- A local Codex agent (usually `~/.codex`)
-- Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
-- tmux for creating and interacting with sessions
+- At least one configured local CLI: Codex or Claude Code
+- tmux for creating, resuming, and interacting with sessions
+
+Hub reads `~/.codex` and `~/.claude` by default. You can use either runtime or both;
+see [Agent configuration](docs/usage.md#multiple-agents) for custom directories.
+For Codex session management, the CLI must support `resume`, `--no-daemon`,
+`--no-alt-screen`, `--worktree`, `archive`, and `delete --force`.
 
 Try it without a global installation:
 
@@ -54,6 +56,7 @@ For running from source, see [Development](docs/development.md).
 - Follow conversation updates while browsing their history.
 - Create sessions with optional worktrees, send input, and preview their terminals.
 - View live sessions, resume exited sessions, stop session execution, and archive or delete history.
+- [Publish static pages and review diffs](docs/usage.md#publish-pages-and-diffs) with optional local hosting.
 - Switch the interface between English, Simplified Chinese, and Traditional Chinese.
 
 ## Session interaction
@@ -69,21 +72,11 @@ See [file uploads](docs/usage.md#file-uploads) for storage, cleanup, and file li
 
 </details>
 
-### Terminal Preview
+Expand **Terminal Preview** to follow the CLI and handle prompts with the on-screen
+controls. See [session interaction](docs/usage.md#send-prompts-and-files) for keyboard
+shortcuts, interruption, and Codex session handoff.
 
-Expand **Terminal Preview** to follow the live CLI. Use the on-screen controls,
-or focus the preview and press arrow keys and **Enter**, to navigate CLI prompts.
-Press **Ctrl+C** or click **Interrupt** to interrupt; **Esc** collapses the preview.
-**Working** and **Idle** reflect recent terminal output, not task completion.
-
-### Continue with Handoff
-
-If Codex switches sessions in the same terminal after `/clear`, `/resume`, or
-running a plan, click **Handoff** on the previous session's page. Once it shows
-**Superseded**, follow **Go to bound session**. Your draft stays on the old page.
-See [tmux interaction](docs/usage.md#send-prompts-and-files) for details.
-
-## Management CLI sessions
+## Command-line management
 
 Use `ahub-cli session` to list, create, resume, inspect, and manage sessions from
 another terminal, or send input to a live session. Add `--json` for structured
@@ -97,9 +90,9 @@ directory from the temporary cache for lasting use.
 
 ## Security
 
-Agent Hub reads local session logs and the session index, interacts with Codex
-through tmux, and manages sessions through native CLI commands. Authentication
-stays with Codex; the hub does not read or manage tokens, API keys, or credential files.
+Agent Hub reads local session history and controls connected CLI sessions through
+tmux. Model access and authentication remain with the configured Codex or Claude
+Code CLI; Hub does not manage API keys or CLI credentials.
 
 The server binds to loopback by default. Interaction and management are enabled
 without application authentication. Before exposing it to a network, add
