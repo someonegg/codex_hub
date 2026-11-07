@@ -5,7 +5,7 @@ See [Usage](usage.md), [JSONL processing](session-jsonl-filtering.md),
 Treat IDs and revisions as opaque strings. Message positions are nonnegative
 ordinal numbers; pass each returned `nextAfter` as the next request’s `after`.
 
-- [Sources and identity](#sources-and-identity)
+- [Sources and identity](#sources-and-identity), including [runtime CLI compatibility](#runtime-cli-compatibility)
 - [Conversation model](#conversation-model)
 - [Catalog](#catalog)
 - [Reader and automatic updates](#reader-and-automatic-updates)
@@ -91,6 +91,20 @@ Creation defaults `agent` to the first configured nickname. Unknown nicknames re
 `409`. Operations use the selected/owning adapter's local CLI and agent environment
 (`CODEX_HOME` for Codex, `CLAUDE_CONFIG_DIR` for Claude). See [Multiple agents](usage.md#multiple-agents).
 
+### Runtime CLI compatibility
+
+Before launching sessions, configure and authenticate each agent's runtime CLI
+on `PATH`. The adapters use these commands and flags:
+
+| Runtime     | Create and resume                                                                      | Launch options                                               | History management                                                                            |
+| ----------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Codex       | Interactive `codex` and `codex resume <UUID>`, both with `--no-daemon --no-alt-screen` | `--worktree`, `--yolo` when selected                         | `codex archive <UUID>` and `codex delete <UUID> --force`                                      |
+| Claude Code | Interactive `claude` and `claude --resume <UUID>`                                      | `--worktree`, `--dangerously-skip-permissions` when selected | The adapter deletes local session files directly; no native archive/delete command is invoked |
+
+See the [Codex adapter](../src/server/adapters/codex/session-manager.ts),
+[Claude Code adapter](../src/server/adapters/claude/session-manager.ts), and
+[execution and confirmation](#execution-and-confirmation) for behavior.
+
 ### Claude Code adapter
 
 Claude supports main-session reading, tmux interaction, create/resume, exit, and
@@ -99,9 +113,8 @@ unavailable; native shell commands/output are excluded from conversations. Readi
 does not modify native history or depend on Codex internals. Filtering and limits
 are defined in [JSONL processing](session-jsonl-filtering.md#claude-code).
 
-Before launching, configure and authenticate the local `claude` CLI for the agent.
-Launch sets `CLAUDE_CONFIG_DIR` and runs interactive `claude`, with
-`--resume <UUID>`, `--worktree`, or `--dangerously-skip-permissions` as applicable.
+Launch uses the agent's `CLAUDE_CONFIG_DIR` and the
+[CLI contract above](#runtime-cli-compatibility).
 The adapter waits up to 15 seconds for a confirmed native prompt before sending
 the binding command once. A single matching empty prompt with the cursor in its
 allowed rectangle is sufficient; unsuccessful checks wait one second before
@@ -244,10 +257,10 @@ other resource failures use `command_failed`. Session connection errors use
 ### Client behavior and results
 
 `ahub-cli session` is a stateless HTTP client: no rollout reads, direct tmux
-control, server discovery/startup, or persisted recovery state. `codex-hub` starts
+control, server discovery/startup, or persisted recovery state. `agent-hub` starts
 the server; `ahub-cli page`/`diff` access local hosting storage via `--home-dir`.
 
-URL precedence: `--url`, `CODEX_HUB_URL`, `http://127.0.0.1:4173`. HTTP and HTTPS
+URL precedence: `--url`, `AGENT_HUB_URL`, `http://127.0.0.1:4173`. HTTP and HTTPS
 origins are accepted. HTTPS uses Node.js certificate verification. For a private CA, set
 `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 

@@ -65,7 +65,7 @@ export function HubSidebar({
       <header className="hub-brand">
         <InternalLink href="/" onNavigate={() => navigate(null)}>
           <img className="brand-logo" src="/favicon.svg" alt="" width="29" height="29" />
-          Codex Hub
+          Agent Hub
         </InternalLink>
         {onCollapse ? <SidebarToggle collapsed={false} onToggle={onCollapse} /> : null}
       </header>

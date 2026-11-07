@@ -27,7 +27,7 @@ describe("server command line", () => {
       ).map((nickname) => ({ nickname, path: resolve(homedir(), `.${nickname}`) })),
       tls: { enabled: false },
       interactionEnabled: true,
-      uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
+      uploadDirectory: resolve(homedir(), ".agent-hub/uploads"),
     });
   });
 
@@ -83,8 +83,8 @@ it("resolves upload directories and rejects empty configuration", () => {
 
 it("shares the Hub root for uploads and hosting, expanding agent-relative paths", () => {
   expect(runnable(["--hosting"])).toMatchObject({
-    uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
-    hostingDirectory: resolve(homedir(), ".codex-hub/hosting"),
+    uploadDirectory: resolve(homedir(), ".agent-hub/uploads"),
+    hostingDirectory: resolve(homedir(), ".agent-hub/hosting"),
   });
   expect(runnable(["--hosting", "--home-dir", "~/hub-data"])).toMatchObject({
     uploadDirectory: resolve(homedir(), "hub-data/uploads"),
@@ -146,3 +146,10 @@ it.each(["~/config with spaces", "./config with spaces", "/tmp/config with space
     });
   },
 );
+
+it("uses the legacy data directory only when explicitly selected", () => {
+  expect(runnable(["--hosting", "--home-dir", "~/.codex-hub"])).toMatchObject({
+    uploadDirectory: resolve(homedir(), ".codex-hub/uploads"),
+    hostingDirectory: resolve(homedir(), ".codex-hub/hosting"),
+  });
+});

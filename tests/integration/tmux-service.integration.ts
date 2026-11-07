@@ -11,6 +11,7 @@ import type {
 
 import { applyPreview } from "../../src/client/state/terminal-preview-patch.js";
 import { CodexSessionManager } from "../../src/server/adapters/codex/session-manager.js";
+import type { SessionInteractionService } from "../../src/server/interaction/interaction-service.js";
 import { TerminalPreviewService } from "../../src/server/interaction/terminal-preview-service.js";
 import type { PreviewListener } from "../../src/server/interaction/tmux-preview-listener.js";
 import {
@@ -227,21 +228,33 @@ it("forces only the bound session closed when its outer shell ignores interrupts
     const killTarget = vi.fn(async (pane: TmuxBinding, _id: string, check: () => void) =>
       transport.killSession(pane, check),
     );
+    const sendExitKeys = vi.fn<SessionInteractionService["sendExitKeys"]>(
+      (pane, _id, keys, check) => transport.sendKeys(pane, [{ keys, delayMs: 0 }], check),
+    );
     let now = 0;
     const exit = new SessionExitService(
       {
         inspectTarget: (pane) => transport.inspect(pane),
-        sendExitKeys: (pane, _id, keys, check) =>
-          transport.sendKeys(pane, [{ keys, delayMs: 0 }], check),
+        sendExitKeys,
         killTarget,
       },
       () => now,
     );
     const task = exit.start("manual", target, new CodexSessionManager("/unused"), () => {});
-    for (const value of [0, 1_000, 2_000, 6_000]) {
+    // Four adapter interrupts, then EOF after the shell grace period.
+    for (const value of [0, 200, 2_600, 2_800, 6_000]) {
       now = value;
       expect(await task.advance()).toBe(false);
     }
+    expect(sendExitKeys.mock.calls.map((call) => call[2])).toEqual([
+      ["C-c"],
+      ["C-c"],
+      ["C-c"],
+      ["C-c"],
+      ["C-d"],
+    ]);
+    now = 14_999;
+    expect(await task.advance()).toBe(false);
     expect(killTarget).not.toHaveBeenCalled();
     now = 15_000;
     expect(await task.advance()).toBe(false);

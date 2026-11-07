@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { commandLineHelp, loadConfig } from "./config.js";
-import { createCodexHub } from "./create-hub.js";
+import { createAhub } from "./create-hub.js";
 import { createApiRouter } from "./http/api-router.js";
 import { startServer } from "./http/create-server.js";
 import { createTerminalPreviewWebSocket } from "./http/terminal-preview-websocket.js";
@@ -24,7 +24,7 @@ async function main(): Promise<void> {
   const { config } = command;
   const uploads = new UploadStore(await uploadDirectory(config.uploadDirectory));
   await uploads.initialize();
-  const hub = await createCodexHub({
+  const hub = await createAhub({
     agents: config.agents,
     socket: config.tmuxSocket,
     claudeReadyScript: config.claudeReadyScript,
@@ -45,12 +45,12 @@ async function main(): Promise<void> {
     config.tls.enabled && config.tls.certificateAuthorityPath
       ? " (client certificates required)"
       : "";
-  console.log(`Codex Hub listening on ${protocol}://${host}:${port}${mutualTls}`);
+  console.log(`Agent Hub listening on ${protocol}://${host}:${port}${mutualTls}`);
 
   function close(): void {
     server.close((error) => {
       if (error) {
-        console.error("Failed to stop Codex Hub");
+        console.error("Failed to stop Agent Hub");
         process.exitCode = 1;
       }
     });
@@ -61,6 +61,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.message : "Failed to start Codex Hub");
+  console.error(error instanceof Error ? error.message : "Failed to start Agent Hub");
   process.exitCode = 1;
 });

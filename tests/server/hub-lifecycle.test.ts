@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { expect, it, vi } from "vitest";
 
 import type { ServerConfig } from "../../src/server/config.js";
-import { createCodexHub } from "../../src/server/create-hub.js";
+import { createAhub } from "../../src/server/create-hub.js";
 import { createApiRouter } from "../../src/server/http/api-router.js";
 import type { createServer } from "../../src/server/http/create-server.js";
 import { startServer } from "../../src/server/http/create-server.js";
@@ -29,7 +29,7 @@ async function config(): Promise<ServerConfig> {
 
 it("closes the composed services once before waiting for HTTP connections", async () => {
   const settings = await config();
-  const hub = await createCodexHub({ agents: settings.agents, interactionEnabled: false });
+  const hub = await createAhub({ agents: settings.agents, interactionEnabled: false });
   const catalogClose = vi.spyOn(hub.catalog, "close");
   const updatesClose = vi.spyOn(hub.updates, "close");
   const operationsClose = vi.spyOn(hub.operations, "close");
@@ -123,22 +123,22 @@ it("isolates pane bindings between hubs and after closing and recreating a hub",
       },
     }) + "\n";
   await writeFile(rollout, metadata + invalidBinding);
-  const first = await createCodexHub({ agents: settings.agents });
-  let second: Awaited<ReturnType<typeof createCodexHub>> | undefined;
+  const first = await createAhub({ agents: settings.agents });
+  let second: Awaited<ReturnType<typeof createAhub>> | undefined;
   try {
     const session = (await first.sessions.list()).sessions[0]!;
     expect(await first.interaction.describe(session.id)).toMatchObject({ state: "disconnected" });
 
     // The same source identity now has no binding. Only the first hub saw the old event.
     await writeFile(rollout, metadata);
-    second = await createCodexHub({ agents: settings.agents });
+    second = await createAhub({ agents: settings.agents });
     const nextSession = (await second.sessions.list()).sessions[0]!;
     expect(nextSession.id).toBe(session.id);
     expect(await second.interaction.describe(session.id)).toMatchObject({ state: "unbound" });
     expect(await first.interaction.describe(session.id)).toMatchObject({ state: "disconnected" });
 
     first.close();
-    const recreated = await createCodexHub({ agents: settings.agents });
+    const recreated = await createAhub({ agents: settings.agents });
     try {
       expect(await recreated.interaction.describe(session.id)).toMatchObject({ state: "unbound" });
     } finally {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -47,16 +47,18 @@ try {
     ],
     { cwd: temporary },
   );
-  const serverBinary = join(temporary, "node_modules", ".bin", "codex-hub");
+  const serverBinary = join(temporary, "node_modules", ".bin", "agent-hub");
+  await assert.rejects(access(join(temporary, "node_modules", ".bin", "codex-hub")));
   const help = await exec(serverBinary, ["--help"], { cwd: temporary });
-  assert.match(help.stdout, /Usage: codex-hub/);
+  assert.match(help.stdout, /Usage: agent-hub/);
   const cli = join(temporary, "node_modules", ".bin", "ahub-cli");
   const installedManifest = JSON.parse(
     await readFile(
-      join(temporary, "node_modules", "@someonegg", "codex-hub", "package.json"),
+      join(temporary, "node_modules", "@someonegg", "agent-hub", "package.json"),
       "utf8",
     ),
   );
+  assert.deepEqual(Object.keys(installedManifest.bin).sort(), ["agent-hub", "ahub-cli"]);
   for (const [binary, args] of [
     [serverBinary, ["--version"]],
     [cli, ["version"]],
@@ -178,7 +180,7 @@ try {
     assert.equal((await fetch(new URL(asset, address))).status, 200, asset);
   }
   const manifest = JSON.parse(
-    await readFile(join(temporary, "node_modules/@someonegg/codex-hub/package.json"), "utf8"),
+    await readFile(join(temporary, "node_modules/@someonegg/agent-hub/package.json"), "utf8"),
   );
   console.log(
     `Package smoke test passed: ${manifest.name}@${manifest.version} Node ${process.version}, ${assets.length} assets`,

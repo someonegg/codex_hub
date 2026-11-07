@@ -187,7 +187,7 @@ try {
     await review.goto(settings.origin + settings.diffUrl);
     await review.getByRole("heading", { name: label("Review · Friendlier greetings") }).waitFor();
     if (
-      (await review.getByRole("link", { name: label("Codex Hub"), exact: true }).count()) ||
+      (await review.getByRole("link", { name: label("Agent Hub"), exact: true }).count()) ||
       (await review.getByRole("combobox").count())
     )
       throw new Error("Diff should not show Hub navigation or theme controls");

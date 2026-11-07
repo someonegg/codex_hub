@@ -5,7 +5,7 @@ English | [简体中文](usage.zh-CN.md) | [繁體中文](usage.zh-TW.md)
 ## Start the hub
 
 ```sh
-npx @someonegg/codex-hub@latest
+npx @someonegg/agent-hub@latest
 ```
 
 Open <http://127.0.0.1:4173> or the URL printed by the server. Press `Ctrl-C`
@@ -97,16 +97,16 @@ and do not translate conversation or terminal content.
 
 ## Use the CLI
 
-`codex-hub` starts the server; `ahub-cli` manages sessions and published resources.
+`agent-hub` starts the server; `ahub-cli` manages sessions and published resources.
 The examples below assume a global installation:
 
 ```sh
-npm install -g @someonegg/codex-hub
+npm install -g @someonegg/agent-hub
 ahub-cli --help
 ```
 
 Without installing globally, replace `ahub-cli` in any example with
-`npx --package=@someonegg/codex-hub@latest ahub-cli`.
+`npx --package=@someonegg/agent-hub@latest ahub-cli`.
 Add `--json` for structured command results.
 
 ### Session commands
@@ -138,7 +138,7 @@ interrupt execution. `--force` on `send` or `keys` allows input while working;
 it also permits `send` messages starting with `/`. After a terminal switches
 sessions, use `handoff <id>` to transfer its binding.
 
-Commands connect to `http://127.0.0.1:4173` by default. Set `CODEX_HUB_URL` or
+Commands connect to `http://127.0.0.1:4173` by default. Set `AGENT_HUB_URL` or
 pass `--url` to change it; use `--timeout <seconds>` to adjust the timeout.
 For a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 
@@ -155,7 +155,7 @@ Start Hub with `--hosting` to view published resources. Publishing commands read
 local files on the Hub machine and work even while the server is stopped.
 They print a relative URL and Markdown link; open the URL on your Hub server.
 
-Storage defaults to `~/.codex-hub/hosting`. If using a custom data root, pass the
+Storage defaults to `~/.agent-hub/hosting`. If using a custom data root, pass the
 same `--home-dir /path` to both the commands and server.
 
 ### Publish a page
@@ -202,15 +202,17 @@ the returned cache directory to a lasting skill location.
 
 ## Configure the server
 
-Pass options at startup and restart after changing them. Use `codex-hub --help`
+Pass options at startup and restart after changing them. Use `agent-hub --help`
 for the full list.
 
 | Option                 | Default        | Purpose                                            |
 | ---------------------- | -------------- | -------------------------------------------------- |
 | `--port <port>`        | `4173`         | Listen port; `0` selects a free port               |
-| `--home-dir <path>`    | `~/.codex-hub` | Hub data root containing `uploads/` and `hosting/` |
+| `--home-dir <path>`    | `~/.agent-hub` | Hub data root containing `uploads/` and `hosting/` |
 | `--hosting`            | Disabled       | Serve published pages and diffs                    |
 | `--tmux-socket <path>` | tmux default   | Use a custom tmux socket                           |
+
+Agent Hub uses `~/.agent-hub` by default and does not migrate old data. To use an existing Codex Hub data directory, pass `--home-dir ~/.codex-hub` to the server and resource commands.
 
 ### Multiple agents
 
@@ -220,7 +222,7 @@ Each Agent has a unique nickname and directory, containing `sessions/` for Codex
 or `projects/` for Claude Code:
 
 ```sh
-codex-hub \
+agent-hub \
   --codex-agent 'work=~/.codex-work' \
   --claude-agent 'claude=~/.claude'
 ```
@@ -240,7 +242,7 @@ configure authenticated, restricted access through a reverse proxy or mutual TLS
 For built-in mTLS:
 
 ```sh
-codex-hub \
+agent-hub \
   --host 0.0.0.0 \
   --ssl \
   --ssl-cert /path/to/server-fullchain.pem \
@@ -266,7 +268,7 @@ Other local users and processes can access it; do not forward external proxy tra
 
 - **No sessions:** check that each configured Agent contains `sessions/` (Codex)
   or `projects/` (Claude). Check the server output for unreadable or skipped files.
-- **Port in use:** choose another port, such as `codex-hub --port 4180`.
+- **Port in use:** choose another port, such as `agent-hub --port 4180`.
 - **Cannot send input:** complete CLI prompts via **Tmux access**, wait if busy,
   or use **Resume** if available. Archived sessions are read-only; session logs
   alone do not provide a live terminal connection.
@@ -283,7 +285,7 @@ For runtime and recovery details, see the [technical reference](technical-refere
 Stop the server. For a global installation, run:
 
 ```sh
-npm uninstall -g @someonegg/codex-hub
+npm uninstall -g @someonegg/agent-hub
 ```
 
 An `npx` run needs no global uninstall. Sessions, worktrees, running tmux sessions,

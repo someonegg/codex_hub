@@ -24,7 +24,7 @@ export async function runSkillCommand(args: string[]): Promise<void> {
     } catch {
       // Continue through directories without a package manifest.
     }
-    if (name === "@someonegg/codex-hub") {
+    if (name === "@someonegg/agent-hub") {
       const path = join(directory, "skills", skill);
       if (!(await stat(join(path, "SKILL.md"))).isFile())
         throw new CommandError("command_failed", "Skill file is missing");

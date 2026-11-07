@@ -169,10 +169,10 @@ describe("Claude JSONL adapter", () => {
 });
 
 it("keeps Codex and Claude agents independently routed while merging project associations", async () => {
-  const { createCodexHub } = await import("../../src/server/create-hub.js");
+  const { createAhub } = await import("../../src/server/create-hub.js");
   const codex = await createTempDirectory("claude-mixed-codex-");
   await cp(join(import.meta.dirname, "../fixtures/codex-home"), codex, { recursive: true });
-  const hub = await createCodexHub({
+  const hub = await createAhub({
     agents: [
       { nickname: "codex", path: codex },
       { nickname: "glm", path: fixture, adapter: "claude" },

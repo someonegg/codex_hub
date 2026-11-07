@@ -1,5 +1,5 @@
 {
-  "name": "@codex-hub/client-lint",
+  "name": "@ahub/client-lint",
   "private": true,
   "version": "1.0.0",
   "type": "module",

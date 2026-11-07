@@ -90,7 +90,7 @@ export function useHubNavigation(list: SessionListResponse | null) {
       projectNav.current.scrollTop = navigationRef.current.scroll;
   }, [catalogLoaded, sessionId]);
   useEffect(() => {
-    if (sessionId === null) document.title = "Codex Hub";
+    if (sessionId === null) document.title = "Agent Hub";
   }, [sessionId]);
   const selectedProject = projectForSession(list, sessionId);
   let projectKey: string | undefined;

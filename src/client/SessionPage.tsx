@@ -64,7 +64,7 @@ export function SessionPage({
   }, [displayedId, updatedAt, onUpdatedAt]);
 
   useEffect(() => {
-    document.title = sessionTitle === null ? "Codex Hub" : `${sessionTitle} · Codex Hub`;
+    document.title = sessionTitle === null ? "Agent Hub" : `${sessionTitle} · Agent Hub`;
   }, [sessionTitle]);
 
   useEffect(() => {

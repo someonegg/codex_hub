@@ -18,7 +18,7 @@ import { UploadDownload } from "./UploadDownload";
 export function UploadsPage({ sessionId, onBack }: { sessionId: string; onBack: () => void }) {
   const { i18n } = useTranslation();
   useEffect(() => {
-    document.title = t("uploadHistoryCodexHub");
+    document.title = t("uploadHistoryAhub");
   }, [i18n.resolvedLanguage]);
   const [items, setItems] = useState<UploadAttachment[]>([]);
   const [loading, setLoading] = useState(true);

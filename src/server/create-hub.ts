@@ -22,7 +22,7 @@ import { SessionUpdatesService } from "./updates/session-updates-service.js";
 import type { UploadCleanup } from "./uploads/store.js";
 
 /** Compose reading and management using the adapter's published Agent nickname. */
-export async function createCodexHub({
+export async function createAhub({
   agents,
   socket,
   claudeReadyScript,

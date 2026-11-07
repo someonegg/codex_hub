@@ -12,7 +12,7 @@ import { RequestError } from "./RequestError";
 export function ArtifactsPage() {
   const { i18n } = useTranslation();
   useEffect(() => {
-    document.title = `${t("pages")} · Codex Hub`;
+    document.title = `${t("pages")} · Agent Hub`;
   }, [i18n.resolvedLanguage]);
   const [projects, setProjects] = useState<ArtifactsResponse["projects"]>([]);
   const [error, setError] = useState<unknown>("");
@@ -57,7 +57,7 @@ export function ArtifactsPage() {
   }, [loadProjects, runOperation]);
   return (
     <section className="artifacts-page">
-      <a href="/">← Codex Hub</a>
+      <a href="/">← Agent Hub</a>
       <header className="artifacts-heading">
         <div>
           <p className="eyebrow">{t("publishedSnapshots")}</p>

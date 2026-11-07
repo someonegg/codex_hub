@@ -176,7 +176,7 @@ export const namespaceKeys = {
     "unbound",
     "uploadBytes",
     "uploadHistory",
-    "uploadHistoryCodexHub",
+    "uploadHistoryAhub",
     "working",
   ],
   hosting: [

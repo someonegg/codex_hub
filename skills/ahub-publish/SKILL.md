@@ -1,15 +1,15 @@
 ---
 name: ahub-publish
-description: Publish static pages or review diffs to an existing Codex Hub. Use only when the user explicitly requests `ahub-publish` by name.
+description: Publish static pages or review diffs to an existing Agent Hub. Use only when the user explicitly requests `ahub-publish` by name.
 ---
 
-# Publish to Codex Hub
+# Publish to Agent Hub
 
 Publish static pages and review diffs using an existing Hub. Do not manage or probe services, or configure network access.
 
 ## Check the environment
 
-- Check `command -v ahub-cli` and read/write access to `~/.codex-hub/hosting`. If storage does not exist yet, check write and search access to its nearest existing parent; publication creates storage. If a custom Hub data root is already configured, pass `--home-dir /absolute/path/to/hub-root` to every resource command; storage is its `hosting/` subdirectory.
+- Check `command -v ahub-cli` and read/write access to `~/.agent-hub/hosting`. If storage does not exist yet, check write and search access to its nearest existing parent; publication creates storage. If a custom Hub data root is already configured, pass `--home-dir /absolute/path/to/hub-root` to every resource command; storage is its `hosting/` subdirectory.
 - If the command or storage is unavailable, report the blocker and follow environment approval rules. Do not install tools, create alternative storage, or start services on your own.
 - Commands write directly to local storage; success does not verify browser access. Do not check HTTP, ports, or processes. If hosting is disabled, ask the user to maintain the existing Hub configuration.
 
