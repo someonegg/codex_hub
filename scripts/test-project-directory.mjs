@@ -34,51 +34,32 @@ async function verify(page, output) {
     await page.setViewportSize(viewport);
     await page.getByRole("button", { name: "New session", exact: true }).first().click();
     const dialog = page.getByRole("dialog", { name: "New session", exact: true });
-    const baseline = await dialog.evaluate((element) => element.scrollHeight);
     const field = page.getByRole("combobox", { name: "Project directory", exact: true });
-    await field.click();
-    const list = page.getByRole("listbox");
-    await list.waitFor();
-    const check = async () => {
-      const metrics = await list.evaluate((element) => {
-        const dialog = element.closest("dialog");
-        const rect = element.getBoundingClientRect();
-        return {
-          topLayer: element.matches(":popover-open"),
-          dialogHeight: dialog.scrollHeight,
-          fits:
-            rect.top >= 0 &&
-            rect.bottom <= innerHeight &&
-            rect.left >= 0 &&
-            rect.right <= innerWidth,
-          scrolls: element.scrollHeight > element.clientHeight,
-          horizontalOverflow: dialog.scrollWidth > dialog.clientWidth,
-        };
-      });
-      if (
-        !metrics.topLayer ||
-        metrics.dialogHeight !== baseline ||
-        !metrics.fits ||
-        metrics.horizontalOverflow
-      )
-        throw new Error(JSON.stringify({ viewport, baseline, ...metrics }));
-      return metrics;
-    };
-    if (!(await check()).scrolls) throw new Error("Long project list should scroll internally");
-    for (let index = 0; index < 24; index++) await field.press("ArrowDown");
-    await check();
+    if (!(await field.evaluate((element) => element.tagName === "SELECT")))
+      throw new Error("Existing projects must use a native select");
+    await field.selectOption({ index: 24 });
+    if (await dialog.getByRole("textbox").count())
+      throw new Error("Selecting a project exposed a keyboard input");
+    await field.focus();
+    await dialog.evaluate((element) => {
+      element.scrollTop = element.scrollHeight;
+    });
+    if (await page.getByRole("listbox").count()) throw new Error("Floating suggestions remain");
+    await field.selectOption("custom");
+    const custom = dialog.getByRole("textbox", { name: "Custom directory" });
+    if (await custom.evaluate((element) => element === document.activeElement))
+      throw new Error("Custom mode must not automatically open the keyboard");
+    await custom.fill("/new/project");
+    if (!(await custom.inputValue()).includes("/new/project"))
+      throw new Error("Custom entry failed");
+    await field.selectOption({ index: 1 });
+    if (await custom.count()) throw new Error("Custom input remains after selecting a project");
+    if (await dialog.evaluate((element) => element.scrollWidth > element.clientWidth))
+      throw new Error("Horizontal overflow");
     await page.screenshot({ path: `${output}/${viewport.width}x${viewport.height}.png` });
-    const selected = list.getByRole("option", { selected: true });
-    await selected.click();
-    if (!(await field.inputValue()).includes("project-23")) throw new Error("Selection failed");
-    await field.click();
-    await field.press("Escape");
-    await list.waitFor({ state: "hidden" });
-    if (!(await dialog.isVisible()))
-      throw new Error("Escape closed the dialog instead of the list");
     await page.getByRole("button", { name: "Close new session" }).click();
   }
-  return "Project directory overflow, viewport bounds, keyboard, click and Escape checks passed";
+  return "Native project selection and explicit custom entry checks passed";
 }
 const source = join(directory, "verify.js");
 await writeFile(source, `(page) => (${verify.toString()})(page, ${JSON.stringify(directory)})`);
