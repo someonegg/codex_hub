@@ -6,6 +6,8 @@ const help = `Usage: ahub-cli <command> [options]
   page      Publish, list, or delete local hosted pages
   diff      Publish, list, or delete local review diffs
   skill     Locate bundled skills
+  project   List known project directories
+  agent     List known agents
   session   Manage sessions through an existing Hub HTTP server
   version   Show the current version (alias: --version)
 Run ahub-cli <command> --help for details.`;
@@ -22,6 +24,9 @@ async function main(): Promise<void> {
   } else if (command === "skill") {
     const { runSkillCommand } = await import("./skill.js");
     await runSkillCommand(args);
+  } else if (command === "project" || command === "agent") {
+    const { runCatalogCommand } = await import("./catalog.js");
+    await runCatalogCommand(command, args);
   } else if (command === "session") {
     const { runSessionCommand } = await import("./session.js");
     await runSessionCommand(args);
