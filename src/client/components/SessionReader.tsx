@@ -129,7 +129,6 @@ export function SessionReader({
           interaction={interaction}
           onNavigate={onNavigate}
           sessionId={context.session.id}
-          updatedAt={context.session.updatedAt}
           onMessagePreview={showMessagePreview}
           previewAutoExpandKey={previewAutoExpandKey}
         />

@@ -41,7 +41,6 @@ function props(value: InteractionResponse | null) {
   return {
     sessionId: "session-a",
     interaction: value,
-    updatedAt: "2026-08-08T12:00:00.000Z",
     interactionBusy: false,
     error: null,
     onDismissError: vi.fn(),
@@ -159,7 +158,7 @@ describe("interaction panel", () => {
     const user = userEvent.setup();
     render(<InteractionPanel {...handlers} />);
     const textarea = screen.getByRole("textbox", { name: "Message to agent" });
-    expect(textarea).toHaveAttribute("rows", "4");
+    expect(textarea).toHaveAttribute("rows", "3");
     expect(document.querySelector(".interaction-heading")).toBeNull();
     await user.type(textarea, "line one{enter}line two");
     expect(textarea).toHaveValue("line one\nline two");
@@ -316,28 +315,32 @@ describe("interaction panel", () => {
 it.each([
   ["/plan", true],
   [" /plan", false],
-])("sends %s with preview expansion=%s without moving focus", async (message, expands) => {
-  const handlers = props(interaction("connected"));
-  render(<InteractionPanel {...handlers} />);
-  const textarea = screen.getByRole("textbox");
-  textarea.focus();
-  fireEvent.change(textarea, { target: { value: message } });
-  await act(async () => fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true }));
-  expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
-  expect(screen.getByRole("button", { name: "Terminal Preview" })).toHaveAttribute(
-    "aria-expanded",
-    String(expands),
-  );
-  expect(handlers.onExpandPreview).toHaveBeenCalledTimes(expands ? 1 : 0);
-  expect(textarea).toHaveFocus();
-  if (expands) {
-    // Skipping command focus must not suppress later manual expansion.
+])(
+  "sends %s with preview expansion=%s and focuses the expanded preview",
+  async (message, expands) => {
+    const user = userEvent.setup();
+    const handlers = props(interaction("connected"));
+    render(<InteractionPanel {...handlers} />);
+    const textarea = screen.getByRole("textbox");
     const toggle = screen.getByRole("button", { name: "Terminal Preview" });
-    fireEvent.click(toggle);
-    fireEvent.click(toggle);
+    textarea.focus();
+    fireEvent.change(textarea, { target: { value: message } });
+    await act(async () => fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true }));
+    expect(handlers.onSendMessage).toHaveBeenCalledWith(message);
+    expect(toggle).toHaveAttribute("aria-expanded", String(expands));
+    expect(handlers.onExpandPreview).toHaveBeenCalledTimes(expands ? 1 : 0);
+    if (!expands) {
+      expect(textarea).toHaveFocus();
+      return;
+    }
     expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
-  }
-});
+    await user.keyboard("{ArrowDown}");
+    expect(handlers.onSendKeys).toHaveBeenCalledWith(["down"]);
+    await user.click(toggle);
+    await user.click(toggle);
+    expect(document.getElementById(toggle.getAttribute("aria-controls")!)).toHaveFocus();
+  },
+);
 
 it.each([false, true])(
   "protects IME confirmation and key repeat with enterToSend=%s",

@@ -100,7 +100,6 @@ export const namespaceKeys = {
     "show",
     "thisSessionHasNoMessages",
     "messagePreview",
-    "lastUpdatedTime",
     "timeUnavailable",
     "unavailable",
     "user",

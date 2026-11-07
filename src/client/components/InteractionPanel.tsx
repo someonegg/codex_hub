@@ -18,7 +18,7 @@ import type {
 import { MAX_INTERACTION_MESSAGE_BYTES } from "../../shared/api-contract";
 
 import type { PlainMessageKey } from "../i18n";
-import { formatDate, formatNumber, t } from "../i18n";
+import { formatNumber, t } from "../i18n";
 import { LocalizedError } from "../i18n/localized-error";
 import { usePreferences } from "../state/preferences";
 import { useSessionDraft } from "../state/session-drafts";
@@ -30,7 +30,6 @@ import { RequestError } from "./RequestError";
 
 interface InteractionPanelProps {
   sessionId: string;
-  updatedAt: string | null;
   onPanelElement?: (element: HTMLElement | null) => void;
   recoveryActions?: ReactNode;
   operationStatus?: ReactNode;
@@ -58,7 +57,6 @@ interface InteractionPanelProps {
 
 export function InteractionPanel({
   sessionId,
-  updatedAt,
   onPanelElement,
   recoveryActions,
   operationStatus,
@@ -189,6 +187,7 @@ export function InteractionPanel({
     clearSentMessage();
     if (!mounted.current || !shouldExpandPreview || wasPreviewExpanded.current) return;
     scrollOnExpand.current = true;
+    focusPreviewOnExpand.current = true;
     onExpandPreview();
   };
   const handoff = async () => {
@@ -330,14 +329,6 @@ export function InteractionPanel({
             ) : null}
             {operationStatus}
             {previewConnected ? renderConnectedInteraction(attachmentMenu) : null}
-            <p className="interaction-summary">
-              {t("lastUpdatedTime", {
-                time:
-                  updatedAt && Number.isFinite(Date.parse(updatedAt))
-                    ? formatDate(new Date(updatedAt), { timeStyle: "medium" })
-                    : t("timeUnavailable"),
-              })}
-            </p>
           </div>
         </section>
       )}
@@ -508,7 +499,7 @@ export function InteractionPanel({
             }}
             aria-label={t("messageToAgent")}
             value={message}
-            rows={4}
+            rows={3}
             maxLength={MAX_INTERACTION_MESSAGE_BYTES}
             placeholder={t(enterToSend ? "shiftNewline" : "shiftSend")}
             onChange={(event) => setMessage(event.target.value)}

@@ -178,7 +178,6 @@ it("connects the panel toggle to the socket lifecycle", () => {
   const { unmount } = render(
     <SessionInteraction
       sessionId="a"
-      updatedAt={null}
       interaction={{
         supported: true,
         activity: "unknown",
@@ -223,7 +222,6 @@ it.each([false, true])(
     const { unmount } = render(
       <SessionInteraction
         sessionId="a"
-        updatedAt={null}
         interaction={{
           supported: true,
           activity: null,
