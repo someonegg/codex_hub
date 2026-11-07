@@ -1,6 +1,6 @@
 {
   "name": "@someonegg/agent-hub",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "description": "Local project and session hub for coding agents",
   "type": "module",
   "engines": {
@@ -25,7 +25,9 @@
     "test:integration:claude": "vitest run --config vitest.integration.config.ts tests/integration/claude-management.integration.ts"
   },
   "keywords": [
+    "agent",
     "codex",
+    "claude",
     "sessions",
     "reader"
   ],
@@ -89,10 +91,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/someonegg/codex_hub.git"
+    "url": "git+https://github.com/someonegg/agent_hub.git"
   },
-  "homepage": "https://github.com/someonegg/codex_hub#readme",
+  "homepage": "https://github.com/someonegg/agent_hub#readme",
   "bugs": {
-    "url": "https://github.com/someonegg/codex_hub/issues"
+    "url": "https://github.com/someonegg/agent_hub/issues"
   }
 }
