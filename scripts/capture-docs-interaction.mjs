@@ -60,7 +60,7 @@ async function capture(
   const verifyCompactInteraction = async () => {
     const composer = demo.getByRole("textbox", { name: label("Message to agent") });
     const original = await composer.inputValue();
-    await composer.fill("One\nTwo\nThree\nFour");
+    await composer.fill("One\nTwo\nThree");
     const metrics = await composer.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
@@ -73,15 +73,15 @@ async function capture(
       };
     });
     if (
-      metrics.rows !== 4 ||
-      Math.abs(metrics.textHeight - 4 * metrics.lineHeight) > 1 ||
+      metrics.rows !== 3 ||
+      Math.abs(metrics.textHeight - 3 * metrics.lineHeight) > 1 ||
       !metrics.fits ||
       metrics.resize !== "vertical"
     )
-      throw new Error("Composer must fit four visible text lines and allow vertical resize");
-    await composer.fill("One\nTwo\nThree\nFour\nFive");
+      throw new Error("Composer must fit three visible text lines and allow vertical resize");
+    await composer.fill("One\nTwo\nThree\nFour");
     if (!(await composer.evaluate((element) => element.scrollHeight > element.clientHeight)))
-      throw new Error("Fifth composer line must scroll");
+      throw new Error("Fourth composer line must scroll");
     await composer.scrollIntoViewIfNeeded();
     const box = await composer.boundingBox();
     await demo.mouse.move(box.x + box.width - 3, box.y + box.height - 3);

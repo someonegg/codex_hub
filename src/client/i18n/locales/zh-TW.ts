@@ -207,7 +207,6 @@ export const messages: Record<keyof typeof english, string> = {
   theTerminalPaneIsEmpty: "終端窗格是空的。",
   thisSessionHasNoMessages: "此工作階段尚無訊息",
   messagePreview: "等待中",
-  lastUpdatedTime: "更新於 {{time}}",
   timeUnavailable: "時間不可用",
 
   tmuxAccess: "連線 tmux",

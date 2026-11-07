@@ -550,9 +550,3 @@
   color: var(--ink-soft);
   text-underline-offset: 3px;
 }
-
-.interaction-summary {
-  margin: 12px 0 0;
-  color: var(--ink-soft);
-  font-size: var(--text-small);
-}

@@ -14,7 +14,6 @@ interface SessionInteractionProps {
   interaction: InteractionResponse | null;
   onNavigate?: (sessionId: string) => void;
   sessionId: string;
-  updatedAt: string | null;
   onMessagePreview?: (message: string) => () => void;
   previewAutoExpandKey?: string | null;
 }
@@ -27,7 +26,6 @@ export function SessionInteraction({
   interaction,
   onNavigate,
   sessionId,
-  updatedAt,
   onMessagePreview,
   previewAutoExpandKey = null,
 }: SessionInteractionProps) {
@@ -52,7 +50,6 @@ export function SessionInteraction({
     <InteractionPanel
       key={sessionId}
       sessionId={sessionId}
-      updatedAt={updatedAt}
       onPanelElement={onPanelElement}
       recoveryActions={recoveryActions}
       operationStatus={operationStatus}
