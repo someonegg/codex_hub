@@ -201,14 +201,15 @@ dialog::backdrop {
   min-width: 0;
 }
 .project-directory [role="listbox"] {
-  position: absolute;
-  top: calc(100% + 0.25rem);
-  left: 0;
-  right: 0;
-  z-index: 2;
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
   box-shadow: 0 8px 30px rgb(33 49 56 / 12%);
   max-height: 10rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--mist);
   border-radius: var(--radius-control);
   background: var(--surface);

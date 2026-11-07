@@ -92,6 +92,9 @@ Start the frontend:
 npm run dev -- --port 4187 --strictPort
 ```
 
+Check project suggestions for nested scrolling, viewport clipping, and keyboard
+selection with `node scripts/test-project-directory.mjs`.
+
 In another terminal, generate the English assets:
 
 ```sh
