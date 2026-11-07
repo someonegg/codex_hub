@@ -44,25 +44,24 @@ export function ProjectDirectory({
     };
     list.showPopover?.();
     position();
-    window.addEventListener("resize", position);
-    document.addEventListener("scroll", position, true);
-    window.visualViewport?.addEventListener("resize", position);
-    window.visualViewport?.addEventListener("scroll", position);
+    const events = new AbortController();
+    const { signal } = events;
+    window.addEventListener("resize", position, { signal });
+    document.addEventListener("scroll", position, { capture: true, signal });
+    window.visualViewport?.addEventListener("resize", position, { signal });
+    window.visualViewport?.addEventListener("scroll", position, { signal });
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(position);
     observer?.observe(field);
     return () => {
       observer?.disconnect();
-      window.removeEventListener("resize", position);
-      document.removeEventListener("scroll", position, true);
-      window.visualViewport?.removeEventListener("resize", position);
-      window.visualViewport?.removeEventListener("scroll", position);
+      events.abort();
       list.hidePopover?.();
     };
   }, [expanded, value, projects]);
   useEffect(() => {
     if (expanded && active >= 0) {
       const list = listbox.current;
-      const option = document.getElementById(`${id}-option-${active}`);
+      const option = list?.querySelector<HTMLElement>('[aria-selected="true"]');
       if (!list || !option) return;
       // Scroll only the suggestions, never the enclosing dialog or page.
       const top = option.offsetTop;
@@ -71,7 +70,7 @@ export function ProjectDirectory({
       else if (bottom > list.scrollTop + list.clientHeight)
         list.scrollTop = bottom - list.clientHeight;
     }
-  }, [active, expanded, id]);
+  }, [active, expanded]);
   const close = () => {
     setOpen(false);
     setActive(-1);
