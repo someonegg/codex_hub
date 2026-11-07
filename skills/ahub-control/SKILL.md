@@ -21,6 +21,18 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - For multiple project matches, show the candidate absolute paths and ask the user to choose. For no match, show the known project list and ask for the correct path. Do not pass an unresolved relative path to create.
 - Omit `--agent` to use Hub's default Agent. If the user specifies an agent, run `ahub-cli agent list --json` and match known nicknames and runtime names. Pass the nickname with `--agent` only for a unique match; otherwise show the matching or available agents and ask the user to choose.
 
+## Frame the assignment
+
+Give the worker agent a concise brief:
+
+- **Goal:** the problem and desired result.
+- **Context:** relevant background, decisions, and references.
+- **Constraints:** scope, compatibility, authorization boundaries, and fixed choices; distinguish requirements from suggestions.
+- **Deliverables:** expected artifacts or changes, their destination, and validation evidence.
+- **Acceptance criteria:** observable conditions for completion and quality.
+
+Describe specifications rather than prescribed steps or file-by-file edits. Trust the agent to investigate and plan the implementation; include implementation guidance only when a known constraint requires it.
+
 ## Create, resume, and send
 
 - `create --project <directory>` sets project association and the default launch directory. Add `--cwd <directory>` to change the launch location while retaining the project association.
@@ -29,7 +41,7 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - `resume <id>` retains the original Agent and uses an available original working or project directory. It accepts `--yolo` but no directory overrides.
 - Successful create/resume means the session was observed live, connected, and idle. Save `sessionId` and `tmux` (`socketPath`, `sessionName`); diagnostics may be null.
 - Before sending, inspect and follow `nextAfter` until `hasMore=false`. Save the final `nextAfter` as the turn's baseline, then observe new replies from that position.
-- Specify the objective, output location, constraints, and acceptance criteria. Prefer `--stdin` from a file or pipe for long messages to avoid shell interpolation and quoting errors. `sent` confirms delivery only.
+- Send the assignment framed above. Prefer `--stdin` from a file or pipe for long messages to avoid shell interpolation and quoting errors. `sent` confirms delivery only.
 
 Replace the example IDs, positions, and paths with actual values:
 
