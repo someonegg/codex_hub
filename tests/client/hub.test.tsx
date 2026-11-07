@@ -110,7 +110,7 @@ describe("unified hub", () => {
     expect(group()).not.toHaveAttribute("open");
   });
 
-  it("offers a home link below a missing session error without redirecting automatically", async () => {
+  it("offers a agent link below a missing session error without redirecting automatically", async () => {
     window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
     vi.mocked(api.messages).mockRejectedValue(
       new ApiClientError(404, "session_not_found", "Session missing"),
@@ -238,7 +238,7 @@ describe("unified hub", () => {
     );
   });
 
-  it("opens nothing on home, toggles archived records, and retains navigation through history", async () => {
+  it("opens nothing on agent, toggles archived records, and retains navigation through history", async () => {
     render(<App />);
     await flush();
     const nav = screen.getByRole("navigation", { name: "Projects and main sessions" });
@@ -377,26 +377,26 @@ it("feeds displayed session updatedAt back into sidebar ordering without refresh
   expect(api.sessions).toHaveBeenCalledTimes(2);
 });
 
-function multiHomeCatalog(): SessionListResponse {
+function multiAgentCatalog(): SessionListResponse {
   return {
     ...catalog,
-    homes: [{ nickname: "personal" }, { nickname: "work" }, { nickname: "empty" }],
+    agents: [{ nickname: "personal" }, { nickname: "work" }, { nickname: "empty" }],
     sessions: [
-      ...catalog.sessions.map((session) => ({ ...session, home: "personal" })),
+      ...catalog.sessions.map((session) => ({ ...session, agent: "personal" })),
       {
         ...catalog.sessions[0]!,
         id: "work-session",
         title: "Work trace",
-        home: "work",
+        agent: "work",
       },
     ],
   };
 }
-it("aggregates and filters merged projects, remembers the home and keeps a direct-linked reader open", async () => {
+it("aggregates and filters merged projects, remembers the agent and keeps a direct-linked reader open", async () => {
   window.history.replaceState(null, "", `/sessions/${SESSION_ID}`);
   vi.mocked(api.sessions)
     .mockReset()
-    .mockResolvedValueOnce(multiHomeCatalog())
+    .mockResolvedValueOnce(multiAgentCatalog())
     .mockImplementation(() => new Promise(() => {}));
   render(<App />);
   await flush();
@@ -405,35 +405,35 @@ it("aggregates and filters merged projects, remembers the home and keeps a direc
   expect(within(sidebar).getAllByRole("button", { name: /reader, 2 main sessions/ })).toHaveLength(
     1,
   );
-  expect(screen.getByText("Home: default")).toBeInTheDocument();
-  fireEvent.change(screen.getByRole("combobox", { name: "Filter by home" }), {
+  expect(screen.getByText("Agent: default")).toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter by agent" }), {
     target: { value: "work" },
   });
   expect(within(sidebar).queryByRole("link", { name: /Reader work/ })).not.toBeInTheDocument();
   expect(within(sidebar).getByRole("link", { name: /Work trace/ })).toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Reader work" })).toBeInTheDocument();
-  expect(browserStorage.getItem("ahub.home")).toBe("work");
-  fireEvent.change(screen.getByRole("combobox", { name: "Filter by home" }), {
+  expect(browserStorage.getItem("ahub.agent")).toBe("work");
+  fireEvent.change(screen.getByRole("combobox", { name: "Filter by agent" }), {
     target: { value: "empty" },
   });
   expect(within(sidebar).getByText("No main sessions yet")).toBeInTheDocument();
   fireEvent.click(within(sidebar).getByRole("button", { name: "New session" }));
-  expect(screen.getByLabelText("Session home")).toHaveValue("empty");
+  expect(screen.getByLabelText("Session agent")).toHaveValue("empty");
 });
-it("defaults creation to the first home in aggregate view and restores a stored filter", async () => {
+it("defaults creation to the first agent in aggregate view and restores a stored filter", async () => {
   window.history.replaceState(null, "", "/");
-  browserStorage.setItem("ahub.home", "removed-source");
+  browserStorage.setItem("ahub.agent", "removed-source");
   vi.mocked(api.sessions)
     .mockReset()
-    .mockResolvedValueOnce(multiHomeCatalog())
+    .mockResolvedValueOnce(multiAgentCatalog())
     .mockImplementation(() => new Promise(() => {}));
   const view = render(<App />);
   await flush();
-  expect(screen.getByLabelText("Filter by home")).toHaveValue("");
+  expect(screen.getByLabelText("Filter by agent")).toHaveValue("");
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/project" } });
   expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
-  fireEvent.change(screen.getByLabelText("Session home"), { target: { value: "work" } });
+  fireEvent.change(screen.getByLabelText("Session agent"), { target: { value: "work" } });
   expect(screen.getByRole("button", { name: "Create session" })).toBeEnabled();
   const create = vi
     .spyOn(api, "createSession")
@@ -441,23 +441,23 @@ it("defaults creation to the first home in aggregate view and restores a stored 
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ home: "work", projectDirectory: "/project" }),
+    expect.objectContaining({ agent: "work", projectDirectory: "/project" }),
   );
-  fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });
+  fireEvent.change(screen.getByLabelText("Filter by agent"), { target: { value: "work" } });
   view.unmount();
   vi.mocked(api.sessions)
     .mockReset()
-    .mockResolvedValueOnce(multiHomeCatalog())
+    .mockResolvedValueOnce(multiAgentCatalog())
     .mockImplementation(() => new Promise(() => {}));
   render(<App />);
   await flush();
-  expect(screen.getByLabelText("Filter by home")).toHaveValue("work");
+  expect(screen.getByLabelText("Filter by agent")).toHaveValue("work");
 });
 
-it("preselects the default creation home and respects an explicit home filter", async () => {
+it("preselects the default creation agent and respects an explicit agent filter", async () => {
   window.history.replaceState(null, "", "/");
-  const list = multiHomeCatalog();
-  list.homes[2] = { nickname: "default" };
+  const list = multiAgentCatalog();
+  list.agents[2] = { nickname: "default" };
   vi.mocked(api.sessions)
     .mockReset()
     .mockResolvedValueOnce(list)
@@ -465,16 +465,16 @@ it("preselects the default creation home and respects an explicit home filter", 
   render(<App />);
   await flush();
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
-  expect(screen.getByLabelText("Session home")).toHaveValue(list.homes[0]!.nickname);
+  expect(screen.getByLabelText("Session agent")).toHaveValue(list.agents[0]!.nickname);
   fireEvent.change(screen.getByLabelText("Project directory"), { target: { value: "/project" } });
   const create = vi.spyOn(api, "createSession").mockRejectedValue(new Error("Test stopped"));
   fireEvent.click(screen.getByRole("button", { name: "Create session" }));
   await flush();
   expect(create).toHaveBeenCalledWith(
-    expect.objectContaining({ home: list.homes[0]!.nickname, projectDirectory: "/project" }),
+    expect.objectContaining({ agent: list.agents[0]!.nickname, projectDirectory: "/project" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Close new session" }));
-  fireEvent.change(screen.getByLabelText("Filter by home"), { target: { value: "work" } });
+  fireEvent.change(screen.getByLabelText("Filter by agent"), { target: { value: "work" } });
   fireEvent.click(screen.getAllByRole("button", { name: "New session" })[0]!);
-  expect(screen.getByLabelText("Session home")).toHaveValue("work");
+  expect(screen.getByLabelText("Session agent")).toHaveValue("work");
 });

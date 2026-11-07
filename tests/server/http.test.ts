@@ -43,7 +43,7 @@ async function start() {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    homes: [{ nickname: "default", path: "/unused" }],
+    agents: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
@@ -66,7 +66,7 @@ async function startWithRepository(
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    homes: [{ nickname: "default", path: "/unused" }],
+    agents: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: { enabled: false },
     interactionEnabled: false,
@@ -151,7 +151,7 @@ async function startSecure(requireClientCertificate: boolean): Promise<string> {
   const config: ServerConfig = {
     host: LOOPBACK_HOST,
     port: 0,
-    homes: [{ nickname: "default", path: "/unused" }],
+    agents: [{ nickname: "default", path: "/unused" }],
     clientDirectory,
     tls: {
       enabled: true,
@@ -173,7 +173,7 @@ describe("secure HTTP foundation", () => {
     const server = createServer({
       host: LOOPBACK_HOST,
       port: 0,
-      homes: [{ nickname: "default", path: "/unused" }],
+      agents: [{ nickname: "default", path: "/unused" }],
       clientDirectory: resolve("public"),
       tls: { enabled: false },
       interactionEnabled: false,
@@ -206,7 +206,7 @@ describe("secure HTTP foundation", () => {
     const config: ServerConfig = {
       host: LOOPBACK_HOST,
       port: 0,
-      homes: [{ nickname: "default", path: "/unused" }],
+      agents: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,
@@ -253,7 +253,7 @@ describe("secure HTTP foundation", () => {
     const server = createServer({
       host: LOOPBACK_HOST,
       port: 0,
-      homes: [{ nickname: "default", path: "/unused" }],
+      agents: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,
@@ -281,7 +281,7 @@ describe("secure HTTP foundation", () => {
     const baseConfig = {
       host: LOOPBACK_HOST,
       port: 0,
-      homes: [{ nickname: "default", path: "/unused" }],
+      agents: [{ nickname: "default", path: "/unused" }],
       clientDirectory,
     };
 
@@ -396,7 +396,7 @@ it("serves an optional loopback HTTP listener and closes shared services once", 
       host: LOOPBACK_HOST,
       port: 0,
       localPort: 0,
-      homes: [],
+      agents: [],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,
@@ -422,7 +422,7 @@ it("stops both listeners before a pending local response finishes", async () => 
       host: LOOPBACK_HOST,
       port: 0,
       localPort: 0,
-      homes: [],
+      agents: [],
       clientDirectory,
       tls: { enabled: false },
       interactionEnabled: false,

@@ -55,14 +55,14 @@
   color: var(--ink-soft);
   font-size: var(--text-small);
 }
-.home-filter {
+.agent-filter {
   display: flex;
   align-items: center;
   gap: 6px;
   flex: 1;
   min-width: 0;
 }
-.home-filter select {
+.agent-filter select {
   min-width: 0;
   flex: 1;
 }
@@ -126,7 +126,7 @@
   line-height: 1.5;
   align-items: center;
 }
-.session-nav-home {
+.session-nav-agent {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;

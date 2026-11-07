@@ -57,25 +57,25 @@ export class SessionLaunchError extends Error {
 export class SessionManagerRegistry {
   readonly #managers = new Map<string, SessionManager>();
 
-  constructor(readonly defaultHome: string) {}
+  constructor(readonly defaultAgent: string) {}
 
-  register(home: string, manager: SessionManager): this {
-    if (!home.trim()) throw new Error("Empty home nickname");
-    if (this.#managers.has(home)) throw new Error(`Duplicate home nickname: ${home}`);
-    this.#managers.set(home, manager);
+  register(agent: string, manager: SessionManager): this {
+    if (!agent.trim()) throw new Error("Empty agent nickname");
+    if (this.#managers.has(agent)) throw new Error(`Duplicate agent nickname: ${agent}`);
+    this.#managers.set(agent, manager);
     return this;
   }
 
-  resolveCreateHome(home?: string): string {
-    const selected = home ?? this.defaultHome;
-    if (!this.#managers.has(selected)) throw new Error("Unknown home nickname");
+  resolveCreateAgent(agent?: string): string {
+    const selected = agent ?? this.defaultAgent;
+    if (!this.#managers.has(selected)) throw new Error("Unknown agent nickname");
     return selected;
   }
 
-  get(home: string): SessionManager {
-    const manager = this.#managers.get(home);
+  get(agent: string): SessionManager {
+    const manager = this.#managers.get(agent);
     if (!manager) {
-      throw new Error(`Session source has no management capability: ${home}`);
+      throw new Error(`Session source has no management capability: ${agent}`);
     }
     return manager;
   }

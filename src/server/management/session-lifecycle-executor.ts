@@ -39,8 +39,8 @@ export class SessionLifecycleExecutor {
         }
         throw new Error("Session not found");
       }
-      entry.home = session.origin.home;
-      const manager = this.managers.get(entry.home);
+      entry.agent = session.origin.agent;
+      const manager = this.managers.get(entry.agent);
       if (type === "archive" && typeof manager.archive !== "function")
         throw new Error(
           "operation_not_supported: Operation is not supported by this session source",
@@ -124,7 +124,7 @@ export class SessionLifecycleExecutor {
       else await this.#nativeOperation(entry, next);
       return;
     }
-    const task = this.#exit.start(sessionId, target, this.managers.get(entry.home), () => {
+    const task = this.#exit.start(sessionId, target, this.managers.get(entry.agent), () => {
       this.control.timeout(entry);
       if (!this.control.pending(entry)) throw new Error("Exit operation is no longer active");
     });
@@ -146,7 +146,7 @@ export class SessionLifecycleExecutor {
       this.now() + 25_000,
     );
     try {
-      const manager = this.managers.get(entry.home);
+      const manager = this.managers.get(entry.agent);
       if (type === "archive") await manager.archive!(nativeId);
       else await manager.delete(nativeId);
       if (!this.control.pending(entry)) return;
@@ -163,7 +163,7 @@ export class SessionLifecycleExecutor {
 
   #matches(snapshot: ManagementSnapshot, entry: OperationEntry, nativeId: string) {
     return snapshot.sessions.filter(
-      (session) => session.origin.home === entry.home && session.sourceId === nativeId,
+      (session) => session.origin.agent === entry.agent && session.sourceId === nativeId,
     );
   }
 }

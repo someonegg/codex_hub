@@ -9,7 +9,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   enter: "Enter",
   aborted: "已中止",
-  allHomes: "所有 Home",
+  allAgents: "所有智慧體",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "所有成功上傳的檔案都會保留，包括從草稿中移除的檔案。",
 
@@ -91,15 +91,15 @@ export const messages: Record<keyof typeof english, string> = {
 
   fileDiffs: "檔案差異",
   filesMustBeAtMost20MiB: "單個檔案不能超過 20 MiB",
-  filterByHome: "按 Home 篩選",
+  filterByAgent: "按智慧體篩選",
   foldersAreNotSupported: "不支援資料夾",
   goToBoundSession: "前往已繫結工作階段",
-  handOffThisPaneSBindingToTheActiveCodexSession: "將此窗格的繫結移交給目前活動的 agent 工作階段。",
+  handOffThisPaneSBindingToTheActiveCodexSession: "將此窗格的繫結移交給目前活動的智慧體工作階段。",
   handoff: "移交繫結",
   hide: "隱藏",
 
-  home: "Home",
-  homeLabel: "Home：",
+  agent: "智慧體",
+  agentLabel: "智慧體：",
   idle: "閒置",
 
   interrupt: "中斷",
@@ -117,10 +117,10 @@ export const messages: Record<keyof typeof english, string> = {
   loadingSessions: "正在載入工作階段…",
 
   loadingUploads: "正在載入上傳記錄…",
-  messageToAgent: "傳送給代理程式的訊息",
+  messageToAgent: "傳送給智慧體的訊息",
   newSession: "新增工作階段",
   noCodexSessionDetectedYetAttachToTmuxToCheckStartupProgress:
-    "尚未檢測到 agent 工作階段。請連線 tmux 檢視啟動進度。",
+    "尚未檢測到智慧體工作階段。請連線 tmux 檢視啟動進度。",
   noAnswerRecorded: "尚無回答記錄。",
 
   noMainSessionsYet: "暫無主工作階段",
@@ -172,7 +172,7 @@ export const messages: Record<keyof typeof english, string> = {
   scrollableCodeBlock: "可滾動程式碼區塊",
   scrollableMathFormula: "可滾動數學公式",
   scrollableTable: "可滾動表格",
-  selectAHome: "選擇 Home",
+  selectAnAgent: "選擇智慧體",
   selectASessionFromTheSidebar: "從側邊欄選擇工作階段",
   selected: "已選擇",
   send: "傳送",
@@ -181,7 +181,7 @@ export const messages: Record<keyof typeof english, string> = {
   sessionList: "工作階段列表",
 
   sessionCreated: "工作階段已建立。",
-  sessionHome: "工作階段 Home",
+  sessionAgent: "工作階段智慧體",
   sessionInformation: "工作階段資訊",
   sessionInteraction: "工作階段互動",
   sessionIsBusyTryAgainLater: "工作階段正忙，請稍後重試",
@@ -192,7 +192,7 @@ export const messages: Record<keyof typeof english, string> = {
 
   someContentCouldNotBeFullyParsedCheckTheOriginalTextBelow:
     "部分內容未能完整解析，請檢視下方原文。",
-  startingCodex: "正在啟動 agent",
+  startingCodex: "正在啟動智慧體",
   superseded: "已被替代",
   takePhoto: "拍照",
   terminalPreview: "終端預覽",
@@ -286,9 +286,9 @@ export const settings: Record<keyof typeof englishSettings, string> = {
   mist: "薄霧",
   paper: "紙張",
   launch: "工作階段啟動預設設定",
-  home: "預設 Home",
+  agent: "預設智慧體",
   auto: "自動",
-  unavailable: "不可用的 Home",
+  unavailable: "不可用的智慧體",
   worktree: "預設啟用 worktree",
   yolo: "預設啟用 YOLO",
   enter: "按 Enter 傳送（Shift+Enter 換行）",

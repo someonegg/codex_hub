@@ -105,7 +105,7 @@ async function record(
       if (route.request().method() === "POST") {
         const body = route.request().postDataJSON();
         if (
-          body.home !== "default" ||
+          body.agent !== "default" ||
           body.projectDirectory !== "/projects/atlas-dashboard" ||
           body.worktree
         ) {
@@ -127,13 +127,13 @@ async function record(
       await new Promise((resolve) => setTimeout(resolve, 200));
       return json({
         revision: String(created),
-        homes: [{ nickname: "default" }, { nickname: "work" }],
+        agents: [{ nickname: "default" }, { nickname: "work" }],
         projects: [{ directory: "/projects/atlas-dashboard" }],
         sessions: created
           ? [
               {
                 ...session(),
-                home: "default",
+                agent: "default",
                 projectDirectory: "/projects/atlas-dashboard",
                 isChild: false,
               },

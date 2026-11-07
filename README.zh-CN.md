@@ -5,7 +5,7 @@
 面向 Codex 和 Claude Code 的本地网页中心，将清晰易读的会话记录与实时 CLI 交互结合起来。
 按项目浏览会话、跟进最新回复，并从电脑或手机继续工作。
 
-支持 Codex 和 Claude Code 主会话，详见[多个 Home 配置](docs/usage.zh-CN.md#多个-home)。
+支持 Codex 和 Claude Code 主会话，详见[多个智能体配置](docs/usage.zh-CN.md#多个智能体)。
 
 ![创建会话、发送提示并查看已回答的用户输入卡片](docs/images/zh-CN/ahub-intro.gif)
 
@@ -23,7 +23,7 @@
 运行要求：
 
 - macOS 或 Linux，Node.js >=22.13 与 npm
-- 本地 Codex Home（通常为 `~/.codex`）
+- 本地 Codex 智能体（通常为 `~/.codex`）
 - 支持 `resume`、`--no-daemon`、`--no-alt-screen`、`--worktree`、`archive` 和 `delete --force` 的 Codex CLI
 - tmux，用于创建会话和交互
 
@@ -43,7 +43,7 @@ codex-hub
 打开 <http://127.0.0.1:4173>。按 `Ctrl-C` 停止服务器。
 界面默认英文，在侧边栏底部打开 **Settings → Language → 简体中文 / 繁體中文** 即可切换；选择保存在当前浏览器。
 
-Home、端口与可选网页／差异托管配置见[使用与配置](docs/usage.zh-CN.md)。
+智能体、端口与可选网页／差异托管配置见[使用与配置](docs/usage.zh-CN.md)。
 
 升级时再次执行
 `npm install -g @someonegg/codex-hub@latest`。从源码运行请参阅[开发指南（英文）](docs/development.md)。

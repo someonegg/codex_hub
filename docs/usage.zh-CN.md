@@ -24,12 +24,12 @@ npx @someonegg/codex-hub@latest
 ## 创建与管理会话
 
 点击项目旁的 **+**，或全局 **+** 后选择项目、输入本机绝对目录。
-选择 [Home](#多个-home) 和可选的启动设置：
+选择 [智能体](#多个智能体) 和可选的启动设置：
 
 - **Worktree：**在独立 Git worktree 中启动，隔离代码改动。
-- **YOLO：**跳过智能体的审批提示；Codex 还会禁用其沙盒。
+- **YOLO：**跳过运行工具的审批提示；Codex 还会禁用其沙盒。
 
-打开已退出的会话，在可用时点击**恢复**继续。恢复保留原 Home 和项目归属，使用可用的原工作目录或项目目录。
+打开已退出的会话，在可用时点击**恢复**继续。恢复保留原智能体和项目归属，使用可用的原工作目录或项目目录。
 恢复从其他位置启动的会话前，请确认原进程已经退出。
 
 通过会话的 **…** 菜单执行：
@@ -60,7 +60,7 @@ npx @someonegg/codex-hub@latest
 使用附件按钮**拍照**、**选择图片**或**选择文件**，也可粘贴图片或拖放文件。
 发送前可预览或移除附件，支持单独发送附件和多个文件，不支持文件夹。**每个文件最大 20 MiB**。
 
-图片保留原始内容，包括 EXIF 元数据。相机行为取决于浏览器；HEIC/HEIF 支持取决于智能体。
+图片保留原始内容，包括 EXIF 元数据。相机行为取决于浏览器；HEIC/HEIF 支持取决于运行工具。
 
 从会话标题区域打开**上传记录**，预览、下载或删除文件，包括未发送的上传文件。
 从草稿移除附件不会删除已上传文件；从上传记录删除文件也会将其从草稿移除。
@@ -71,7 +71,7 @@ npx @someonegg/codex-hub@latest
 
 ## 浏览器设置
 
-在侧边栏底部打开**设置**，选择语言、主题、新会话默认 Home，以及 Worktree、YOLO 默认值。
+在侧边栏底部打开**设置**，选择语言、主题、新会话默认智能体，以及 Worktree、YOLO 默认值。
 修改自动保存在当前浏览器。YOLO 默认值也用于恢复会话，启动对话框可覆盖默认值。
 
 界面初始为英文，切换语言立即生效，不翻译会话或终端原文。
@@ -104,9 +104,9 @@ ahub-cli session inspect <id> --follow
 `inspect` 也接受子会话 ID。将返回的 `Next after` 值传给 `--after <value>` 读取下一页。
 `--follow` 持续观察直到按 `Ctrl+C` 停止，不会因任务完成自动结束。
 
-创建默认使用项目目录和第一个已配置 Home。用 `--cwd` 修改工作目录而保留项目归属，
-用 `--home <nickname>` 选择 Home；可选 `--worktree` 和 `--yolo` 控制启动行为。
-`resume <id>` 保留原 Home，支持 `--yolo`。
+创建默认使用项目目录和第一个已配置智能体。用 `--cwd` 修改工作目录而保留项目归属，
+用 `--agent <nickname>` 选择智能体；可选 `--worktree` 和 `--yolo` 控制启动行为。
+`resume <id>` 保留原智能体，支持 `--yolo`。
 用 `create --task <name>` 和 `list --task <name>` 跨项目分组会话。
 
 输入默认要求终端已连接且空闲。用 `send <id> --stdin` 接收管道输入，`terminal <id>` 查看终端，
@@ -176,20 +176,20 @@ ahub-cli diff publish /tmp/review.diff --title "Review changes"
 | `--hosting`            | 关闭           | 提供已发布网页与差异访问                    |
 | `--tmux-socket <path>` | tmux 默认值    | 使用自定义 tmux socket                      |
 
-### 多个 Home
+### 多个智能体
 
-Home 是智能体的会话与配置目录：Codex 包含 `sessions/`，Claude Code 包含 `projects/`。
-每个 Home 需使用唯一昵称和目录：
+智能体是独立拥有配置、Skills、记忆和模型设置的身份。Codex 和 Claude Code 是运行工具，任务中派生的身份称为子智能体。智能体目录在 Codex 中包含 `sessions/`，在 Claude Code 中包含 `projects/`。
+每个智能体需使用唯一昵称和目录：
 
 ```sh
 codex-hub \
-  --codex-home 'work=~/.codex-work' \
-  --claude-home 'claude=~/.claude'
+  --codex-agent 'work=~/.codex-work' \
+  --claude-agent 'claude=~/.claude'
 ```
 
-可重复或混合传入这些选项。显式配置会替换**两个默认 Home**，创建默认使用第一项。
-通过侧边栏 Home 筛选器缩小范围。网页创建时，有效的 Home 筛选或默认 Home 偏好优先于第一项。
-完整规则见 [Home 路由（英文）](technical-reference.md#home-identity-and-routing)。
+可重复或混合传入这些选项。显式配置会替换**两个默认智能体**，创建默认使用第一项。
+通过侧边栏智能体筛选器缩小范围。网页创建时，有效的智能体筛选或默认智能体偏好优先于第一项。
+完整规则见 [智能体路由（英文）](technical-reference.md#agent-identity-and-routing)。
 
 ## 从其他设备访问
 
@@ -220,7 +220,7 @@ ahub-cli session list --url http://127.0.0.1:4174
 
 ## 故障排查
 
-- **没有会话：**检查各 Home 是否包含 `sessions/`（Codex）或 `projects/`（Claude）。查看服务器输出中的不可读或跳过文件提示。
+- **没有会话：**检查各智能体是否包含 `sessions/`（Codex）或 `projects/`（Claude）。查看服务器输出中的不可读或跳过文件提示。
 - **端口占用：**换用其他端口，例如 `codex-hub --port 4180`。
 - **无法发送输入：**通过**连接 tmux**完成 CLI 提示，正忙时等待，或在可用时使用**恢复**。归档会话只读，仅有日志不代表终端已连接。
 - **创建或恢复状态不明：**重试前检查 tmux 并刷新会话列表，避免重复启动。关闭页面不会停止操作，重启服务器会丢失进度追踪。

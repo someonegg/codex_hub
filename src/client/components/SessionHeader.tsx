@@ -8,12 +8,12 @@ import { StatusBadge } from "./StatusBadge";
 import { UploadHistoryLink } from "./UploadHistoryLink";
 
 interface SessionHeaderProps {
-  homeNickname?: string;
+  agentNickname?: string;
   management?: ReactNode;
   session: SessionDetail;
 }
 
-export function SessionHeader({ homeNickname, management, session }: SessionHeaderProps) {
+export function SessionHeader({ agentNickname, management, session }: SessionHeaderProps) {
   useTranslation();
   const updatedAt = formatTimestamp(session.updatedAt);
 
@@ -28,12 +28,12 @@ export function SessionHeader({ homeNickname, management, session }: SessionHead
         </div>
         <div className="session-metadata">
           <StatusBadge status={session.status} />
-          <span>{session.origin.agentName}</span>
-          {homeNickname !== undefined ? (
+          <span>{session.origin.runtimeName}</span>
+          {agentNickname !== undefined ? (
             <>
               <span>·</span>
               <span>
-                {t("homeLabel")} {homeNickname}
+                {t("agentLabel")} {agentNickname}
               </span>
             </>
           ) : null}
@@ -81,7 +81,7 @@ function formatTimestamp(value: string | null): string {
 }
 
 function sessionOriginLabel(origin: SessionDetail["origin"]): string {
-  let label = origin.agentName;
-  if (origin.agentVersion !== null) label += ` ${origin.agentVersion}`;
+  let label = origin.runtimeName;
+  if (origin.runtimeVersion !== null) label += ` ${origin.runtimeVersion}`;
   return label;
 }

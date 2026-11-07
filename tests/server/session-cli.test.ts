@@ -72,7 +72,7 @@ it.each([
   ["send", "id", "--stdin", "--message", "x"],
   ["keys", "id", "interrupt"],
   ["keys", "id", "C-c", "--force"],
-  ["resume", "id", "--home", "other"],
+  ["resume", "id", "--agent", "other"],
   ["inspect", "id", "--limit", "301"],
   ["list", "--url", "ftp://example.com"],
   ["list", "--url", "https://user:password@example.com"],
@@ -136,7 +136,7 @@ it("supports HTTPS with an extra CA and rejects untrusted certificates by defaul
   const base = await serve((req, res) => {
     requests++;
     expect(req.url).toBe("/api/v1/sessions");
-    reply(res, { homes: [], projects: [], sessions: [] });
+    reply(res, { agents: [], projects: [], sessions: [] });
   }, true);
   const untrusted = await cli(["list", "--url", base, "--json"], "", {
     NODE_EXTRA_CA_CERTS: "",
@@ -163,7 +163,7 @@ it("uses explicit URL over the environment and filters by associated project", a
   const base = await serve((req, res) => {
     expect(req.url).toBe("/api/v1/sessions");
     reply(res, {
-      homes: [],
+      agents: [],
       revision: "private",
       projects: [{ directory: "/project" }],
       sessions: [
@@ -172,7 +172,7 @@ it("uses explicit URL over the environment and filters by associated project", a
           projectDirectory: "/project",
           title: "Title",
           status: "normal",
-          home: "work",
+          agent: "work",
           updatedAt: null,
         },
         { id: "child", projectDirectory: "/project", isChild: true, parentId: "yes" },
@@ -188,7 +188,7 @@ it("uses explicit URL over the environment and filters by associated project", a
       id: "yes",
       title: "Title",
       status: "normal",
-      home: "work",
+      agent: "work",
       projectDirectory: "/project",
       updatedAt: null,
     },
@@ -303,7 +303,7 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
       expect(body).toMatchObject({
         projectDirectory: "/project",
         workingDirectory: resolve("relative-working"),
-        home: "second",
+        agent: "second",
         worktree: true,
         yolo: true,
       });
@@ -345,7 +345,7 @@ it("waits for lifecycle completion and launch idle, mapping only public results"
     "/project",
     "--cwd",
     "relative-working",
-    "--home",
+    "--agent",
     "second",
     "--worktree",
     "--yolo",
@@ -423,16 +423,16 @@ it("renders human output and sends human diagnostics to stderr", async () => {
       });
     else
       reply(res, {
-        homes: [{ nickname: "work" }],
+        agents: [{ nickname: "work" }],
         projects: [{ directory: "/project" }],
         sessions: [
-          { id: "id", status: "live", home: "work", projectDirectory: "/project", title: "Title" },
+          { id: "id", status: "live", agent: "work", projectDirectory: "/project", title: "Title" },
         ],
       });
   });
   const list = await cli(["list", "--url", base]);
   expect(list.code).toBe(0);
-  expect(list.stdout).toContain("id  live    work  /project  Title");
+  expect(list.stdout).toContain("id  live    work   /project  Title");
   expect((await cli(["terminal", "id", "--url", base])).stdout).toContain(
     "(truncated)\ncurrent screen",
   );
@@ -471,7 +471,7 @@ it.each([
           childIds: [],
           title: "Child",
           status: "live",
-          origin: { sourceType: "codex", agentName: "Codex", home: "work" },
+          origin: { sourceType: "codex", runtimeName: "Codex", agent: "work" },
           resume: { allowed: false, reason: "Session is already live" },
           workingDirectory: null,
           projectDirectory: null,
@@ -741,7 +741,7 @@ it.each([true, false])("follows input hints, answers and idle changes (json=%s)"
 it.each([false, true])("filters archived sessions with all=%s", async (include) => {
   const base = await serve((_req, res) => {
     reply(res, {
-      homes: [],
+      agents: [],
       projects: [],
       sessions: [
         { id: "normal", status: "normal", projectDirectory: "/project" },
@@ -749,7 +749,7 @@ it.each([false, true])("filters archived sessions with all=%s", async (include) 
         { id: "archived", status: "archived", projectDirectory: "/project" },
         { id: "child", status: "archived", isChild: true, projectDirectory: "/project" },
         { id: "other", status: "archived", projectDirectory: "/other" },
-      ].map((session) => ({ title: session.id, home: "default", updatedAt: null, ...session })),
+      ].map((session) => ({ title: session.id, agent: "default", updatedAt: null, ...session })),
     });
   });
   const args = ["list", "--url", base, "--project", "/project", ...(include ? ["--all"] : [])];

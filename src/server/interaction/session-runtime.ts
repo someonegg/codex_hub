@@ -85,7 +85,7 @@ export class SessionRuntime {
       if (observed.state === "alive" && observed.replacement === null) status = "live";
       if (!detail) return deny("Resume validation required");
       if (status === "live") return deny("Session is already live");
-      const manager = this.managers.get(session.origin.home);
+      const manager = this.managers.get(session.origin.agent);
       if (!session.sourceId?.trim() || !manager.isValidNativeId(session.sourceId))
         return deny("Session has no valid native identity");
       const resolved = await resolveResumeDirectory(manager, session);

@@ -30,7 +30,7 @@ export class SessionLaunchExecutor {
     input: Extract<CreateSessionRequest, { projectDirectory: string }>,
   ) {
     try {
-      const manager = this.managers.get(entry.home);
+      const manager = this.managers.get(entry.agent);
       const project = await manager.resolveDirectory(input.projectDirectory);
       const working =
         input.workingDirectory === undefined || input.workingDirectory === input.projectDirectory
@@ -77,9 +77,9 @@ export class SessionLaunchExecutor {
       const replacement = this.bindings.replacement(session.id);
       const capability = await this.runtime.evaluate(session);
       if (!capability.resume.allowed) throw new Error(capability.resume.reason!);
-      entry.home = session.origin.home;
+      entry.agent = session.origin.agent;
       entry.resumeNativeId = session.sourceId ?? undefined;
-      const manager = this.managers.get(entry.home);
+      const manager = this.managers.get(entry.agent);
       const directory = capability.directory!;
       if (
         attempt !== this.bindings.latest(session.id) ||
@@ -122,7 +122,7 @@ export class SessionLaunchExecutor {
     const matches = snapshot.sessions.filter((session) => {
       const attempt = this.bindings.latest(session.id);
       return (
-        session.origin.home === entry.home &&
+        session.origin.agent === entry.agent &&
         attempt?.valid &&
         attempt.operationId === entry.metadata.operationId
       );
@@ -157,7 +157,7 @@ export class SessionLaunchExecutor {
     if (!this.control.pending(entry)) return;
     if (!matchesTarget) throw new AssociationError("Binding does not match the launched target");
     entry.metadata.sessionId = match.id;
-    if (this.managers.get(entry.home).interruptAfterBinding) {
+    if (this.managers.get(entry.agent).interruptAfterBinding) {
       try {
         await this.interaction.interruptLaunch(context.target, match.id, () => {
           if (!this.control.pending(entry)) throw new Error("Launch operation is no longer active");

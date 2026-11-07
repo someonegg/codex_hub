@@ -177,7 +177,7 @@ interface LinkedSessions {
 }
 
 function assertUniqueSources(sources: readonly SessionSource[]): void {
-  for (const field of ["instanceKey", "home"] as const) {
+  for (const field of ["instanceKey", "agent"] as const) {
     const keys = new Set<string>();
     for (const { descriptor } of sources) {
       const key = descriptor[field];
@@ -225,14 +225,14 @@ function linkRelationships(
           ordinal: null,
         };
         if (diagnostics.length < diagnosticLimit) diagnostics.push(diagnostic);
-        const group = aggregateDiagnostics.get(descriptor.home) ?? [];
+        const group = aggregateDiagnostics.get(descriptor.agent) ?? [];
         const sessionId = opaqueIdForParts(descriptor.instanceKey, entry.localId);
         if (
           group.length < MAX_CATALOG_DIAGNOSTICS &&
           !group.some((item) => item.sessionId === sessionId)
         ) {
           group.push({ sessionId, diagnostic });
-          aggregateDiagnostics.set(descriptor.home, group);
+          aggregateDiagnostics.set(descriptor.agent, group);
         }
         continue;
       }
@@ -305,8 +305,8 @@ function linkRelationships(
         origin: {
           ...item.origin,
           sourceType: item.descriptor.sourceType,
-          home: item.descriptor.home,
-          agentName: item.descriptor.displayName,
+          agent: item.descriptor.agent,
+          runtimeName: item.descriptor.displayName,
         },
         isChild: item.parentNativeSessionId !== null,
         parentId: resolvedParents.get(id) ?? null,
@@ -394,7 +394,7 @@ function sameSourceInput(left: PendingSession, right: PendingSession): boolean {
     left.parentNativeSessionId === right.parentNativeSessionId &&
     sameOrigin(left.origin, right.origin) &&
     left.descriptor.sourceType === right.descriptor.sourceType &&
-    left.descriptor.home === right.descriptor.home &&
+    left.descriptor.agent === right.descriptor.agent &&
     left.descriptor.displayName === right.descriptor.displayName
   );
 }
@@ -405,9 +405,9 @@ function sameOrigin(
 ): boolean {
   return (
     left.sourceType === right.sourceType &&
-    left.home === right.home &&
-    left.agentName === right.agentName &&
-    left.agentVersion === right.agentVersion
+    left.agent === right.agent &&
+    left.runtimeName === right.runtimeName &&
+    left.runtimeVersion === right.runtimeVersion
   );
 }
 

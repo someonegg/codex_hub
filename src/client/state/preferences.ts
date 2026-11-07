@@ -4,7 +4,7 @@ import { applyLanguage, isLanguage, type Language } from "../i18n";
 
 export interface Preferences {
   language: Language;
-  defaultHome: string;
+  defaultAgent: string;
   theme: "mist" | "warm";
   worktree: boolean;
   yolo: boolean;
@@ -13,7 +13,7 @@ export interface Preferences {
 const key = "ahub.preferences.v1";
 const defaults: Preferences = {
   language: "en",
-  defaultHome: "",
+  defaultAgent: "",
   theme: "mist",
   worktree: false,
   yolo: false,
@@ -24,7 +24,7 @@ function read(): Preferences {
     const value = JSON.parse(localStorage.getItem(key) ?? "null") ?? {};
     return {
       language: isLanguage(value.language) ? value.language : "en",
-      defaultHome: typeof value.defaultHome === "string" ? value.defaultHome : "",
+      defaultAgent: typeof value.defaultAgent === "string" ? value.defaultAgent : "",
       theme: value.theme === "warm" ? "warm" : "mist",
       worktree: value.worktree === true,
       yolo: value.yolo === true,

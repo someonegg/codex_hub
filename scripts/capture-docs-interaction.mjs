@@ -198,7 +198,7 @@ async function capture(
       return route.fulfill({
         json: {
           revision: "demo-catalog",
-          homes: [{ nickname: "default" }],
+          agents: [{ nickname: "default" }],
           projects: [
             { directory: session.projectDirectory },
             { directory: "/projects/harbor-api" },
@@ -207,7 +207,7 @@ async function capture(
           sessions: [
             {
               ...session,
-              home: "default",
+              agent: "default",
               projectDirectory: session.projectDirectory,
               isChild: false,
             },
@@ -221,7 +221,7 @@ async function capture(
               id,
               title,
               projectDirectory,
-              home: "default",
+              agent: "default",
               isChild: false,
               status: "normal",
             })),
@@ -309,7 +309,7 @@ async function capture(
         "base64",
       ),
     });
-    const expected = '"/tmp/camera uploads/photo.png"\n\nbefore replace after';
+    const expected = '- "/tmp/camera uploads/photo.png"\n\nbefore replace after';
     try {
       await demo.waitForFunction(
         (value) => document.querySelector("textarea")?.value === value,
@@ -331,7 +331,11 @@ async function capture(
     await demo.waitForFunction(
       () => document.querySelector(".interaction-send")?.getAttribute("aria-disabled") !== "true",
     );
+    const sent = demo.waitForResponse(
+      (response) => response.url().endsWith("/messages") && response.request().method() === "POST",
+    );
     await demo.getByRole("button", { name: label("Send"), exact: true }).click();
+    await sent;
     try {
       await demo.waitForFunction(() => document.querySelector("textarea")?.value === "");
     } catch {
@@ -339,8 +343,12 @@ async function capture(
         `Send failed at ${viewport.width}px: ${await composer.inputValue()}; sent: ${JSON.stringify(sentMessages)}; alerts: ${await demo.getByRole("alert").allTextContents()}`,
       );
     }
-    if (sentMessages.pop() !== expected || uploadedNames.pop() !== "photo.png")
-      throw new Error("Unexpected upload or message payload");
+    const sentMessage = sentMessages.pop();
+    const uploadedName = uploadedNames.pop();
+    if (sentMessage !== expected || uploadedName !== "photo.png")
+      throw new Error(
+        `Unexpected upload or message payload: ${JSON.stringify({ sentMessage, expected, uploadedName })}`,
+      );
     await trigger.click();
     const cameraPromise = demo.waitForEvent("filechooser");
     await demo.getByRole("menuitem", { name: label("Take photo") }).click();

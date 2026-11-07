@@ -8,7 +8,7 @@ export const messages = {
 
   enter: "Enter",
   aborted: "Aborted",
-  allHomes: "All homes",
+  allAgents: "All agents",
   allSuccessfulUploadsAreRetainedIncludingFilesRemovedFromDrafts:
     "All successful uploads are retained, including files removed from drafts.",
 
@@ -92,7 +92,7 @@ export const messages = {
 
   fileDiffs: "File diffs",
   filesMustBeAtMost20MiB: "Files must be at most 20 MiB",
-  filterByHome: "Filter by home",
+  filterByAgent: "Filter by agent",
   foldersAreNotSupported: "Folders are not supported",
   goToBoundSession: "Go to bound session",
   handOffThisPaneSBindingToTheActiveCodexSession:
@@ -100,8 +100,8 @@ export const messages = {
   handoff: "Handoff",
   hide: "Hide",
 
-  home: "Home",
-  homeLabel: "Home:",
+  agent: "Agent",
+  agentLabel: "Agent:",
   idle: "Idle",
 
   interrupt: "Interrupt",
@@ -174,7 +174,7 @@ export const messages = {
   scrollableCodeBlock: "Scrollable code block",
   scrollableMathFormula: "Scrollable math formula",
   scrollableTable: "Scrollable table",
-  selectAHome: "Select a home",
+  selectAnAgent: "Select an agent",
   selectASessionFromTheSidebar: "Select a session from the sidebar",
   selected: "Selected",
   send: "Send",
@@ -183,7 +183,7 @@ export const messages = {
   sessionList: "Session list",
 
   sessionCreated: "Session created.",
-  sessionHome: "Session home",
+  sessionAgent: "Session agent",
   sessionInformation: "Session information",
   sessionInteraction: "Session interaction",
   sessionIsBusyTryAgainLater: "Session is busy; try again later",
@@ -287,9 +287,9 @@ export const settings = {
   mist: "Mist",
   paper: "Paper",
   launch: "Session launch defaults",
-  home: "Default Home",
+  agent: "Default Agent",
   auto: "Auto",
-  unavailable: "Unavailable home",
+  unavailable: "Unavailable agent",
   worktree: "Enable worktree by default",
   yolo: "Enable YOLO by default",
   enter: "Enter to send (Shift+Enter for newline)",

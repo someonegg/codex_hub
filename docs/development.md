@@ -22,7 +22,7 @@ To browse isolated demo conversations after building, create a new demo director
 
 ```sh
 node scripts/create-docs-demo.mjs /tmp/ahub-docs-demo
-npm start -- --codex-home 'default=/tmp/ahub-docs-demo' --port 4187
+npm start -- --codex-agent 'default=/tmp/ahub-docs-demo' --port 4187
 ```
 
 ### Find the code
@@ -64,9 +64,9 @@ Run additional checks for the affected area:
 | `npm run test:hosting`            | Hosting/diff changes and desktop/mobile diff screenshots          |
 | `npm run benchmark:scale`         | Scale or performance changes                                      |
 
-With tmux, Git, and both agent CLIs installed, `npm run test:all` runs unit tests
+With tmux, Git, and both runtime CLIs installed, `npm run test:all` runs unit tests
 and all three native integration suites. Lifecycle suites use isolated projects,
-homes, credentials, and tmux sockets; Claude uses a local API stub. They do not
+agents, credentials, and tmux sockets; Claude uses a local API stub. They do not
 call a model or use existing user sessions. Hosting checks require `playwright-cli`
 and its browser.
 

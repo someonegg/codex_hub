@@ -43,8 +43,8 @@ async function setup() {
     delete: vi.fn(),
     exitSteps: () => [],
   };
-  const managers = new SessionManagerRegistry(source.descriptor.home).register(
-    source.descriptor.home,
+  const managers = new SessionManagerRegistry(source.descriptor.agent).register(
+    source.descriptor.agent,
     manager,
   );
   const runtime = new SessionRuntime(transport, managers, bindings);

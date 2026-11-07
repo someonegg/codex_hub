@@ -25,17 +25,17 @@ import { createTestPreviewListener } from "../helpers/terminal-listener.js";
 import { createCodexSessionReadService } from "./codex-read-helper.js";
 
 async function fixtureRepository() {
-  const home = await createTempDirectory("codex-repository-");
-  await cp(resolve("tests/fixtures/codex-home"), home, { recursive: true });
-  return { home, repository: await createCodexSessionReadService(home) };
+  const agent = await createTempDirectory("codex-repository-");
+  await cp(resolve("tests/fixtures/codex-home"), agent, { recursive: true });
+  return { agent, repository: await createCodexSessionReadService(agent) };
 }
 
 describe("SessionReadService", () => {
   it("preserves state revisions across reader instances without replaying history", async () => {
-    const { home, repository } = await fixtureRepository();
+    const { agent, repository } = await fixtureRepository();
     const session = (await repository.list()).sessions[0]!;
     const baseline = (await repository.messages(session.id, { after: 0, limit: 300 }))!;
-    const restarted = await createCodexSessionReadService(home);
+    const restarted = await createCodexSessionReadService(agent);
     const page = (await restarted.messages(session.id, { after: baseline.nextAfter }))!;
     expect(page.stateRevision).toBe(baseline.stateRevision);
     expect(page.items).toEqual([]);
@@ -62,7 +62,7 @@ describe("SessionReadService", () => {
       descriptor: {
         sourceType: "test",
         instanceKey: "test",
-        home: "test",
+        agent: "test",
         displayName: "Test",
       },
       async refresh() {
@@ -92,7 +92,7 @@ describe("SessionReadService", () => {
   });
 
   it("updates structural titles from session-index without invalidating timeline cursors", async () => {
-    const { home, repository } = await fixtureRepository();
+    const { agent, repository } = await fixtureRepository();
     const baseline = await repository.list();
     const basic = (await repository.list()).sessions.find(
       ({ title }) => title === "Synthetic trace",
@@ -100,7 +100,7 @@ describe("SessionReadService", () => {
     const firstItems = await repository.messages(basic.id, { limit: 1 });
 
     await writeFile(
-      join(home, "session_index.jsonl"),
+      join(agent, "session_index.jsonl"),
       [
         JSON.stringify({ id: "basic-session", thread_name: "Old nickname" }),
         JSON.stringify({ id: "basic-session", thread_name: "Current nickname" }),
@@ -138,18 +138,18 @@ describe("SessionReadService", () => {
   });
 
   it("discovers an archived root created after repository startup", async () => {
-    const home = await createTempDirectory("codex-late-archive-");
-    await mkdir(join(home, "sessions"), { recursive: true });
+    const agent = await createTempDirectory("codex-late-archive-");
+    await mkdir(join(agent, "sessions"), { recursive: true });
     await writeFile(
-      join(home, "sessions/rollout-active.jsonl"),
+      join(agent, "sessions/rollout-active.jsonl"),
       '{"timestamp":"2026-07-28T10:00:00.000Z","type":"session_meta","payload":{"id":"active-session","title":"Active trace"}}\n',
     );
-    const repository = await createCodexSessionReadService(home);
+    const repository = await createCodexSessionReadService(agent);
     expect((await repository.list()).sessions).toHaveLength(1);
 
-    await mkdir(join(home, "archived_sessions"), { recursive: true });
+    await mkdir(join(agent, "archived_sessions"), { recursive: true });
     await writeFile(
-      join(home, "archived_sessions/rollout-archived.jsonl"),
+      join(agent, "archived_sessions/rollout-archived.jsonl"),
       '{"timestamp":"2026-07-20T10:00:00.000Z","type":"session_meta","payload":{"id":"archived-session","title":"Late archive"}}\n',
     );
     await repository.refresh();
@@ -162,14 +162,14 @@ describe("SessionReadService", () => {
   });
 
   it("keeps a native Codex session identity stable when its rollout moves", async () => {
-    const { home, repository } = await fixtureRepository();
+    const { agent, repository } = await fixtureRepository();
     const before = await repository.list();
     const session = before.sessions.find((session) => session.title === "Synthetic trace")!;
     const original = join(
-      home,
+      agent,
       "sessions/2026/07/28/rollout-2026-07-28T10-00-00-basic-session.jsonl",
     );
-    const archiveDirectory = join(home, "archived_sessions/reorganized");
+    const archiveDirectory = join(agent, "archived_sessions/reorganized");
     await mkdir(archiveDirectory, { recursive: true });
     await rename(original, join(archiveDirectory, "rollout-moved-basic-session.jsonl"));
 
@@ -198,7 +198,7 @@ describe("SessionReadService", () => {
     const first = await repository.list();
     expect(first.sessions).toHaveLength(305);
     expect(new Set(first.sessions.map((session) => session.id)).size).toBe(305);
-    expect(Object.keys(first).sort()).toEqual(["homes", "projects", "revision", "sessions"]);
+    expect(Object.keys(first).sort()).toEqual(["agents", "projects", "revision", "sessions"]);
   });
 
   it("maps public identity and passes cursors across consecutive reads", async () => {
@@ -232,9 +232,9 @@ describe("SessionReadService", () => {
 
 const TEST_ORIGIN = {
   sourceType: "test",
-  home: "test-source",
-  agentName: "Test",
-  agentVersion: null,
+  agent: "test-source",
+  runtimeName: "Test",
+  runtimeVersion: null,
 } as const;
 
 function normalizedSession(
@@ -257,7 +257,7 @@ function normalizedSession(
       archived: false,
       parentId: null,
       childIds: [],
-      agent: null,
+      subagent: null,
       warningCount: 0,
       diagnostics: [],
     },
@@ -284,7 +284,7 @@ function staticSource(key: string, sessions: readonly SourceSessionEntry[]): Ses
     descriptor: {
       sourceType: "test",
       instanceKey: key,
-      home: key,
+      agent: key,
       displayName: "Test",
     },
     async refresh() {
@@ -385,7 +385,7 @@ it("pushes runtime status and resume changes without a source revision or JSONL 
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>().mockResolvedValue(pane);
   const transport = { resolveTarget } as unknown as InteractionTransport;
   const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
-  const registry = new SessionManagerRegistry(domain.origin.home).register(domain.origin.home, {
+  const registry = new SessionManagerRegistry(domain.origin.agent).register(domain.origin.agent, {
     isValidNativeId: vi.fn((_nativeId: string) => true),
     resolveDirectory,
     launch: vi.fn(),

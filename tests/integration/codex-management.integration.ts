@@ -31,9 +31,9 @@ afterEach(() => {
 it("creates and binds concurrent real Codex sessions, including a native worktree, then archives and deletes by UUID", async () => {
   const root = await realpath(await createTempDirectory("codex-native-management-"));
   const directory = join(root, "project with spaces ; $literal");
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   await mkdir(directory);
-  await mkdir(home);
+  await mkdir(agent);
   execFileSync("git", ["-C", directory, "init", "-q"]);
   execFileSync("git", [
     "-C",
@@ -48,32 +48,32 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
     "Test",
   ]);
   await writeFile(
-    join(home, "config.toml"),
+    join(agent, "config.toml"),
     `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
   );
   execFileSync("codex", ["login", "--with-api-key"], {
-    env: { ...process.env, CODEX_HOME: home },
+    env: { ...process.env, CODEX_HOME: agent },
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
   const bindings = new PaneBindingManager();
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const reader = new SessionReadService([source], {
     publishBindings: (events) => {
       for (const event of events) bindings.submit(event);
     },
   });
-  const homeNickname = source.descriptor.home;
+  const agentNickname = source.descriptor.agent;
   const interaction = new SessionInteractionService(reader, new TmuxInteractionService(), {
     enabled: true,
     bindings,
   });
   const socket = join(root, "tmux.sock");
-  const manager = new CodexSessionManager(home, new TmuxLauncher(socket));
+  const manager = new CodexSessionManager(agent, new TmuxLauncher(socket));
   const operations = new OperationService(
     reader,
     interaction,
-    new SessionManagerRegistry(homeNickname).register(homeNickname, manager),
+    new SessionManagerRegistry(agentNickname).register(agentNickname, manager),
     { bindings: bindings },
   );
   try {
@@ -159,7 +159,7 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
             "-t",
             attempt.sessionName,
             "Up",
-            "Home",
+            "Agent",
           ]);
         await until(async () =>
           execFileSync("tmux", ["-S", socket, "capture-pane", "-p", "-t", attempt.sessionName], {
@@ -167,10 +167,10 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
           }).includes("UNSUBMITTED-ARCHIVE-DRAFT"),
         );
       }
-      const activeFiles = await readdir(join(home, "sessions"), { recursive: true });
+      const activeFiles = await readdir(join(agent, "sessions"), { recursive: true });
       const activeRollout = activeFiles.find((file) => file.endsWith(`${record.sourceId}.jsonl`));
       expect(activeRollout).toBeDefined();
-      const before = await readFile(join(home, "sessions", activeRollout!), "utf8");
+      const before = await readFile(join(agent, "sessions", activeRollout!), "utf8");
       const modelEvents = (log: string) =>
         log
           .trim()
@@ -224,10 +224,10 @@ it("creates and binds concurrent real Codex sessions, including a native worktre
 ${terminal}`);
       });
       // No draft text was recorded as submitted input, and no model turn started.
-      const files = await readdir(join(home, "archived_sessions"), { recursive: true });
+      const files = await readdir(join(agent, "archived_sessions"), { recursive: true });
       const rollout = files.find((file) => file.endsWith(`${record.sourceId}.jsonl`));
       expect(rollout).toBeDefined();
-      const log = await readFile(join(home, "archived_sessions", rollout!), "utf8");
+      const log = await readFile(join(agent, "archived_sessions", rollout!), "utf8");
       expect(log).not.toContain("UNSUBMITTED-ARCHIVE-DRAFT");
       expect(modelEvents(log)).toEqual(modelEvents(before));
       const deletion = operations.manage("delete", record.id);
@@ -256,28 +256,28 @@ async function until(predicate: () => Promise<boolean>) {
 
 it("reports the native refusal for a running unbound session and archives it after it exits", async () => {
   const root = await realpath(await createTempDirectory("codex-unbound-management-"));
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   const directory = join(root, "project");
   const socket = join(root, "tmux.sock");
-  await mkdir(home);
+  await mkdir(agent);
   await mkdir(directory);
   await writeFile(
-    join(home, "config.toml"),
+    join(agent, "config.toml"),
     `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
   );
   execFileSync("codex", ["login", "--with-api-key"], {
-    env: { ...process.env, CODEX_HOME: home },
+    env: { ...process.env, CODEX_HOME: agent },
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
   const bindings = new PaneBindingManager();
-  const source = await createCodexSessionSource(home);
+  const source = await createCodexSessionSource(agent);
   const reader = new SessionReadService([source], {
     publishBindings: (events) => {
       for (const event of events) bindings.submit(event);
     },
   });
-  const homeNickname = source.descriptor.home;
+  const agentNickname = source.descriptor.agent;
   const transport = new TmuxInteractionService();
   const interaction = new SessionInteractionService(reader, transport, {
     enabled: true,
@@ -286,16 +286,16 @@ it("reports the native refusal for a running unbound session and archives it aft
   const operations = new OperationService(
     reader,
     interaction,
-    new SessionManagerRegistry(homeNickname).register(
-      homeNickname,
-      new CodexSessionManager(home, new TmuxLauncher(socket)),
+    new SessionManagerRegistry(agentNickname).register(
+      agentNickname,
+      new CodexSessionManager(agent, new TmuxLauncher(socket)),
     ),
     { bindings: bindings },
   );
   try {
     const binding = await new TmuxLauncher(socket).launch(randomUUID(), directory, [
       "env",
-      `CODEX_HOME=${home}`,
+      `CODEX_HOME=${agent}`,
       "codex",
       "--no-daemon",
       "--no-alt-screen",
@@ -339,38 +339,38 @@ it("reports the native refusal for a running unbound session and archives it aft
 
 it("composes the Hub with shared adapter, interaction, and operation bindings", async () => {
   const root = await realpath(await createTempDirectory("ahub-composition-"));
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   const directory = join(root, "project");
   const socket = join(root, "tmux.sock");
-  await mkdir(home);
+  await mkdir(agent);
   await mkdir(directory);
   await writeFile(
-    join(home, "config.toml"),
+    join(agent, "config.toml"),
     `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
   );
   execFileSync("codex", ["login", "--with-api-key"], {
-    env: { ...process.env, CODEX_HOME: home },
+    env: { ...process.env, CODEX_HOME: agent },
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const emptyHome = join(root, "empty-home");
-  await mkdir(emptyHome);
+  const emptyAgent = join(root, "empty-agent");
+  await mkdir(emptyAgent);
   const hub = await createCodexHub({
-    homes: [
-      { nickname: "empty", path: emptyHome },
-      { nickname: "work", path: home },
+    agents: [
+      { nickname: "empty", path: emptyAgent },
+      { nickname: "work", path: agent },
     ],
     socket,
   });
   const catalog = await hub.sessions.list();
-  expect(catalog.homes).toHaveLength(2);
-  const nickname = catalog.homes.find((entry) => entry.nickname === "work")!.nickname;
+  expect(catalog.agents).toHaveLength(2);
+  const nickname = catalog.agents.find((entry) => entry.nickname === "work")!.nickname;
   try {
     const operation = hub.operations.create({
       projectDirectory: directory,
       worktree: false,
       requestId: "hub-composition",
-      home: nickname,
+      agent: nickname,
     });
     await until(async () => {
       const result = await hub.operations.get(operation.operationId);
@@ -378,8 +378,8 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
       return result?.status === "succeeded";
     });
     const result = (await hub.operations.get(operation.operationId))!;
-    expect((await hub.sessions.getSession(result.sessionId!))!.session.origin.home).toBe(nickname);
-    expect(await readdir(emptyHome)).toEqual([]);
+    expect((await hub.sessions.getSession(result.sessionId!))!.session.origin.agent).toBe(nickname);
+    expect(await readdir(emptyAgent)).toEqual([]);
     expect(await hub.interaction.describe(result.sessionId!)).toMatchObject({ state: "connected" });
     const originalId = result.sessionId!;
     const original = (await hub.sessions.getSession(originalId))!.session;
@@ -437,21 +437,21 @@ it("composes the Hub with shared adapter, interaction, and operation bindings", 
 
 it("runs the HTTP session CLI through native create, local input, observation, resume and deletion", async () => {
   const root = await realpath(await createTempDirectory("ahub-cli-native-"));
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   const directory = join(root, "project");
   const socket = join(root, "tmux.sock");
-  await mkdir(home);
+  await mkdir(agent);
   await mkdir(directory);
   await writeFile(
-    join(home, "config.toml"),
+    join(agent, "config.toml"),
     `[projects.${JSON.stringify(directory)}]\ntrust_level = "trusted"\n`,
   );
   execFileSync("codex", ["login", "--with-api-key"], {
-    env: { ...process.env, CODEX_HOME: home },
+    env: { ...process.env, CODEX_HOME: agent },
     input: "test-only-not-a-real-key",
     stdio: ["pipe", "pipe", "pipe"],
   });
-  const hub = await createCodexHub({ homes: [{ nickname: "work", path: home }], socket: socket });
+  const hub = await createCodexHub({ agents: [{ nickname: "work", path: agent }], socket: socket });
   const { base } = await startHttpServer(createApiRouter(hub), hub.close);
   const cli = async (...args: string[]) => {
     const { stdout, stderr } = await promisify(execFile)(process.execPath, [
@@ -472,7 +472,7 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     return JSON.parse(stdout);
   };
   try {
-    const created = await cli("create", "--project", directory, "--home", "work");
+    const created = await cli("create", "--project", directory, "--agent", "work");
     const id = created.sessionId;
     expect(created.status).toBe("succeeded");
     expect(
@@ -487,7 +487,7 @@ it("runs the HTTP session CLI through native create, local input, observation, r
     );
     const inspected = await cli("inspect", id);
     expect(inspected.interaction).toMatchObject({ supported: true, state: "connected" });
-    expect(inspected.session.home).toBe("work");
+    expect(inspected.session.agent).toBe("work");
     expect((await cli("terminal", id)).content).toContain("AHUB-CLI-ROUNDTRIP");
     await until(async () => {
       const state = await hub.interaction.describe(id);

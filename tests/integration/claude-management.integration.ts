@@ -17,13 +17,13 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 it("does not send bootstrap input to Claude's real directory trust dialog", async () => {
   const root = await realpath(await createTempDirectory("claude-native-trust-"));
   const directory = join(root, "untrusted-project");
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   const socket = join(root, "tmux.sock");
   await mkdir(directory);
-  await mkdir(home);
+  await mkdir(agent);
   const key = "test-only-not-a-real-api-key";
   await writeFile(
-    join(home, ".claude.json"),
+    join(agent, ".claude.json"),
     JSON.stringify({
       hasCompletedOnboarding: true,
       lastOnboardingVersion: "2.1.318",
@@ -32,7 +32,7 @@ it("does not send bootstrap input to Claude's real directory trust dialog", asyn
     }),
   );
   await writeFile(
-    join(home, "settings.json"),
+    join(agent, "settings.json"),
     JSON.stringify({
       env: {
         ANTHROPIC_API_KEY: key,
@@ -45,7 +45,7 @@ it("does not send bootstrap input to Claude's real directory trust dialog", asyn
   const send = vi.spyOn(tmux.transport, "sendMessage");
   const operationId = "00000000-0000-4000-8000-000000000001";
   const target = { socketPath: socket, sessionName: `ahub-${operationId}` };
-  const result = new ClaudeSessionManager(home, tmux)
+  const result = new ClaudeSessionManager(agent, tmux)
     .launch({
       operationId,
       workingDirectory: directory,
@@ -84,14 +84,14 @@ it("does not send bootstrap input to Claude's real directory trust dialog", asyn
   }
 }, 30_000);
 
-/** Native CLI and tmux; credentials, model responses, homes and projects are test-owned. */
+/** Native CLI and tmux; credentials, model responses, agents and projects are test-owned. */
 it("creates, interacts, interrupts, exits and resumes the original Claude identity, including worktrees", async () => {
   const root = await realpath(await createTempDirectory("claude-native-management-"));
   const directory = join(root, "project");
-  const home = join(root, "home");
+  const agent = join(root, "agent");
   const socket = join(root, "tmux.sock");
   await mkdir(directory);
-  await mkdir(home);
+  await mkdir(agent);
   execFileSync("git", ["-C", directory, "init", "-q"]);
   execFileSync("git", [
     "-C",
@@ -183,7 +183,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
   if (!address || typeof address === "string") throw new Error("Missing mock address");
   const key = "test-only-not-a-real-api-key";
   await writeFile(
-    join(home, ".claude.json"),
+    join(agent, ".claude.json"),
     JSON.stringify({
       hasCompletedOnboarding: true,
       lastOnboardingVersion: "2.1.318",
@@ -195,7 +195,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     }),
   );
   await writeFile(
-    join(home, "settings.json"),
+    join(agent, "settings.json"),
     JSON.stringify({
       env: {
         ANTHROPIC_API_KEY: key,
@@ -206,7 +206,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     }),
   );
   const hub = await createCodexHub({
-    homes: [{ nickname: "claude", path: home, adapter: "claude" }],
+    agents: [{ nickname: "claude", path: agent, adapter: "claude" }],
     socket,
   });
   const kill = vi.spyOn(hub.interaction, "killTarget");
@@ -243,7 +243,7 @@ it("creates, interacts, interrupts, exits and resumes the original Claude identi
     const sessionId = created.sessionId!;
     const nativeId = (await hub.sessions.managementSnapshot()).byId.get(sessionId)!.sourceId;
     expect(nativeId).toMatch(/^[a-f0-9-]+$/);
-    expect((await hub.sessions.list()).homes).toEqual([
+    expect((await hub.sessions.list()).agents).toEqual([
       { nickname: "claude", management: { archive: false } },
     ]);
     // Unsupported HTTP and internal operations must leave the live pane untouched.

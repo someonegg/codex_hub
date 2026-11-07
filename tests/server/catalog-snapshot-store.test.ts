@@ -125,9 +125,9 @@ describe("CatalogSnapshotStore incremental derivation", () => {
 
 const TEST_ORIGIN = {
   sourceType: "test",
-  home: "test",
-  agentName: "Test",
-  agentVersion: null,
+  agent: "test",
+  runtimeName: "Test",
+  runtimeVersion: null,
 } as const;
 
 function mutableSource(
@@ -140,7 +140,7 @@ function mutableSource(
     descriptor: {
       sourceType: "test",
       instanceKey: "test",
-      home: "test",
+      agent: "test",
       displayName: "Test",
     },
     async refresh() {
@@ -183,7 +183,7 @@ function normalizedSession(id: string, title: string): NormalizedSession {
       archived: false,
       parentId: null,
       childIds: [],
-      agent: null,
+      subagent: null,
       warningCount: 0,
       diagnostics: [],
     },
@@ -222,7 +222,7 @@ it("waits for all failed-refresh sources to settle before allowing a retry", asy
   let calls = 0;
   let fail = true;
   const slow: SessionSource = {
-    descriptor: { sourceType: "test", instanceKey: "slow", home: "slow", displayName: "Slow" },
+    descriptor: { sourceType: "test", instanceKey: "slow", agent: "slow", displayName: "Slow" },
     async refresh() {
       expect(active).toBe(0);
       active++;
@@ -237,7 +237,7 @@ it("waits for all failed-refresh sources to settle before allowing a retry", asy
     descriptor: {
       sourceType: "test",
       instanceKey: "broken",
-      home: "broken",
+      agent: "broken",
       displayName: "Broken",
     },
     async refresh() {

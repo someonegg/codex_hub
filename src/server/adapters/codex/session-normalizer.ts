@@ -123,7 +123,7 @@ export class DefaultSessionNormalizer implements SessionNormalizer {
       archived: metadata.archived,
       parentId: metadata.parentThreadId,
       childIds: [],
-      agent: metadata.agent ?? null,
+      subagent: metadata.subagent ?? null,
       warningCount,
       diagnostics,
     };
@@ -182,9 +182,9 @@ class LazyMap<K, V> implements MapOperations<K, V> {
 
 const DEFAULT_SESSION_ORIGIN: DomainSessionOrigin = {
   sourceType: "test",
-  home: "test",
-  agentName: "Test",
-  agentVersion: null,
+  agent: "test",
+  runtimeName: "Test",
+  runtimeVersion: null,
 };
 
 function consumeRecord(

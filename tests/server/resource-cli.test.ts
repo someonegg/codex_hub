@@ -62,7 +62,7 @@ it.each(["page", "diff"])(
   "accepts legal %s options through publish, list and delete",
   async (resource) => {
     const root = await mkdtemp(join(tmpdir(), "resource-cli-"));
-    const home = join(root, "home");
+    const agent = join(root, "agent");
     const source = join(root, "source");
     const runText = async (...args: string[]) => {
       const result = await exec(process.execPath, [
@@ -72,7 +72,7 @@ it.each(["page", "diff"])(
         resource,
         ...args,
         "--home-dir",
-        home,
+        agent,
       ]);
       expect(result.stderr).toBe("");
       return result.stdout;

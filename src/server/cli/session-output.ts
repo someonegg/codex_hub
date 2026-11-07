@@ -11,7 +11,7 @@ export interface CliSessionList {
     id: string;
     title: string;
     status: string;
-    home: string;
+    agent: string;
     projectDirectory: string | null;
     taskName?: string | null;
     updatedAt: string | null;
@@ -21,8 +21,8 @@ export interface CliSession {
   id: string;
   title: string;
   status: string;
-  home: string;
-  agentName: string;
+  agent: string;
+  runtimeName: string;
   workingDirectory: string | null;
   projectDirectory: string | null;
   taskName?: string | null;
@@ -98,7 +98,7 @@ export function mapList(
         id: s.id,
         title: s.title,
         status: s.status,
-        home: s.home,
+        agent: s.agent,
         projectDirectory: s.projectDirectory,
         ...(s.taskName ? { taskName: s.taskName } : {}),
         updatedAt: s.updatedAt,
@@ -118,8 +118,8 @@ export function mapInspect(value: SessionMessagesResponse): CliInspect {
       id: s.id,
       title: s.title,
       status: s.status,
-      home: s.origin.home,
-      agentName: s.origin.agentName,
+      agent: s.origin.agent,
+      runtimeName: s.origin.runtimeName,
       workingDirectory: s.workingDirectory,
       projectDirectory: s.projectDirectory,
       ...(s.taskName ? { taskName: s.taskName } : {}),
@@ -207,11 +207,11 @@ export function formatResult(
     const showTask = result.sessions.some((s) => Boolean(s.taskName));
     return (
       formatTable(
-        ["ID", "STATUS", "HOME", "PROJECT", ...(showTask ? ["TASK"] : []), "TITLE"],
+        ["ID", "STATUS", "AGENT", "PROJECT", ...(showTask ? ["TASK"] : []), "TITLE"],
         result.sessions.map((s) => [
           s.id,
           s.status,
-          s.home ?? "",
+          s.agent ?? "",
           s.projectDirectory ?? "",
           ...(showTask ? [s.taskName ?? ""] : []),
           s.title,
@@ -242,7 +242,7 @@ function formatInspect(result: CliInspect, emptyItemsText: string): string {
       summary.push(`Superseded by: ${interaction.supersededBySessionId}`);
   }
   summary.push(
-    `Home: ${session.home ?? ""}`,
+    `Agent: ${session.agent ?? ""}`,
     `Project: ${session.projectDirectory ?? ""}`,
     ...(session.taskName ? [`Task: ${session.taskName}`] : []),
     `Working directory: ${session.workingDirectory ?? ""}`,

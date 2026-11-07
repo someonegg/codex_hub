@@ -9,7 +9,7 @@ import { codexBindingCommand } from "./interaction-parser.js";
 const execute = promisify(execFile);
 export class CodexSessionManager implements SessionManager {
   constructor(
-    private readonly home: string,
+    private readonly agent: string,
     private readonly tmux = new TmuxLauncher(),
   ) {}
 
@@ -30,7 +30,7 @@ export class CodexSessionManager implements SessionManager {
       throw new Error("Invalid resume identity");
     return this.tmux.launch(operationId, workingDirectory, [
       "env",
-      `CODEX_HOME=${this.home}`,
+      `CODEX_HOME=${this.agent}`,
       "codex",
       ...(resumeNativeId ? ["resume", resumeNativeId] : []),
       "--no-daemon",
@@ -50,12 +50,12 @@ export class CodexSessionManager implements SessionManager {
   async #command(args: string[]) {
     if (!this.isValidNativeId(args[1]!)) throw new Error("Session has no valid native UUID");
     await execute("codex", args, {
-      env: { ...process.env, CODEX_HOME: this.home },
+      env: { ...process.env, CODEX_HOME: this.agent },
       timeout: 25_000,
       maxBuffer: 64 * 1024,
     });
   }
 }
 
-export const createCodexSessionManager = (home: string, socket?: string): SessionManager =>
-  new CodexSessionManager(home, new TmuxLauncher(socket));
+export const createCodexSessionManager = (agent: string, socket?: string): SessionManager =>
+  new CodexSessionManager(agent, new TmuxLauncher(socket));

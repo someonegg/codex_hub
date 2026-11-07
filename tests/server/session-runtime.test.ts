@@ -15,7 +15,7 @@ function setup() {
   const resolveTarget = vi.fn<InteractionTransport["resolveTarget"]>(async () => null);
   const resolveDirectory = vi.fn(async () => ({ directory: "/project" }));
   const isValidNativeId = vi.fn((_nativeId: string) => true);
-  const managers = new SessionManagerRegistry("home").register("home", {
+  const managers = new SessionManagerRegistry("agent").register("agent", {
     isValidNativeId,
     resolveDirectory,
     launch: vi.fn(),
@@ -30,9 +30,9 @@ function setup() {
     archived: false,
     origin: {
       sourceType: "codex",
-      home: "home",
-      agentName: "Codex",
-      agentVersion: null,
+      agent: "agent",
+      runtimeName: "Codex",
+      runtimeVersion: null,
     },
     title: "Session",
     workingDirectory: "/project",
@@ -41,7 +41,7 @@ function setup() {
     updatedAt: null,
     parentId: null,
     childIds: [],
-    agent: null,
+    subagent: null,
     warningCount: 0,
     diagnostics: [],
   };

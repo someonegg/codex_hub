@@ -29,7 +29,7 @@ import { waitForLaunch, waitForOperation } from "./session-wait.js";
 
 export const sessionHelp = `Usage: ahub-cli session <command> [options]
   list [--project <directory>] [--task <name>] [--all]
-  create --project <directory> [--task <name>] [--cwd <directory>] [--home <nickname>] [--worktree] [--yolo]
+  create --project <directory> [--task <name>] [--cwd <directory>] [--agent <nickname>] [--worktree] [--yolo]
   resume <id> [--yolo]
   send <id> (--message <text> | --stdin) [--force]
   inspect <id> [--limit 1-300] [--after <number>] [--follow [--count <N>]]
@@ -61,7 +61,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
         task: { type: "string" },
         all: { type: "boolean" },
         cwd: { type: "string" },
-        home: { type: "string" },
+        agent: { type: "string" },
         worktree: { type: "boolean" },
         yolo: { type: "boolean" },
         message: { type: "string" },
@@ -81,7 +81,7 @@ export function parseSessionArguments(args: string[], environmentUrl?: string) {
   const [command, id, ...keys] = positionals;
   const allowed: Record<string, string[]> = {
     list: ["project", "task", "all"],
-    create: ["task", "cwd", "project", "home", "worktree", "yolo"],
+    create: ["task", "cwd", "project", "agent", "worktree", "yolo"],
     resume: ["yolo"],
     send: ["message", "stdin", "force"],
     inspect: ["limit", "after", "follow", "count"],
@@ -259,7 +259,7 @@ export async function runSessionCommand(args: string[]): Promise<void> {
           ...(values.cwd === undefined ? {} : { workingDirectory: resolve(values.cwd) }),
           worktree: values.worktree ?? false,
           yolo: values.yolo ?? false,
-          ...(values.home === undefined ? {} : { home: values.home }),
+          ...(values.agent === undefined ? {} : { agent: values.agent }),
           requestId: randomUUID(),
         };
       } else if (command === "resume") {

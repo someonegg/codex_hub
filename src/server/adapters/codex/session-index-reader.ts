@@ -14,8 +14,8 @@ export class SessionIndexReader {
   #fingerprint: SessionIndexFingerprint | null = null;
   #threadNames: ReadonlyMap<string, string> = new Map();
 
-  constructor(codexHome: string) {
-    this.#path = join(codexHome, "session_index.jsonl");
+  constructor(codexAgent: string) {
+    this.#path = join(codexAgent, "session_index.jsonl");
   }
 
   async refresh(): Promise<void> {

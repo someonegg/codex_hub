@@ -28,13 +28,13 @@ individual plans, including opening several at once.
 ## Create and manage sessions
 
 Click a project's **+**, or the global **+** to select a project or enter an
-absolute local directory. Choose a [Home](#multiple-homes) and optional launch settings:
+absolute local directory. Choose a [Agent](#multiple-agents) and optional launch settings:
 
 - **Worktree:** start in a separate Git worktree for isolated changes.
-- **YOLO:** skip the agent's approval prompts; Codex also disables its sandbox.
+- **YOLO:** skip the runtime's approval prompts; Codex also disables its sandbox.
 
 Open an exited session and click **Resume** when available to continue it. Resume
-keeps the original Home and project association, using an available original
+keeps the original Agent and project association, using an available original
 working or project directory. Before resuming a session started elsewhere, make
 sure its original process has exited.
 
@@ -75,7 +75,7 @@ sending, with or without text. Multiple files are supported; folders are not.
 Each file can be up to **20 MiB**.
 
 Images retain their original content, including EXIF metadata. Camera behavior
-depends on the browser; HEIC/HEIF support depends on the agent.
+depends on the browser; HEIC/HEIF support depends on the runtime.
 
 Open **Upload history** from the session header to preview, download, or delete
 files, including unsent uploads. Removing an attachment from a draft does not
@@ -89,7 +89,7 @@ for storage and cleanup details, or [preview upload history](images/ahub-uploads
 ## Browser settings
 
 Open **Settings** at the bottom of the sidebar to choose language, theme, the
-default Home for new sessions, and Worktree/YOLO defaults. Changes save automatically
+default Agent for new sessions, and Worktree/YOLO defaults. Changes save automatically
 in this browser. YOLO defaults also apply to resume; launch dialogs allow overrides.
 
 The interface starts in English. Language changes take effect immediately
@@ -126,10 +126,10 @@ unless `--all` is supplied; `inspect` also accepts child session IDs. Pass the
 returned `Next after` value as `--after <value>` to read the next page.
 `--follow` keeps observing until `Ctrl+C`; it does not stop when a task finishes.
 
-Create defaults to the project directory and first configured Home. Use `--cwd`
+Create defaults to the project directory and first configured Agent. Use `--cwd`
 to change the working directory while retaining the project association, or
-`--home <nickname>` to select a Home. Optional `--worktree` and `--yolo` control
-launch behavior; `resume <id>` retains the original Home and accepts `--yolo`.
+`--agent <nickname>` to select an Agent. Optional `--worktree` and `--yolo` control
+launch behavior; `resume <id>` retains the original Agent and accepts `--yolo`.
 Use `create --task <name>` and `list --task <name>` to group sessions across projects.
 
 Input requires a connected, idle terminal by default. Use `send <id> --stdin`
@@ -212,22 +212,24 @@ for the full list.
 | `--hosting`            | Disabled       | Serve published pages and diffs                    |
 | `--tmux-socket <path>` | tmux default   | Use a custom tmux socket                           |
 
-### Multiple homes
+### Multiple agents
 
-A Home is an agent's session/configuration directory: it contains `sessions/`
-for Codex or `projects/` for Claude Code. Give each Home a unique nickname and directory:
+An Agent is an identity with its own configuration, Skills, memory, and model settings.
+Codex and Claude Code are Runtimes; identities spawned within a task are Subagents.
+Each Agent has a unique nickname and directory, containing `sessions/` for Codex
+or `projects/` for Claude Code:
 
 ```sh
 codex-hub \
-  --codex-home 'work=~/.codex-work' \
-  --claude-home 'claude=~/.claude'
+  --codex-agent 'work=~/.codex-work' \
+  --claude-agent 'claude=~/.claude'
 ```
 
-Repeat or combine these options as needed. Explicit homes replace **both**
+Repeat or combine these options as needed. Explicit agents replace **both**
 defaults; the first is the default for creation.
-Use the sidebar Home filter to narrow sessions. For web creation, an active Home
-filter or valid default Home preference takes priority over the first Home.
-See [Home routing](technical-reference.md#home-identity-and-routing) for exact rules.
+Use the sidebar Agent filter to narrow sessions. For web creation, an active Agent
+filter or valid default Agent preference takes priority over the first Agent.
+See [Agent routing](technical-reference.md#agent-identity-and-routing) for exact rules.
 
 ## Access from other devices
 
@@ -262,7 +264,7 @@ Other local users and processes can access it; do not forward external proxy tra
 
 ## Troubleshooting
 
-- **No sessions:** check that each configured Home contains `sessions/` (Codex)
+- **No sessions:** check that each configured Agent contains `sessions/` (Codex)
   or `projects/` (Claude). Check the server output for unreadable or skipped files.
 - **Port in use:** choose another port, such as `codex-hub --port 4180`.
 - **Cannot send input:** complete CLI prompts via **Tmux access**, wait if busy,

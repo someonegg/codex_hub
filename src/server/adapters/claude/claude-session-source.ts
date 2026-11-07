@@ -48,9 +48,14 @@ export class ClaudeSessionSource implements SessionSource {
   constructor(
     private readonly directory: string,
     instanceKey: string,
-    { home = "claude" }: { readonly home?: string } = {},
+    { agent = "claude" }: { readonly agent?: string } = {},
   ) {
-    this.descriptor = { sourceType: "claude-jsonl", instanceKey, home, displayName: "Claude Code" };
+    this.descriptor = {
+      sourceType: "claude-jsonl",
+      instanceKey,
+      agent,
+      displayName: "Claude Code",
+    };
   }
   async refresh(): Promise<SessionSourceSnapshot> {
     const diagnostics: DomainDiagnostic[] = [];
@@ -175,10 +180,10 @@ export class ClaudeSessionSource implements SessionSource {
   }
 }
 export async function createClaudeSessionSource(
-  home: string,
-  options: { readonly home?: string } = {},
+  agent: string,
+  options: { readonly agent?: string } = {},
 ) {
-  const directory = resolve(home);
+  const directory = resolve(agent);
   return new ClaudeSessionSource(directory, `claude-jsonl\0${directory}`, options);
 }
 
@@ -222,9 +227,9 @@ function materializeClaudeSession(
   const projectDirectory = state.project ?? state.firstCwd;
   const origin = {
     sourceType: descriptor.sourceType,
-    home: descriptor.home,
-    agentName: descriptor.displayName,
-    agentVersion: state.version,
+    agent: descriptor.agent,
+    runtimeName: descriptor.displayName,
+    runtimeVersion: state.version,
   };
   const localId = `thread:${nativeId}`;
   const normalized: NormalizedSession = {
@@ -245,7 +250,7 @@ function materializeClaudeSession(
       archived: false,
       parentId: null,
       childIds: [],
-      agent: null,
+      subagent: null,
       warningCount: state.diagnostics.length,
       diagnostics: state.diagnostics,
     },

@@ -76,11 +76,11 @@ it("validates independent V3 binding metadata, preserving pane validity for inva
 });
 
 it.each([false, true])(
-  "routes explicit Claude home and native launch flags (resume=%s)",
+  "routes explicit Claude agent and native launch flags (resume=%s)",
   async (resume) => {
     const tmux = new TmuxLauncher();
     const launch = vi.spyOn(tmux, "launch").mockRejectedValue(new Error("Stop before bootstrap"));
-    const manager = new ClaudeSessionManager("/claude home", tmux);
+    const manager = new ClaudeSessionManager("/claude agent", tmux);
     const nativeId = "11111111-2222-4333-8444-555555555555";
     await expect(
       manager.launch({
@@ -97,7 +97,7 @@ it.each([false, true])(
       "/launch-directory",
       [
         "env",
-        "CLAUDE_CONFIG_DIR=/claude home",
+        "CLAUDE_CONFIG_DIR=/claude agent",
         "claude",
         ...(resume ? ["--resume", nativeId] : ["--worktree"]),
         "--dangerously-skip-permissions",
@@ -242,22 +242,22 @@ it.each(["capture", "send"])("preserves recovery information when %s fails", asy
 });
 
 it("deletes Claude logs and subagents across projects while preserving other content", async () => {
-  const home = await createTempDirectory("claude-delete-");
+  const agent = await createTempDirectory("claude-delete-");
   const id = "11111111-2222-4333-8444-555555555555";
   for (const project of ["one", "two"]) {
-    const root = join(home, "projects", project);
+    const root = join(agent, "projects", project);
     await mkdir(join(root, id, "subagents", "nested"), { recursive: true });
     await writeFile(join(root, `${id}.jsonl`), "history");
     await writeFile(join(root, id, "subagents", "nested", "agent.jsonl"), "agent");
     await writeFile(join(root, id, "keep"), "keep");
     await writeFile(join(root, "other.jsonl"), "other");
   }
-  const manager = new ClaudeSessionManager(home);
+  const manager = new ClaudeSessionManager(agent);
   await expect(manager.delete("../invalid")).rejects.toThrow("Invalid Claude");
   await manager.delete(id);
   await manager.delete(id);
   for (const project of ["one", "two"]) {
-    const root = join(home, "projects", project);
+    const root = join(agent, "projects", project);
     await expect(access(join(root, `${id}.jsonl`))).rejects.toMatchObject({ code: "ENOENT" });
     await expect(access(join(root, id, "subagents"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(join(root, id, "keep"), "utf8")).toBe("keep");

@@ -78,7 +78,7 @@ try {
   );
   const diff = await new DiffStore(hosting).publish(diffFile, "Review · Friendlier greetings");
   const config = {
-    homes: [],
+    agents: [],
     host: "127.0.0.1",
     port: 0,
     clientDirectory: resolve("dist/client"),
@@ -258,7 +258,9 @@ try {
       const path = new URL(route.request().url()).pathname;
       const session = { ...docsSession, messageCount: 1 };
       if (path === "/api/v1/sessions")
-        return route.fulfill({ json: { revision: "demo", homes: [], projects: [], sessions: [] } });
+        return route.fulfill({
+          json: { revision: "demo", agents: [], projects: [], sessions: [] },
+        });
       if (new URL(route.request().url()).searchParams.get("wait") === "true")
         return route.fulfill({ status: 204 });
       const snapshot = {

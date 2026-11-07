@@ -12,7 +12,7 @@ import {
 import type { SessionListResponse } from "../../src/shared/api-contract.js";
 
 const initial: SessionListResponse = {
-  homes: [],
+  agents: [],
   revision: "a".repeat(43),
   projects: [],
   sessions: [],
@@ -64,7 +64,7 @@ describe("session catalog long polling", () => {
       ...initial,
       sessions: [
         {
-          home: "default",
+          agent: "default",
           id: "one",
           title: "One",
           projectDirectory: null,

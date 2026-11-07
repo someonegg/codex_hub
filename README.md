@@ -4,9 +4,9 @@ English | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md)
 
 A local web hub for Codex and Claude Code that pairs readable conversations with live CLI interaction.
 Browse sessions by project, follow responses in near real time, and keep working with
-either agent from desktop or mobile.
+either runtime from desktop or mobile.
 
-Codex and Claude Code main sessions are supported; see [Home configuration](docs/usage.md#multiple-homes).
+Codex and Claude Code main sessions are supported; see [Agent configuration](docs/usage.md#multiple-agents).
 
 ![Codex Hub: create a session, send a prompt, and review an answered User input card](docs/images/ahub-intro.gif)
 
@@ -24,7 +24,7 @@ Codex and Claude Code main sessions are supported; see [Home configuration](docs
 Runtime requirements:
 
 - macOS or Linux with Node.js >=22.13 and npm
-- A local Codex home (usually `~/.codex`)
+- A local Codex agent (usually `~/.codex`)
 - Codex CLI with `resume`, `--no-daemon`, `--no-alt-screen`, `--worktree`, `archive`, and `delete --force` support
 - tmux for creating and interacting with sessions
 
@@ -42,7 +42,7 @@ codex-hub
 ```
 
 Open <http://127.0.0.1:4173>. Open **Settings → Language** at the bottom of the sidebar to switch between English (the default), 简体中文, and 繁體中文. The choice is saved in this browser. Press `Ctrl-C` to stop the server.
-For home configuration, ports, and optional page/diff hosting, see [Usage](docs/usage.md).
+For agent configuration, ports, and optional page/diff hosting, see [Usage](docs/usage.md).
 
 To upgrade, run `npm install -g @someonegg/codex-hub@latest` again.
 For running from source, see [Development](docs/development.md).

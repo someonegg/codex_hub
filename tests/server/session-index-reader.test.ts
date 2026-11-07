@@ -9,10 +9,10 @@ import { createTempDirectory } from "../helpers/temp-directories.js";
 
 describe("SessionIndexReader", () => {
   it("aggregates the last complete valid thread name for each id", async () => {
-    const home = await createTempDirectory("codex-session-index-");
+    const agent = await createTempDirectory("codex-session-index-");
     const longName = "Long nickname ".repeat(12);
     await writeFile(
-      join(home, "session_index.jsonl"),
+      join(agent, "session_index.jsonl"),
       [
         JSON.stringify({ id: "one", thread_name: "First", updated_at: "ignored" }),
         "not json",
@@ -23,7 +23,7 @@ describe("SessionIndexReader", () => {
         JSON.stringify({ id: "one", thread_name: "Incomplete tail" }),
       ].join("\n"),
     );
-    const reader = new SessionIndexReader(home);
+    const reader = new SessionIndexReader(agent);
 
     await reader.refresh();
 
@@ -33,15 +33,15 @@ describe("SessionIndexReader", () => {
   });
 
   it("treats a missing index as an empty advisory source and recovers later", async () => {
-    const home = await createTempDirectory("codex-session-index-missing-");
-    const reader = new SessionIndexReader(home);
+    const agent = await createTempDirectory("codex-session-index-missing-");
+    const reader = new SessionIndexReader(agent);
 
     await expect(reader.refresh()).resolves.toBeUndefined();
     expect(reader.threadName("session")).toBeNull();
 
-    await mkdir(home, { recursive: true });
+    await mkdir(agent, { recursive: true });
     await writeFile(
-      join(home, "session_index.jsonl"),
+      join(agent, "session_index.jsonl"),
       `${JSON.stringify({ id: "session", thread_name: "Recovered" })}\n`,
     );
     await reader.refresh();

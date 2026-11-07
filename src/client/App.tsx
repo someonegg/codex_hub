@@ -27,23 +27,23 @@ export function App() {
 function SessionHub() {
   useTranslation();
   const catalog = useSessionList();
-  const [homeFilter, setHomeFilter] = useState(() => browserStorage.getItem("ahub.home") ?? "");
-  const homes = catalog.list?.homes ?? [];
-  const selectedHome = homes.some((home) => home.nickname === homeFilter) ? homeFilter : "";
+  const [agentFilter, setAgentFilter] = useState(() => browserStorage.getItem("ahub.agent") ?? "");
+  const agents = catalog.list?.agents ?? [];
+  const selectedAgent = agents.some((agent) => agent.nickname === agentFilter) ? agentFilter : "";
   useEffect(() => {
     if (!catalog.list) return;
-    if (homeFilter !== selectedHome) setHomeFilter("");
-    browserStorage.setItem("ahub.home", selectedHome);
-  }, [catalog.list, homeFilter, selectedHome]);
+    if (agentFilter !== selectedAgent) setAgentFilter("");
+    browserStorage.setItem("ahub.agent", selectedAgent);
+  }, [catalog.list, agentFilter, selectedAgent]);
   const visibleList = useMemo(
     () =>
-      !selectedHome || !catalog.list
+      !selectedAgent || !catalog.list
         ? catalog.list
         : {
             ...catalog.list,
-            sessions: catalog.list.sessions.filter((session) => session.home === selectedHome),
+            sessions: catalog.list.sessions.filter((session) => session.agent === selectedAgent),
           },
-    [catalog.list, selectedHome],
+    [catalog.list, selectedAgent],
   );
   const visibleCatalog = { ...catalog, list: visibleList };
   const hub = useHubNavigation(catalog.list);
@@ -94,8 +94,8 @@ function SessionHub() {
       <HubSidebar
         onCollapse={toggleSidebar}
         catalog={visibleCatalog}
-        homeFilter={selectedHome}
-        onHomeFilter={setHomeFilter}
+        agentFilter={selectedAgent}
+        onAgentFilter={setAgentFilter}
         hub={hub}
         onCreate={(directory) => {
           setCreateDirectory(directory);
@@ -137,7 +137,7 @@ function SessionHub() {
                 key={sessionId}
                 sessionId={sessionId}
                 sessions={catalog.list?.sessions ?? []}
-                homes={homes}
+                agents={agents}
                 includeArchived={navigation.includeArchived}
                 onNavigate={navigate}
                 onCatalogChanged={catalog.refresh}
@@ -163,8 +163,8 @@ function SessionHub() {
         )}
       </div>
       <CreateSession
-        homes={homes}
-        selectedHome={selectedHome}
+        agents={agents}
+        selectedAgent={selectedAgent}
         project={createDirectory ?? ""}
         projects={(catalog.list?.projects ?? []).map((item) => ({ project: item.directory }))}
         open={createOpen}

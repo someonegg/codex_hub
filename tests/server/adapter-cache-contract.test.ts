@@ -33,13 +33,13 @@ const adapters = [
 it.each(adapters)(
   "$name reuses snapshots and ignores inode replacement with unchanged logical fingerprints",
   async (adapter) => {
-    const home = await createTempDirectory("adapter-contract-");
-    const path = join(home, adapter.file);
+    const agent = await createTempDirectory("adapter-contract-");
+    const path = join(agent, adapter.file);
     await mkdir(join(path, ".."), { recursive: true });
     await writeFile(path, adapter.initial + adapter.title("first"));
     // Use an exactly representable timestamp for both original and replacement.
     await utimes(path, 1_700_000_000, 1_700_000_000);
-    const source = await adapter.create(home);
+    const source = await adapter.create(agent);
     const before = await source.refresh();
     const serialized = JSON.stringify(before);
     expect(await source.refresh()).toBe(before);
@@ -83,8 +83,8 @@ it.each(adapters)(
 it.each(adapters)(
   "$name defers bindings across failed catalog refreshes without losing decoded batches",
   async (adapter) => {
-    const home = await createTempDirectory("adapter-binding-publication-");
-    const path = join(home, adapter.file);
+    const agent = await createTempDirectory("adapter-binding-publication-");
+    const path = join(agent, adapter.file);
     await mkdir(join(path, ".."), { recursive: true });
     const bind = (pane: string) =>
       adapter.name === "Codex"
@@ -112,10 +112,15 @@ it.each(adapters)(
             },
           });
     await writeFile(path, adapter.initial);
-    const source = await adapter.create(home);
+    const source = await adapter.create(agent);
     let fail = false;
     const other: SessionSource = {
-      descriptor: { sourceType: "test", instanceKey: "other", home: "other", displayName: "Other" },
+      descriptor: {
+        sourceType: "test",
+        instanceKey: "other",
+        agent: "other",
+        displayName: "Other",
+      },
       async refresh() {
         if (fail) throw new Error("injected source failure");
         return { signature: "empty", sessions: [], diagnostics: [] };

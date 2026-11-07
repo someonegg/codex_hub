@@ -24,10 +24,10 @@ const fixture = join(import.meta.dirname, "../fixtures/claude-home");
 const relative = `projects/project/${id}.jsonl`;
 const lines = async () => (await readFile(join(fixture, relative), "utf8")).trimEnd().split("\n");
 
-async function createSessionHome(prefix: string) {
-  const home = await createTempDirectory(prefix);
-  await mkdir(join(home, "projects/project"), { recursive: true });
-  return { home, path: join(home, relative) };
+async function createSessionAgent(prefix: string) {
+  const agent = await createTempDirectory(prefix);
+  await mkdir(join(agent, "projects/project"), { recursive: true });
+  return { agent, path: join(agent, relative) };
 }
 
 describe("Claude JSONL adapter", () => {
@@ -96,7 +96,7 @@ describe("Claude JSONL adapter", () => {
 
   it("selects native metadata and only accepts main-shell binding stdout", async () => {
     const bindings = new PaneBindingManager();
-    const source = await createClaudeSessionSource(fixture, { home: "glm" });
+    const source = await createClaudeSessionSource(fixture, { agent: "glm" });
     const snapshot = await source.refresh();
     for (const event of snapshot.bindings ?? [])
       bindings.submit({
@@ -110,12 +110,12 @@ describe("Claude JSONL adapter", () => {
       projectDirectory: "/test/original-project",
       taskName: "Task",
       parentId: null,
-      agent: null,
+      subagent: null,
     });
     expect(entry.origin).toMatchObject({
-      home: "glm",
-      agentName: "Claude Code",
-      agentVersion: "2.1.318",
+      agent: "glm",
+      runtimeName: "Claude Code",
+      runtimeVersion: "2.1.318",
     });
     expect(
       bindings.latest(opaqueIdForParts(source.descriptor.instanceKey, entry.localId)),
@@ -123,12 +123,12 @@ describe("Claude JSONL adapter", () => {
   });
 
   it("commits complete lines, rereads tails, diagnoses malformed lines and rebuilds rewrites", async () => {
-    const home = await createTempDirectory("claude-source-");
-    await cp(fixture, home, { recursive: true });
-    const path = join(home, relative);
+    const agent = await createTempDirectory("claude-source-");
+    await cp(fixture, agent, { recursive: true });
+    const path = join(agent, relative);
     const input = await lines();
     await writeFile(path, input[0] + "\n" + input[1]!.slice(0, 30));
-    const source = await createClaudeSessionSource(home);
+    const source = await createClaudeSessionSource(agent);
     const first = await source.refresh();
     const before = JSON.stringify(first);
     expect(first.sessions[0]!.normalized.timeline).toHaveLength(1);
@@ -139,7 +139,7 @@ describe("Claude JSONL adapter", () => {
       { code: "invalid_jsonl" },
     ]);
     expect(JSON.stringify(first)).toBe(before);
-    const fresh = await (await createClaudeSessionSource(home)).refresh();
+    const fresh = await (await createClaudeSessionSource(agent)).refresh();
     expect(JSON.stringify(appended)).toEqual(JSON.stringify(fresh));
     await writeFile(path, input[0] + "\n");
     expect((await source.refresh()).sessions[0]!.normalized.timeline).toHaveLength(1);
@@ -150,16 +150,16 @@ describe("Claude JSONL adapter", () => {
   });
 
   it("does not recursively discover subagents and rejects conflicting native identities", async () => {
-    const home = await createTempDirectory("claude-identity-");
-    await mkdir(join(home, "projects/project/subagents"), { recursive: true });
+    const agent = await createTempDirectory("claude-identity-");
+    await mkdir(join(agent, "projects/project/subagents"), { recursive: true });
     await writeFile(
-      join(home, "projects/project/subagents", `${id}.jsonl`),
+      join(agent, "projects/project/subagents", `${id}.jsonl`),
       (await lines())[0] + "\n",
     );
-    const source = await createClaudeSessionSource(home);
+    const source = await createClaudeSessionSource(agent);
     expect((await source.refresh()).sessions).toEqual([]);
     await writeFile(
-      join(home, relative),
+      join(agent, relative),
       (await lines())[0]!.replace(id, "aaaaaaaa-2222-4333-8444-555555555555") + "\n",
     );
     const snapshot = await source.refresh();
@@ -168,25 +168,25 @@ describe("Claude JSONL adapter", () => {
   });
 });
 
-it("keeps Codex and Claude homes independently routed while merging project associations", async () => {
+it("keeps Codex and Claude agents independently routed while merging project associations", async () => {
   const { createCodexHub } = await import("../../src/server/create-hub.js");
   const codex = await createTempDirectory("claude-mixed-codex-");
   await cp(join(import.meta.dirname, "../fixtures/codex-home"), codex, { recursive: true });
   const hub = await createCodexHub({
-    homes: [
+    agents: [
       { nickname: "codex", path: codex },
       { nickname: "glm", path: fixture, adapter: "claude" },
     ],
   });
   try {
     const snapshot = await hub.sessions.managementSnapshot();
-    expect(snapshot.sessions.some((session) => session.origin.home === "codex")).toBe(true);
-    const claude = snapshot.sessions.find((session) => session.origin.home === "glm")!;
-    expect(claude.origin.agentName).toBe("Claude Code");
+    expect(snapshot.sessions.some((session) => session.origin.agent === "codex")).toBe(true);
+    const claude = snapshot.sessions.find((session) => session.origin.agent === "glm")!;
+    expect(claude.origin.runtimeName).toBe("Claude Code");
     expect(hub.managers.get("glm").isValidNativeId(claude.sourceId!)).toBe(true);
     expect(hub.managers.get("glm").archive).toBeUndefined();
     expect(hub.managers.get("codex").archive).toBeTypeOf("function");
-    expect((await hub.sessions.list()).homes).toEqual([
+    expect((await hub.sessions.list()).agents).toEqual([
       { nickname: "codex", management: { archive: true } },
       { nickname: "glm", management: { archive: false } },
     ]);
@@ -196,7 +196,7 @@ it("keeps Codex and Claude homes independently routed while merging project asso
 });
 
 it("retains binding order when multiple native stdout blocks share one line", async () => {
-  const { home, path } = await createSessionHome("claude-binding-order-");
+  const { agent, path } = await createSessionAgent("claude-binding-order-");
   const content = [
     "ahub-00000000-0000-0000-0000-000000000001",
     "ahub-00000000-0000-0000-0000-000000000002",
@@ -214,7 +214,7 @@ it("retains binding order when multiple native stdout blocks share one line", as
     }) + "\n",
   );
   const bindings = new PaneBindingManager();
-  const source = await createClaudeSessionSource(home);
+  const source = await createClaudeSessionSource(agent);
   const snapshot = await source.refresh();
   for (const event of snapshot.bindings ?? [])
     bindings.submit({
@@ -228,7 +228,7 @@ it("retains binding order when multiple native stdout blocks share one line", as
 });
 
 it("decodes only append bytes, skips unchanged files and caps resource usage", async () => {
-  const { home, path } = await createSessionHome("claude-limits-");
+  const { agent, path } = await createSessionAgent("claude-limits-");
   const row = (content: string) =>
     JSON.stringify({ type: "user", message: { role: "user", content } }) + "\n";
   await writeFile(
@@ -238,7 +238,7 @@ it("decodes only append bytes, skips unchanged files and caps resource usage", a
       "\n" +
       row("x".repeat(MAX_MESSAGE_CHARS - 1) + "😀end"),
   );
-  const source = await createClaudeSessionSource(home);
+  const source = await createClaudeSessionSource(agent);
   const first = await source.refresh();
   expect(first.sessions[0]!.normalized.session.diagnostics).toHaveLength(MAX_SESSION_DIAGNOSTICS);
   const item = first.sessions[0]!.normalized.timeline[0]!;
@@ -265,19 +265,19 @@ it("decodes only append bytes, skips unchanged files and caps resource usage", a
 });
 
 it("keeps the accepted duplicate path until it becomes invalid", async () => {
-  const home = await createTempDirectory("claude-duplicates-");
-  await mkdir(join(home, "projects/z"), { recursive: true });
-  const z = join(home, "projects/z", `${id}.jsonl`);
-  const a = join(home, "projects/a", `${id}.jsonl`);
+  const agent = await createTempDirectory("claude-duplicates-");
+  await mkdir(join(agent, "projects/z"), { recursive: true });
+  const z = join(agent, "projects/z", `${id}.jsonl`);
+  const a = join(agent, "projects/a", `${id}.jsonl`);
   const row = (title: string) =>
     JSON.stringify({ type: "custom-title", customTitle: title }) + "\n";
   await writeFile(z, row("old"));
-  const source = await createClaudeSessionSource(home);
+  const source = await createClaudeSessionSource(agent);
   await source.refresh();
-  await mkdir(join(home, "projects/a"));
+  await mkdir(join(agent, "projects/a"));
   await writeFile(a, row("new"));
   expect((await source.refresh()).sessions[0]!.normalized.session.title).toBe("old");
-  const fresh = await createClaudeSessionSource(home);
+  const fresh = await createClaudeSessionSource(agent);
   expect((await fresh.refresh()).sessions[0]!.normalized.session.title).toBe("new");
   await writeFile(z, JSON.stringify({ type: "user", sessionId: "wrong" }) + "\n");
   expect((await source.refresh()).sessions[0]!.normalized.session.title).toBe("new");
@@ -286,8 +286,8 @@ it("keeps the accepted duplicate path until it becomes invalid", async () => {
 });
 
 it("uses bounded Unicode-safe explicit titles and Markdown user titles", async () => {
-  const { home, path } = await createSessionHome("claude-titles-");
-  const source = await createClaudeSessionSource(home);
+  const { agent, path } = await createSessionAgent("claude-titles-");
+  const source = await createClaudeSessionSource(agent);
   await writeFile(path, JSON.stringify({ type: "system", sessionId: id }) + "\n");
   expect((await source.refresh()).sessions[0]!.normalized.session.title).toBe("Untitled session");
   await writeFile(
@@ -306,26 +306,26 @@ it("uses bounded Unicode-safe explicit titles and Markdown user titles", async (
 });
 
 it("treats a missing projects root as empty without warnings", async () => {
-  const home = await createTempDirectory("claude-empty-");
-  expect(await (await createClaudeSessionSource(home)).refresh()).toMatchObject({
+  const agent = await createTempDirectory("claude-empty-");
+  expect(await (await createClaudeSessionSource(agent)).refresh()).toMatchObject({
     sessions: [],
     diagnostics: [],
   });
 });
 
 it("caps scan diagnostics but continues accepting valid candidates", async () => {
-  const home = await createTempDirectory("claude-scan-limit-");
+  const agent = await createTempDirectory("claude-scan-limit-");
   for (let index = 0; index < MAX_SESSION_DIAGNOSTICS + 5; index++) {
-    const directory = join(home, "projects", String(index).padStart(2, "0"));
+    const directory = join(agent, "projects", String(index).padStart(2, "0"));
     await mkdir(directory, { recursive: true });
     await writeFile(
       join(directory, `${id}.jsonl`),
       JSON.stringify({ type: "user", sessionId: "wrong" }) + "\n",
     );
   }
-  await mkdir(join(home, "projects/z"));
-  await writeFile(join(home, "projects/z", `${id}.jsonl`), (await lines())[0] + "\n");
-  const snapshot = await (await createClaudeSessionSource(home)).refresh();
+  await mkdir(join(agent, "projects/z"));
+  await writeFile(join(agent, "projects/z", `${id}.jsonl`), (await lines())[0] + "\n");
+  const snapshot = await (await createClaudeSessionSource(agent)).refresh();
   expect(snapshot.diagnostics).toHaveLength(MAX_SESSION_DIAGNOSTICS);
   expect(snapshot.sessions).toHaveLength(1);
 });
@@ -352,10 +352,10 @@ it("prioritizes decoder diagnostics without hiding identity conflicts across bat
 });
 
 it("caches rejected identities, incrementally checks appends and recovers after replacement", async () => {
-  const { home, path } = await createSessionHome("claude-rejected-cache-");
+  const { agent, path } = await createSessionAgent("claude-rejected-cache-");
   const valid = (await lines())[0]!;
   await writeFile(path, valid.replace(id, "aaaaaaaa-2222-4333-8444-555555555555") + "\n");
-  const source = await createClaudeSessionSource(home);
+  const source = await createClaudeSessionSource(agent);
   const rejected = await source.refresh();
   expect(rejected.sessions).toEqual([]);
   expect(rejected.bindings).toEqual([]);

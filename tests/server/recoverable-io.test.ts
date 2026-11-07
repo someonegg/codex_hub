@@ -32,21 +32,21 @@ afterEach(() => faults.clear());
 
 const codes = ["ENOENT", "EACCES", "ESTALE"];
 async function fixture() {
-  const home = await realpath(await createTempDirectory("codex-io-faults-"));
-  const sessions = join(home, "sessions");
-  const archived = join(home, "archived_sessions");
+  const agent = await realpath(await createTempDirectory("codex-io-faults-"));
+  const sessions = join(agent, "sessions");
+  const archived = join(agent, "archived_sessions");
   await mkdir(sessions);
   await mkdir(archived);
   const damaged = join(sessions, "rollout-damaged.jsonl");
   await writeFile(damaged, '{"type":"session_meta","payload":{"id":"damaged"}}\n');
   const healthy = join(archived, "rollout-healthy.jsonl");
   await writeFile(healthy, '{"type":"session_meta","payload":{"id":"healthy"}}\n');
-  return { home, sessions, damaged, healthy };
+  return { agent, sessions, damaged, healthy };
 }
 
 it("skips all per-file checks for successfully cached archives", async () => {
-  const { home, healthy } = await fixture();
-  const source = new CodexSessionSource(home, "archive-checks");
+  const { agent, healthy } = await fixture();
+  const source = new CodexSessionSource(agent, "archive-checks");
   const initial = await source.refresh();
   for (const operation of ["lstat", "realpath", "stat", "access"]) {
     faults.set(`${operation}:${healthy}`, new Error(`Unexpected archived ${operation}`));
@@ -56,8 +56,8 @@ it("skips all per-file checks for successfully cached archives", async () => {
 });
 
 it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading", async (code) => {
-  const { home, sessions, damaged } = await fixture();
-  const source = new CodexSessionSource(home, "test");
+  const { agent, sessions, damaged } = await fixture();
+  const source = new CodexSessionSource(agent, "test");
   expect((await source.refresh()).sessions).toHaveLength(2);
   for (const location of [`readdir:${sessions}`, `stat:${damaged}`]) {
     faults.set(location, Object.assign(new Error("injected IO failure"), { code }));
@@ -70,7 +70,7 @@ it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading
   }
   const decoder = new CheckpointedJsonlDecoder();
   let failed = true;
-  const loading = new CodexSessionSource(home, "load", {
+  const loading = new CodexSessionSource(agent, "load", {
     decoder: {
       async decode(descriptor, checkpoint) {
         if (failed && descriptor.path === damaged)
@@ -89,23 +89,25 @@ it.each(codes)("recovers from %s in metadata reads, scanning and rollout loading
 });
 
 it.each(["stat", "readdir"])("propagates unexpected %s failures", async (operation) => {
-  const { home, sessions, damaged } = await fixture();
+  const { agent, sessions, damaged } = await fixture();
   const path = operation === "stat" ? damaged : sessions;
   faults.set(`${operation}:${path}`, new Error("program invariant"));
-  await expect(new CodexSessionSource(home, "test").refresh()).rejects.toThrow("program invariant");
+  await expect(new CodexSessionSource(agent, "test").refresh()).rejects.toThrow(
+    "program invariant",
+  );
 });
 
 it("treats initially absent allowlisted directories as normal", async () => {
-  const home = await createTempDirectory("codex-empty-io-");
-  expect(await new CodexSessionSource(home, "test").refresh()).toMatchObject({
+  const agent = await createTempDirectory("codex-empty-io-");
+  expect(await new CodexSessionSource(agent, "test").refresh()).toMatchObject({
     sessions: [],
     diagnostics: [],
   });
 });
 
 it("reuses unchanged active files without permission probes and retries actual open failures", async () => {
-  const { home, damaged } = await fixture();
-  const source = new CodexSessionSource(home, "active-permissions");
+  const { agent, damaged } = await fixture();
+  const source = new CodexSessionSource(agent, "active-permissions");
   const initial = await source.refresh();
   faults.set(`access:${damaged}`, new Error("Unexpected permission probe"));
   faults.set(`open:${damaged}`, Object.assign(new Error("denied"), { code: "EACCES" }));

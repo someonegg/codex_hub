@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import type { HubOperation, InteractionResponse, SessionHome } from "../../shared/api-contract";
+import type { HubOperation, InteractionResponse, SessionAgent } from "../../shared/api-contract";
 import type { SessionDetail } from "../../shared/domain";
 
 import { api } from "../api/client";
@@ -103,8 +103,8 @@ export function OperationStatus({ controller }: { controller: OperationControlle
   );
 }
 interface CreateSessionProps {
-  homes?: readonly SessionHome[];
-  selectedHome?: string;
+  agents?: readonly SessionAgent[];
+  selectedAgent?: string;
   project: string;
   projects: readonly { project: string }[];
   onCreated: (op: HubOperation) => void;
@@ -114,8 +114,8 @@ interface CreateSessionProps {
 }
 
 export function CreateSession({
-  homes = [],
-  selectedHome = "",
+  agents = [],
+  selectedAgent = "",
   project,
   projects,
   onCreated,
@@ -135,26 +135,26 @@ export function CreateSession({
     }
   }
   const [directory, setDirectory] = useState(project);
-  const initialHome =
-    selectedHome ||
-    homes.find((home) => home.nickname === preferences.defaultHome)?.nickname ||
-    homes[0]?.nickname ||
+  const initialAgent =
+    selectedAgent ||
+    agents.find((agent) => agent.nickname === preferences.defaultAgent)?.nickname ||
+    agents[0]?.nickname ||
     "";
-  const [home, setHome] = useState(initialHome);
+  const [agent, setAgent] = useState(initialAgent);
   useEffect(() => {
     if (open) {
       dialog.current?.showModal?.();
       dialog.current?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
     } else dialog.current?.close?.();
   }, [open]);
-  const launchDefaults = useRef({ ...preferences, home: initialHome, directory: project });
-  launchDefaults.current = { ...preferences, home: initialHome, directory: project };
+  const launchDefaults = useRef({ ...preferences, agent: initialAgent, directory: project });
+  launchDefaults.current = { ...preferences, agent: initialAgent, directory: project };
   const [worktree, setWorktree] = useState(false);
   const [yolo, setYolo] = useState(false);
   useEffect(() => {
     if (open) {
       setDirectory(launchDefaults.current.directory);
-      setHome(launchDefaults.current.home);
+      setAgent(launchDefaults.current.agent);
       setWorktree(launchDefaults.current.worktree);
       setYolo(launchDefaults.current.yolo);
     }
@@ -183,12 +183,12 @@ export function CreateSession({
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const fingerprint = JSON.stringify([home, directory, worktree, yolo]);
+          const fingerprint = JSON.stringify([agent, directory, worktree, yolo]);
           if (request.current?.fingerprint !== fingerprint)
             request.current = { fingerprint, id: newRequestId() };
           void controller.start(() =>
             api.createSession({
-              ...(home ? { home } : {}),
+              ...(agent ? { agent } : {}),
               projectDirectory: directory,
               worktree,
               yolo,
@@ -197,22 +197,22 @@ export function CreateSession({
           );
         }}
       >
-        {homes.length > 1 ? (
+        {agents.length > 1 ? (
           <label>
-            {t("home")}
+            {t("agent")}
             <select
               required
-              aria-label={t("sessionHome")}
-              value={home}
+              aria-label={t("sessionAgent")}
+              value={agent}
               disabled={controller.busy}
-              onChange={(event) => setHome(event.target.value)}
+              onChange={(event) => setAgent(event.target.value)}
             >
               <option value="" disabled>
-                {t("selectAHome")}
+                {t("selectAnAgent")}
               </option>
-              {homes.map((home) => (
-                <option key={home.nickname} value={home.nickname}>
-                  {home.nickname}
+              {agents.map((agent) => (
+                <option key={agent.nickname} value={agent.nickname}>
+                  {agent.nickname}
                 </option>
               ))}
             </select>
@@ -248,7 +248,7 @@ export function CreateSession({
           disabled={
             controller.busy ||
             !directory.startsWith("/") ||
-            (homes.length > 1 && !homes.some((item) => item.nickname === home))
+            (agents.length > 1 && !agents.some((item) => item.nickname === agent))
           }
         >
           {controller.busy ? t("creating") : t("createSession")}
@@ -258,7 +258,7 @@ export function CreateSession({
   );
 }
 interface ManageSessionProps {
-  management?: SessionHome["management"];
+  management?: SessionAgent["management"];
   interaction?: InteractionResponse | null;
   session: SessionDetail;
   onChanged: () => void;
@@ -320,7 +320,7 @@ function ManageSessionControls({
   onStart,
 }: {
   session: SessionDetail;
-  management?: SessionHome["management"];
+  management?: SessionAgent["management"];
   interaction?: InteractionResponse | null;
   controller: OperationController;
   showStatus: boolean;

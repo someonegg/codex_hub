@@ -33,7 +33,7 @@ it("resumes an explicit UUID in the original CODEX_HOME with an operation bindin
     socketPath: "/tmp/test",
     sessionName: "ahub-00000000-0000-0000-0000-000000000001",
   });
-  const manager = new CodexSessionManager("/original-home", tmux);
+  const manager = new CodexSessionManager("/original-agent", tmux);
   const nativeId = "00000000-0000-4000-8000-000000000001";
   await manager.launch({
     operationId: "54c105aa-3622-45bc-b4c4-e0fa9110d399",
@@ -45,7 +45,7 @@ it("resumes an explicit UUID in the original CODEX_HOME with an operation bindin
   const args = launch.mock.calls[0]![2];
   expect(args.slice(0, 5)).toEqual([
     "env",
-    "CODEX_HOME=/original-home",
+    "CODEX_HOME=/original-agent",
     "codex",
     "resume",
     nativeId,

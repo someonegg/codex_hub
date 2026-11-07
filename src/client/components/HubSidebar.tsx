@@ -14,8 +14,8 @@ import { StatusBadge } from "./StatusBadge";
 interface HubSidebarProps {
   catalog: ReturnType<typeof useSessionList>;
   hub: ReturnType<typeof useHubNavigation>;
-  homeFilter?: string;
-  onHomeFilter?: (value: string) => void;
+  agentFilter?: string;
+  onAgentFilter?: (value: string) => void;
   onCollapse?: () => void;
   onCreate: (directory: string | null) => void;
 }
@@ -24,8 +24,8 @@ export function HubSidebar({
   hub,
   onCreate,
   onCollapse,
-  homeFilter = "",
-  onHomeFilter,
+  agentFilter = "",
+  onAgentFilter,
 }: HubSidebarProps) {
   const { i18n } = useTranslation();
   const language = i18n.resolvedLanguage;
@@ -70,18 +70,18 @@ export function HubSidebar({
         {onCollapse ? <SidebarToggle collapsed={false} onToggle={onCollapse} /> : null}
       </header>
       <div className="catalog-filters">
-        {(catalog.list?.homes?.length ?? 0) > 1 ? (
-          <label className="home-filter">
-            {t("home")}
+        {(catalog.list?.agents?.length ?? 0) > 1 ? (
+          <label className="agent-filter">
+            {t("agent")}
             <select
-              aria-label={t("filterByHome")}
-              value={homeFilter}
-              onChange={(event) => onHomeFilter?.(event.target.value)}
+              aria-label={t("filterByAgent")}
+              value={agentFilter}
+              onChange={(event) => onAgentFilter?.(event.target.value)}
             >
-              <option value="">{t("allHomes")}</option>
-              {catalog.list!.homes.map((home) => (
-                <option key={home.nickname} value={home.nickname}>
-                  {home.nickname}
+              <option value="">{t("allAgents")}</option>
+              {catalog.list!.agents.map((agent) => (
+                <option key={agent.nickname} value={agent.nickname}>
+                  {agent.nickname}
                 </option>
               ))}
             </select>
@@ -164,8 +164,8 @@ export function HubSidebar({
                         >
                           <span className="session-nav-copy">
                             <span>{session.title}</span>
-                            {(catalog.list?.homes?.length ?? 0) > 1 ? (
-                              <small className="session-nav-home">{session.home}</small>
+                            {(catalog.list?.agents?.length ?? 0) > 1 ? (
+                              <small className="session-nav-agent">{session.agent}</small>
                             ) : null}
                             {updatedAtLabel ? (
                               <time dateTime={session.updatedAt!}>{updatedAtLabel}</time>
@@ -190,7 +190,7 @@ export function HubSidebar({
         ) : null}
       </nav>
       <footer className="hub-sidebar-footer">
-        <Settings homes={catalog.list?.homes ?? []} />
+        <Settings agents={catalog.list?.agents ?? []} />
         {hosting ? (
           <a href="/artifacts" target="_blank" rel="noopener noreferrer">
             {t("publishedPages")}

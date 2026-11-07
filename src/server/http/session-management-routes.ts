@@ -80,10 +80,10 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
                 "worktree",
                 "yolo",
                 "requestId",
-                "home",
+                "agent",
               ].includes(key),
           ) ||
-          (body.home !== undefined && typeof body.home !== "string") ||
+          (body.agent !== undefined && typeof body.agent !== "string") ||
           typeof body.projectDirectory !== "string" ||
           (body.workingDirectory !== undefined && typeof body.workingDirectory !== "string") ||
           typeof body.worktree !== "boolean" ||
@@ -101,7 +101,7 @@ export function createSessionManagementRoutes(operations?: OperationService): Ap
           response,
           202,
           operations.create({
-            ...(typeof body.home === "string" ? { home: body.home } : {}),
+            ...(typeof body.agent === "string" ? { agent: body.agent } : {}),
             projectDirectory: body.projectDirectory,
             ...(typeof body.taskName === "string" ? { taskName: body.taskName.trim() } : {}),
             ...(typeof body.workingDirectory === "string"

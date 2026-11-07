@@ -1,6 +1,6 @@
 import type {
+  SessionAgent,
   SessionDetailResponse,
-  SessionHome,
   SessionListResponse,
   SessionMessagesQuery,
   SessionMessagesResponse,
@@ -31,7 +31,7 @@ export interface SessionReadServiceDependencies extends CatalogSnapshotStoreDepe
   readonly freshnessMs?: number;
   readonly now?: () => number;
   readonly runtime?: RuntimeReader;
-  readonly homes?: SessionHome[];
+  readonly agents?: SessionAgent[];
   readonly resolveDisplayTitle?: SessionDisplayTitleResolver;
 }
 
@@ -48,14 +48,14 @@ export class SessionReadService implements SessionReader {
       store,
       interaction,
       resolveDisplayTitle,
-      homes,
+      agents,
       freshnessMs = DEFAULT_CATALOG_FRESHNESS_MS,
       now = performance.now.bind(performance),
       runtime,
       ...storeDependencies
     } = options;
     this.runtime = runtime;
-    this.#mapper = new SessionApiMapper(resolveDisplayTitle, homes);
+    this.#mapper = new SessionApiMapper(resolveDisplayTitle, agents);
     this.#store = store ?? new CatalogSnapshotStore(sources, freshnessMs, now, storeDependencies);
     this.#interaction = interaction;
     this.#interactionSessions = new CatalogInteractionSessionReader(this.#store);

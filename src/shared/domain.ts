@@ -1,7 +1,7 @@
 export type SessionId = string;
 export type ItemId = string;
 
-export interface AgentIdentity {
+export interface SubagentIdentity {
   taskName: string | null;
   nickname: string | null;
   role: string | null;
@@ -9,9 +9,9 @@ export interface AgentIdentity {
 
 export interface SessionOrigin {
   sourceType: string;
-  home: string;
-  agentName: string;
-  agentVersion: string | null;
+  agent: string;
+  runtimeName: string;
+  runtimeVersion: string | null;
 }
 
 export type SessionStatus = "normal" | "live" | "archived";
@@ -21,7 +21,7 @@ export interface ResumeCapability {
 }
 
 export interface SessionSummary {
-  home: string;
+  agent: string;
   id: SessionId;
   title: string;
   projectDirectory: string | null;
@@ -45,7 +45,7 @@ export interface SessionDetail {
   status: SessionStatus;
   parentId: SessionId | null;
   childIds: SessionId[];
-  agent: AgentIdentity | null;
+  subagent: SubagentIdentity | null;
   sourceId: string | null;
 }
 
