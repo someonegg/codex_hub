@@ -93,6 +93,8 @@ ahub-cli --help
 先啟動 Hub，再從另一終端執行：
 
 ```sh
+ahub-cli project list
+ahub-cli agent list
 ahub-cli session list --project /path/to/project
 ahub-cli session create --project /path/to/project
 ahub-cli session send <id> --message "Explain the failing tests"

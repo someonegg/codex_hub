@@ -14,6 +14,13 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 - HTTP and HTTPS origins are supported. HTTPS uses Node.js certificate verification; for a private CA, set `NODE_EXTRA_CA_CERTS=/absolute/path/to/ca.pem` before starting the CLI.
 - Select existing sessions with `list --project /absolute/project --json`. It lists main sessions. Known child IDs can be inspected directly. Treat IDs as opaque strings.
 
+## Resolve projects and agents before creation
+
+- For an absolute project path, verify that it exists as a directory and use it directly, even if it is not in the known project list. Otherwise, ask for the correct path; do not fall back to name matching.
+- For a non-absolute project value, run `ahub-cli project list --json` and match its directory name (for example `agent_hub`) against known project directory names. Use the known absolute path only for a unique match. Resolve this in the skill before invoking create, not against the current working directory.
+- For multiple project matches, show the candidate absolute paths and ask the user to choose. For no match, show the known project list and ask for the correct path. Do not pass an unresolved relative path to create.
+- Omit `--agent` to use Hub's default Agent. If the user specifies an agent, run `ahub-cli agent list --json` and match known nicknames and runtime names. Pass the nickname with `--agent` only for a unique match; otherwise show the matching or available agents and ask the user to choose.
+
 ## Create, resume, and send
 
 - `create --project <directory>` sets project association and the default launch directory. Add `--cwd <directory>` to change the launch location while retaining the project association.
@@ -27,6 +34,10 @@ The CLI reports runtime state, replies, input requests, and diagnostics. The cal
 Replace the example IDs, positions, and paths with actual values:
 
 ```bash
+# For non-absolute project values only, resolve to a unique known absolute path:
+ahub-cli project list --json
+# Only for a user-specified agent, resolve before adding --agent <nickname>:
+# ahub-cli agent list --json
 ahub-cli session create --project /absolute/project --json
 # Save sessionId; add --cwd /absolute/working-directory if needed.
 
